@@ -1,0 +1,2 @@
+ALTER TABLE "Page"
+ADD COLUMN "initialCallDelayMinutes" INTEGER NOT NULL DEFAULT 30;

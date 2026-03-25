@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(echo \"NODE_ENV=$NODE_ENV\")",
+      "Bash(printenv NODE_ENV)",
+      "Bash(echo \"PORT=$PORT\")",
+      "Bash(sqlite3 /home/md-limon-hossain/SAAS/df-bot-v17.1/backend/storage/dev.db \"SELECT id, username, email, name, role, createdAt FROM User ORDER BY createdAt DESC LIMIT 5;\")",
+      "Bash(sqlite3 /home/md-limon-hossain/SAAS/df-bot-v17.1/backend/storage/dev.db \".tables\")",
+      "Bash(sqlite3 /home/md-limon-hossain/SAAS/df-bot-v17.1/backend/storage/dev.db 'SELECT id, username, email, name, role, createdAt FROM \"\"User\"\" ORDER BY createdAt DESC LIMIT 5;')",
+      "Bash(grep -v '^$')",
+      "Bash(grep -n \"tab === ''CALL''\" /home/md-limon-hossain/SAAS/df-bot-v17.1/dashboard/src/pages/SettingsPage.tsx)",
+      "Bash(grep -E \"\\\\.\\(ts|tsx|prisma\\)$\")",
+      "Bash(grep -r 'DF Bot' /home/md-limon-hossain/SAAS/df-bot-v17.1 --include=*.html --include=*.tsx --include=*.ts)",
+      "Bash(grep -r import.*from.*''./.*'' /home/md-limon-hossain/SAAS/df-bot-v17.1/dashboard/src/pages/*.tsx)",
+      "Bash(/home/md-limon-hossain/SAAS/df-bot-v17.1/dashboard/.env.example:*)",
+      "Bash(chmod +x /home/md-limon-hossain/SAAS/df-bot-v17.1/backend/scripts/deploy.sh /home/md-limon-hossain/SAAS/df-bot-v17.1/backend/scripts/db-init.sh)",
+      "Bash(pg_isready)",
+      "Bash(psql -U postgres -c \"SELECT datname FROM pg_database WHERE datname=''chatcatpro_dev'';\")",
+      "Bash(sudo -u postgres psql -c \"SELECT datname FROM pg_database WHERE datname=''chatcatpro_dev'';\")",
+      "Bash(sudo -u postgres psql -c \"\\\\l\")",
+      "Bash(psql -U \"$USER\" -c \"\\\\l\")",
+      "Bash(psql -U postgres -c \"\\\\l\")",
+      "Read(//etc/postgresql/**)"
+    ]
+  }
+}

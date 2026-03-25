@@ -1,0 +1,590 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  // LOCAL DEV: sqlite  |  PRODUCTION VPS: postgresql
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String?  @unique
+  username  String   @unique
+  name      String   @default("")
+  role      String   @default("client")
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // V12: Auth fields moved from JSON file to DB
+  passwordHash        String  @default("")
+  salt                String  @default("")
+  forcePasswordChange Boolean @default(false)
+  pageIds             String  @default("[]") // JSON array of page DB ids
+
+  pages         Page[]
+  sessions      Session[]
+  subscriptions Subscription[]
+
+  @@index([username])
+  @@index([email])
+}
+
+// OTP tokens for email verification and password reset
+model OtpToken {
+  id        String   @id @default(uuid())
+  email     String
+  code      String
+  purpose   String   // 'signup' | 'reset'
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([email, purpose])
+}
+
+// V12: Session moved from sessions.json to DB
+model Session {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      String   @default("client")
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  @@index([token])
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model Page {
+  id          Int    @id @default(autoincrement())
+  pageId      String @unique
+  pageName    String @default("")
+  pageToken   String @default("")
+  verifyToken String @default("")
+
+  ownerId String?
+  owner   User?   @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+
+  isActive             Boolean @default(true)
+  automationOn         Boolean @default(false)
+  automationAllowed    Boolean @default(true)
+  ocrOn                Boolean @default(false)
+  ocrAllowed           Boolean @default(true)
+  infoModeOn           Boolean @default(true)
+  infoModeAllowed      Boolean @default(true)
+  orderModeOn          Boolean @default(true)
+  orderModeAllowed     Boolean @default(true)
+  printModeOn          Boolean @default(false)
+  printModeAllowed     Boolean @default(true)
+  memoSaveModeOn       Boolean @default(false)
+  memoSaveModeAllowed  Boolean @default(true)
+  memoTemplateModeOn   Boolean @default(false)
+  memoTemplateModeAllowed Boolean @default(true)
+  autoMemoDesignModeOn Boolean @default(false)
+  autoMemoDesignModeAllowed Boolean @default(true)
+  memoTheme            String  @default("classic")
+  memoLayout           String  @default("memo")
+  memosPerPage         Int     @default(3)
+
+  businessName            String?
+  businessPhone           String?
+  businessAddress         String?
+  phone                   String?
+  address                 String?
+  logoUrl                 String?
+  memoFooterText          String?
+  codLabel                String  @default("COD")
+  currencySymbol          String  @default("৳")
+  primaryColor            String?
+  catalogMessengerUrl     String?               // Custom link for catalog "Order on Messenger" button
+  catalogSlug             String?  @unique      // e.g. "limon-tech-diary" → /catalog/limon-tech-diary
+  // V8: Custom product code prefix (e.g. "SK", "FZ", "BD"). Default "DF"
+  productCodePrefix       String  @default("DF")
+  deliveryFeeInsideDhaka  Float   @default(80)
+  deliveryFeeOutsideDhaka Float   @default(120)
+  deliveryTimeText        String?
+
+  // V17: Payment mode — controls how bot collects payment before confirming order
+  // 'cod' = full cash on delivery (default)
+  // 'advance_outside' = advance required for outside-Dhaka orders, COD inside
+  // 'full_advance' = full advance required for every order
+  paymentMode            String  @default("cod")
+  advanceAmount          Float   @default(0)   // 0 = delivery fee only, >0 = custom fixed amount
+  advanceBkash           String?               // Bkash number shown to customer
+  advanceNagad           String?               // Nagad number shown to customer
+  advancePaymentMessage  String?               // Custom advance payment message template (supports {{amount}}, {{bkash}}, {{nagad}}, {{currency}})
+
+  callConfirmModeOn     Boolean @default(false)
+  callConfirmModeAllowed Boolean @default(true)
+  callMode              String  @default("MANUAL")
+  callConfirmationScope String  @default("ALL")
+  initialCallDelayMinutes Int   @default(30)
+  retryIntervalMinutes  Int     @default(30)
+  maxCallRetries        Int     @default(3)
+
+  callLanguage        String    @default("BN")
+  voiceType           String    @default("FEMALE")
+  voiceStyle          String    @default("NATURAL")
+  callProvider        String?
+  ttsProvider         String?
+  banglaVoiceId       String?
+  englishVoiceId      String?
+  banglaCallScript    String?
+  englishCallScript   String?
+  banglaVoiceFileUrl  String?
+  englishVoiceFileUrl String?
+  voiceGeneratedAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orders               Order[]
+  products             Product[]
+  conversationSessions ConversationSession[]
+  callAttempts         CallAttempt[]
+  memoTemplate         MemoTemplate?
+
+  // V5 Accounting
+  collections     Collection[]
+  expenses        Expense[]
+  returnEntries   ReturnEntry[]
+  exchangeEntries ExchangeEntry[]
+
+  // V9
+  customers        Customer[]
+  followUps        FollowUp[]
+  broadcasts       Broadcast[]
+  courierShipments CourierShipment[]
+}
+
+model Product {
+  id     Int  @id @default(autoincrement())
+  pageId Int
+  page   Page @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  code             String
+  name             String?
+  price            Float   @default(0)
+  costPrice        Float   @default(0) // V5: for profit estimation
+  stockQty         Int     @default(0)
+  imageUrl         String?
+  description      String?
+  isActive         Boolean @default(true)
+  // V8: Optional post caption — bot combines with OCR for confident code detection
+  postCaption      String?
+
+  // V10: Product Catalog
+  videoUrl         String? // YouTube URL
+  catalogVisible   Boolean @default(true)
+  catalogSortOrder Int     @default(0)
+
+  // V17: Bot asks customer for these before order (JSON: [{label,choices?}])
+  variantOptions   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orderItems OrderItem[]
+
+  @@unique([pageId, code])
+  @@index([pageId])
+}
+
+model Order {
+  id           Int     @id @default(autoincrement())
+  pageIdRef    Int
+  page         Page    @relation(fields: [pageIdRef], references: [id])
+  customerPsid String  @default("")
+  customerName String?
+  phone        String?
+  address      String?
+  status       String  @default("RECEIVED")
+  source       String  @default("FACEBOOK")
+
+  negotiationRequested Boolean @default(false)
+  customerOfferedPrice Float?
+  orderNote            String?
+
+  callStatus     String    @default("NONE")
+  callRetryCount Int       @default(0)
+  lastCallAt     DateTime?
+  callResult     String?
+  callSessionId  String?
+
+  // V17: Payment tracking (advance / full-advance modes)
+  // not_required | pending_proof | advance_paid | agent_required
+  paymentStatus        String  @default("not_required")
+  transactionId        String?
+  paymentScreenshotUrl String?
+  // pending_review | verified | verify_failed  (only used when paymentStatus=advance_paid)
+  paymentVerifyStatus  String  @default("pending_review")
+  printedAt            DateTime?
+
+  confirmedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  items        OrderItem[]
+  callAttempts CallAttempt[]
+
+  // V5 Accounting relations
+  collections     Collection[]
+  expenses        Expense[]
+  returnEntries   ReturnEntry[]
+  exchangeEntries ExchangeEntry[]
+
+  // V9
+  courierShipment CourierShipment?
+  followUps       FollowUp[]
+
+  @@index([pageIdRef])
+  @@index([customerPsid])
+  @@index([status])
+}
+
+model OrderItem {
+  id Int @id @default(autoincrement())
+
+  orderId Int
+  order   Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  productId Int?
+  product   Product? @relation(fields: [productId], references: [id])
+
+  productCode String
+  qty         Int     @default(1)
+  unitPrice   Float   @default(0)
+  productName String?
+  metaJson    String?
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+model ConversationSession {
+  id           Int    @id @default(autoincrement())
+  pageIdRef    Int
+  page         Page   @relation(fields: [pageIdRef], references: [id], onDelete: Cascade)
+  customerPsid String
+
+  activeDraftJson           String?
+  lastPresentedProductsJson String?
+  awaitingField             String?
+  lastIntent                String?
+  referencedMessageId       String?
+  agentHandling             Boolean @default(false) // true = bot stays silent, agent is handling
+
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  @@unique([pageIdRef, customerPsid])
+  @@index([pageIdRef])
+}
+
+model CallAttempt {
+  id              Int     @id @default(autoincrement())
+  orderId         Int
+  order           Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  pageId          Int
+  page            Page    @relation(fields: [pageId], references: [id])
+  phone           String
+  callProvider    String  @default("manual")
+  status          String  @default("INITIATED")
+  dtmfInput       String?
+  durationSeconds Int     @default(0)
+  errorMsg        String?
+
+  createdAt DateTime @default(now())
+
+  @@index([orderId])
+  @@index([pageId])
+}
+
+model MemoTemplate {
+  id         Int      @id @default(autoincrement())
+  pageIdRef  Int      @unique
+  page       Page     @relation(fields: [pageIdRef], references: [id], onDelete: Cascade)
+  filename   String
+  mapping    String   @default("{}")
+  status     String   @default("draft")
+  renderMode String   @default("fallback-auto")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+// ── V5 ACCOUNTING MODELS ──────────────────────────────────────────────────────
+
+/// Manual collection entry — tracks money actually received
+model Collection {
+  id      Int    @id @default(autoincrement())
+  pageId  Int
+  page    Page   @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  orderId Int?
+  order   Order? @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  // advance | full_payment | partial | cod | other_income
+  type        String   @default("full_payment")
+  // cash | bkash | nagad | bank | cod | other
+  method      String   @default("cash")
+  amount      Float    @default(0)
+  note        String?
+  collectedAt DateTime @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([pageId])
+  @@index([orderId])
+  @@index([collectedAt])
+}
+
+/// Business expense entry — order-linked or general
+model Expense {
+  id      Int    @id @default(autoincrement())
+  pageId  Int
+  page    Page   @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  orderId Int?
+  order   Order? @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  // courier | packaging | ads | resize | labour | sourcing | misc | other
+  category String   @default("misc")
+  amount   Float    @default(0)
+  note     String?
+  spentAt  DateTime @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([pageId])
+  @@index([orderId])
+  @@index([spentAt])
+}
+
+/// Return adjustment — affects revenue and refund tracking
+model ReturnEntry {
+  id      Int   @id @default(autoincrement())
+  pageId  Int
+  page    Page  @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  orderId Int
+  order   Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  // full | partial
+  returnType   String  @default("full")
+  refundAmount Float   @default(0)
+  returnCost   Float   @default(0)
+  note         String?
+
+  // Advance refund tracking
+  refundStatus      String    @default("pending")   // pending | given | not_applicable
+  refundGivenAt     DateTime?
+  refundGivenAmount Float?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([pageId])
+  @@index([orderId])
+}
+
+/// Exchange adjustment — extra charge or refund on swap
+model ExchangeEntry {
+  id      Int   @id @default(autoincrement())
+  pageId  Int
+  page    Page  @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  orderId Int
+  order   Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  extraCharge      Float   @default(0)
+  refundAdjustment Float   @default(0)
+  note             String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([pageId])
+  @@index([orderId])
+}
+
+// ── V9: CUSTOMER CRM ──────────────────────────────────────────────────────────
+
+/// One record per unique customer (psid) per page
+model Customer {
+  id           Int        @id @default(autoincrement())
+  pageId       Int
+  page         Page       @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  psid         String
+  name         String?
+  phone        String?
+  address      String?
+  note         String? // agent internal note
+  tags         String     @default("[]") // JSON array of string tags
+  totalOrders  Int        @default(0)
+  totalSpent   Float      @default(0)
+  firstOrderAt DateTime?
+  lastOrderAt  DateTime?
+  isBlocked    Boolean    @default(false)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  followUps    FollowUp[]
+
+  @@unique([pageId, psid])
+  @@index([pageId])
+}
+
+// ── V9: FOLLOW-UP ──────────────────────────────────────────────────────────────
+
+model FollowUp {
+  id          Int       @id @default(autoincrement())
+  pageId      Int
+  page        Page      @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  customerId  Int?
+  customer    Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  psid        String
+  orderId     Int?
+  order       Order?    @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  // pending | sent | failed | cancelled
+  status      String    @default("pending")
+  // order_received | order_delivered | abandoned_cart | custom
+  triggerType String    @default("custom")
+  message     String
+  scheduledAt DateTime
+  sentAt      DateTime?
+  error       String?
+  createdAt   DateTime  @default(now())
+
+  @@index([pageId])
+  @@index([status, scheduledAt])
+}
+
+// ── V9: COURIER ──────────────────────────────────────────────────────────────
+
+model CourierShipment {
+  id          Int       @id @default(autoincrement())
+  pageId      Int
+  page        Page      @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  orderId     Int       @unique
+  order       Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  // pathao | steadfast | redx | paperfly | manual
+  courierName String
+  // consignment_id / tracking_code from courier
+  trackingId  String?
+  trackingUrl String?
+  // pending | booked | picked | in_transit | delivered | returned | cancelled
+  status      String    @default("pending")
+  codAmount   Float     @default(0)
+  weight      Float     @default(0.5)
+  courierFee  Float?
+  bookedAt    DateTime?
+  deliveredAt DateTime?
+  returnedAt  DateTime?
+  rawResponse String? // full courier API response JSON
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([pageId])
+  @@index([status])
+}
+
+// ── V9: BROADCAST ─────────────────────────────────────────────────────────────
+
+model Broadcast {
+  id          Int       @id @default(autoincrement())
+  pageId      Int
+  page        Page      @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  title       String
+  message     String
+  // all | tag | ordered_before | never_ordered
+  targetType  String    @default("all")
+  targetValue String? // e.g. tag name, date range JSON
+  // draft | running | completed | failed
+  status      String    @default("draft")
+  totalTarget Int       @default(0)
+  totalSent   Int       @default(0)
+  totalFailed Int       @default(0)
+  scheduledAt DateTime?
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([pageId])
+}
+
+// ── V15: BILLING ──────────────────────────────────────────────────────────────
+
+model Plan {
+  id            String         @id @default(uuid())
+  name          String         @unique // starter | pro | enterprise
+  displayName   String
+  priceMonthly  Float          @default(0)
+  ordersLimit   Int            @default(500) // -1 = unlimited
+  pagesLimit    Int            @default(1) // -1 = unlimited
+  agentsLimit   Int            @default(1) // -1 = unlimited
+  isActive      Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  subscriptions Subscription[]
+}
+
+model Subscription {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planId String
+  plan   Plan   @relation(fields: [planId], references: [id])
+
+  // Status: trial | active | expired | cancelled | grace
+  status String @default("trial")
+
+  // Current billing period
+  periodStart DateTime @default(now())
+  periodEnd   DateTime
+
+  // Usage tracking (reset monthly)
+  ordersUsed  Int @default(0)
+  ordersLimit Int @default(500) // copied from plan at creation
+
+  // Trial
+  trialEndsAt DateTime?
+  isTrialUsed Boolean   @default(false)
+
+  // Payment
+  lastPaymentAt  DateTime?
+  nextPaymentDue DateTime?
+
+  note      String? // admin note
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  payments Payment[]
+
+  @@index([userId])
+  @@index([status])
+}
+
+model Payment {
+  id             String       @id @default(uuid())
+  subscriptionId String
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  amount        Float
+  currency      String  @default("BDT")
+  // bkash | nagad | bank | manual
+  method        String  @default("manual")
+  // Transaction ID from bKash or manual reference
+  transactionId String?
+  // pending | confirmed | failed | refunded
+  status        String  @default("pending")
+
+  note        String?
+  confirmedAt DateTime?
+  confirmedBy String? // admin userId
+  paidAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([subscriptionId])
+}

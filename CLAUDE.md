@@ -1,0 +1,133 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project Overview
+
+DF Bot is a multi-tenant SaaS platform for Facebook commerce automation targeting Bengali-speaking e-commerce entrepreneurs. It automates order handling, product detection via OCR, courier integration, and accounting for Facebook page owners.
+
+## Repository Structure
+
+```
+df-bot-v17.1/
+├── backend/       # NestJS API server (port 3000)
+├── dashboard/     # React 19 admin dashboard (port 5173 in dev)
+└── landing/       # Static marketing page (no build step)
+```
+
+## Commands
+
+### Backend
+
+```bash
+cd backend
+npm run start:dev       # Development with watch mode
+npm run start:prod      # Production (requires prior build)
+npm run build           # Prisma generate + TypeScript compile → dist/
+npm run lint            # ESLint with auto-fix
+npm run test            # Jest unit tests
+npm run test:watch      # Watch mode
+npm run test:cov        # Coverage report
+npm run test:e2e        # End-to-end tests
+npx prisma generate     # Regenerate Prisma client after schema changes
+npx prisma migrate deploy  # Apply pending migrations
+npx prisma studio       # Visual DB browser
+```
+
+### Dashboard
+
+```bash
+cd dashboard
+npm run dev             # Vite dev server (port 5173)
+npm run build           # tsc + Vite production build
+npm run lint            # ESLint check
+npm run preview         # Preview production build
+```
+
+## Key Environment Variables
+
+**Backend** (`.env`):
+- `DATABASE_URL` — SQLite (`file:./storage/dev.db`) or PostgreSQL
+- `FB_TOKEN_ENCRYPTION_KEY` — 32+ hex chars, used for AES-256 encryption of Facebook tokens
+- `FB_WEBHOOK_SECRET` — Meta App Secret for HMAC webhook verification
+- `DEFAULT_VERIFY_TOKEN` — Webhook verification token
+- `AUTH_ADMIN_USERNAME` / `AUTH_ADMIN_PASSWORD` — Bootstraps the admin account
+- `CORS_ORIGINS` — Comma-separated allowed origins (omit for open CORS)
+- `PORT` — Defaults to 3000
+
+**Dashboard** (`.env`):
+- `VITE_API_BASE` — Backend URL, defaults to `http://localhost:3000`
+
+## Backend Architecture
+
+NestJS with one module per domain. Each module follows the Service-Controller-Module pattern with Prisma for data access.
+
+**Core modules and their responsibilities:**
+
+| Module | Responsibility |
+|--------|---------------|
+| `auth` | Login, signup, sessions (token-based with expiry) |
+| `webhook` | Facebook Messenger webhook entry point |
+| `bot` | Intent detection, reply template execution |
+| `bot-knowledge` | Bot training data / knowledge base |
+| `conversation-context` | Per-conversation state management |
+| `messenger` | Facebook Send API wrapper |
+| `orders` | Order lifecycle management |
+| `products` | Product catalog CRUD |
+| `ocr` / `ocr-queue` | Image-to-text for product detection, job queue |
+| `courier` | Integrations: Pathao, Steadfast, RedX, Paperfly |
+| `accounting` | Revenue, expenses, profit calculations |
+| `crm` | Customer records and history |
+| `broadcast` | Bulk Messenger campaigns |
+| `followup` | Automated follow-up sequences |
+| `catalog` | Public-facing product catalog |
+| `billing` | Subscription and payment management |
+| `page` | Per-page Facebook configuration and settings |
+| `facebook` | OAuth flow for connecting Facebook pages |
+| `print` / `memo` | Invoice/memo generation and printing |
+| `scheduler` | Cron-style automated tasks |
+| `admin` | Admin panel backend |
+| `common` | Shared utilities: AES-256 encryption, validation helpers |
+| `prisma` | Singleton Prisma client |
+
+**Security layers:**
+- Rate limiting: 200 req/min globally; 10 attempts/5 min on auth endpoints
+- AES-256 encryption for all stored Facebook access tokens (`EncryptionService` in `common`)
+- HMAC-SHA256 verification for all incoming Facebook webhooks
+- Guard-based RBAC (`client` vs `admin` roles)
+- Environment variable validation at startup (crashes early if required vars missing)
+
+**Notable `main.ts` configuration:**
+- Body size limit: 1MB (except raw body preserved for webhook HMAC verification)
+- Static files served from `/storage` at the `/storage` route
+- PM2 process manager config in `ecosystem.config.js` (max 400MB memory, fork mode)
+
+## Dashboard Architecture
+
+React 19 with TypeScript, using screen-based navigation (no router library). The `App.tsx` top-level component manages which screen is shown.
+
+**State management:** Custom hooks only — no Redux/Zustand:
+- `useAuth()` — authentication state, login/logout, password change
+- `useApi()` — fetch wrapper that injects the auth token
+- `useToast()` — toast notification system
+
+**Theme:** Context-based dark/light mode persisted to `localStorage`.
+
+**HTTP:** Native `fetch` API throughout (no Axios or similar).
+
+Pages live in `src/pages/`. Shared UI primitives (inputs, modals, alerts, themed wrappers) are in `src/components/ui.tsx`.
+
+## Database
+
+Prisma ORM. SQLite for development (`./storage/dev.db`), PostgreSQL-compatible for production.
+
+After any schema change in `backend/prisma/schema.prisma`:
+1. Create a migration: `npx prisma migrate dev --name <description>`
+2. Regenerate client: `npm run prisma:generate`
+
+## Production Deployment
+
+1. Build backend: `cd backend && npm run build`
+2. Start with PM2: `pm2 start ecosystem.config.js`
+3. Build dashboard: `cd dashboard && npm run build` (output to `dist/`)
+4. Serve dashboard `dist/` via a static file server or reverse proxy

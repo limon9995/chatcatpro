@@ -1,0 +1,141 @@
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
+import { SkipThrottle } from '@nestjs/throttler';
+import { AuthGuard } from '../auth/auth.guard';
+import { Roles } from '../auth/roles.decorator';
+import { RolesGuard } from '../auth/roles.guard';
+import { AdminService } from './admin.service';
+
+@SkipThrottle({ global: true, auth: true })
+@Controller('admin')
+@UseGuards(AuthGuard, RolesGuard)
+@Roles('admin')
+export class AdminController {
+  constructor(private readonly svc: AdminService) {}
+
+  private parsePageId(raw: string): number {
+    const pageId = Number(raw);
+    if (!Number.isInteger(pageId) || pageId <= 0) {
+      throw new BadRequestException('Invalid pageId');
+    }
+    return pageId;
+  }
+
+  @Get('overview') overview() {
+    return this.svc.overview();
+  }
+  @Get('clients') clients() {
+    return this.svc.clients();
+  }
+  @Get('clients/:id') clientDetails(@Param('id') id: string) {
+    return this.svc.clientDetails(id);
+  }
+  @Get('pages') allPages() {
+    return this.svc.getAllPages();
+  }
+  @Get('health') health() {
+    return this.svc.health();
+  }
+  @Get('pages/:pageId/settings') getPageSettings(@Param('pageId') p: string) {
+    return this.svc.getPageSettings(this.parsePageId(p));
+  }
+  @Patch('pages/:pageId/settings') updatePageSettings(
+    @Param('pageId') p: string,
+    @Body() b: any,
+  ) {
+    return this.svc.updatePageSettings(this.parsePageId(p), b || {});
+  }
+
+  // ── Global bot-knowledge ──────────────────────────────────────────────────
+  @Get('bot-knowledge/global')
+  globalBotKnowledge() {
+    return this.svc.getGlobalBotKnowledge();
+  }
+
+  @Patch('bot-knowledge/global/questions')
+  updateGlobalQuestions(@Body('questions') q: any[]) {
+    return this.svc.updateGlobalBotQuestions(q || []);
+  }
+
+  @Patch('bot-knowledge/global/system-replies')
+  updateGlobalReplies(@Body('systemReplies') s: any) {
+    return this.svc.updateGlobalBotSystemReplies(s || {});
+  }
+
+  @Patch('bot-knowledge/global/areas')
+  updateGlobalAreas(@Body('areas') a: any[]) {
+    return this.svc.updateGlobalBotAreas(a || []);
+  }
+
+  @Get('bot-knowledge/learning-log')
+  learningLog() {
+    return this.svc.getBotLearningLog();
+  }
+
+  @Post('bot-knowledge/learning-log/create-question')
+  createFromLearning(@Body() b: any) {
+    return this.svc.createQuestionFromLearning(b || {});
+  }
+
+  // ── Per-client page knowledge ─────────────────────────────────────────────
+  @Get('bot-knowledge/page/:pageId')
+  getClientKnowledge(@Param('pageId') p: string) {
+    return this.svc.getClientBotKnowledge(this.parsePageId(p));
+  }
+
+  @Patch('bot-knowledge/page/:pageId/questions')
+  setClientQuestions(@Param('pageId') p: string, @Body('questions') q: any[]) {
+    return this.svc.setClientPageQuestions(this.parsePageId(p), q || []);
+  }
+
+  @Patch('bot-knowledge/page/:pageId/system-replies')
+  setClientReplies(@Param('pageId') p: string, @Body('systemReplies') s: any) {
+    return this.svc.setClientPageSystemReplies(this.parsePageId(p), s || {});
+  }
+
+  @Post('bot-knowledge/page/:pageId/push-global/:key')
+  pushGlobalToPage(@Param('pageId') p: string, @Param('key') key: string) {
+    return this.svc.pushGlobalQuestionToPage(this.parsePageId(p), key);
+  }
+
+  // ── V10: Courier tutorial videos (backward-compat) ───────────────────────
+  @Get('courier-tutorials')
+  getCourierTutorials() {
+    return this.svc.getCourierTutorials();
+  }
+
+  @Patch('courier-tutorials')
+  saveCourierTutorials(@Body() b: any) {
+    return this.svc.saveCourierTutorials(b || {});
+  }
+
+  // ── V17: Unified tutorials (courier + facebookAccessToken + generalOnboarding) ──
+  @Get('tutorials')
+  getTutorials() {
+    return this.svc.getTutorials();
+  }
+
+  @Patch('tutorials')
+  saveTutorials(@Body() b: any) {
+    return this.svc.saveTutorials(b || {});
+  }
+
+  // ── Global Config (callFeatureEnabled, callServers) ───────────────────────
+  @Get('global-config')
+  getGlobalConfig() {
+    return this.svc.getGlobalConfig();
+  }
+
+  @Patch('global-config')
+  saveGlobalConfig(@Body() b: any) {
+    return this.svc.saveGlobalConfig(b || {});
+  }
+}

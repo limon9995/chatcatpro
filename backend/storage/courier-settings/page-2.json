@@ -1,0 +1,20 @@
+{
+  "defaultCourier": "manual",
+  "autoBookOnConfirm": false,
+  "pathao": {
+    "apiKey": "",
+    "secretKey": "",
+    "storeId": ""
+  },
+  "steadfast": {
+    "apiKey": "",
+    "secretKey": ""
+  },
+  "redx": {
+    "apiKey": ""
+  },
+  "paperfly": {
+    "apiKey": "",
+    "apiPassword": ""
+  }
+}

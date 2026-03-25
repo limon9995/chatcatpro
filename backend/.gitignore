@@ -1,0 +1,35 @@
+# Environment — never commit secrets
+.env
+.env.local
+.env.production.local
+.env.*.local
+
+# Build output
+dist/
+node_modules/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Storage — uploaded files, OCR temp files, generated assets
+# Keep the directory structure but not the files
+storage/*.db
+storage/*.db-journal
+storage/*.db-shm
+storage/*.db-wal
+storage/uploads/
+storage/ocr/
+storage/global-config.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+# Test coverage
+coverage/

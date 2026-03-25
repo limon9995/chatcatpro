@@ -1,0 +1,116 @@
+import { useEffect, useState } from 'react';
+import { useAuth } from './hooks/useAuth';
+import { API_BASE, useApi } from './hooks/useApi';
+import { getTheme, useToast } from './components/ui';
+import { LoginPage } from './pages/LoginPage';
+import { SignupPageComponent } from './pages/SignupPage';
+import { ChangePasswordPage } from './pages/ChangePasswordPage';
+import { ConnectPageScreen } from './pages/ConnectPageScreen';
+import { DashboardLayout } from './pages/DashboardLayout';
+import { AdminPanel } from './pages/AdminPanel';
+
+type MyPage = { id: number; pageId: string; pageName: string; isActive: boolean; automationOn: boolean };
+type Screen = 'login' | 'signup' | 'change-password' | 'connect-page' | 'dashboard' | 'admin';
+
+export default function App() {
+  const [dark, setDark]     = useState(() => localStorage.getItem('dfbot_dark') !== '0');
+  const th                  = getTheme(dark);
+  const { user, ready, login, logout, changePassword } = useAuth();
+  const { request }         = useApi();
+  const { show: showToast, ToastNode } = useToast();
+
+  const [screen, setScreen]         = useState<Screen>('login');
+  const [myPages, setMyPages]       = useState<MyPage[]>([]);
+  const [activePage, setActivePage] = useState<MyPage | null>(null);
+
+  useEffect(() => { localStorage.setItem('dfbot_dark', dark ? '1' : '0'); }, [dark]);
+
+  useEffect(() => {
+    if (!ready) return;
+    if (!user)  { setScreen('login'); return; }
+    if (user.forcePasswordChange) { setScreen('change-password'); return; }
+    if (user.role === 'admin') { setScreen('admin'); return; }
+    loadMyPages();
+  }, [ready, user]);
+
+  const loadMyPages = async () => {
+    try {
+      const pages: MyPage[] = await request(`${API_BASE}/facebook/my-pages`);
+      setMyPages(pages);
+      if (pages.length === 0) { setScreen('connect-page'); return; }
+      const savedId = localStorage.getItem('dfbot_active_page');
+      const found   = savedId ? pages.find(p => p.id === Number(savedId)) : null;
+      setActivePage(found || pages[0]);
+      setScreen('dashboard');
+    } catch { setScreen('connect-page'); }
+  };
+
+  const handleLogin = async (username: string, password: string) => {
+    const result = await login(username, password);
+    if (result.mustChangePassword) { setScreen('change-password'); return; }
+    if (result.user?.role === 'admin') { setScreen('admin'); return; }
+    await loadMyPages();
+  };
+
+  const handleSignup = async (data: { identifier: string; password: string; name: string }) => {
+    const raw     = data.identifier.trim();
+    const isPhone = /^(\+88)?01[3-9]\d{8}$/.test(raw.replace(/[\s-]/g,''));
+    const isEmail = raw.includes('@');
+    const body: any = { password: data.password, name: data.name };
+    if (isPhone)      { body.phone    = raw.replace(/[\s-]/g,''); body.username = body.phone; }
+    else if (isEmail) { body.email    = raw.toLowerCase(); body.username = raw.toLowerCase(); }
+    else              { body.username = raw; }
+
+    await request(`${API_BASE}/auth/signup`, {
+      method: 'POST', body: JSON.stringify(body),
+    });
+    await handleLogin(raw, data.password);
+  };
+
+  const handleLogout = async () => {
+    await logout();
+    setMyPages([]); setActivePage(null); setScreen('login');
+  };
+
+  const handlePageSwitch = (p: MyPage) => {
+    setActivePage(p);
+    localStorage.setItem('dfbot_active_page', String(p.id));
+  };
+
+  if (!ready) return (
+    <div style={{ minHeight:'100vh', background: dark?'#06060a':'#f7f7f8', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'system-ui', color: dark?'#ededf0':'#0d0d10' }}>
+      <div style={{ textAlign:'center' }}>
+        <div style={{ fontSize:28, marginBottom:8, opacity:.4 }}>⬡</div>
+        <div style={{ fontSize:12, opacity:.35 }}>Loading…</div>
+      </div>
+    </div>
+  );
+
+  if (screen === 'login')
+    return <LoginPage dark={dark} setDark={setDark} onLogin={handleLogin} onSignup={() => setScreen('signup')} />;
+
+  if (screen === 'signup')
+    return <SignupPageComponent dark={dark} setDark={setDark} onSignup={handleSignup} onBack={() => setScreen('login')} />;
+
+  if (screen === 'change-password')
+    return <ChangePasswordPage dark={dark} onSubmit={async (cur, next) => { await changePassword(cur, next); await loadMyPages(); }} />;
+
+  if (screen === 'connect-page')
+    return <ConnectPageScreen dark={dark} userId={user?.id||''} onConnected={loadMyPages} onLogout={handleLogout} />;
+
+  if (screen === 'admin' && user?.role === 'admin')
+    return <><AdminPanel th={th} onToast={showToast} onLogout={handleLogout} />{ToastNode}</>;
+
+  if (screen === 'dashboard' && activePage && user)
+    return (
+      <DashboardLayout
+        dark={dark} setDark={setDark}
+        user={user} myPages={myPages} activePage={activePage}
+        onPageSwitch={handlePageSwitch}
+        onConnectMore={() => setScreen('connect-page')}
+        onLogout={handleLogout}
+      />
+    );
+
+  return null;
+}

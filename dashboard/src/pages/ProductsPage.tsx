@@ -1,0 +1,416 @@
+import { useCallback, useEffect, useState } from 'react';
+import { EmptyState, FieldWithInfo, Spinner } from '../components/ui';
+import type { Theme } from '../components/ui';
+import { API_BASE, useApi } from '../hooks/useApi';
+import { useLanguage } from '../i18n';
+
+type Product = {
+  id: number; code: string; name: string | null;
+  price: number; costPrice: number; stockQty: number;
+  isActive: boolean; postCaption: string | null;
+  videoUrl: string | null; catalogVisible: boolean;
+  imageUrl: string | null; description: string | null;
+  variantOptions: string | null;
+};
+
+type EditData = {
+  name?: string; price?: number; costPrice?: number; stockQty?: number;
+  postCaption?: string; videoUrl?: string; catalogVisible?: boolean;
+  description?: string; imageUrl?: string; variantOptions?: string;
+};
+
+const EMPTY = { code: '', name: '', price: 0, costPrice: 0, stockQty: 0, postCaption: '', videoUrl: '', catalogVisible: true, description: '', imageUrl: '', variantOptions: '' };
+
+/** Convert DB JSON variantOptions → textarea text ("Size: S,M,L,XL\nColor: Red,Blue") */
+function variantOptionsToText(json: string | null): string {
+  if (!json) return '';
+  try {
+    const arr: { label: string; choices?: string[] }[] = JSON.parse(json);
+    return arr.map(v => v.choices?.length ? `${v.label}: ${v.choices.join(',')}` : v.label).join('\n');
+  } catch { return ''; }
+}
+
+function extractYouTubeId(url: string): string | null {
+  const m = url?.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/);
+  return m?.[1] ?? null;
+}
+
+export function ProductsPage({ th, pageId, onToast }: {
+  th: Theme; pageId: number; onToast: (m: string, t?: any) => void;
+}) {
+  const { copy } = useLanguage();
+  const { request } = useApi();
+  const [products, setProducts]   = useState<Product[]>([]);
+  const [loading, setLoading]     = useState(false);
+  const [view, setView]           = useState<'grid' | 'list'>('grid');
+  const [search, setSearch]       = useState('');
+  const [editId, setEditId]       = useState<number | null>(null);
+  const [editData, setEditData]   = useState<EditData>({});
+  const [newP, setNewP]           = useState(EMPTY);
+  const [showNew, setShowNew]     = useState(false);
+  const [busy, setBusy]           = useState(false);
+  const BASE = `${API_BASE}/client-dashboard/${pageId}`;
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try { setProducts(await request<Product[]>(`${BASE}/products`)); }
+    catch (e: any) { onToast(e.message, 'error'); }
+    finally { setLoading(false); }
+  }, [pageId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const openEdit = (p: Product) => {
+    setEditId(p.id);
+    setEditData({ name: p.name ?? '', price: p.price, costPrice: p.costPrice, stockQty: p.stockQty, postCaption: p.postCaption ?? '', videoUrl: p.videoUrl ?? '', catalogVisible: p.catalogVisible ?? true, description: p.description ?? '', imageUrl: p.imageUrl ?? '', variantOptions: variantOptionsToText(p.variantOptions) });
+  };
+
+  const saveEdit = async (p: Product) => {
+    setBusy(true);
+    try {
+      await request(`${BASE}/products/${p.code}`, { method: 'PATCH', body: JSON.stringify(editData) });
+      onToast(copy('✓ Saved', '✓ Saved')); setEditId(null); load();
+    } catch (e: any) { onToast(e.message, 'error'); }
+    finally { setBusy(false); }
+  };
+
+  const createProduct = async () => {
+    if (!newP.code.trim()) return onToast(copy('Product code দিন', 'Enter a product code'), 'error');
+    setBusy(true);
+    try {
+      await request(`${BASE}/products`, { method: 'POST', body: JSON.stringify(newP) });
+      onToast(copy('✓ Product created', '✓ Product created')); setNewP(EMPTY); setShowNew(false); load();
+    } catch (e: any) { onToast(e.message, 'error'); }
+    finally { setBusy(false); }
+  };
+
+  const deleteProduct = async (code: string) => {
+    if (!confirm(copy('Delete করবেন?', 'Do you want to delete this product?'))) return;
+    try {
+      await request(`${BASE}/products/${code}`, { method: 'DELETE' });
+      onToast(copy('Deleted', 'Deleted')); load();
+    } catch (e: any) { onToast(e.message, 'error'); }
+  };
+
+  const filtered = products.filter(p => {
+    if (!search) return true;
+    const s = search.toLowerCase();
+    return p.code.toLowerCase().includes(s) || (p.name || '').toLowerCase().includes(s);
+  });
+
+  const stats = {
+    total:    products.length,
+    active:   products.filter(p => p.isActive).length,
+    lowStock: products.filter(p => p.stockQty <= 3 && p.isActive).length,
+    withImg:  products.filter(p => p.imageUrl).length,
+    withVid:  products.filter(p => p.videoUrl).length,
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+        <div>
+          <h1 style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.04em', margin: 0 }}>Products</h1>
+          <p style={{ fontSize: 13, color: th.muted, margin: '3px 0 0' }}>
+            {stats.active} {copy('active', 'active')} · {stats.lowStock > 0 ? <span style={{ color: '#ea580c' }}>{stats.lowStock} {copy('low stock', 'low stock')}</span> : copy('stock ok', 'stock ok')}
+          </p>
+        </div>
+        <button style={th.btnPrimary} onClick={() => setShowNew(v => !v)}>
+          {showNew ? copy('✕ Cancel', '✕ Cancel') : copy('+ Add Product', '+ Add Product')}
+        </button>
+      </div>
+
+      {/* Stats row */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(120px,1fr))', gap: 10 }}>
+        {[
+          { label: 'Total',     val: stats.total,    color: th.accent },
+          { label: 'Active',    val: stats.active,   color: '#16a34a' },
+          { label: 'Low Stock', val: stats.lowStock, color: stats.lowStock > 0 ? '#ea580c' : '#16a34a' },
+          { label: 'With Photo',val: stats.withImg,  color: '#8b5cf6' },
+          { label: 'With Video',val: stats.withVid,  color: '#0891b2' },
+        ].map(k => (
+          <div key={k.label} style={{ ...th.card2, textAlign: 'center', padding: '12px 8px' }}>
+            <div style={{ fontSize: 22, fontWeight: 900, color: k.color, letterSpacing: '-0.05em' }}>{k.val}</div>
+            <div style={{ fontSize: 10.5, color: th.muted, marginTop: 3, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{k.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* New product form */}
+      {showNew && (
+        <div style={{ ...th.card, border: `1.5px solid ${th.accent}44` }}>
+          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 16 }}>{copy('Add New Product', 'Add New Product')}</div>
+          {(() => {
+            const newYtId = extractYouTubeId(newP.videoUrl);
+            return (
+              <>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(160px,1fr))', gap: 12 }}>
+            <FieldWithInfo th={th} label="Code *" helpText={copy('Unique product code। যেমন: DF-0001, SK-0042', 'Unique product code, for example: DF-0001, SK-0042')}>
+              <input style={th.input} placeholder="DF-0001" value={newP.code}
+                onChange={e => setNewP(p => ({ ...p, code: e.target.value.toUpperCase() }))} />
+            </FieldWithInfo>
+            <FieldWithInfo th={th} label="Name" helpText={copy('Product এর নাম', 'Product name')}>
+              <input style={th.input} placeholder="Blue Kurti" value={newP.name}
+                onChange={e => setNewP(p => ({ ...p, name: e.target.value }))} />
+            </FieldWithInfo>
+            <FieldWithInfo th={th} label="Price (৳)" helpText="Selling price">
+              <input style={th.input} type="number" min={0} value={newP.price || ''}
+                onChange={e => setNewP(p => ({ ...p, price: Number(e.target.value) }))} />
+            </FieldWithInfo>
+            <FieldWithInfo th={th} label="Cost Price (৳)" helpText={copy('আপনার ক্রয় মূল্য — profit হিসাবের জন্য', 'Your purchase cost, used for profit calculation')}>
+              <input style={th.input} type="number" min={0} value={newP.costPrice || ''}
+                onChange={e => setNewP(p => ({ ...p, costPrice: Number(e.target.value) }))} />
+            </FieldWithInfo>
+            <FieldWithInfo th={th} label="Stock" helpText={copy('প্রাথমিক stock পরিমাণ', 'Initial stock quantity')}>
+              <input style={th.input} type="number" min={0} value={newP.stockQty || ''}
+                onChange={e => setNewP(p => ({ ...p, stockQty: Number(e.target.value) }))} />
+            </FieldWithInfo>
+            <FieldWithInfo th={th} label="Image URL" helpText={copy('Product এর ছবির URL', 'Product image URL')}>
+              <input style={th.input} placeholder="https://..." value={newP.imageUrl}
+                onChange={e => setNewP(p => ({ ...p, imageUrl: e.target.value }))} />
+            </FieldWithInfo>
+            <FieldWithInfo th={th} label="Video URL" helpText={copy('YouTube video link দিন, catalog-এ ভিডিও দেখাবে', 'Add a YouTube video link to show it in the catalog')}>
+              <input style={th.input} placeholder="https://youtube.com/watch?v=..." value={newP.videoUrl}
+                onChange={e => setNewP(p => ({ ...p, videoUrl: e.target.value }))} />
+            </FieldWithInfo>
+          </div>
+          {newYtId && (
+            <div style={{ marginTop: 12, borderRadius: 12, overflow: 'hidden', aspectRatio: '16/9', background: '#000', border: `1px solid ${th.border}` }}>
+              <iframe
+                src={`https://www.youtube.com/embed/${newYtId}`}
+                style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
+                allowFullScreen
+                title="new-product-video-preview"
+              />
+            </div>
+          )}
+          <div style={{ marginTop: 12 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+              <input
+                type="checkbox"
+                checked={newP.catalogVisible}
+                onChange={e => setNewP(p => ({ ...p, catalogVisible: e.target.checked }))}
+                style={{ accentColor: th.accent }}
+              />
+              {copy('Catalog এ দেখাবে', 'Show in Catalog')}
+            </label>
+            <div style={{ fontSize: 11.5, color: th.muted, marginTop: 4 }}>
+              {copy('Tick থাকলে product catalog-এ দেখাবে। Tick তুলে দিলে add হবে, কিন্তু catalog-এ লুকানো থাকবে।', 'If checked, the product will appear in the catalog. If unchecked, it will be added but stay hidden from the catalog.')}
+            </div>
+          </div>
+          {/* Variant options — bot asks these before order */}
+          <div style={{ marginTop: 12 }}>
+            <FieldWithInfo th={th} label="Bot Variants (optional)" helpText={copy('Bot order নেওয়ার সময় customer কে জিজ্ঞেস করবে। প্রতি লাইনে: Label: choice1, choice2 — যেমন: Size: S,M,L,XL', 'The bot will ask customers these choices while ordering. Use one line per option group, for example: Size: S,M,L,XL')}>
+              <textarea
+                style={{ ...th.input, minHeight: 64, resize: 'vertical', fontFamily: 'monospace', fontSize: 12.5 }}
+                placeholder={'Size: S,M,L,XL\nColor: Red,Blue,Black'}
+                value={newP.variantOptions}
+                onChange={e => setNewP(p => ({ ...p, variantOptions: e.target.value }))}
+              />
+            </FieldWithInfo>
+          </div>
+          <div style={{ marginTop: 14, display: 'flex', gap: 8 }}>
+            <button style={th.btnPrimary} onClick={createProduct} disabled={busy}>
+              {busy ? <Spinner size={13} color="#fff"/> : null} {copy('Create Product', 'Create Product')}
+            </button>
+            <button style={th.btnGhost} onClick={() => setShowNew(false)}>{copy('Cancel', 'Cancel')}</button>
+          </div>
+              </>
+            );
+          })()}
+        </div>
+      )}
+
+      {/* Toolbar */}
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div style={{ position: 'relative', flex: 1, maxWidth: 260 }}>
+          <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: th.muted, fontSize: 13 }}>⌕</span>
+          <input style={{ ...th.input, paddingLeft: 30 }} placeholder="Search products..."
+            value={search} onChange={e => setSearch(e.target.value)} />
+        </div>
+        <div style={{ display: 'flex', background: th.surface, borderRadius: 8, padding: 3, border: `1px solid ${th.border}` }}>
+          {(['grid','list'] as const).map(v => (
+            <button key={v} onClick={() => setView(v)} style={{
+              padding: '5px 12px', borderRadius: 6, border: 'none', cursor: 'pointer',
+              fontFamily: 'inherit', fontSize: 12, fontWeight: 600,
+              background: view === v ? th.panel : 'transparent',
+              color: view === v ? th.accent : th.muted,
+              boxShadow: view === v ? th.shadow : 'none',
+              transition: 'all .12s',
+            }}>
+              {v === 'grid' ? '⊞' : '☰'} {v.charAt(0).toUpperCase() + v.slice(1)}
+            </button>
+          ))}
+        </div>
+        <button style={th.btnGhost} onClick={load}>{loading ? <Spinner size={13}/> : '↺'}</button>
+        <span style={{ fontSize: 12.5, color: th.muted }}>{filtered.length} products</span>
+      </div>
+
+      {/* Products — Grid view */}
+      {view === 'grid' && (
+        loading && !products.length ? (
+          <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}><Spinner size={22} color={th.accent}/></div>
+        ) : filtered.length === 0 ? (
+          <EmptyState icon="📦" title={copy('No products found', 'No products found')} sub={copy('উপরে Add Product ক্লিক করে শুরু করুন', 'Click Add Product above to get started')} />
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 14 }}>
+            {filtered.map(p => {
+              const isEditing = editId === p.id;
+              const ytId = extractYouTubeId(editData.videoUrl ?? p.videoUrl ?? '');
+
+              return (
+                <div key={p.id} style={{
+                  ...th.card, padding: 0, overflow: 'hidden',
+                  border: `1px solid ${isEditing ? th.accent + '66' : th.border}`,
+                  opacity: p.isActive ? 1 : 0.55, transition: 'all .15s',
+                }}>
+                  {/* Image */}
+                  <div style={{ position: 'relative', aspectRatio: '4/3', background: th.surface, overflow: 'hidden' }}>
+                    {p.imageUrl
+                      ? <img src={p.imageUrl} alt={p.name || p.code} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                      : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 32, color: th.muted }}>🛍</div>
+                    }
+                    {/* Badges */}
+                    <div style={{ position: 'absolute', top: 8, left: 8, display: 'flex', gap: 4 }}>
+                      {p.videoUrl && <span style={{ ...th.pill, background: '#0891b244', color: '#0891b2', border: '1px solid #0891b244', fontSize: 9.5 }}>🎬</span>}
+                      {!p.catalogVisible && <span style={{ ...th.pill, ...th.pillGray, fontSize: 9.5 }}>Hidden</span>}
+                    </div>
+                    {/* Stock badge */}
+                    <div style={{ position: 'absolute', top: 8, right: 8 }}>
+                      <span style={{ ...th.pill, fontSize: 9.5, ...(p.stockQty === 0 ? th.pillRed : p.stockQty <= 3 ? th.pillYellow : th.pillGreen) }}>
+                        {p.stockQty === 0 ? 'Out' : `${p.stockQty}`}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Content */}
+                  {!isEditing ? (
+                    <div style={{ padding: '12px 14px' }}>
+                      <div style={{ fontSize: 10.5, color: th.muted, fontWeight: 700, letterSpacing: '0.05em', marginBottom: 3 }}>{p.code}</div>
+                      <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name || '—'}</div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                        <span style={{ fontWeight: 900, fontSize: 16, color: th.accent, letterSpacing: '-0.03em' }}>৳{p.price.toLocaleString()}</span>
+                        {p.costPrice > 0 && <span style={{ fontSize: 11, color: '#16a34a' }}>+৳{(p.price - p.costPrice).toLocaleString()} profit</span>}
+                      </div>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button style={{ ...th.btnSm, flex: 1, justifyContent: 'center' }} onClick={() => openEdit(p)}>Edit</button>
+                        <button style={{ ...th.btnSmDanger }} onClick={() => deleteProduct(p.code)}>✕</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ padding: '12px 14px' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        <input style={{ ...th.input, fontSize: 12.5 }} placeholder="Name" value={editData.name ?? ''}
+                          onChange={e => setEditData(d => ({ ...d, name: e.target.value }))} />
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                          <input style={{ ...th.input, fontSize: 12.5 }} type="number" placeholder="Price" value={editData.price ?? ''}
+                            onChange={e => setEditData(d => ({ ...d, price: Number(e.target.value) }))} />
+                          <input style={{ ...th.input, fontSize: 12.5 }} type="number" placeholder="Cost" value={editData.costPrice ?? ''}
+                            onChange={e => setEditData(d => ({ ...d, costPrice: Number(e.target.value) }))} />
+                        </div>
+                        <input style={{ ...th.input, fontSize: 12.5 }} type="number" placeholder="Stock" value={editData.stockQty ?? ''}
+                          onChange={e => setEditData(d => ({ ...d, stockQty: Number(e.target.value) }))} />
+                        <input style={{ ...th.input, fontSize: 12.5 }} placeholder="Image URL" value={editData.imageUrl ?? ''}
+                          onChange={e => setEditData(d => ({ ...d, imageUrl: e.target.value }))} />
+                        {/* Video URL */}
+                        <div>
+                          <input style={{ ...th.input, fontSize: 12.5 }} placeholder="YouTube / Facebook video URL"
+                            value={editData.videoUrl ?? ''}
+                            onChange={e => setEditData(d => ({ ...d, videoUrl: e.target.value }))} />
+                          {ytId && (
+                            <div style={{ marginTop: 6, borderRadius: 8, overflow: 'hidden', aspectRatio: '16/9', background: '#000' }}>
+                              <iframe src={`https://www.youtube.com/embed/${ytId}`} style={{ width: '100%', height: '100%', border: 'none', display: 'block' }} allowFullScreen title="preview"/>
+                            </div>
+                          )}
+                        </div>
+                        {/* Catalog visible toggle */}
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 12.5 }}>
+                          <input type="checkbox" checked={editData.catalogVisible ?? true}
+                            onChange={e => setEditData(d => ({ ...d, catalogVisible: e.target.checked }))}
+                            style={{ accentColor: th.accent }} />
+                          Show in Catalog
+                        </label>
+                        {/* Variant options */}
+                        <div>
+                          <div style={{ fontSize: 11, color: th.muted, marginBottom: 4 }}>Bot Variants — প্রতি লাইনে: Label: choice1,choice2</div>
+                          <textarea
+                            style={{ ...th.input, fontSize: 12, minHeight: 56, resize: 'vertical', fontFamily: 'monospace' }}
+                            placeholder={'Size: S,M,L,XL\nColor: Red,Blue'}
+                            value={editData.variantOptions ?? ''}
+                            onChange={e => setEditData(d => ({ ...d, variantOptions: e.target.value }))}
+                          />
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
+                        <button style={{ ...th.btnSmSuccess, flex: 1, justifyContent: 'center', fontSize: 12 }}
+                          onClick={() => saveEdit(p)} disabled={busy}>
+                          {busy ? <Spinner size={11}/> : '✓'} Save
+                        </button>
+                        <button style={th.btnSmGhost} onClick={() => setEditId(null)}>✕</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )
+      )}
+
+      {/* Products — List view */}
+      {view === 'list' && (
+        <div style={{ ...th.card, padding: 0, overflow: 'hidden' }}>
+          {filtered.length === 0
+            ? <EmptyState icon="📦" title="No products" />
+            : (
+              <table style={th.table}>
+                <thead>
+                  <tr>
+                    <th style={th.th}>Code</th>
+                    <th style={th.th}>Name</th>
+                    <th style={th.th}>Price</th>
+                    <th style={th.th}>Cost</th>
+                    <th style={th.th}>Stock</th>
+                    <th style={th.th}>Status</th>
+                    <th style={th.th}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map(p => (
+                    <tr key={p.id} style={{ opacity: p.isActive ? 1 : 0.5 }}>
+                      <td style={{ ...th.td, fontWeight: 700, color: th.accentText, fontSize: 12.5 }}>{p.code}</td>
+                      <td style={th.td}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          {p.imageUrl && <img src={p.imageUrl} style={{ width: 32, height: 32, borderRadius: 6, objectFit: 'cover' }} onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}/>}
+                          <span style={{ fontWeight: 600 }}>{p.name || '—'}</span>
+                        </div>
+                      </td>
+                      <td style={{ ...th.td, fontWeight: 700 }}>৳{p.price.toLocaleString()}</td>
+                      <td style={{ ...th.td, color: th.muted }}>৳{p.costPrice}</td>
+                      <td style={th.td}>
+                        <span style={{ ...th.pill, fontSize: 11, ...(p.stockQty === 0 ? th.pillRed : p.stockQty <= 3 ? th.pillYellow : th.pillGreen) }}>
+                          {p.stockQty}
+                        </span>
+                      </td>
+                      <td style={th.td}>
+                        {p.videoUrl && <span style={{ ...th.pill, ...th.pillBlue, fontSize: 10, marginRight: 4 }}>🎬</span>}
+                        {!p.catalogVisible && <span style={{ ...th.pill, ...th.pillGray, fontSize: 10 }}>Hidden</span>}
+                      </td>
+                      <td style={th.td}>
+                        <div style={{ display: 'flex', gap: 5 }}>
+                          <button style={th.btnSmGhost} onClick={() => openEdit(p)}>Edit</button>
+                          <button style={th.btnSmDanger} onClick={() => deleteProduct(p.code)}>✕</button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+        </div>
+      )}
+    </div>
+  );
+}
