@@ -1,3 +1,6 @@
+# Claude Code settings
+.claude/
+
 # Environment — never commit secrets
 .env
 .env.local
