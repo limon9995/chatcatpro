@@ -767,7 +767,7 @@ export class AnalyticsService {
     );
     const printReadyRows = printWorkflowEnabled
       ? await this.prisma.$queryRawUnsafe<{ count: bigint | number }[]>(
-          `SELECT COUNT(*) as count FROM "Order" WHERE "pageIdRef" = ? AND status = 'CONFIRMED' AND "printedAt" IS NULL`,
+          `SELECT COUNT(*) as count FROM "Order" WHERE "pageIdRef" = $1 AND status = 'CONFIRMED' AND "printedAt" IS NULL`,
           pageId,
         )
       : [];
