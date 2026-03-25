@@ -458,8 +458,9 @@ export function AgentTasksPage({ th, pageId, onToast, onOpenOrders, onOpenPrint,
   const setupPending = onboardingTasks.reduce((sum, task) => sum + task.count, 0);
   const pending = pendingIds.size + setupPending;
   const botHandled = Math.max(totalOrders - pending, 0);
-  const botPct = totalOrders ? Math.round((botHandled / totalOrders) * 100) : 100;
-  const agentPct = totalOrders ? 100 - botPct : 0;
+  const totalWithSetup = totalOrders + setupPending;
+  const botPct = totalWithSetup ? Math.round((botHandled / totalWithSetup) * 100) : 100;
+  const agentPct = totalWithSetup ? 100 - botPct : 0;
 
   if (loading && !orders.length) {
     return (
