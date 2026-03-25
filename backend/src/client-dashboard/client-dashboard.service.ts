@@ -436,7 +436,7 @@ export class ClientDashboardService {
         callLanguage: page.callLanguage ?? 'BN',
         voiceType: page.voiceType ?? 'FEMALE',
         voiceStyle: page.voiceStyle ?? 'NATURAL',
-        ttsProvider: page.ttsProvider ?? '', // who generates audio
+        ttsProvider: page.ttsProvider || 'MANUAL_UPLOAD', // who generates audio
         banglaVoiceId: page.banglaVoiceId ?? '',
         englishVoiceId: page.englishVoiceId ?? '',
         banglaCallScript: page.banglaCallScript ?? '',
