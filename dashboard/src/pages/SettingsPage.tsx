@@ -56,7 +56,7 @@ const S0: Settings = {
     initialCallDelayMinutes: 30, retryIntervalMinutes: 30, maxCallRetries: 3, callProvider: '',
   },
   voiceSettings: {
-    callLanguage: 'BN', voiceType: 'FEMALE', voiceStyle: 'NATURAL', ttsProvider: '',
+    callLanguage: 'BN', voiceType: 'FEMALE', voiceStyle: 'NATURAL', ttsProvider: 'MANUAL_UPLOAD',
     banglaVoiceId: '', englishVoiceId: '', banglaCallScript: '', englishCallScript: '',
     banglaVoiceFileUrl: '', englishVoiceFileUrl: '', voiceGeneratedAt: null,
   },
@@ -887,27 +887,6 @@ export function SettingsPage({ th, pageId, tab, onToast }: {
             )}
           </Section>
 
-          {/* Voice options */}
-          <Section title="🗣 Voice Options">
-            <Grid cols={2}>
-              <div>
-                <Label text={copy('ভাষা', 'Language')}/>
-                <select style={inp} value={s.voiceSettings.callLanguage}
-                  onChange={e => setS(p => ({ ...p, voiceSettings: { ...p.voiceSettings, callLanguage: e.target.value } }))}>
-                  <option value="BN">{copy('🇧🇩 বাংলা', '🇧🇩 Bangla')}</option>
-                  <option value="EN">🇺🇸 English</option>
-                </select>
-              </div>
-              <div>
-                <Label text="Voice Type"/>
-                <select style={inp} value={s.voiceSettings.voiceType}
-                  onChange={e => setS(p => ({ ...p, voiceSettings: { ...p.voiceSettings, voiceType: e.target.value } }))}>
-                  <option value="FEMALE">👩 Female</option>
-                  <option value="MALE">👨 Male</option>
-                </select>
-              </div>
-            </Grid>
-          </Section>
 
           {!isManualUpload && (
             <Section title="🔑 Voice IDs" desc={copy('Provider-এর নিজস্ব voice identifier — খালি রাখলে default ব্যবহার হবে', 'Provider-specific voice IDs. Leave empty to use the default voice')}>
