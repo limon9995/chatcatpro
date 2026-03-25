@@ -17,7 +17,7 @@ export class OtpService {
       user: process.env.GMAIL_USER,
       pass: process.env.GMAIL_APP_PASSWORD,
     },
-  });
+  } as any);
 
   constructor(private readonly prisma: PrismaService) {}
 
