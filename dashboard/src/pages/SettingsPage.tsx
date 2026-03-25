@@ -409,7 +409,7 @@ export function SettingsPage({ th, pageId, tab, onToast }: {
               </div>
               {s.catalogSlug && (
                 <div style={{ fontSize: 11.5, color: th.accent, marginTop: 5, fontFamily: 'monospace' }}>
-                  {window.location.protocol}//{window.location.hostname}:3000/catalog/{s.catalogSlug}
+                  {API_BASE}/catalog/{s.catalogSlug}
                 </div>
               )}
             </div>
