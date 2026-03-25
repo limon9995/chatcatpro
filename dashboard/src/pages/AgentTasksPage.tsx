@@ -223,7 +223,7 @@ export function AgentTasksPage({ th, pageId, onToast, onOpenOrders, onOpenPrint,
           orders: [],
           count:
             !settings.catalogSlug.trim() ||
-            !settings.catalogMessengerUrl.trim()
+            (!settings.catalogMessengerUrl.trim() && !(settings as any).fbPageId)
               ? 1
               : 0,
           preset: { label: 'Complete Catalog Setup' },
