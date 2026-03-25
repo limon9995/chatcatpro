@@ -417,9 +417,11 @@ export function SettingsPage({ th, pageId, tab, onToast }: {
               <Label text="🔗 Catalog Page Link" hint={copy(`Catalog এ 'Order করুন' button এ এই link যাবে — Facebook page, Messenger বা WhatsApp link দিন`, `This link will open when customers click the 'Order Now' button in the catalog - use a Facebook page, Messenger, or WhatsApp link`)}/>
               <input style={inp} value={s.catalogMessengerUrl}
                 onChange={e => setS(p => ({ ...p, catalogMessengerUrl: e.target.value }))}
-                placeholder={copy('https://m.me/your-page  বা  https://wa.me/8801700000000', 'https://m.me/your-page or https://wa.me/8801700000000')}/>
+                placeholder={(s as any).fbPageId ? `https://m.me/${(s as any).fbPageId} (auto)` : copy('https://m.me/your-page  বা  https://wa.me/8801700000000', 'https://m.me/your-page or https://wa.me/8801700000000')}/>
               <div style={{ fontSize: 11.5, color: th.muted, marginTop: 5 }}>
-                {copy('খালি রাখলে Facebook Messenger auto-detect হবে', 'Leave this empty to auto-detect Facebook Messenger')}
+                {(s as any).fbPageId
+                  ? copy(`খালি রাখলে auto: https://m.me/${(s as any).fbPageId}`, `Leave empty to auto-use: https://m.me/${(s as any).fbPageId}`)
+                  : copy('খালি রাখলে Facebook Messenger auto-detect হবে', 'Leave this empty to auto-detect Facebook Messenger')}
               </div>
             </div>
           </Grid>

@@ -409,6 +409,7 @@ export class ClientDashboardService {
       advancePaymentMessage: page.advancePaymentMessage ?? '',
       catalogMessengerUrl: page.catalogMessengerUrl ?? '',
       catalogSlug: page.catalogSlug ?? '',
+      fbPageId: page.pageId ?? '',
       // Feature flags
       infoModeOn: Boolean(page.infoModeOn),
       orderModeOn: Boolean(page.orderModeOn),
