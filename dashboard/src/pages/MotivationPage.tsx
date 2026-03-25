@@ -158,15 +158,17 @@ export function MotivationPage({ th, pageId, onToast, onOpenAgentTasks, onOpenOr
   const [loading, setLoading]         = useState(false);
   const [animKey, setAnimKey]         = useState(0);
 
+  const [loadError, setLoadError] = useState('');
+
   const load = useCallback(async () => {
-    setLoading(true);
+    setLoading(true); setLoadError('');
     try {
       const [d, sc] = await Promise.all([
         request<any>(`${API_BASE}/client-dashboard/${pageId}/analytics/motivation`),
         request<any>(`${API_BASE}/client-dashboard/${pageId}/sender-count`),
       ]);
       setData(d); setSenderCount(sc?.uniqueSenders ?? null); setAnimKey(k => k + 1);
-    } catch (e: any) { onToast(e.message, 'error'); }
+    } catch (e: any) { setLoadError(e.message || 'Failed to load'); }
     finally { setLoading(false); }
   }, [pageId]);
 
@@ -178,8 +180,18 @@ export function MotivationPage({ th, pageId, onToast, onOpenAgentTasks, onOpenOr
     </div>
   );
   if (!data) return (
-    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:80, gap:16, opacity:.5 }}>
-      <div style={{ fontSize:32 }}>📊</div>
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:80, gap:16 }}>
+      <div style={{ fontSize:40, opacity:.4 }}>📊</div>
+      {loadError && (
+        <div style={{ fontSize:12, color:'#ef4444', background:'rgba(239,68,68,0.08)', border:'1px solid rgba(239,68,68,0.2)', borderRadius:8, padding:'8px 16px', maxWidth:400, textAlign:'center' }}>
+          {loadError}
+        </div>
+      )}
+      {!loadError && (
+        <div style={{ fontSize:13, color:th.muted, textAlign:'center' }}>
+          {copy('এখনো কোনো ডেটা নেই। Facebook Page connect করুন এবং orders আসলে এখানে দেখাবে।', 'No data yet. Connect your Facebook Page and data will appear once orders come in.')}
+        </div>
+      )}
       <button onClick={load} style={{ padding:'8px 20px', borderRadius:8, border:`1px solid ${th.border}`, background:'transparent', color:th.text, cursor:'pointer', fontSize:13 }}>
         {copy('🔄 Reload', '🔄 Reload')}
       </button>
