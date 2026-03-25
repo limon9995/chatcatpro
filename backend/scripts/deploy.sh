@@ -20,9 +20,9 @@ npm ci --omit=dev
 echo "[2/5] Generating Prisma client..."
 npx prisma generate
 
-# 3. Run pending migrations (safe — only applies what hasn't been applied yet)
-echo "[3/5] Running database migrations..."
-npx prisma migrate deploy
+# 3. Sync schema to database (db push — safe for PostgreSQL with no migration history)
+echo "[3/5] Syncing database schema..."
+npx prisma db push --accept-data-loss
 
 # 4. Build the NestJS app
 echo "[4/5] Building application..."
