@@ -22,7 +22,10 @@ export class OtpService {
 
   /** Generate and send a 6-digit OTP to the given email. */
   async sendOtp(email: string, purpose: 'signup' | 'reset'): Promise<void> {
-    const logoBase64 = `data:image/png;base64,${fs.readFileSync(path.join(process.cwd(), 'storage', 'logo.png')).toString('base64')}`;
+    const logoPath = path.join(process.cwd(), 'storage', 'logo.png');
+    const logoBase64 = fs.existsSync(logoPath)
+      ? `data:image/png;base64,${fs.readFileSync(logoPath).toString('base64')}`
+      : '';
     // Remove previous unused OTPs for this email+purpose
     await this.prisma.otpToken.deleteMany({ where: { email, purpose } });
 
@@ -43,7 +46,7 @@ export class OtpService {
       html: `
         <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:24px">
           <div style="text-align:center;margin-bottom:20px">
-            <img src="${logoBase64}" style="width:90px;height:90px;object-fit:cover;border-radius:50%;display:block;margin:0 auto 10px" />
+            ${logoBase64 ? `<img src="${logoBase64}" style="width:90px;height:90px;object-fit:cover;border-radius:50%;display:block;margin:0 auto 10px" />` : ''}
             <h2 style="margin:4px 0 4px;color:#1e293b;font-size:20px">ChatCat Pro</h2>
           </div>
           <p style="color:#334155;font-size:15px;margin-bottom:20px">
