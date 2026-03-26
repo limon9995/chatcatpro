@@ -76,6 +76,9 @@ export default function App() {
       });
       return;
     }
+    if (screen === 'landing') {
+      return;
+    }
     if (user.forcePasswordChange) {
       setScreen('change-password');
       return;
@@ -164,6 +167,22 @@ export default function App() {
     setScreen('landing');
   };
 
+  const handleLandingLogin = async () => {
+    if (!user) {
+      setScreen('login');
+      return;
+    }
+    if (user.forcePasswordChange) {
+      setScreen('change-password');
+      return;
+    }
+    if (user.role === 'admin') {
+      setScreen('admin');
+      return;
+    }
+    await loadMyPages();
+  };
+
   if (!ready) {
     return <ScreenFallback dark={dark} />;
   }
@@ -173,7 +192,7 @@ export default function App() {
       <LandingPage
         dark={dark}
         setDark={setDark}
-        onLogin={() => setScreen('login')}
+        onLogin={handleLandingLogin}
         onSignup={() => setScreen('signup')}
       />
     );
