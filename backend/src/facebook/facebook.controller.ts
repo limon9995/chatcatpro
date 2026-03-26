@@ -45,6 +45,15 @@ export class FacebookController {
     });
   }
 
+  @Post('resolve-page')
+  @UseGuards(AuthGuard)
+  resolvePage(@Body() body: any) {
+    return this.fb.resolvePageIdentity(
+      String(body.pageUrl || ''),
+      String(body.pageToken || ''),
+    );
+  }
+
   // GET /facebook/my-pages  → list all connected pages for logged-in user
   @Get('my-pages')
   @UseGuards(AuthGuard)

@@ -100,4 +100,51 @@ describe('FacebookService', () => {
       }),
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
+
+  it('resolves page identity from a page link and returns verified page values', async () => {
+    jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ id: '1046542211868208', name: 'Limon Tech Diary' }),
+      } as any)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ id: '1046542211868208', name: 'Limon Tech Diary' }),
+      } as any);
+
+    const result = await service.resolvePageIdentity(
+      'https://www.facebook.com/LimonTechDiary',
+      'token-123',
+    );
+
+    expect(result).toEqual({
+      pageId: '1046542211868208',
+      pageName: 'Limon Tech Diary',
+    });
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining('/LimonTechDiary?fields=id,name&access_token=token-123'),
+    );
+  });
+
+  it('rejects page links that resolve to a different page than the supplied token', async () => {
+    jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ id: '1046542211868208', name: 'Limon Tech Diary' }),
+      } as any)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ id: '123456789012345', name: 'Wrong Page' }),
+      } as any);
+
+    await expect(
+      service.resolvePageIdentity(
+        'https://www.facebook.com/WrongPage',
+        'token-123',
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
 });

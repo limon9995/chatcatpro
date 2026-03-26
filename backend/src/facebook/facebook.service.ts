@@ -134,6 +134,47 @@ export class FacebookService {
     };
   }
 
+  async resolvePageIdentity(pageUrl: string, pageToken: string): Promise<{
+    pageId: string;
+    pageName: string;
+  }> {
+    const submittedPageUrl = String(pageUrl || '').trim();
+    const submittedPageToken = String(pageToken || '').trim();
+
+    if (!submittedPageToken) {
+      throw new BadRequestException('Facebook page token is required');
+    }
+
+    const verifiedPage = await this.verifyPageToken(submittedPageToken);
+    const parsedRef = this.parsePageReference(submittedPageUrl);
+
+    if (!parsedRef) {
+      return {
+        pageId: verifiedPage.pageId,
+        pageName: verifiedPage.pageName,
+      };
+    }
+
+    const resolvedPage = await this.fetchPageIdentityByReference(
+      parsedRef,
+      submittedPageToken,
+    );
+
+    if (resolvedPage.pageId !== verifiedPage.pageId) {
+      this.logger.warn(
+        `[Facebook] Rejected page resolve due to mismatch: link=${submittedPageUrl} resolved=${resolvedPage.pageId} verified=${verifiedPage.pageId}`,
+      );
+      throw new BadRequestException(
+        `Page link mismatch. Token belongs to page ${verifiedPage.pageId} (${verifiedPage.pageName}).`,
+      );
+    }
+
+    return {
+      pageId: verifiedPage.pageId,
+      pageName: verifiedPage.pageName,
+    };
+  }
+
   async disconnectPage(
     userId: string,
     pageDbId: number,
@@ -206,6 +247,92 @@ export class FacebookService {
       pageName: String(data.name || '').trim() || 'Untitled Facebook Page',
       pageToken,
     };
+  }
+
+  private async fetchPageIdentityByReference(
+    reference: string,
+    pageToken: string,
+  ): Promise<FacebookPageInfo> {
+    const url = `https://graph.facebook.com/v19.0/${encodeURIComponent(reference)}?fields=id,name&access_token=${encodeURIComponent(pageToken)}`;
+    const res = await fetch(url);
+    const data: any = await res.json().catch(() => ({}));
+
+    if (!res.ok || !data?.id) {
+      const msg =
+        data?.error?.message ||
+        data?.message ||
+        'Failed to resolve Facebook page link';
+      throw new BadRequestException(`Facebook page link resolution failed: ${msg}`);
+    }
+
+    return {
+      pageId: String(data.id),
+      pageName: String(data.name || '').trim() || 'Untitled Facebook Page',
+      pageToken,
+    };
+  }
+
+  private parsePageReference(pageUrl: string): string | null {
+    const raw = String(pageUrl || '').trim();
+    if (!raw) return null;
+
+    if (/^\d+$/.test(raw)) return raw;
+
+    const normalized = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+
+    let url: URL;
+    try {
+      url = new URL(normalized);
+    } catch {
+      return null;
+    }
+
+    const host = url.hostname.toLowerCase().replace(/^www\./, '');
+    if (host !== 'facebook.com' && host !== 'm.facebook.com') {
+      return null;
+    }
+
+    const profileId = url.searchParams.get('id');
+    if (profileId && /^\d+$/.test(profileId)) {
+      return profileId;
+    }
+
+    const segments = url.pathname
+      .split('/')
+      .map((segment) => segment.trim())
+      .filter(Boolean);
+
+    if (segments.length === 0) return null;
+
+    if (segments[0] === 'pages' || segments[0] === 'people') {
+      const numericTail = [...segments].reverse().find((segment) => /^\d+$/.test(segment));
+      if (numericTail) return numericTail;
+    }
+
+    if (segments[0] === 'pg' && segments[1]) {
+      return segments[1];
+    }
+
+    const blockedRoots = new Set([
+      'share',
+      'watch',
+      'reel',
+      'story.php',
+      'photo',
+      'photos',
+      'videos',
+      'posts',
+      'permalink.php',
+      'groups',
+      'marketplace',
+      'login',
+      'dialog',
+      'plugins',
+    ]);
+
+    if (blockedRoots.has(segments[0])) return null;
+
+    return segments[0];
   }
 
   private parseSignedState(state: string): { userId: string; ts: number } {
