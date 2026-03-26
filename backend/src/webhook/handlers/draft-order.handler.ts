@@ -197,7 +197,7 @@ export class DraftOrderHandler {
         await this.ctx.saveDraft(pageId, psid, draft);
         return this.buildSummary(draft, page);
       }
-      return 'সব ঠিক থাকলে **confirm** লিখুন 💖\nকিছু বদলাতে চাইলে বলুন: "name change" / "phone change" / "address change"';
+      return `সব ঠিক থাকলে **confirm** লিখুন 💖\nকিছু বদলাতে চাইলে: ${this.buildEditOptions(draft)}`;
     }
 
     // ── ADVANCE PAYMENT PROOF ─────────────────────────────────────────────────
@@ -355,7 +355,8 @@ export class DraftOrderHandler {
   reminder(draft: DraftSession): string {
     const step = draft.currentStep;
     if (step === 'confirm_address') return 'চলমান order — ঠিকানা confirm করুন 💖';
-    if (step === 'confirm') return 'সব ঠিক থাকলে **confirm** লিখুন 💖';
+    if (step === 'confirm')
+      return `সব ঠিক থাকলে **confirm** লিখুন 💖\nকিছু বদলাতে চাইলে: ${this.buildEditOptions(draft)}`;
     if (step === 'advance_payment')
       return 'চলমান order — advance payment পাঠান 💖';
     if (step.startsWith('cf:'))
@@ -364,6 +365,14 @@ export class DraftOrderHandler {
     if (step === 'phone') return 'চলমান order — ফোন নাম্বার দিন 💖';
     if (step === 'address') return 'চলমান order — পুরো ঠিকানা দিন 💖';
     return '';
+  }
+
+  private buildEditOptions(draft: DraftSession): string {
+    const options = ['"name change"', '"phone change"', '"address change"'];
+    for (const key of Object.keys(draft.customFieldValues || {})) {
+      options.push(`"${key} change"`);
+    }
+    return options.join(' / ');
   }
 
   async finalizeDraftOrder(
