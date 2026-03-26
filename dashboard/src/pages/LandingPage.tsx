@@ -297,7 +297,10 @@ footer{border-top:1px solid var(--border);padding:40px 5%;display:flex;justify-c
 <script>
 const DASHBOARD_URL = (function() {
   var meta = document.querySelector('meta[name="dashboard-url"]');
-  if (meta) return meta.getAttribute('content');
+  if (meta) {
+    var content = meta.getAttribute('content');
+    if (content && content !== 'null' && content !== 'undefined') return content;
+  }
   return window.location.origin;
 })();
 ['nav-login','cta-login','hero-signup'].forEach(function(id) {
