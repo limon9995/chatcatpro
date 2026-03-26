@@ -18,12 +18,9 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
   const [error, setError]         = useState('');
 
   // Manual form state
-  const [manualPageUrl, setManualPageUrl]   = useState('');
-  const [manualPageId, setManualPageId]     = useState('');
   const [manualPageName, setManualPageName] = useState('');
   const [manualToken, setManualToken]       = useState('');
   const [manualBusy, setManualBusy]         = useState(false);
-  const [resolveBusy, setResolveBusy]       = useState(false);
   const [manualSuccess, setManualSuccess]   = useState(false);
   const [webhookInfo, setWebhookInfo]       = useState<{ webhookUrl: string; verifyToken: string } | null>(null);
 
@@ -41,51 +38,15 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
       .catch(() => {});
   }, [request]);
 
-  const resolvePageLink = async () => {
-    const pageUrl = manualPageUrl.trim();
-    const tok = manualToken.trim();
-    if (!pageUrl) {
-      setError(copy('Page link দিন।', 'Enter the Facebook page link.'));
-      return;
-    }
-    if (!tok) {
-      setError(copy('আগে Page Access Token দিন।', 'Enter the Page Access Token first.'));
-      return;
-    }
-    setResolveBusy(true);
-    setError('');
-    try {
-      const res: any = await request(`${API_BASE}/facebook/resolve-page`, {
-        method: 'POST',
-        body: JSON.stringify({ pageUrl, pageToken: tok }),
-      });
-      if (res?.pageId) setManualPageId(String(res.pageId));
-      if (res?.pageName) setManualPageName(String(res.pageName));
-    } catch (e: any) {
-      const msg = String(e?.message || '');
-      if (msg.includes('Cannot POST /facebook/resolve-page')) {
-        setError(copy(
-          'Page link auto-detect এখনো server-এ deploy করা হয়নি। নিচের backend deploy steps run করুন, তারপর আবার try করুন।',
-          'Page link auto-detect is not deployed on the server yet. Run the backend deploy steps, then try again.',
-        ));
-      } else {
-        setError(e?.message || copy('Page link থেকে ID বের করা যায়নি', 'Could not detect the page from the link.'));
-      }
-    } finally {
-      setResolveBusy(false);
-    }
-  };
-
   const connectManual = async () => {
-    const pid   = manualPageId.trim();
     const pname = manualPageName.trim();
     const tok   = manualToken.trim();
-    if (!pid || !pname || !tok) { setError(copy('Page ID, Page Name এবং Access Token সবগুলো দিন।', 'Enter the Page ID, Page Name, and Access Token.')); return; }
+    if (!pname || !tok) { setError(copy('Page Name এবং Access Token দিন।', 'Enter the Page Name and Access Token.')); return; }
     setManualBusy(true); setError('');
     try {
       const res: any = await request(`${API_BASE}/facebook/connect`, {
         method: 'POST',
-        body: JSON.stringify({ pageId: pid, pageName: pname, pageToken: tok }),
+        body: JSON.stringify({ pageId: '', pageName: pname, pageToken: tok }),
       });
       if (res?.webhookUrl || res?.page?.verifyToken) {
         setWebhookInfo({ webhookUrl: res.webhookUrl || '', verifyToken: res.page?.verifyToken || '' });
@@ -250,48 +211,9 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
               {copy('1. ', '1. ')}<a href="https://developers.facebook.com/tools/explorer/" target="_blank" rel="noreferrer" style={{ color: '#6366f1' }}>Graph API Explorer</a>{copy(' খুলুন', ' and open it')}<br />
               {copy('2. আপনার App ও Page select করুন', '2. Select your App and Page')}<br />
               {copy('3. ', '3. ')}<code style={{ background: dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)', padding: '1px 5px', borderRadius: 4 }}>pages_messaging</code>{copy(' permission add করুন', ' permission')}<br />
-              {copy('4. "Generate Access Token" click করুন → copy করুন', '4. Click "Generate Access Token" and copy it')}
+              {copy('4. "Generate Access Token" click করুন → copy করুন', '4. Click "Generate Access Token" and copy it')}<br />
+              {copy('5. Page Name দিন, Access Token দিন — Page ID bot নিজে বের করবে', '5. Enter the Page Name and Access Token — the bot will detect the Page ID automatically')}
             </span>
-          </div>
-
-          <div>
-            <label style={{ fontSize: 12, color: muted, fontWeight: 600, display: 'block', marginBottom: 5 }}>{copy('Facebook Page Link', 'Facebook Page Link')}</label>
-            <div style={{ display: 'flex', gap: 10, alignItems: 'stretch' }}>
-              <input
-                style={inp}
-                placeholder={copy('যেমন: https://facebook.com/yourpage', 'Example: https://facebook.com/yourpage')}
-                value={manualPageUrl}
-                onChange={e => setManualPageUrl(e.target.value)}
-              />
-              <button
-                onClick={resolvePageLink}
-                disabled={resolveBusy || manualBusy}
-                style={{
-                  border: 'none',
-                  borderRadius: 10,
-                  padding: '0 14px',
-                  minWidth: 124,
-                  background: resolveBusy ? 'rgba(99,102,241,0.45)' : 'rgba(99,102,241,0.92)',
-                  color: '#fff',
-                  fontWeight: 800,
-                  fontSize: 12.5,
-                  cursor: resolveBusy || manualBusy ? 'default' : 'pointer',
-                  fontFamily: 'inherit',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {resolveBusy ? copy('Detecting...', 'Detecting...') : copy('Auto Detect', 'Auto Detect')}
-              </button>
-            </div>
-            <div style={{ marginTop: 6, fontSize: 11.5, color: muted, lineHeight: 1.6 }}>
-              {copy('Page link + access token দিলে Page ID ও Page Name auto-fill হবে।', 'Enter the page link and access token to auto-fill the Page ID and Page Name.')}
-            </div>
-          </div>
-
-          <div>
-            <label style={{ fontSize: 12, color: muted, fontWeight: 600, display: 'block', marginBottom: 5 }}>{copy('Facebook Page ID *', 'Facebook Page ID *')}</label>
-            <input style={inp} placeholder={copy('যেমন: 123456789012345', 'Example: 123456789012345')}
-              value={manualPageId} onChange={e => setManualPageId(e.target.value)} />
           </div>
 
           <div>
