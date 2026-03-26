@@ -74,6 +74,16 @@ export class PageService {
     if (typeof body.autoMemoDesignModeOn === 'boolean')
       data.autoMemoDesignModeOn = body.autoMemoDesignModeOn;
 
+    // V18: image recognition settings
+    if (typeof body.imageRecognitionOn === 'boolean')
+      data.imageRecognitionOn = body.imageRecognitionOn;
+    if (typeof body.imageFallbackAiOn === 'boolean')
+      data.imageFallbackAiOn = body.imageFallbackAiOn;
+    if (body.imageHighConfidence !== undefined)
+      data.imageHighConfidence = Math.min(1, Math.max(0, Number(body.imageHighConfidence) || 0.75));
+    if (body.imageMediumConfidence !== undefined)
+      data.imageMediumConfidence = Math.min(1, Math.max(0, Number(body.imageMediumConfidence) || 0.45));
+
     if (typeof body.businessName === 'string')
       data.businessName = body.businessName.trim();
     if (typeof body.businessPhone === 'string')

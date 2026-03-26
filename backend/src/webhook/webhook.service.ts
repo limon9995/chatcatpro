@@ -14,6 +14,10 @@ import { DraftOrderHandler } from './handlers/draft-order.handler';
 import { ProductInfoHandler } from './handlers/product-info.handler';
 import { NegotiationHandler } from './handlers/negotiation.handler';
 import { CrmService } from '../crm/crm.service';
+// V18: Image recognition imports
+import { VisionAnalysisService } from '../vision-analysis/vision-analysis.service';
+import { ProductMatchService, ProductMatchResult } from '../product-match/product-match.service';
+import { FallbackAiService } from '../fallback-ai/fallback-ai.service';
 
 @Injectable()
 export class WebhookService {
@@ -31,6 +35,10 @@ export class WebhookService {
     private readonly productHandler: ProductInfoHandler,
     private readonly negotiationHandler: NegotiationHandler,
     private readonly crm: CrmService,
+    // V18: Image recognition services
+    private readonly visionAnalysis: VisionAnalysisService,
+    private readonly productMatch: ProductMatchService,
+    private readonly fallbackAi: FallbackAiService,
   ) {}
 
   // ── Entry point ────────────────────────────────────────────────────────────
@@ -1005,12 +1013,19 @@ export class WebhookService {
 
       // No codes at all
       if (!codes.length) {
-        const isLowConf =
-          ocrResult.confidence < 30 && ocrResult.ocrConfidence === 'NONE';
-        const key = isLowConf ? 'ocr_low_confidence' : 'ocr_fail';
         this.logger.warn(
           `[OCR] No codes — conf=${ocrResult.confidence.toFixed(0)} overall=${ocrResult.ocrConfidence}`,
         );
+
+        // V18: Try vision-based product recognition if enabled for this page
+        if (page.imageRecognitionOn) {
+          await this.visionProductRecognition(page, psid, imageUrl);
+          return;
+        }
+
+        const isLowConf =
+          ocrResult.confidence < 30 && ocrResult.ocrConfidence === 'NONE';
+        const key = isLowConf ? 'ocr_low_confidence' : 'ocr_fail';
         const reply = await this.botKnowledge.resolveSystemReply(pageId, key);
         await this.safeSend(token, psid, reply);
         return;
@@ -1040,6 +1055,187 @@ export class WebhookService {
         .catch(() => 'Sorry, something went wrong.');
       await this.safeSend(token, psid, reply);
     }
+  }
+
+  // ── V18: Vision-based product recognition ────────────────────────────────
+
+  /**
+   * Called when OCR finds no product codes AND page.imageRecognitionOn = true.
+   * Analyzes the image with the configured AI vision provider, matches products,
+   * then routes based on confidence thresholds set per page.
+   */
+  private async visionProductRecognition(
+    page: any,
+    psid: string,
+    imageUrl: string,
+  ): Promise<void> {
+    const pageId = page.id as number;
+    const token = page.pageToken as string;
+
+    // Read per-page thresholds (fall back to safe defaults)
+    const highThreshold: number = typeof page.imageHighConfidence === 'number'
+      ? page.imageHighConfidence
+      : 0.75;
+    const medThreshold: number = typeof page.imageMediumConfidence === 'number'
+      ? page.imageMediumConfidence
+      : 0.45;
+
+    this.logger.log(
+      `[VisionRecog] Starting for page=${page.pageId} psid=${psid} ` +
+        `thresholds: high=${highThreshold} med=${medThreshold}`,
+    );
+
+    try {
+      // Step 1: Analyze image with vision provider
+      const attrs = await this.visionAnalysis.analyze(imageUrl);
+
+      this.logger.log(
+        `[VisionRecog] Attributes — cat=${attrs.category} color=${attrs.color} ` +
+          `pattern=${attrs.pattern} confidence=${attrs.confidence.toFixed(2)}`,
+      );
+
+      // If vision provider itself has zero confidence (mock or bad image)
+      if (attrs.confidence <= 0 || !attrs.category) {
+        this.logger.warn(`[VisionRecog] Zero confidence from vision provider — falling back`);
+        await this.visionLowConfidenceFallback(page, psid, attrs, null);
+        return;
+      }
+
+      // Step 2: Match products by extracted attributes
+      const matches = await this.productMatch.findMatches(pageId, attrs, 4);
+
+      this.logger.log(
+        `[VisionRecog] Found ${matches.length} candidate match(es). ` +
+          (matches[0]
+            ? `Top: ${matches[0].productCode} score=${matches[0].matchScore.toFixed(2)}`
+            : 'none'),
+      );
+
+      if (!matches.length) {
+        // No products matched at all
+        await this.visionLowConfidenceFallback(page, psid, attrs, null);
+        return;
+      }
+
+      const topMatch = matches[0];
+      const topScore = topMatch.matchScore;
+
+      // Step 3: Route by confidence
+      if (topScore >= highThreshold) {
+        // HIGH confidence — proceed as if customer sent the product code directly
+        this.logger.log(`[VisionRecog] HIGH confidence (${topScore.toFixed(2)}) — auto-proceed with ${topMatch.productCode}`);
+        await this.safeSend(
+          token,
+          psid,
+          this.buildVisionHighConfidenceMsg(attrs, topMatch),
+        );
+        await this.productHandler.sendProductInfo(page, psid, topMatch.productCode);
+
+      } else if (topScore >= medThreshold) {
+        // MEDIUM confidence — show 2–4 options, ask customer to pick
+        this.logger.log(
+          `[VisionRecog] MEDIUM confidence (${topScore.toFixed(2)}) — showing ${matches.length} options`,
+        );
+        await this.safeSend(
+          token,
+          psid,
+          this.buildVisionMediumConfidenceMsg(attrs, matches),
+        );
+        // Save matches as "last presented" so customer can reply with a number or code
+        await this.ctx.setLastPresentedProducts(
+          pageId,
+          psid,
+          matches.map((m) => ({ code: m.productCode, price: m.price })),
+        );
+
+      } else {
+        // LOW confidence
+        this.logger.warn(`[VisionRecog] LOW confidence (${topScore.toFixed(2)}) — triggering fallback`);
+        await this.visionLowConfidenceFallback(page, psid, attrs, matches);
+      }
+
+    } catch (err: any) {
+      this.logger.error(`[VisionRecog] Uncaught error page=${page.pageId} psid=${psid}: ${err?.message ?? err}`);
+      // Fail gracefully — send a generic helpful reply
+      await this.safeSend(
+        token,
+        psid,
+        'ছবিটি বিশ্লেষণ করতে সমস্যা হয়েছে। আপনি কি পণ্যের কোড বা আরও স্পষ্ট ছবি পাঠাতে পারবেন?',
+      );
+    }
+  }
+
+  /** Build reply for high-confidence vision match */
+  private buildVisionHighConfidenceMsg(
+    attrs: import('../vision-analysis/vision-analysis.interface').VisionAttributes,
+    match: ProductMatchResult,
+  ): string {
+    const catLabel = attrs.category ?? 'পণ্য';
+    const colorLabel = attrs.color ? ` ${attrs.color}` : '';
+    const patternLabel = attrs.pattern && attrs.pattern !== 'plain' ? ` ${attrs.pattern}` : '';
+    return (
+      `আপনার ছবিটা দেখে মনে হচ্ছে এটা${colorLabel}${patternLabel} ${catLabel} টাইপের। ` +
+      `এই পণ্যটি পেয়েছি:`
+    );
+  }
+
+  /** Build reply for medium-confidence vision match — show options list */
+  private buildVisionMediumConfidenceMsg(
+    attrs: import('../vision-analysis/vision-analysis.interface').VisionAttributes,
+    matches: ProductMatchResult[],
+  ): string {
+    const catLabel = attrs.category ?? 'পণ্য';
+    const colorLabel = attrs.color ? ` ${attrs.color}` : '';
+    const patternLabel = attrs.pattern && attrs.pattern !== 'plain' ? ` ${attrs.pattern}` : '';
+
+    const header =
+      `আপনার ছবিটা দেখে মনে হচ্ছে এটা${colorLabel}${patternLabel} ${catLabel} টাইপের। ` +
+      `এই ধরনের কয়েকটি product পেয়েছি:\n\n`;
+
+    const lines = matches.map((m, i) => {
+      const name = m.productName ? ` — ${m.productName}` : '';
+      return `${i + 1}. ${m.productCode}${name} (৳${m.price})`;
+    });
+
+    return header + lines.join('\n') + '\n\nকোনটি নিতে চান? কোড বা নম্বর লিখুন।';
+  }
+
+  /**
+   * Called when vision confidence is too low to show products.
+   * If fallbackAiOn: try AI reply. Otherwise: ask for clearer image.
+   */
+  private async visionLowConfidenceFallback(
+    page: any,
+    psid: string,
+    attrs: import('../vision-analysis/vision-analysis.interface').VisionAttributes,
+    _partialMatches: ProductMatchResult[] | null,
+  ): Promise<void> {
+    const token = page.pageToken as string;
+
+    if (page.imageFallbackAiOn) {
+      const fbResult = await this.fallbackAi.generateReply({
+        customerMessage: '',
+        reason: 'image_unclear',
+        visionDescription: attrs.rawDescription,
+        businessName: page.businessName ?? undefined,
+      });
+
+      if (fbResult.reply) {
+        await this.safeSend(token, psid, fbResult.reply);
+        if (fbResult.escalateToAgent) {
+          await this.ctx.setAgentHandling(page.id, psid, true);
+        }
+        return;
+      }
+    }
+
+    // Default: ask for a clearer image or product code
+    await this.safeSend(
+      token,
+      psid,
+      'ছবিটা থেকে পণ্যটি চেনা যাচ্ছে না। আপনি কি আরও স্পষ্ট ছবি পাঠাবেন, ' +
+        'অথবা পণ্যের কোড জানালে সাহায্য করতে পারব।',
+    );
   }
 
   private async resolveReferencedProductCode(

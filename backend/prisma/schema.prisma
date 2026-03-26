@@ -126,6 +126,12 @@ model Page {
   retryIntervalMinutes  Int     @default(30)
   maxCallRetries        Int     @default(3)
 
+  // V18: Image recognition feature settings
+  imageRecognitionOn      Boolean @default(false)  // master toggle for vision-based product search
+  imageHighConfidence     Float   @default(0.75)   // >= this: auto-proceed with top match
+  imageMediumConfidence   Float   @default(0.45)   // >= this: show options, ask customer
+  imageFallbackAiOn       Boolean @default(false)  // use AI fallback when low confidence
+
   callLanguage        String    @default("BN")
   voiceType           String    @default("FEMALE")
   voiceStyle          String    @default("NATURAL")
@@ -184,6 +190,13 @@ model Product {
 
   // V17: Bot asks customer for these before order (JSON: [{label,choices?}])
   variantOptions   String?
+
+  // V18: Image recognition metadata — used for vision-based product matching
+  category      String?   // dress, saree, panjabi, shirt, t-shirt, kurti, etc.
+  color         String?   // red, black, white, multicolor, etc.
+  tags          String?   // JSON array of string tags, e.g. ["floral","summer","cotton"]
+  imageKeywords String?   // space-separated keywords, e.g. "floral printed maxi"
+  aiDescription String?   // optional AI-generated description for matching
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

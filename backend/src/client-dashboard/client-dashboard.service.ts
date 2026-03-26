@@ -324,6 +324,12 @@ export class ClientDashboardService {
       variantOptions: body.variantOptions
         ? this.parseVariantOptionsText(body.variantOptions)
         : undefined,
+      // V18: Image recognition metadata
+      category: body.category || undefined,
+      color: body.color || undefined,
+      tags: body.tags || undefined,
+      imageKeywords: body.imageKeywords || undefined,
+      aiDescription: body.aiDescription || undefined,
     });
   }
   async updateProduct(pageId: number, code: string, body: any) {
@@ -356,6 +362,12 @@ export class ClientDashboardService {
         body?.variantOptions !== undefined
           ? this.parseVariantOptionsText(body.variantOptions)
           : undefined,
+      // V18: Image recognition metadata
+      category: body?.category !== undefined ? String(body.category || '') : undefined,
+      color: body?.color !== undefined ? String(body.color || '') : undefined,
+      tags: body?.tags !== undefined ? String(body.tags || '') : undefined,
+      imageKeywords: body?.imageKeywords !== undefined ? String(body.imageKeywords || '') : undefined,
+      aiDescription: body?.aiDescription !== undefined ? String(body.aiDescription || '') : undefined,
     });
   }
 
@@ -411,6 +423,8 @@ export class ClientDashboardService {
       catalogSlug: page.catalogSlug ?? '',
       fbPageId: page.pageId ?? '',
       // Feature flags
+      automationOn: Boolean(page.automationOn),
+      ocrOn: Boolean(page.ocrOn),
       infoModeOn: Boolean(page.infoModeOn),
       orderModeOn: Boolean(page.orderModeOn),
       printModeOn: Boolean(page.printModeOn),
@@ -419,6 +433,11 @@ export class ClientDashboardService {
       memoTemplateModeOn: Boolean(page.memoTemplateModeOn),
       autoMemoDesignModeOn: Boolean(page.autoMemoDesignModeOn),
       modeAccess: this.getModeAccess(page),
+      // V18: Image recognition
+      imageRecognitionOn: Boolean(page.imageRecognitionOn),
+      imageHighConfidence: page.imageHighConfidence ?? 0.75,
+      imageMediumConfidence: page.imageMediumConfidence ?? 0.45,
+      imageFallbackAiOn: Boolean(page.imageFallbackAiOn),
       // Pricing (from bot-knowledge config)
       pricingPolicy: cfg?.pricingPolicy || {},
       // Call — all fields explicit
@@ -480,6 +499,11 @@ export class ClientDashboardService {
       'catalogMessengerUrl',
       'catalogSlug',
       'productCodePrefix',
+      // V18: image recognition settings
+      'imageRecognitionOn',
+      'imageHighConfidence',
+      'imageMediumConfidence',
+      'imageFallbackAiOn',
     ];
     const pagePatch: any = {};
     for (const k of PAGE_FIELDS) {

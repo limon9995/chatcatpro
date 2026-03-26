@@ -11,15 +11,20 @@ type Product = {
   videoUrl: string | null; catalogVisible: boolean;
   imageUrl: string | null; description: string | null;
   variantOptions: string | null;
+  // V18: Image recognition metadata
+  category: string | null; color: string | null;
+  tags: string | null; imageKeywords: string | null;
 };
 
 type EditData = {
   name?: string; price?: number; costPrice?: number; stockQty?: number;
   postCaption?: string; videoUrl?: string; catalogVisible?: boolean;
   description?: string; imageUrl?: string; variantOptions?: string;
+  // V18: Image recognition metadata
+  category?: string; color?: string; tags?: string; imageKeywords?: string;
 };
 
-const EMPTY = { code: '', name: '', price: 0, costPrice: 0, stockQty: 0, postCaption: '', videoUrl: '', catalogVisible: true, description: '', imageUrl: '', variantOptions: '' };
+const EMPTY = { code: '', name: '', price: 0, costPrice: 0, stockQty: 0, postCaption: '', videoUrl: '', catalogVisible: true, description: '', imageUrl: '', variantOptions: '', category: '', color: '', tags: '', imageKeywords: '' };
 
 /** Convert DB JSON variantOptions → textarea text ("Size: S,M,L,XL\nColor: Red,Blue") */
 function variantOptionsToText(json: string | null): string {
@@ -62,7 +67,7 @@ export function ProductsPage({ th, pageId, onToast }: {
 
   const openEdit = (p: Product) => {
     setEditId(p.id);
-    setEditData({ name: p.name ?? '', price: p.price, costPrice: p.costPrice, stockQty: p.stockQty, postCaption: p.postCaption ?? '', videoUrl: p.videoUrl ?? '', catalogVisible: p.catalogVisible ?? true, description: p.description ?? '', imageUrl: p.imageUrl ?? '', variantOptions: variantOptionsToText(p.variantOptions) });
+    setEditData({ name: p.name ?? '', price: p.price, costPrice: p.costPrice, stockQty: p.stockQty, postCaption: p.postCaption ?? '', videoUrl: p.videoUrl ?? '', catalogVisible: p.catalogVisible ?? true, description: p.description ?? '', imageUrl: p.imageUrl ?? '', variantOptions: variantOptionsToText(p.variantOptions), category: p.category ?? '', color: p.color ?? '', tags: p.tags ?? '', imageKeywords: p.imageKeywords ?? '' });
   };
 
   const saveEdit = async (p: Product) => {
@@ -211,6 +216,30 @@ export function ProductsPage({ th, pageId, onToast }: {
               />
             </FieldWithInfo>
           </div>
+          {/* V18: Image recognition metadata */}
+          <div style={{ marginTop: 14, padding: '12px 14px', borderRadius: 10, background: `${th.accent}0d`, border: `1px solid ${th.accent}22` }}>
+            <div style={{ fontSize: 11.5, fontWeight: 700, color: th.accent, marginBottom: 10, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+              {copy('Image Recognition Tags (AI)', 'Image Recognition Tags (AI)')}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(160px,1fr))', gap: 10 }}>
+              <FieldWithInfo th={th} label="Category" helpText={copy('পণ্যের ধরন — dress, saree, panjabi, shirt, kurti, t-shirt', 'Product category for image matching, e.g. dress, saree, panjabi, shirt, kurti')}>
+                <input style={th.input} placeholder="dress" value={newP.category}
+                  onChange={e => setNewP(p => ({ ...p, category: e.target.value }))} />
+              </FieldWithInfo>
+              <FieldWithInfo th={th} label="Color" helpText={copy('প্রধান রঙ — black, red, white, multicolor', 'Primary color for image matching, e.g. black, red, white, multicolor')}>
+                <input style={th.input} placeholder="black" value={newP.color}
+                  onChange={e => setNewP(p => ({ ...p, color: e.target.value }))} />
+              </FieldWithInfo>
+              <FieldWithInfo th={th} label="Keywords" helpText={copy('ছবি থেকে পণ্য খুঁজতে কীওয়ার্ড — floral printed maxi', 'Keywords to help match this product from customer images, e.g. floral printed maxi')}>
+                <input style={th.input} placeholder="floral printed summer" value={newP.imageKeywords}
+                  onChange={e => setNewP(p => ({ ...p, imageKeywords: e.target.value }))} />
+              </FieldWithInfo>
+              <FieldWithInfo th={th} label="Tags (JSON)" helpText={copy('JSON array — [\"floral\",\"summer\"]', 'JSON array of tags, e.g. ["floral","summer","cotton"]')}>
+                <input style={th.input} placeholder='["floral","cotton"]' value={newP.tags}
+                  onChange={e => setNewP(p => ({ ...p, tags: e.target.value }))} />
+              </FieldWithInfo>
+            </div>
+          </div>
           <div style={{ marginTop: 14, display: 'flex', gap: 8 }}>
             <button style={th.btnPrimary} onClick={createProduct} disabled={busy}>
               {busy ? <Spinner size={13} color="#fff"/> : null} {copy('Create Product', 'Create Product')}
@@ -341,6 +370,18 @@ export function ProductsPage({ th, pageId, onToast }: {
                             value={editData.variantOptions ?? ''}
                             onChange={e => setEditData(d => ({ ...d, variantOptions: e.target.value }))}
                           />
+                        </div>
+                        {/* V18: Image recognition metadata */}
+                        <div style={{ padding: '8px 10px', borderRadius: 8, background: `${th.accent}0d`, border: `1px solid ${th.accent}22` }}>
+                          <div style={{ fontSize: 10, fontWeight: 700, color: th.accent, marginBottom: 8, letterSpacing: '0.05em', textTransform: 'uppercase' }}>AI Tags</div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            <input style={{ ...th.input, fontSize: 12 }} placeholder="Category (dress, saree…)" value={editData.category ?? ''}
+                              onChange={e => setEditData(d => ({ ...d, category: e.target.value }))} />
+                            <input style={{ ...th.input, fontSize: 12 }} placeholder="Color (black, red…)" value={editData.color ?? ''}
+                              onChange={e => setEditData(d => ({ ...d, color: e.target.value }))} />
+                            <input style={{ ...th.input, fontSize: 12 }} placeholder="Keywords (floral printed)" value={editData.imageKeywords ?? ''}
+                              onChange={e => setEditData(d => ({ ...d, imageKeywords: e.target.value }))} />
+                          </div>
                         </div>
                       </div>
                       <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>

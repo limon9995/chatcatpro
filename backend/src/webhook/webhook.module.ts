@@ -11,6 +11,10 @@ import { ProductsModule } from '../products/products.module';
 import { CrmModule } from '../crm/crm.module';
 import { FollowUpModule } from '../followup/followup.module';
 import { BillingModule } from '../billing/billing.module';
+// V18: Image recognition modules
+import { VisionAnalysisModule } from '../vision-analysis/vision-analysis.module';
+import { ProductMatchModule } from '../product-match/product-match.module';
+import { FallbackAiModule } from '../fallback-ai/fallback-ai.module';
 import { WebhookController } from './webhook.controller';
 import { WebhookService } from './webhook.service';
 import { DraftOrderHandler } from './handlers/draft-order.handler';
@@ -31,6 +35,10 @@ import { NegotiationHandler } from './handlers/negotiation.handler';
     CrmModule,
     FollowUpModule,
     BillingModule,
+    // V18
+    VisionAnalysisModule,
+    ProductMatchModule,
+    FallbackAiModule,
   ],
   controllers: [WebhookController],
   providers: [

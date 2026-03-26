@@ -52,6 +52,12 @@ export class ProductsService {
     catalogVisible?: boolean;
     catalogSortOrder?: number;
     variantOptions?: string | null;
+    // V18: Image recognition metadata
+    category?: string | null;
+    color?: string | null;
+    tags?: string | null;
+    imageKeywords?: string | null;
+    aiDescription?: string | null;
   }) {
     const code = normalizeProductCode(data.code);
     const existing = await this.prisma.product.findUnique({
@@ -76,6 +82,11 @@ export class ProductsService {
         catalogVisible: data.catalogVisible ?? true,
         catalogSortOrder: data.catalogSortOrder ?? 0,
         variantOptions: data.variantOptions ?? null,
+        category: data.category ?? null,
+        color: data.color ?? null,
+        tags: data.tags ?? null,
+        imageKeywords: data.imageKeywords ?? null,
+        aiDescription: data.aiDescription ?? null,
       },
     });
   }
@@ -115,6 +126,12 @@ export class ProductsService {
       catalogVisible?: boolean;
       catalogSortOrder?: number;
       variantOptions?: string | null;
+      // V18: Image recognition metadata
+      category?: string | null;
+      color?: string | null;
+      tags?: string | null;
+      imageKeywords?: string | null;
+      aiDescription?: string | null;
     },
   ) {
     const code = normalizeProductCode(codeRaw);
@@ -141,6 +158,12 @@ export class ProductsService {
       payload.catalogSortOrder = data.catalogSortOrder;
     if (data.variantOptions !== undefined)
       payload.variantOptions = data.variantOptions;
+    // V18: image recognition metadata fields
+    if (data.category !== undefined) payload.category = data.category || null;
+    if (data.color !== undefined) payload.color = data.color || null;
+    if (data.tags !== undefined) payload.tags = data.tags || null;
+    if (data.imageKeywords !== undefined) payload.imageKeywords = data.imageKeywords || null;
+    if (data.aiDescription !== undefined) payload.aiDescription = data.aiDescription || null;
     if (Object.keys(payload).length === 0)
       return this.findByCode(pageId, codeRaw);
     return this.prisma.product.update({

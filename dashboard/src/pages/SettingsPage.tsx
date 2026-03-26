@@ -16,6 +16,9 @@ interface Settings {
   automationOn: boolean; ocrOn: boolean;
   infoModeOn: boolean; orderModeOn: boolean; printModeOn: boolean;
   callConfirmModeOn: boolean; memoSaveModeOn: boolean; memoTemplateModeOn: boolean;
+  // V18: Image recognition
+  imageRecognitionOn: boolean; imageHighConfidence: number;
+  imageMediumConfidence: number; imageFallbackAiOn: boolean;
   pricingPolicy: {
     priceMode: string; allowCustomerOffer: boolean; agentApprovalRequired: boolean;
     fixedPriceReplyText: string; negotiationReplyText: string;
@@ -45,6 +48,7 @@ const S0: Settings = {
   automationOn: false, ocrOn: false,
   infoModeOn: true, orderModeOn: true, printModeOn: false,
   callConfirmModeOn: false, memoSaveModeOn: false, memoTemplateModeOn: false,
+  imageRecognitionOn: false, imageHighConfidence: 0.75, imageMediumConfidence: 0.45, imageFallbackAiOn: false,
   pricingPolicy: {
     priceMode: 'FIXED', allowCustomerOffer: false, agentApprovalRequired: true,
     fixedPriceReplyText: 'দুঃখিত, আমাদের price fixed 💖',
@@ -565,6 +569,41 @@ export function SettingsPage({ th, pageId, tab, onToast }: {
           </div>
         </Section>
 
+        {/* V18: Image Recognition */}
+        <Section title={copy('Image Recognition (AI)', 'Image Recognition (AI)')} desc={copy('ছবি থেকে product চেনার feature। Customer product code না দিয়ে ছবি পাঠালে bot বুঝতে চেষ্টা করবে।', 'Let the bot recognize products from customer images — no product code needed.')}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <Toggle th={th}
+              label={copy('Image Recognition চালু', 'Enable Image Recognition')}
+              sub={copy('Customer ছবি পাঠালে AI দিয়ে product match করার চেষ্টা করবে', 'When a customer sends an image, the bot will try to match it with products using AI')}
+              checked={s.imageRecognitionOn}
+              onChange={v => setS(p => ({ ...p, imageRecognitionOn: v }))} />
+            <Toggle th={th}
+              label={copy('AI Fallback চালু', 'Enable AI Fallback')}
+              sub={copy('Low confidence match হলে AI fallback reply দেবে। VISION_PROVIDER এবং OPENAI_API_KEY প্রয়োজন।', 'Use AI to generate a reply when confidence is too low. Requires VISION_PROVIDER and OPENAI_API_KEY in server .env')}
+              checked={s.imageFallbackAiOn}
+              onChange={v => setS(p => ({ ...p, imageFallbackAiOn: v }))} />
+            {s.imageRecognitionOn && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 4 }}>
+                <div>
+                  <Label text={copy('High Confidence Threshold', 'High Confidence Threshold')} hint={copy('এই মানের উপরে হলে bot সরাসরি product দেখাবে (0–1)', 'Above this score the bot auto-proceeds with the top match (0.0–1.0)')}/>
+                  <input style={th.input} type="number" min={0} max={1} step={0.05}
+                    value={s.imageHighConfidence}
+                    onChange={e => setS(p => ({ ...p, imageHighConfidence: Number(e.target.value) }))} />
+                </div>
+                <div>
+                  <Label text={copy('Medium Confidence Threshold', 'Medium Confidence Threshold')} hint={copy('এই মানের উপরে হলে bot কয়েকটি option দেখাবে (0–1)', 'Above this score the bot shows 2–4 product options (0.0–1.0)')}/>
+                  <input style={th.input} type="number" min={0} max={1} step={0.05}
+                    value={s.imageMediumConfidence}
+                    onChange={e => setS(p => ({ ...p, imageMediumConfidence: Number(e.target.value) }))} />
+                </div>
+              </div>
+            )}
+            <div style={{ fontSize: 12, color: th.muted, padding: '8px 12px', borderRadius: 8, background: th.surface, border: `1px solid ${th.border}` }}>
+              {copy('Note: Server-এ VISION_PROVIDER=openai এবং OPENAI_API_KEY set না থাকলে এই feature কাজ করবে না। Product এর Category, Color, Keywords field fill করুন matching ভালো হওয়ার জন্য।', 'Note: This feature requires VISION_PROVIDER=openai and OPENAI_API_KEY set in the server .env file. Fill in Category, Color, and Keywords on each product for better matching accuracy.')}
+            </div>
+          </div>
+        </Section>
+
         <SaveRow onClick={() => save({
           businessName: s.businessName, businessPhone: s.businessPhone,
           businessAddress: s.businessAddress, deliveryTimeText: s.deliveryTimeText,
@@ -585,6 +624,11 @@ export function SettingsPage({ th, pageId, tab, onToast }: {
           advancePaymentMessage: s.advancePaymentMessage,
           catalogMessengerUrl: s.catalogMessengerUrl,
           catalogSlug: s.catalogSlug || null,
+          // V18: image recognition settings
+          imageRecognitionOn: s.imageRecognitionOn,
+          imageHighConfidence: s.imageHighConfidence,
+          imageMediumConfidence: s.imageMediumConfidence,
+          imageFallbackAiOn: s.imageFallbackAiOn,
         })} saving={saving}/>
       </div>
     </div>
