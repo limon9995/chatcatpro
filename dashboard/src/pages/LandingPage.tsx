@@ -302,11 +302,17 @@ const DASHBOARD_URL = (function() {
 })();
 ['nav-login','cta-login','hero-signup'].forEach(function(id) {
   var el = document.getElementById(id);
-  if (el) el.href = DASHBOARD_URL + '/?mode=login';
+  if (el) {
+    el.href = DASHBOARD_URL + '/?mode=login';
+    el.target = '_top';
+  }
 });
 ['nav-signup','cta-signup'].forEach(function(id) {
   var el = document.getElementById(id);
-  if (el) el.href = DASHBOARD_URL + '/?mode=signup';
+  if (el) {
+    el.href = DASHBOARD_URL + '/?mode=signup';
+    el.target = '_top';
+  }
 });
 const observer = new IntersectionObserver(function(entries) {
   entries.forEach(function(e) { if(e.isIntersecting){ e.target.style.opacity='1'; e.target.style.transform='translateY(0)'; }});
