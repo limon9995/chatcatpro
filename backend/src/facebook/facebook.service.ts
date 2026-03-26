@@ -155,6 +155,19 @@ export class FacebookService {
       };
     }
 
+    if (/^\d+$/.test(parsedRef)) {
+      if (parsedRef !== verifiedPage.pageId) {
+        throw new BadRequestException(
+          `Page link mismatch. The link points to ${parsedRef}, but the token belongs to page ${verifiedPage.pageId} (${verifiedPage.pageName}).`,
+        );
+      }
+
+      return {
+        pageId: verifiedPage.pageId,
+        pageName: verifiedPage.pageName,
+      };
+    }
+
     const resolvedPage = await this.fetchPageIdentityByReference(
       parsedRef,
       submittedPageToken,

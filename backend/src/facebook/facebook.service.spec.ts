@@ -147,4 +147,36 @@ describe('FacebookService', () => {
       ),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
+
+  it('accepts numeric profile-style links when the id matches the verified page id', async () => {
+    jest.spyOn(global, 'fetch').mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ id: '61550984030942', name: 'Limon Tech Diary' }),
+    } as any);
+
+    const result = await service.resolvePageIdentity(
+      'https://www.facebook.com/profile.php?id=61550984030942',
+      'token-123',
+    );
+
+    expect(result).toEqual({
+      pageId: '61550984030942',
+      pageName: 'Limon Tech Diary',
+    });
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects numeric profile-style links when the id does not match the verified page id', async () => {
+    jest.spyOn(global, 'fetch').mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ id: '1046542211868208', name: 'Limon Tech Diary' }),
+    } as any);
+
+    await expect(
+      service.resolvePageIdentity(
+        'https://www.facebook.com/profile.php?id=61550984030942',
+        'token-123',
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
 });
