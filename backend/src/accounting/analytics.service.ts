@@ -829,7 +829,7 @@ export class AnalyticsService {
     const botHandled = Math.max(totalTracked - needsAgent, 0);
     const botHandledPct = totalTracked
       ? Math.round((botHandled / totalTracked) * 100)
-      : 100;
+      : 0;
     const needsAgentPct = totalTracked ? 100 - botHandledPct : 0;
 
     return {

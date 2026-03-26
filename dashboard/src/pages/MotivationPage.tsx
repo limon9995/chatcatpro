@@ -211,7 +211,7 @@ export function MotivationPage({ th, pageId, onToast: _onToast, onOpenAgentTasks
     totalTracked: 0,
     botHandled: 0,
     needsAgent: 0,
-    botHandledPct: 100,
+    botHandledPct: 0,
     needsAgentPct: 0,
     workCounts: {
       messagesHandled: 0,
@@ -309,6 +309,20 @@ export function MotivationPage({ th, pageId, onToast: _onToast, onOpenAgentTasks
     },
   ].filter((item) => item.value > 0);
   const queueTaskTotal = queueItems.reduce((sum, item) => sum + item.value, 0);
+  const automationHeadline =
+    automation.totalTracked > 0
+      ? copy('Bot already major কাজ handle করছে', 'The bot is already handling the majority of the work')
+      : copy('Automation data আসা শুরু হলে এখানে summary দেখাবে', 'This summary will update once automation data starts coming in');
+  const automationSummary =
+    automation.totalTracked > 0
+      ? copy(
+          `${automation.botHandled}টি order flow bot handle করেছে, আর queue-তে ${queueTaskTotal}টি manual কাজ আছে.`,
+          `The bot handled ${automation.botHandled} order flows, and there are ${queueTaskTotal} manual tasks waiting in the queue.`,
+        )
+      : copy(
+          'এখনো কোনো tracked order flow নেই, তাই bot workload 0% দেখানো হচ্ছে।',
+          'There are no tracked order flows yet, so the bot workload is currently shown as 0%.',
+        );
 
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:24 }}>
@@ -410,13 +424,10 @@ export function MotivationPage({ th, pageId, onToast: _onToast, onOpenAgentTasks
             </div>
             <div style={{ flex:1, minWidth: 220 }}>
               <div style={{ fontWeight:800, fontSize:15 }}>
-                {copy('Bot already major কাজ handle করছে', 'The bot is already handling the majority of the work')}
+                {automationHeadline}
               </div>
               <div style={{ fontSize:12.5, color:th.muted, marginTop:6, lineHeight:1.6 }}>
-                {copy(
-                  `${automation.botHandled}টি order flow bot handle করেছে, আর queue-তে ${queueTaskTotal}টি manual কাজ আছে.`,
-                  `The bot handled ${automation.botHandled} order flows, and there are ${queueTaskTotal} manual tasks waiting in the queue.`,
-                )}
+                {automationSummary}
               </div>
               <div style={{ display:'flex', gap:14, flexWrap:'wrap', marginTop:10, fontSize:12.5 }}>
                 <span style={{ color:'#16a34a', fontWeight:700 }}>{copy(`Bot handled: ${automation.botHandled}`, `Bot handled: ${automation.botHandled}`)}</span>

@@ -458,8 +458,18 @@ export function AgentTasksPage({ th, pageId, onToast, onOpenOrders, onOpenPrint,
   const pending = pendingIds.size + setupPending;
   const botHandled = Math.max(totalOrders - pending, 0);
   const totalWithSetup = totalOrders + setupPending;
-  const botPct = totalWithSetup ? Math.round((botHandled / totalWithSetup) * 100) : 100;
+  const botPct = totalWithSetup ? Math.round((botHandled / totalWithSetup) * 100) : 0;
   const agentPct = totalWithSetup ? 100 - botPct : 0;
+  const automationSummary =
+    totalWithSetup > 0
+      ? copy(
+          `${botHandled}টি order flow bot complete করেছে. মাত্র ${pending}টি কাজ agent-এর জন্য বাকি আছে.`,
+          `The bot completed ${botHandled} order flows automatically. Only ${pending} tasks are waiting for the agent.`,
+        )
+      : copy(
+          'এখনো কোনো order flow বা setup task নেই, তাই automation impact 0% দেখানো হচ্ছে।',
+          'There are no order flows or setup tasks yet, so the automation impact is currently 0%.',
+        );
 
   if (loading && !orders.length) {
     return (
@@ -496,7 +506,7 @@ export function AgentTasksPage({ th, pageId, onToast, onOpenOrders, onOpenPrint,
             colorB="#f59e0b"
             value={`${botPct}%`}
             label={copy('Bot handled automatically', 'Bot handled automatically')}
-            sub={copy(`${botHandled}টি order flow bot complete করেছে. মাত্র ${pending}টি কাজ agent-এর জন্য বাকি আছে.`, `The bot completed ${botHandled} order flows automatically. Only ${pending} tasks are waiting for the agent.`)}
+            sub={automationSummary}
             th={th}
           />
           <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginTop: 16, fontSize: 12.5 }}>
