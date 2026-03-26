@@ -767,19 +767,21 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:radial-
 .header{background:linear-gradient(135deg,var(--p),var(--p2));color:#fff;position:sticky;top:0;z-index:100;box-shadow:0 10px 30px rgba(15,23,42,.16)}
 .header::after{content:'';position:absolute;bottom:-1px;left:0;right:0;height:1px;background:rgba(255,255,255,.15)}
 .header-glass{backdrop-filter:blur(0);-webkit-backdrop-filter:blur(0)}
-.header-inner{max-width:1180px;margin:0 auto;padding:14px 20px;display:flex;align-items:center;gap:14px}
+.header-inner{max-width:1180px;margin:0 auto;padding:14px 20px 10px;display:flex;align-items:center;gap:14px}
 .h-logo{width:48px;height:48px;border-radius:15px;object-fit:cover;border:2px solid rgba(255,255,255,.3);flex-shrink:0}
 .h-logo-ph{width:48px;height:48px;border-radius:15px;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;border:2px solid rgba(255,255,255,.2)}
 .h-biz{font-size:19px;font-weight:800;letter-spacing:-.3px;line-height:1.15}
 .h-sub{font-size:12px;opacity:.82;margin-top:4px;font-weight:500}
-.h-msg-btn{margin-left:auto;background:rgba(255,255,255,.18);color:#fff;border:1.5px solid rgba(255,255,255,.35);border-radius:999px;padding:10px 18px;font-weight:700;font-size:13px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:7px;white-space:nowrap;backdrop-filter:blur(8px);transition:all .15s;font-family:inherit}
+.header-actions{margin-left:auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+.h-msg-btn{background:rgba(255,255,255,.18);color:#fff;border:1.5px solid rgba(255,255,255,.35);border-radius:999px;padding:10px 18px;font-weight:700;font-size:13px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:7px;white-space:nowrap;backdrop-filter:blur(8px);transition:all .15s;font-family:inherit}
 .h-msg-btn:hover{background:rgba(255,255,255,.28);border-color:rgba(255,255,255,.5)}
 
 /* ── HERO ── */
-.hero-wrap{max-width:1180px;margin:0 auto;padding:8px 20px 6px}
+.hero-wrap{max-width:1180px;margin:0 auto;padding:0 20px 8px}
 .hero-card{position:relative;overflow:hidden;border-radius:22px;background:linear-gradient(135deg,rgba(255,255,255,.14),rgba(255,255,255,.06));border:1px solid rgba(255,255,255,.12);padding:14px 16px;box-shadow:inset 0 1px 0 rgba(255,255,255,.12)}
 .hero-card::before{content:'';position:absolute;width:340px;height:340px;border-radius:50%;right:-110px;top:-160px;background:radial-gradient(circle,rgba(255,255,255,.28),transparent 70%)}
 .hero-card::after{content:'';position:absolute;width:240px;height:240px;border-radius:50%;left:-60px;bottom:-120px;background:radial-gradient(circle,rgba(255,255,255,.14),transparent 72%)}
+.hero-search{position:relative;z-index:2;margin-bottom:12px}
 .hero-grid{position:relative;z-index:1;display:grid;grid-template-columns:minmax(0,1.7fr) minmax(240px,.8fr);gap:10px;align-items:center}
 .hero-copy{padding:0}
 .hero-kicker{display:inline-flex;align-items:center;gap:8px;padding:6px 11px;border-radius:999px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.16);font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
@@ -797,20 +799,20 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:radial-
 .hero-stat-lbl{font-size:10px;color:var(--sub);margin-top:2px}
 
 /* ── SEARCH ── */
-.search-strip{padding:8px 20px 6px}
-.search-inner{max-width:1180px;margin:0 auto}
+.search-strip{padding:0}
+.search-inner{max-width:none;margin:0}
 .s-wrap{position:relative}
 .s-icon{position:absolute;left:18px;top:50%;transform:translateY(-50%);opacity:.45;pointer-events:none;font-size:16px;line-height:1}
-.s-input{width:100%;padding:14px 18px 14px 48px;border-radius:18px;border:1.5px solid rgba(255,255,255,.8);font-size:14px;font-family:inherit;background:rgba(255,255,255,.9);outline:none;color:var(--text);box-shadow:var(--shadow-sm)}
+.s-input{width:100%;padding:14px 18px 14px 48px;border-radius:18px;border:1.5px solid rgba(255,255,255,.22);font-size:14px;font-family:inherit;background:rgba(9,13,20,.14);outline:none;color:#fff;box-shadow:0 10px 26px rgba(15,23,42,.12);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
 .s-input::placeholder{color:var(--muted)}
-.s-input:focus{box-shadow:0 0 0 4px color-mix(in srgb,var(--p) 18%,transparent);border-color:color-mix(in srgb,var(--p) 25%,#fff)}
+.s-input:focus{box-shadow:0 0 0 4px color-mix(in srgb,var(--p) 18%,transparent),0 10px 26px rgba(15,23,42,.14);border-color:rgba(255,255,255,.42)}
 
 /* ── STATS ── */
-.stats{max-width:1180px;margin:4px auto 4px;padding:0 20px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.stats{max-width:1180px;margin:8px auto 6px;padding:0 20px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
 .stats-count{font-size:14px;font-weight:700;color:var(--sub)}
 .stats-count span{color:var(--p)}
 .stats-badges{display:flex;flex-wrap:wrap;gap:10px}
-.stats-badge{display:inline-flex;align-items:center;gap:8px;padding:10px 14px;border-radius:999px;background:rgba(255,255,255,.85);border:1px solid var(--border);box-shadow:var(--shadow-sm);font-size:12px;font-weight:700;color:var(--sub)}
+.stats-badge{display:inline-flex;align-items:center;gap:8px;padding:10px 14px;border-radius:999px;background:rgba(255,255,255,.9);border:1px solid var(--border);box-shadow:var(--shadow-sm);font-size:12px;font-weight:700;color:var(--sub)}
 
 /* ── FILTERS ── */
 .filters{max-width:1180px;margin:4px auto 0;padding:0 20px}
@@ -881,23 +883,29 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:radial-
   .hero-grid{grid-template-columns:1fr}
   .hero-panel{display:none}
   .hero-title{max-width:none}
+  .stats{align-items:flex-start}
 }
 @media(max-width:600px){
-  .header-inner{padding:14px 16px}
-  .hero-wrap,.search-strip,.stats,.filters,.grid-wrap,.site-footer{padding-left:14px;padding-right:14px}
+  .header-inner{padding:14px 16px 10px;align-items:flex-start}
+  .header-actions{width:100%;margin-left:0;justify-content:space-between}
+  .hero-wrap,.stats,.filters,.grid-wrap,.site-footer{padding-left:14px;padding-right:14px}
   .hero-card{padding:12px 14px}
   .hero-kicker{font-size:10px;padding:5px 9px}
   .hero-title{font-size:18px}
   .hero-text{font-size:11.5px}
   .hero-points{display:none}
   .h-biz{font-size:16px}
-  .h-msg-btn .h-msg-txt{display:none}
+  .h-msg-btn{padding:9px 14px;font-size:12px}
+  .h-msg-btn .h-msg-txt{display:inline}
+  .s-input{padding:13px 16px 13px 44px;font-size:13px}
   .grid{grid-template-columns:repeat(2,1fr);gap:12px}
   .section-title{font-size:23px}
   .c-body{padding:12px 12px 14px}
   .c-name{font-size:13px}
   .c-price{font-size:16px}
   .c-order{font-size:10px;padding:5px 10px}
+  .stats-badges{gap:8px}
+  .stats-badge{padding:8px 12px;font-size:11px}
 }
 @media(max-width:360px){.grid{grid-template-columns:1fr}}
 
@@ -914,7 +922,7 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:radial-
     linear-gradient(180deg,#04060a 0%,#090d14 34%,#0b1119 100%)}
   .header{background:linear-gradient(180deg,#090d14 0%,#0c1220 58%,#10192a 100%)!important;box-shadow:0 14px 40px rgba(0,0,0,.34)}
   .hero-card{background:linear-gradient(135deg,rgba(16,25,42,.96),rgba(18,24,38,.88));border-color:rgba(255,255,255,.06);box-shadow:0 18px 40px rgba(0,0,0,.24),inset 0 1px 0 rgba(255,255,255,.04)}
-  .hero-panel,.s-input,.footer-inner,.stats-badge,.footer-links a,.filter-btn{background:#121925;color:var(--text);border-color:rgba(255,255,255,.08)}
+  .hero-panel,.footer-inner,.stats-badge,.footer-links a,.filter-btn{background:#121925;color:var(--text);border-color:rgba(255,255,255,.08)}
   .hero-kicker,.hero-pill{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.1)}
   .hero-text{color:rgba(238,242,255,.8)}
   .hero-panel-title,.section-title,.c-name,.f-name{color:#eef2ff}
@@ -927,8 +935,8 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:radial-
   .h-sub,.nav-sub{color:#c5d1ec}
   .h-msg-btn,.dk-btn{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.12);color:#eef2ff}
   .h-msg-btn:hover,.dk-btn:hover{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.18)}
-  .search-strip{background:transparent}
-  .stats-badge,.filter-btn,.footer-links a,.s-input,.hero-panel{backdrop-filter:none}
+  .s-input{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.08);color:#eef2ff;box-shadow:0 12px 30px rgba(0,0,0,.18)}
+  .stats-badge,.filter-btn,.footer-links a,.hero-panel{backdrop-filter:none}
   .card{background:linear-gradient(180deg,#0f141c 0%,#121924 100%);border-color:rgba(255,255,255,.06)}
   .c-img{background:linear-gradient(135deg,#0f1722,#131b29)}
   .c-ph{background:linear-gradient(135deg,#141b27,#0f141d)!important}
@@ -947,7 +955,7 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:radial-
   linear-gradient(180deg,#04060a 0%,#090d14 34%,#0b1119 100%)}
 [data-dark="1"] .header{background:linear-gradient(180deg,#090d14 0%,#0c1220 58%,#10192a 100%)!important;box-shadow:0 14px 40px rgba(0,0,0,.34)}
 [data-dark="1"] .hero-card{background:linear-gradient(135deg,rgba(16,25,42,.96),rgba(18,24,38,.88));border-color:rgba(255,255,255,.06);box-shadow:0 18px 40px rgba(0,0,0,.24),inset 0 1px 0 rgba(255,255,255,.04)}
-[data-dark="1"] .hero-panel,[data-dark="1"] .s-input,[data-dark="1"] .footer-inner,[data-dark="1"] .stats-badge,[data-dark="1"] .footer-links a,[data-dark="1"] .filter-btn{background:#121925;color:var(--text);border-color:rgba(255,255,255,.08)}
+[data-dark="1"] .hero-panel,[data-dark="1"] .footer-inner,[data-dark="1"] .stats-badge,[data-dark="1"] .footer-links a,[data-dark="1"] .filter-btn{background:#121925;color:var(--text);border-color:rgba(255,255,255,.08)}
 [data-dark="1"] .hero-kicker,[data-dark="1"] .hero-pill{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.1)}
 [data-dark="1"] .hero-text{color:rgba(238,242,255,.8)}
 [data-dark="1"] .hero-panel-title,[data-dark="1"] .section-title,[data-dark="1"] .c-name,[data-dark="1"] .f-name{color:#eef2ff}
@@ -960,8 +968,8 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:radial-
 [data-dark="1"] .h-sub,[data-dark="1"] .nav-sub{color:#c5d1ec}
 [data-dark="1"] .h-msg-btn,[data-dark="1"] .dk-btn{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.12);color:#eef2ff}
 [data-dark="1"] .h-msg-btn:hover,[data-dark="1"] .dk-btn:hover{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.18)}
-[data-dark="1"] .search-strip{background:transparent}
-[data-dark="1"] .stats-badge,[data-dark="1"] .filter-btn,[data-dark="1"] .footer-links a,[data-dark="1"] .s-input,[data-dark="1"] .hero-panel{backdrop-filter:none}
+[data-dark="1"] .s-input{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.08);color:#eef2ff;box-shadow:0 12px 30px rgba(0,0,0,.18)}
+[data-dark="1"] .stats-badge,[data-dark="1"] .filter-btn,[data-dark="1"] .footer-links a,[data-dark="1"] .hero-panel{backdrop-filter:none}
 [data-dark="1"] .card{background:linear-gradient(180deg,#0f141c 0%,#121924 100%);border-color:rgba(255,255,255,.06)}
 [data-dark="1"] .c-img{background:linear-gradient(135deg,#0f1722,#131b29)}
 [data-dark="1"] .c-ph{background:linear-gradient(135deg,#141b27,#0f141d)!important}
@@ -973,6 +981,7 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:radial-
 [data-dark="1"] .site-footer{background:transparent}
 [data-dark="1"] .section-text,[data-dark="1"] .c-desc,[data-dark="1"] .hero-panel-text,[data-dark="1"] .footer-help{color:var(--sub)}
 [data-dark="0"]{color-scheme:light;--bg:#f0f2f8;--surface:#fff;--text:#0f172a;--sub:#475569;--muted:#94a3b8;--border:#e2e8f0}
+[data-dark="0"] .s-input{background:rgba(255,255,255,.92);border-color:rgba(255,255,255,.76);color:var(--text)}
 
 /* Dark toggle in header */
 .dk-btn{background:rgba(255,255,255,.14);border:1.5px solid rgba(255,255,255,.25);color:#fff;border-radius:22px;padding:7px 12px;font-size:14px;cursor:pointer;transition:all .15s;line-height:1;backdrop-filter:blur(8px);flex-shrink:0}
@@ -999,15 +1008,31 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:radial-
       <div class="h-biz">${esc(page.name)}</div>
       ${page.phone ? `<div class="h-sub">📞 ${esc(page.phone)}</div>` : ''}
     </div>
-    <a class="h-msg-btn" href="${esc(page.messengerUrl)}" target="_blank" rel="noopener">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-      <span class="h-msg-txt">Message করুন</span>
-    </a>
-    <button class="dk-btn" id="dkBtn" onclick="(function(){var d=document.documentElement.dataset.dark==='1';document.documentElement.dataset.dark=d?'0':'1';localStorage.setItem('cat_dark',d?'0':'1');document.getElementById('dkBtn').textContent=d?'🌙':'☀️'})()">🌙</button>
+    <div class="header-actions">
+      <a class="h-msg-btn" href="${esc(page.messengerUrl)}" target="_blank" rel="noopener">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        <span class="h-msg-txt">Message করুন</span>
+      </a>
+      <button class="dk-btn" id="dkBtn" onclick="(function(){var d=document.documentElement.dataset.dark==='1';document.documentElement.dataset.dark=d?'0':'1';localStorage.setItem('cat_dark',d?'0':'1');document.getElementById('dkBtn').textContent=d?'🌙':'☀️'})()">🌙</button>
+    </div>
   </div>
 <script>document.addEventListener('DOMContentLoaded',function(){var b=document.getElementById('dkBtn');if(b)b.textContent=document.documentElement.dataset.dark==='1'?'☀️':'🌙'});</script>
   <div class="hero-wrap">
     <div class="hero-card">
+      <div class="hero-search">
+        <div class="search-strip">
+          <div class="search-inner">
+            <form method="GET" action="/catalog/${esc(page.id)}">
+              <div class="s-wrap">
+                <span class="s-icon">🔍</span>
+                <input class="s-input" type="search" name="q"
+                  placeholder="Product খুঁজুন — code বা নাম লিখুন..."
+                  value="${esc(search)}" autocomplete="off"/>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
       <div class="hero-grid">
         <div class="hero-copy">
           <div class="hero-kicker">Online Storefront</div>
@@ -1046,19 +1071,6 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:radial-
     </div>
   </div>
 </header>
-
-<div class="search-strip">
-  <div class="search-inner">
-    <form method="GET" action="/catalog/${esc(page.id)}">
-      <div class="s-wrap">
-        <span class="s-icon">🔍</span>
-        <input class="s-input" type="search" name="q"
-          placeholder="Product খুঁজুন — code বা নাম লিখুন..."
-          value="${esc(search)}" autocomplete="off"/>
-      </div>
-    </form>
-  </div>
-</div>
 
 <div class="stats">
   <div class="stats-count">
