@@ -60,11 +60,29 @@ export class FacebookService {
       verifyToken?: string;
     },
   ): Promise<any> {
+    const submittedPageId = String(pageInfo.pageId || '').trim();
+    const submittedPageName = String(pageInfo.pageName || '').trim();
+    const submittedPageToken = String(pageInfo.pageToken || '').trim();
+
+    if (!submittedPageToken) {
+      throw new BadRequestException('Facebook page token is required');
+    }
+
+    const verifiedPage = await this.verifyPageToken(submittedPageToken);
+    if (submittedPageId && submittedPageId !== verifiedPage.pageId) {
+      this.logger.warn(
+        `[Facebook] Rejected page connect due to ID mismatch: submitted=${submittedPageId} verified=${verifiedPage.pageId}`,
+      );
+      throw new BadRequestException(
+        `Page ID mismatch. Facebook token belongs to page ${verifiedPage.pageId} (${verifiedPage.pageName}).`,
+      );
+    }
+
     const verifyToken =
-      pageInfo.verifyToken || `dfbot_${pageInfo.pageId}_${Date.now()}`;
-    const encryptedToken = this.encryption.encryptIfNeeded(pageInfo.pageToken);
+      pageInfo.verifyToken || `dfbot_${verifiedPage.pageId}_${Date.now()}`;
+    const encryptedToken = this.encryption.encryptIfNeeded(submittedPageToken);
     const existing = await this.prisma.page.findUnique({
-      where: { pageId: pageInfo.pageId },
+      where: { pageId: verifiedPage.pageId },
       select: { id: true, ownerId: true, verifyToken: true },
     });
 
@@ -78,7 +96,8 @@ export class FacebookService {
       ? await this.prisma.page.update({
           where: { id: existing.id },
           data: {
-            pageName: pageInfo.pageName,
+            pageId: verifiedPage.pageId,
+            pageName: verifiedPage.pageName,
             pageToken: encryptedToken,
             ownerId: userId,
             isActive: true,
@@ -87,8 +106,8 @@ export class FacebookService {
         })
       : await this.prisma.page.create({
           data: {
-            pageId: pageInfo.pageId,
-            pageName: pageInfo.pageName,
+            pageId: verifiedPage.pageId,
+            pageName: verifiedPage.pageName,
             pageToken: encryptedToken,
             verifyToken,
             ownerId: userId,
@@ -167,6 +186,26 @@ export class FacebookService {
       pageName: p.name,
       pageToken: p.access_token,
     }));
+  }
+
+  private async verifyPageToken(pageToken: string): Promise<FacebookPageInfo> {
+    const url = `https://graph.facebook.com/v19.0/me?fields=id,name&access_token=${encodeURIComponent(pageToken)}`;
+    const res = await fetch(url);
+    const data: any = await res.json().catch(() => ({}));
+
+    if (!res.ok || !data?.id) {
+      const msg =
+        data?.error?.message ||
+        data?.message ||
+        'Failed to verify Facebook page token';
+      throw new BadRequestException(`Facebook page token verification failed: ${msg}`);
+    }
+
+    return {
+      pageId: String(data.id),
+      pageName: String(data.name || '').trim() || 'Untitled Facebook Page',
+      pageToken,
+    };
   }
 
   private parseSignedState(state: string): { userId: string; ts: number } {
