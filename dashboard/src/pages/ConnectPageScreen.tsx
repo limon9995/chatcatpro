@@ -27,6 +27,7 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
   const [loading, setLoading]     = useState(false);
   const [connecting, setConnecting] = useState<string | null>(null);
   const [connected, setConnected] = useState<string | null>(null);
+  const [disconnecting, setDisconnecting] = useState<number | null>(null);
   const [error, setError]         = useState('');
   const [fbTutorialUrl, setFbTutorialUrl] = useState<string>('');
 
@@ -128,6 +129,38 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
     }
   };
 
+  const disconnectPage = async (page: ConnectedPage) => {
+    const confirmed = window.confirm(
+      copy(
+        `"${page.pageName}" page টি disconnect করতে চান?`,
+        `Do you want to disconnect "${page.pageName}"?`,
+      ),
+    );
+    if (!confirmed) return;
+
+    setDisconnecting(page.id);
+    setError('');
+    try {
+      await request(`${API_BASE}/facebook/disconnect/${page.id}`, {
+        method: 'DELETE',
+      });
+      const nextPages = alreadyConnected.map((p) =>
+        p.id === page.id ? { ...p, isActive: false } : p,
+      );
+      setAlreadyConnected(nextPages);
+      setConnected((current) => (current === page.pageId ? null : current));
+      setManualSuccess(false);
+      setWebhookInfo(null);
+      if (!nextPages.some((p) => p.isActive)) {
+        onConnected();
+      }
+    } catch (e: any) {
+      setError(e?.message || copy('Disconnect করা যায়নি', 'Disconnect failed'));
+    } finally {
+      setDisconnecting(null);
+    }
+  };
+
   const inp: React.CSSProperties = {
     padding: '11px 14px', borderRadius: 10, border: `1px solid ${border}`,
     background: dark ? 'rgba(255,255,255,0.04)' : '#fff',
@@ -189,14 +222,38 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
               {copy('Connected Pages', 'Connected Pages')}
             </div>
             {alreadyConnected.map(p => (
-              <div key={p.pageId} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', borderRadius: 10, border: `1px solid rgba(34,197,94,0.25)`, background: dark ? 'rgba(34,197,94,0.05)' : 'rgba(34,197,94,0.04)', marginBottom: 6 }}>
-                <span style={{ fontSize: 16 }}>✅</span>
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: 13, color: text }}>{p.pageName}</div>
-                  <div style={{ fontSize: 11, color: muted }}>
-                    {p.pageId} {p.isActive ? copy('• Active', '• Active') : copy('• Inactive', '• Inactive')}
+              <div key={p.pageId} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '9px 12px', borderRadius: 10, border: `1px solid rgba(34,197,94,0.25)`, background: dark ? 'rgba(34,197,94,0.05)' : 'rgba(34,197,94,0.04)', marginBottom: 6 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 16 }}>{p.isActive ? '✅' : '⏸️'}</span>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 13, color: text }}>{p.pageName}</div>
+                    <div style={{ fontSize: 11, color: muted }}>
+                      {p.pageId} {p.isActive ? copy('• Active', '• Active') : copy('• Inactive', '• Inactive')}
+                    </div>
                   </div>
                 </div>
+                <button
+                  onClick={() => disconnectPage(p)}
+                  disabled={disconnecting === p.id || !p.isActive}
+                  style={{
+                    border: 'none',
+                    borderRadius: 8,
+                    padding: '7px 12px',
+                    background: !p.isActive ? (dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)') : 'rgba(239,68,68,0.14)',
+                    color: !p.isActive ? muted : '#ef4444',
+                    cursor: disconnecting === p.id || !p.isActive ? 'default' : 'pointer',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    fontFamily: 'inherit',
+                    minWidth: 104,
+                  }}
+                >
+                  {disconnecting === p.id
+                    ? copy('Disconnecting...', 'Disconnecting...')
+                    : p.isActive
+                      ? copy('Disconnect', 'Disconnect')
+                      : copy('Disconnected', 'Disconnected')}
+                </button>
               </div>
             ))}
             <div style={{ height: 1, background: border, margin: '14px 0' }} />
