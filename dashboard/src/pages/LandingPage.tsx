@@ -199,7 +199,7 @@ footer{border-top:1px solid var(--border);padding:40px 5%;display:flex;justify-c
   <div class="stat"><div class="stat-num" style="color:#4f46e5">৯৯%</div><div class="stat-label">Order accuracy</div></div>
   <div class="stat"><div class="stat-num" style="color:#10b981">৩x</div><div class="stat-label">Faster processing</div></div>
   <div class="stat"><div class="stat-num">২৪/৭</div><div class="stat-label">Bot always active</div></div>
-  <div class="stat"><div class="stat-num" style="color:#f59e0b">০</div><div class="stat-label">Missed orders</div></div>
+  <div class="stat"><div class="stat-num" style="color:#f59e0b">দ্রুত</div><div class="stat-label">Team response workflow</div></div>
 </div>
 <section class="section" id="features">
   <div style="max-width:1100px;margin:0 auto">
@@ -208,11 +208,11 @@ footer{border-top:1px solid var(--border);padding:40px 5%;display:flex;justify-c
     <p class="section-sub">Manual কাজ কমান। Bot দিয়ে বেশি order নিন।</p>
     <div class="features-grid">
       <div class="feature-card"><div class="feature-icon">🤖</div><div class="feature-title">Smart Bot Automation</div><div class="feature-desc">Customer message করলে bot product info দেবে, order নেবে, confirm করবে। ২৪/৭।</div><span class="feature-tag">Messenger API</span></div>
-      <div class="feature-card"><div class="feature-icon">📸</div><div class="feature-title">OCR Product Detection</div><div class="feature-desc">Screenshot থেকে product code detect। 5-pass image processing — highest accuracy।</div><span class="feature-tag">AI-Powered</span></div>
+      <div class="feature-card"><div class="feature-icon">📸</div><div class="feature-title">OCR Product Detection</div><div class="feature-desc">Screenshot থেকে product code detect। Multiple image-processing pass দিয়ে matching improve করা হয়।</div><span class="feature-tag">AI-Powered</span></div>
       <div class="feature-card"><div class="feature-icon">🚚</div><div class="feature-title">Courier Integration</div><div class="feature-desc">Pathao, Steadfast, RedX, Paperfly — এক জায়গা থেকে। Bulk booking, tracking।</div><span class="feature-tag">4 Couriers</span></div>
       <div class="feature-card"><div class="feature-icon">💰</div><div class="feature-title">Full Accounting</div><div class="feature-desc">Revenue, expenses, returns — automatic। Profit হিসাব, growth comparison, export।</div><span class="feature-tag">Auto Sync</span></div>
       <div class="feature-card"><div class="feature-icon">👥</div><div class="feature-title">Customer CRM</div><div class="feature-desc">Order history, tags, notes। Top buyers, best products ranking।</div><span class="feature-tag">Built-in CRM</span></div>
-      <div class="feature-card"><div class="feature-icon">📢</div><div class="feature-title">Broadcast & Follow-up</div><div class="feature-desc">নতুন collection launch? Broadcast। Auto follow-up — delivered / returned।</div><span class="feature-tag">Smart Automation</span></div>
+      <div class="feature-card"><div class="feature-icon">📢</div><div class="feature-title">Broadcast & Follow-up</div><div class="feature-desc">নতুন collection launch? Broadcast পাঠান। Follow-up ও delivery workflow centrally manage করুন।</div><span class="feature-tag">Smart Automation</span></div>
       <div class="feature-card"><div class="feature-icon">🛍️</div><div class="feature-title">Product Catalog</div><div class="feature-desc">Public URL। Photo, demo video, price। Order করতে Messenger এ redirect।</div><span class="feature-tag">Public Page</span></div>
       <div class="feature-card"><div class="feature-icon">📊</div><div class="feature-title">Analytics Dashboard</div><div class="feature-desc">Week vs last week growth। Best products। Order streak। Animated, real-time।</div><span class="feature-tag">Live Data</span></div>
       <div class="feature-card"><div class="feature-icon">🔒</div><div class="feature-title">Secure & Reliable</div><div class="feature-desc">AES-256 encryption, webhook signature verification, rate limiting। Multi-tenant।</div><span class="feature-tag">Production Ready</span></div>
@@ -224,10 +224,10 @@ footer{border-top:1px solid var(--border);padding:40px 5%;display:flex;justify-c
     <span class="section-label">How it works</span>
     <h2 class="section-title">৪ ধাপে শুরু করুন</h2>
     <div class="steps" style="background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">
-      <div class="step"><div class="step-num">1</div><div class="step-title">Facebook Page Connect</div><div class="step-desc">Facebook OAuth দিয়ে page connect। ৫ মিনিটে।</div></div>
+      <div class="step"><div class="step-num">1</div><div class="step-title">Facebook Page Connect</div><div class="step-desc">Page token দিয়ে page connect করুন। কয়েক মিনিটেই setup complete।</div></div>
       <div class="step"><div class="step-num">2</div><div class="step-title">Products যোগ করুন</div><div class="step-desc">Code, দাম, ছবি, video add করুন। Catalog automatically তৈরি।</div></div>
       <div class="step"><div class="step-num">3</div><div class="step-title">Bot Activate করুন</div><div class="step-desc">Bot Knowledge set করুন। এক click এ automation on।</div></div>
-      <div class="step"><div class="step-num">4</div><div class="step-title">Order আসতে থাকুক</div><div class="step-desc">Bot সব handle করবে। শুধু confirm করুন।</div></div>
+      <div class="step"><div class="step-num">4</div><div class="step-title">Order Flow চালু করুন</div><div class="step-desc">Bot routine reply ও order capture handle করবে, team confirm ও follow-up manage করবে।</div></div>
     </div>
   </div>
 </section>

@@ -23,7 +23,7 @@ type Screen = 'landing' | 'login' | 'signup' | 'forgot-password' | 'change-passw
 
 function replaceUrl(params: URLSearchParams) {
   const query = params.toString();
-  const next = query ? `${window.location.pathname}?${query}` : window.location.pathname;
+  const next = query ? `/?${query}` : '/';
   window.history.replaceState({}, '', next);
 }
 
@@ -76,6 +76,13 @@ export default function App() {
     document.body.style.background = dark ? '#0a0a0f' : '#f7f7f8';
     document.body.style.color = dark ? '#ededf0' : '#0d0d10';
   }, [dark]);
+
+  useEffect(() => {
+    if (window.location.pathname !== '/') {
+      const params = new URLSearchParams(window.location.search);
+      replaceUrl(params);
+    }
+  }, []);
 
   useEffect(() => {
     if (screen === 'dashboard') return;
