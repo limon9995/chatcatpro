@@ -222,6 +222,7 @@ export default function App() {
           myPages={myPages}
           activePage={activePage}
           onSelectPage={(page) => setActivePage(page as MyPage)}
+          onManagePages={() => setScreen('connect-page')}
           onLogout={handleLogout}
         />
       </Suspense>

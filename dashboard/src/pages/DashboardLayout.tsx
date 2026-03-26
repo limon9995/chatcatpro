@@ -87,8 +87,6 @@ const LAST_NAV_KEY = 'dfbot_last_nav';
 interface PageItem { id: number; pageId: string; pageName: string; }
 interface ToastItem { msg: string; type?: 'error' | 'success' | 'info'; id: number; }
 
-const HELPLINE_FACEBOOK = 'https://www.facebook.com/share/18CGePjSwQ/';
-
 // ── DashboardLayout ────────────────────────────────────────────────────────────
 export function DashboardLayout({
   dark,
@@ -97,6 +95,7 @@ export function DashboardLayout({
   myPages = [],
   activePage: initialActivePage = null,
   onSelectPage,
+  onManagePages,
   onLogout,
 }: {
   dark: boolean;
@@ -105,6 +104,7 @@ export function DashboardLayout({
   myPages?: PageItem[];
   activePage?: PageItem | null;
   onSelectPage?: (page: PageItem) => void;
+  onManagePages?: () => void;
   onLogout: () => void;
 }) {
   const { copy, language } = useLanguage();
@@ -412,15 +412,13 @@ export function DashboardLayout({
             🔍 <span>{copy('সার্চ', 'Search')}</span>
             <span style={{ fontSize: 10.5, background: th.surface, border: `1px solid ${th.border}`, borderRadius: 4, padding: '1px 5px', color: th.muted, letterSpacing: '0.02em' }}>Ctrl+K</span>
           </button>
-          <a
-            href={HELPLINE_FACEBOOK}
-            target="_blank"
-            rel="noreferrer"
-            style={{ ...th.btnGhost, padding: '6px 10px', fontSize: 12, borderRadius: 8, textDecoration: 'none' }}
-            title="Facebook Page"
+          <button
+            onClick={onManagePages}
+            style={{ ...th.btnGhost, padding: '6px 10px', fontSize: 12, borderRadius: 8 }}
+            title={copy('পেজ connect / disconnect করুন', 'Manage connected Facebook pages')}
           >
             {copy('Facebook Page', 'Facebook Page')}
-          </a>
+          </button>
           <LanguageSwitch dark={dark} compact />
           <button onClick={() => setDark(!dark)} style={{ ...th.btnGhost, padding: '6px 10px', fontSize: 15, borderRadius: 8 }}>
             {dark ? copy('☀ লাইট', '☀ Light') : copy('☾ ডার্ক', '☾ Dark')}
