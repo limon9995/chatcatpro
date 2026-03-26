@@ -296,5 +296,9 @@ export default function App() {
     );
   }
 
+  if (screen === 'dashboard') {
+    return <ScreenFallback dark={dark} />;
+  }
+
   return null;
 }
