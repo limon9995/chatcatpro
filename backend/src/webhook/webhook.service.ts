@@ -295,6 +295,26 @@ export class WebhookService {
       }
     }
 
+    const recentOrder =
+      !draft && page.orderModeOn
+        ? await this.findRecentCustomerOrder(pageId, psid)
+        : null;
+
+    // ── POST-ORDER FOLLOW-UP (after draft already finalized) ──────────────
+    if (recentOrder && intent === 'EDIT_ORDER') {
+      await this.handlePostOrderEdit(page, psid, text, recentOrder);
+      return;
+    }
+
+    if (recentOrder && (intent === 'CONFIRM' || this.isPostOrderAck(text))) {
+      await this.safeSend(
+        token,
+        psid,
+        'ধন্যবাদ 💖 আপনার order request already received হয়েছে। দরকার হলে "size change", "phone change", "address change" বা "name change" লিখুন।',
+      );
+      return;
+    }
+
     // ── ORDER INFO detected without active draft (smart field capture) ────
     if (!draft && page.orderModeOn) {
       const parsed = this.draftHandler.parseCustomerInfo(text);
@@ -741,6 +761,109 @@ export class WebhookService {
     }
 
     return false;
+  }
+
+  private async findRecentCustomerOrder(pageId: number, psid: string) {
+    return this.prisma.order.findFirst({
+      where: {
+        pageIdRef: pageId,
+        customerPsid: psid,
+        status: { in: ['RECEIVED', 'PENDING', 'CONFIRMED'] },
+      },
+      orderBy: { id: 'desc' },
+      select: {
+        id: true,
+        orderNote: true,
+        status: true,
+        createdAt: true,
+      },
+    });
+  }
+
+  private isPostOrderAck(text: string): boolean {
+    const t = text.toLowerCase().trim();
+    return /^(ok|okay|okey|okk|okkk|done|thanks|thank you|thik|thik ache|thik ase|ঠিক|ঠিক আছে|ধন্যবাদ|acha|accha|আচ্ছা)$/.test(
+      t,
+    );
+  }
+
+  private detectPostOrderEditField(text: string): {
+    label: string;
+    prompt: string;
+  } | null {
+    const t = text.toLowerCase();
+    if (
+      /name|naam|নাম/.test(t) &&
+      /change|badla|ভুল|bhul|bul|wrong|thik\s*na|নতুন/i.test(t)
+    ) {
+      return {
+        label: 'name',
+        prompt:
+          'ঠিক আছে 💖 নাম change request note করা হয়েছে। আমাদের agent updated নাম confirm করবে।',
+      };
+    }
+    if (
+      /phone|number|mobile|নম্বর|ফোন/.test(t) &&
+      /change|badla|ভুল|bhul|bul|wrong|thik\s*na|নতুন/i.test(t)
+    ) {
+      return {
+        label: 'phone',
+        prompt:
+          'ঠিক আছে 💖 phone change request note করা হয়েছে। আমাদের agent updated নাম্বার confirm করবে।',
+      };
+    }
+    if (
+      /address|thikana|location|ঠিকানা/.test(t) &&
+      /change|badla|ভুল|bhul|bul|wrong|thik\s*na|নতুন/i.test(t)
+    ) {
+      return {
+        label: 'address',
+        prompt:
+          'ঠিক আছে 💖 address change request note করা হয়েছে। আমাদের agent updated ঠিকানা confirm করবে।',
+      };
+    }
+    if (/size|সাইজ/.test(t)) {
+      return {
+        label: 'size',
+        prompt:
+          'ঠিক আছে 💖 size change request note করা হয়েছে। আমাদের agent updated size confirm করবে।',
+      };
+    }
+    if (/color|colour|rong|কালার|রং/.test(t)) {
+      return {
+        label: 'color',
+        prompt:
+          'ঠিক আছে 💖 color change request note করা হয়েছে। আমাদের agent updated option confirm করবে।',
+      };
+    }
+    return null;
+  }
+
+  private async handlePostOrderEdit(
+    page: any,
+    psid: string,
+    text: string,
+    order: { id: number; orderNote: string | null },
+  ): Promise<void> {
+    const parsed = this.detectPostOrderEditField(text);
+    if (!parsed) {
+      await this.safeSend(
+        page.pageToken,
+        psid,
+        'কোনটা বদলাতে চান লিখুন 💖\n👤 name change\n📞 phone change\n📍 address change\n📌 size change',
+      );
+      return;
+    }
+
+    const existing = order.orderNote?.trim();
+    const appended = `[Customer requested ${parsed.label} change after order]`;
+    const nextNote = existing ? `${existing} | ${appended}` : appended;
+    await this.prisma.order.update({
+      where: { id: order.id },
+      data: { orderNote: nextNote },
+    });
+    await this.ctx.setAgentHandling(page.id, psid, true);
+    await this.safeSend(page.pageToken, psid, parsed.prompt);
   }
 
   /** V17: Payment screenshot OCR — called when draft.currentStep === 'advance_payment' */
