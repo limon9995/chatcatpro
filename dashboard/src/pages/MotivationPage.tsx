@@ -146,7 +146,7 @@ function SectionHead({ label }: { label: string }) {
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
-export function MotivationPage({ th, pageId, onToast, onOpenAgentTasks, onOpenOrders }: {
+export function MotivationPage({ th, pageId, onToast: _onToast, onOpenAgentTasks, onOpenOrders }: {
   th: Theme; pageId: number; onToast: (m: string, t?: any) => void;
   onOpenAgentTasks?: () => void;
   onOpenOrders?: (preset: any) => void;
