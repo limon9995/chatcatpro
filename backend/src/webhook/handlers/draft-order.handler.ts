@@ -41,14 +41,74 @@ export class DraftOrderHandler {
     };
   }
 
+  normalizeVariantOptions(raw: any): CustomFieldDef[] {
+    if (!Array.isArray(raw) || raw.length === 0) return [];
+
+    const cleaned = raw
+      .map((item: any) => {
+        if (typeof item === 'string') {
+          return { label: item.trim(), choices: [] as string[] };
+        }
+        const label = String(item?.label || '').trim();
+        const choices = Array.isArray(item?.choices)
+          ? item.choices.map((c: any) => String(c).trim()).filter(Boolean)
+          : [];
+        return { label, choices };
+      })
+      .filter((item) => item.label || item.choices.length > 0);
+
+    if (!cleaned.length) return [];
+
+    const looksLikeChoiceList = cleaned.every(
+      (item) => item.label && item.choices.length === 0,
+    );
+
+    if (looksLikeChoiceList) {
+      const labels = cleaned.map((item) => item.label);
+      return [
+        {
+          label: this.guessVariantLabel(labels),
+          choices: labels,
+        },
+      ];
+    }
+
+    return cleaned.map((item) => ({
+      label: item.label || 'Option',
+      choices: item.choices,
+    }));
+  }
+
+  private guessVariantLabel(labels: string[]): string {
+    const joined = labels.join(' ').toLowerCase();
+    if (
+      /^(xs|s|m|l|xl|xxl|xxxl|2xl|3xl|4xl)$/i.test(labels[0] || '') ||
+      /\b(xs|s|m|l|xl|xxl|xxxl|2xl|3xl|4xl)\b/.test(joined)
+    ) {
+      return 'Size';
+    }
+    if (
+      /\b(red|blue|green|black|white|yellow|pink|purple|brown|grey|gray|orange)\b/.test(
+        joined,
+      ) ||
+      /(লাল|নীল|সবুজ|কালো|সাদা|হলুদ|গোলাপি|বাদামি|ধূসর)/.test(joined)
+    ) {
+      return 'Color';
+    }
+    return 'Option';
+  }
+
   startDraftFromCodes(
     codes: string[],
     products: Array<{ code: string; price: number }>,
     variantOptions: CustomFieldDef[] = [],
   ): DraftSession {
+    const normalizedVariantOptions = this.normalizeVariantOptions(variantOptions);
     const priceMap = new Map(products.map((p) => [p.code, p.price]));
     const firstStep =
-      variantOptions.length > 0 ? `cf:${variantOptions[0].label}` : 'name';
+      normalizedVariantOptions.length > 0
+        ? `cf:${normalizedVariantOptions[0].label}`
+        : 'name';
     return {
       items: codes.map((code) => ({
         productCode: code,
@@ -59,7 +119,7 @@ export class DraftOrderHandler {
       phone: null,
       address: null,
       currentStep: firstStep,
-      pendingCustomFields: [...variantOptions],
+      pendingCustomFields: [...normalizedVariantOptions],
       customFieldValues: {},
     };
   }

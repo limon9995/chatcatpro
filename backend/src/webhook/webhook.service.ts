@@ -317,7 +317,9 @@ export class WebhookService {
             let variantOptions: any[] = [];
             try {
               if (product.variantOptions)
-                variantOptions = JSON.parse(product.variantOptions);
+                variantOptions = this.draftHandler.normalizeVariantOptions(
+                  JSON.parse(product.variantOptions),
+                );
             } catch {}
             const newDraft = this.draftHandler.startDraftFromCodes(
               [contextCode],
@@ -362,7 +364,9 @@ export class WebhookService {
           let variantOptions: CustomFieldDef[] = [];
           if (product.variantOptions) {
             try {
-              variantOptions = JSON.parse(product.variantOptions);
+              variantOptions = this.draftHandler.normalizeVariantOptions(
+                JSON.parse(product.variantOptions),
+              );
             } catch {
               /* ignore */
             }
@@ -544,7 +548,9 @@ export class WebhookService {
         let variantOptions: CustomFieldDef[] = [];
         if (product.variantOptions) {
           try {
-            variantOptions = JSON.parse(product.variantOptions);
+            variantOptions = this.draftHandler.normalizeVariantOptions(
+              JSON.parse(product.variantOptions),
+            );
           } catch {
             /* ignore */
           }
