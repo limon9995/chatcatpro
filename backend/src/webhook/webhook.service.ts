@@ -39,14 +39,11 @@ export class WebhookService {
     if (!body || body.object !== 'page') return;
 
     for (const entry of body.entry ?? []) {
-      const lookupId = String(entry.id);
-      const allPages = await this.prisma.page.findMany({ select: { pageId: true, isActive: true } });
-      this.logger.log(`[Webhook] DEBUG lookup="${lookupId}" allPages=${JSON.stringify(allPages)}`);
-      const page = await this.prisma.page.findFirst({
-        where: { pageId: lookupId, isActive: true },
+      const page = await this.prisma.page.findUnique({
+        where: { pageId: String(entry.id) },
       });
 
-      if (!page) {
+      if (!page || !page.isActive) {
         this.logger.warn(
           `[Webhook] Entry id=${entry.id} — no active page found`,
         );
