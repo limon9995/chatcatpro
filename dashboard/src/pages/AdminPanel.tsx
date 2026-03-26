@@ -242,6 +242,7 @@ export function AdminPanel({ th, onToast, onLogout }: {
         method: 'PATCH', body: JSON.stringify(pageSettings),
       });
       setPageSettings(updated);
+      setPages(prev => prev.map(p => p.id === selectedPage.id ? { ...p, automationOn: updated.automationOn } : p));
       onToast('✅ Settings saved');
     } catch (e: any) { onToast(e.message, 'error'); }
     finally { setPageSettingsSaving(false); }
