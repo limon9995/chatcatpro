@@ -21,6 +21,12 @@ const AdminPanel = lazy(async () => {
 type MyPage = { id: number; pageId: string; pageName: string; isActive: boolean; automationOn: boolean };
 type Screen = 'landing' | 'login' | 'signup' | 'forgot-password' | 'change-password' | 'connect-page' | 'dashboard' | 'admin';
 
+function replaceUrl(params: URLSearchParams) {
+  const query = params.toString();
+  const next = query ? `${window.location.pathname}?${query}` : window.location.pathname;
+  window.history.replaceState({}, '', next);
+}
+
 function ScreenFallback({ dark }: { dark: boolean }) {
   const { copy } = useLanguage();
   return (
@@ -54,7 +60,12 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('mode') === 'login') return 'login';
-    return params.get('mode') === 'signup' ? 'signup' : 'landing';
+    if (params.get('mode') === 'signup') return 'signup';
+    if (params.get('mode') === 'forgot-password') return 'forgot-password';
+    if (params.get('mode') === 'change-password') return 'change-password';
+    if (params.get('mode') === 'connect-page') return 'connect-page';
+    if (params.get('mode') === 'admin') return 'admin';
+    return 'landing';
   });
   const [activePage, setActivePage] = useState<MyPage | null>(null);
   const [myPages, setMyPages] = useState<MyPage[]>([]);
@@ -65,6 +76,13 @@ export default function App() {
     document.body.style.background = dark ? '#0a0a0f' : '#f7f7f8';
     document.body.style.color = dark ? '#ededf0' : '#0d0d10';
   }, [dark]);
+
+  useEffect(() => {
+    if (screen === 'dashboard') return;
+    const params = new URLSearchParams();
+    if (screen !== 'landing') params.set('mode', screen);
+    replaceUrl(params);
+  }, [screen]);
 
   useEffect(() => {
     if (!ready) return;
@@ -101,8 +119,13 @@ export default function App() {
         setScreen('connect-page');
         return;
       }
+      const params = new URLSearchParams(window.location.search);
+      const pageFromUrl = Number(params.get('page') || '');
       const savedId = localStorage.getItem('dfbot_active_page');
-      const found = savedId ? activePages.find((page) => page.id === Number(savedId)) : null;
+      const foundFromUrl = Number.isFinite(pageFromUrl)
+        ? activePages.find((page) => page.id === pageFromUrl)
+        : null;
+      const found = foundFromUrl || (savedId ? activePages.find((page) => page.id === Number(savedId)) : null);
       const nextPage = found || activePages[0];
       setActivePage(nextPage);
       localStorage.setItem('dfbot_active_page', String(nextPage.id));

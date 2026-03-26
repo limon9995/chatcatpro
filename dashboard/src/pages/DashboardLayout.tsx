@@ -87,6 +87,16 @@ const LAST_NAV_KEY = 'dfbot_last_nav';
 interface PageItem { id: number; pageId: string; pageName: string; }
 interface ToastItem { msg: string; type?: 'error' | 'success' | 'info'; id: number; }
 
+function navToParam(nav: NavKey) {
+  return nav.toLowerCase().replace(/_/g, '-');
+}
+
+function paramToNav(value: string | null): NavKey | null {
+  if (!value) return null;
+  const normalized = value.toUpperCase().replace(/-/g, '_');
+  return NAV_KEYS.has(normalized as NavKey) ? (normalized as NavKey) : null;
+}
+
 // ── DashboardLayout ────────────────────────────────────────────────────────────
 export function DashboardLayout({
   dark,
@@ -110,6 +120,8 @@ export function DashboardLayout({
   const { copy, language } = useLanguage();
   const [activePage, setActivePage] = useState<PageItem | null>(initialActivePage);
   const [nav, setNav] = useState<NavKey>(() => {
+    const navFromUrl = paramToNav(new URLSearchParams(window.location.search).get('tab'));
+    if (navFromUrl) return navFromUrl;
     const scopedKey = initialActivePage?.id ? `dfbot_nav_${initialActivePage.id}` : '';
     const savedNav =
       (scopedKey ? localStorage.getItem(scopedKey) : null) ||
@@ -154,6 +166,15 @@ export function DashboardLayout({
     if (!activePage?.id) return;
     localStorage.setItem(`dfbot_nav_${activePage.id}`, nav);
     localStorage.setItem(LAST_NAV_KEY, nav);
+  }, [activePage?.id, nav]);
+
+  useEffect(() => {
+    if (!activePage?.id) return;
+    const params = new URLSearchParams(window.location.search);
+    params.set('mode', 'dashboard');
+    params.set('page', String(activePage.id));
+    params.set('tab', navToParam(nav));
+    window.history.replaceState({}, '', `/?${params.toString()}`);
   }, [activePage?.id, nav]);
 
 
