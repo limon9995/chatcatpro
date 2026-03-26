@@ -22,7 +22,6 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
   const [manualToken, setManualToken]       = useState('');
   const [manualBusy, setManualBusy]         = useState(false);
   const [manualSuccess, setManualSuccess]   = useState(false);
-  const [webhookInfo, setWebhookInfo]       = useState<{ webhookUrl: string; verifyToken: string } | null>(null);
 
   const bg     = dark ? '#080e1c' : '#f1f3fa';
   const panel  = dark ? '#0d1526' : '#fff';
@@ -44,13 +43,10 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
     if (!pname || !tok) { setError(copy('Page Name এবং Access Token দিন।', 'Enter the Page Name and Access Token.')); return; }
     setManualBusy(true); setError('');
     try {
-      const res: any = await request(`${API_BASE}/facebook/connect`, {
+      await request(`${API_BASE}/facebook/connect`, {
         method: 'POST',
         body: JSON.stringify({ pageId: '', pageName: pname, pageToken: tok }),
       });
-      if (res?.webhookUrl || res?.page?.verifyToken) {
-        setWebhookInfo({ webhookUrl: res.webhookUrl || '', verifyToken: res.page?.verifyToken || '' });
-      }
       setManualSuccess(true);
     } catch (e: any) {
       if (String(e?.message).toLowerCase().includes('already')) {
@@ -82,7 +78,6 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
       );
       setAlreadyConnected(nextPages);
       setManualSuccess(false);
-      setWebhookInfo(null);
       if (!nextPages.some((p) => p.isActive)) {
         onConnected();
       }
@@ -246,27 +241,6 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
               <div style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.3)', borderRadius: 12, padding: '12px 15px', fontSize: 13, color: '#16a34a', fontWeight: 700 }}>
                 {copy('✅ Page সফলভাবে Connected হয়েছে!', '✅ Page connected successfully!')}
               </div>
-              {webhookInfo && (
-                <div style={{ background: dark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)', border: `1px solid ${border}`, borderRadius: 12, padding: '14px 15px', fontSize: 12.5 }}>
-                  <div style={{ fontWeight: 800, color: text, marginBottom: 10 }}>{copy('📡 Facebook Webhook Setup করুন:', '📡 Set up the Facebook Webhook:')}</div>
-                  <div style={{ marginBottom: 8 }}>
-                    <span style={{ color: muted }}>{copy('Webhook URL:', 'Webhook URL:')}</span><br />
-                    <code style={{ background: dark ? 'rgba(255,255,255,0.08)' : '#f0f0f0', padding: '4px 8px', borderRadius: 6, fontSize: 12, display: 'block', marginTop: 4, wordBreak: 'break-all', color: text }}>
-                      {webhookInfo.webhookUrl || `${window.location.origin.replace(':5173', ':3000')}/webhook`}
-                    </code>
-                  </div>
-                  <div>
-                    <span style={{ color: muted }}>{copy('Verify Token:', 'Verify Token:')}</span><br />
-                    <code style={{ background: dark ? 'rgba(255,255,255,0.08)' : '#f0f0f0', padding: '4px 8px', borderRadius: 6, fontSize: 12, display: 'block', marginTop: 4, color: text }}>
-                      {webhookInfo.verifyToken}
-                    </code>
-                  </div>
-                  <div style={{ marginTop: 10, fontSize: 12, color: muted, lineHeight: 1.7 }}>
-                    {copy('⬆️ এই URL এবং Verify Token দিয়ে আপনার Facebook App-এর Webhook settings configure করুন।', '⬆️ Configure your Facebook App webhook using this URL and verify token.')}<br />
-                    {copy('Subscribe করুন:', 'Subscribe to:')} <strong>messages, messaging_postbacks</strong>
-                  </div>
-                </div>
-              )}
               <button onClick={onConnected}
                 style={{ width: '100%', padding: '12px', borderRadius: 12, border: 'none', background: '#6366f1', color: '#fff', fontWeight: 800, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}>
                 {copy('→ Dashboard-এ যান', 'Go to Dashboard')}
