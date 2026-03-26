@@ -39,11 +39,12 @@ export class WebhookService {
     if (!body || body.object !== 'page') return;
 
     for (const entry of body.entry ?? []) {
-      const page = await this.prisma.page.findUnique({
-        where: { pageId: String(entry.id) },
-      });
+      const rows = await this.prisma.$queryRaw<any[]>`
+        SELECT * FROM "Page" WHERE "pageId" = ${String(entry.id)} AND "isActive" = true LIMIT 1
+      `;
+      const page = rows[0] ?? null;
 
-      if (!page || !page.isActive) {
+      if (!page) {
         this.logger.warn(
           `[Webhook] Entry id=${entry.id} — no active page found`,
         );
