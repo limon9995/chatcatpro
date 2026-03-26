@@ -85,15 +85,16 @@ export default function App() {
     try {
       const pages: MyPage[] = await request(`${API_BASE}/facebook/my-pages`);
       setMyPages(pages);
-      if (pages.length === 0) {
+      const activePages = pages.filter((page) => page.isActive);
+      if (activePages.length === 0) {
         localStorage.removeItem('dfbot_active_page');
         setActivePage(null);
         setScreen('connect-page');
         return;
       }
       const savedId = localStorage.getItem('dfbot_active_page');
-      const found = savedId ? pages.find((page) => page.id === Number(savedId)) : null;
-      const nextPage = found || pages[0];
+      const found = savedId ? activePages.find((page) => page.id === Number(savedId)) : null;
+      const nextPage = found || activePages[0];
       setActivePage(nextPage);
       localStorage.setItem('dfbot_active_page', String(nextPage.id));
       setScreen('dashboard');

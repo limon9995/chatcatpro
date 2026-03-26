@@ -4,7 +4,7 @@ import { API_BASE, useApi } from '../hooks/useApi';
 import { useLanguage } from '../i18n';
 
 type FbPage = { pageId: string; pageName: string; pageToken: string };
-type ConnectedPage = { pageId: string; pageName: string };
+type ConnectedPage = { id: number; pageId: string; pageName: string; isActive: boolean };
 type ConnectMode = 'oauth' | 'manual';
 
 function extractYouTubeId(url: string): string | null {
@@ -79,7 +79,8 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
   };
 
   const connectPage = async (p: FbPage) => {
-    const isDuplicate = alreadyConnected.some(c => c.pageId === p.pageId);
+    const existingPage = alreadyConnected.find(c => c.pageId === p.pageId);
+    const isDuplicate = existingPage?.isActive === true;
     if (isDuplicate) {
       setError(copy(`"${p.pageName}" ইতিমধ্যে connected আছে।`, `"${p.pageName}" is already connected.`));
       return;
@@ -192,7 +193,9 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
                 <span style={{ fontSize: 16 }}>✅</span>
                 <div>
                   <div style={{ fontWeight: 700, fontSize: 13, color: text }}>{p.pageName}</div>
-                  <div style={{ fontSize: 11, color: muted }}>{p.pageId}</div>
+                  <div style={{ fontSize: 11, color: muted }}>
+                    {p.pageId} {p.isActive ? copy('• Active', '• Active') : copy('• Inactive', '• Inactive')}
+                  </div>
                 </div>
               </div>
             ))}
@@ -344,7 +347,9 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {fbPages.map(p => {
-                    const isAlready   = alreadyConnected.some(c => c.pageId === p.pageId);
+                    const existingPage = alreadyConnected.find(c => c.pageId === p.pageId);
+                    const isAlready   = Boolean(existingPage);
+                    const isActiveExisting = existingPage?.isActive === true;
                     const isConnected = connected === p.pageId;
                     const isBusy      = connecting === p.pageId;
                     return (
@@ -361,7 +366,11 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
                           <div style={{ fontWeight: 700, color: text, fontSize: 14 }}>{p.pageName}</div>
                           <div style={{ fontSize: 11, color: muted, marginTop: 2 }}>ID: {p.pageId}</div>
                           {isAlready && !isConnected && (
-                            <div style={{ fontSize: 11, color: '#ca8a04', marginTop: 2 }}>{copy('⚠️ ইতিমধ্যে connected — Reconnect করবেন?', '⚠️ Already connected - reconnect it?')}</div>
+                            <div style={{ fontSize: 11, color: '#ca8a04', marginTop: 2 }}>
+                              {isActiveExisting
+                                ? copy('⚠️ ইতিমধ্যে connected আছে।', '⚠️ Already connected.')
+                                : copy('⚠️ Page আছে, কিন্তু inactive. Reconnect করুন।', '⚠️ Page exists, but is inactive. Reconnect it.')}
+                            </div>
                           )}
                         </div>
                         <button
@@ -376,7 +385,7 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
                             transition: 'background .15s',
                           }}
                         >
-                          {isConnected ? copy('✅ Connected!', '✅ Connected!') : isBusy ? <><Spinner size={13} /> {copy('Connecting...', 'Connecting...')}</> : (isAlready ? copy('🔄 Reconnect', 'Reconnect') : copy('✅ Connect', 'Connect'))}
+                          {isConnected ? copy('✅ Connected!', '✅ Connected!') : isBusy ? <><Spinner size={13} /> {copy('Connecting...', 'Connecting...')}</> : (isAlready && !isActiveExisting ? copy('🔄 Reconnect', 'Reconnect') : copy('✅ Connect', 'Connect'))}
                         </button>
                       </div>
                     );
