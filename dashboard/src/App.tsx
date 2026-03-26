@@ -65,6 +65,7 @@ export default function App() {
     if (params.get('mode') === 'change-password') return 'change-password';
     if (params.get('mode') === 'connect-page') return 'connect-page';
     if (params.get('mode') === 'admin') return 'admin';
+    if (params.get('mode') === 'dashboard') return 'dashboard';
     return 'landing';
   });
   const [activePage, setActivePage] = useState<MyPage | null>(null);
