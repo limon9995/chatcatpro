@@ -58,6 +58,7 @@ export class BotIntentService {
     // Weak confirm — only checked when awaitingConfirm=true (order summary shown)
     confirmWeak: [
       // English
+      'done',
       'ok',
       'okay',
       'okey',
