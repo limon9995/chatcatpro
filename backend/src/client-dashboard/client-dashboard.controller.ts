@@ -123,6 +123,15 @@ export class ClientDashboardController {
     return this.svc.getAgentIssues(this.pid(r, p));
   }
 
+  @Post(':pageId/orders/agent-issues/dismiss')
+  dismissAgentIssue(
+    @Param('pageId') p: string,
+    @Body() b: any,
+    @Req() r: any,
+  ) {
+    return this.svc.dismissAgentIssue(this.pid(r, p), b);
+  }
+
   @Post(':pageId/orders/:orderId/toggle-bot')
   toggleBot(
     @Param('pageId') p: string,

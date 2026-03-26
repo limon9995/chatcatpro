@@ -267,6 +267,36 @@ export class OrdersService {
     return { botMuted: mute };
   }
 
+  /**
+   * Dismiss an agent issue — removes it from the issues list.
+   * payment type: resets paymentStatus to 'not_required' (agent handled manually)
+   * unmatched type: clears agentHandling=false so bot can resume
+   */
+  async dismissAgentIssue(
+    pageId: number,
+    body: { issueType: 'payment' | 'unmatched'; orderId?: number; psid?: string },
+  ) {
+    if (body.issueType === 'payment' && body.orderId) {
+      const order = await this.findOrFail(body.orderId, pageId);
+      await this.prisma.order.update({
+        where: { id: order.id },
+        data: { paymentStatus: 'not_required' },
+      });
+      // Also clear agentHandling if set
+      if (order.customerPsid) {
+        await this.ctx.setAgentHandling(pageId, order.customerPsid, false);
+      }
+      return { dismissed: true };
+    }
+
+    if (body.issueType === 'unmatched' && body.psid) {
+      await this.ctx.setAgentHandling(pageId, body.psid, false);
+      return { dismissed: true };
+    }
+
+    return { dismissed: false };
+  }
+
   // ── Payment Proof Review ────────────────────────────────────────────────────
 
   async getPaymentProofs(pageId?: number) {

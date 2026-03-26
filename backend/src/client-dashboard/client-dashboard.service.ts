@@ -866,6 +866,10 @@ export class ClientDashboardService {
     return this.ordersService.toggleBotByPsid(pageId, psid, mute);
   }
 
+  async dismissAgentIssue(pageId: number, body: any) {
+    return this.ordersService.dismissAgentIssue(pageId, body);
+  }
+
   // ── Helpers ────────────────────────────────────────────────────────────────
   private async ensureOrder(pageId: number, orderId: number) {
     const o = await this.prisma.order.findUnique({

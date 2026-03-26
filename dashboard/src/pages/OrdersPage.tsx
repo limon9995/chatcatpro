@@ -321,6 +321,23 @@ export function OrdersPage({ th, pageId, onToast, preset }: {
     finally { setTogglingBot(null); }
   };
 
+  const dismissIssue = async (o: (typeof agentIssues)[0]) => {
+    try {
+      await request(`${BASE}/orders/agent-issues/dismiss`, {
+        method: 'POST',
+        body: JSON.stringify({
+          issueType: o.issueType ?? (o.id ? 'payment' : 'unmatched'),
+          orderId: o.id ?? undefined,
+          psid: o.customerPsid ?? undefined,
+        }),
+      });
+      setAgentIssues(prev => prev.filter(x =>
+        o.id ? x.id !== o.id : x.customerPsid !== o.customerPsid
+      ));
+      onToast('✓ Issue সরানো হয়েছে', 'success');
+    } catch (e: any) { onToast(e.message, 'error'); }
+  };
+
   useEffect(() => {
     if (!preset) return;
     setStatus(preset.status || 'ALL');
@@ -512,6 +529,17 @@ export function OrdersPage({ th, pageId, onToast, preset }: {
                         color: o.botMuted ? '#16a34a' : '#b45309',
                       }}>
                       {togglingBot === o.id ? <Spinner size={11} /> : o.botMuted ? '🤖 Bot চালু করুন' : '🤫 Bot বন্ধ করুন'}
+                    </button>
+                    <button
+                      onClick={() => dismissIssue(o)}
+                      title="Issue সরিয়ে দিন"
+                      style={{
+                        padding: '6px 10px', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer',
+                        border: `1.5px solid ${th.border}`,
+                        background: th.surface, color: th.muted,
+                        lineHeight: 1,
+                      }}>
+                      ✕
                     </button>
                   </div>
                 </div>
