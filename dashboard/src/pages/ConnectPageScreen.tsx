@@ -32,6 +32,8 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
   const border = dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)';
   const text   = dark ? '#e2e8ff' : '#1a1f36';
   const muted  = dark ? 'rgba(226,232,255,0.45)' : 'rgba(26,31,54,0.45)';
+  const activePages = alreadyConnected.filter((page) => page.isActive);
+  const savedPages = alreadyConnected.filter((page) => !page.isActive);
 
   useEffect(() => {
     request<ConnectedPage[]>(`${API_BASE}/facebook/my-pages`)
@@ -60,7 +62,15 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
       if (res?.pageId) setManualPageId(String(res.pageId));
       if (res?.pageName) setManualPageName(String(res.pageName));
     } catch (e: any) {
-      setError(e?.message || copy('Page link থেকে ID বের করা যায়নি', 'Could not detect the page from the link.'));
+      const msg = String(e?.message || '');
+      if (msg.includes('Cannot POST /facebook/resolve-page')) {
+        setError(copy(
+          'Page link auto-detect এখনো server-এ deploy করা হয়নি। নিচের backend deploy steps run করুন, তারপর আবার try করুন।',
+          'Page link auto-detect is not deployed on the server yet. Run the backend deploy steps, then try again.',
+        ));
+      } else {
+        setError(e?.message || copy('Page link থেকে ID বের করা যায়নি', 'Could not detect the page from the link.'));
+      }
     } finally {
       setResolveBusy(false);
     }
@@ -122,6 +132,11 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
     }
   };
 
+  const goToDashboardForPage = (page: ConnectedPage) => {
+    localStorage.setItem('dfbot_active_page', String(page.id));
+    onConnected();
+  };
+
   const inp: React.CSSProperties = {
     padding: '11px 14px', borderRadius: 10, border: `1px solid ${border}`,
     background: dark ? 'rgba(255,255,255,0.04)' : '#fff',
@@ -157,13 +172,13 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
           </div>
         )}
 
-        {/* Already connected pages */}
-        {alreadyConnected.length > 0 && (
+        {/* Active pages */}
+        {activePages.length > 0 && (
           <div style={{ marginBottom: 18 }}>
             <div style={{ fontSize: 11, color: muted, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 8 }}>
-              {copy('Connected Pages', 'Connected Pages')}
+              {copy('Active Pages', 'Active Pages')}
             </div>
-            {alreadyConnected.map(p => (
+            {activePages.map(p => (
               <div key={p.pageId} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '9px 12px', borderRadius: 10, border: `1px solid rgba(34,197,94,0.25)`, background: dark ? 'rgba(34,197,94,0.05)' : 'rgba(34,197,94,0.04)', marginBottom: 6 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={{ fontSize: 16 }}>{p.isActive ? '✅' : '⏸️'}</span>
@@ -196,6 +211,32 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
                       ? copy('Disconnect', 'Disconnect')
                       : copy('Disconnected', 'Disconnected')}
                 </button>
+              </div>
+            ))}
+            <div style={{ height: 1, background: border, margin: '14px 0' }} />
+          </div>
+        )}
+
+        {/* Saved / disconnected pages */}
+        {savedPages.length > 0 && (
+          <div style={{ marginBottom: 18 }}>
+            <div style={{ fontSize: 11, color: muted, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 8 }}>
+              {copy('Saved Pages', 'Saved Pages')}
+            </div>
+            {savedPages.map(p => (
+              <div key={p.pageId} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '9px 12px', borderRadius: 10, border: `1px solid ${border}`, background: dark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)', marginBottom: 6 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 16 }}>⏸️</span>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 13, color: text }}>{p.pageName}</div>
+                    <div style={{ fontSize: 11, color: muted }}>
+                      {p.pageId} {copy('• Saved কিন্তু active না', '• Saved but not active')}
+                    </div>
+                  </div>
+                </div>
+                <div style={{ fontSize: 11.5, color: muted, fontWeight: 700 }}>
+                  {copy('Reconnect লাগবে', 'Reconnect needed')}
+                </div>
               </div>
             ))}
             <div style={{ height: 1, background: border, margin: '14px 0' }} />
@@ -312,12 +353,19 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
           )}
         </div>
 
-        {/* Goto dashboard if already connected */}
-        {alreadyConnected.length > 0 && (
-          <button onClick={onConnected}
-            style={{ marginTop: 18, width: '100%', padding: '11px', borderRadius: 12, border: `1px solid rgba(99,102,241,0.3)`, background: 'transparent', color: '#6366f1', fontWeight: 700, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}>
-            {copy(`→ Dashboard-এ যান (${alreadyConnected[0].pageName})`, `Go to Dashboard (${alreadyConnected[0].pageName})`)}
-          </button>
+        {/* Goto dashboard only for active pages */}
+        {activePages.length > 0 && (
+          <div style={{ marginTop: 18, display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ fontSize: 11, color: muted, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+              {copy('Dashboard Access', 'Dashboard Access')}
+            </div>
+            {activePages.map((page) => (
+              <button key={page.id} onClick={() => goToDashboardForPage(page)}
+                style={{ width: '100%', padding: '11px', borderRadius: 12, border: `1px solid rgba(99,102,241,0.3)`, background: 'transparent', color: '#6366f1', fontWeight: 700, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}>
+                {copy(`→ ${page.pageName} dashboard`, `Go to ${page.pageName} dashboard`)}
+              </button>
+            ))}
+          </div>
         )}
       </div>
     </div>
