@@ -8,6 +8,7 @@ import { SignupPageComponent } from './pages/SignupPage';
 import { ChangePasswordPage } from './pages/ChangePasswordPage';
 import { ConnectPageScreen } from './pages/ConnectPageScreen';
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
+import { LandingPage } from './pages/LandingPage';
 const DashboardLayout = lazy(async () => {
   const mod = await import('./pages/DashboardLayout');
   return { default: mod.DashboardLayout };
@@ -18,7 +19,7 @@ const AdminPanel = lazy(async () => {
 });
 
 type MyPage = { id: number; pageId: string; pageName: string; isActive: boolean; automationOn: boolean };
-type Screen = 'login' | 'signup' | 'forgot-password' | 'change-password' | 'connect-page' | 'dashboard' | 'admin';
+type Screen = 'landing' | 'login' | 'signup' | 'forgot-password' | 'change-password' | 'connect-page' | 'dashboard' | 'admin';
 
 function ScreenFallback({ dark }: { dark: boolean }) {
   const { copy } = useLanguage();
@@ -52,7 +53,8 @@ export default function App() {
 
   const [screen, setScreen] = useState<Screen>(() => {
     const params = new URLSearchParams(window.location.search);
-    return params.get('mode') === 'signup' ? 'signup' : 'login';
+    if (params.get('mode') === 'login') return 'login';
+    return params.get('mode') === 'signup' ? 'signup' : 'landing';
   });
   const [activePage, setActivePage] = useState<MyPage | null>(null);
   const [myPages, setMyPages] = useState<MyPage[]>([]);
@@ -67,7 +69,11 @@ export default function App() {
   useEffect(() => {
     if (!ready) return;
     if (!user) {
-      setScreen(s => s === 'signup' ? 'signup' : 'login');
+      setScreen((s) => {
+        if (s === 'signup') return 'signup';
+        if (s === 'login' || s === 'forgot-password') return s;
+        return 'landing';
+      });
       return;
     }
     if (user.forcePasswordChange) {
@@ -155,11 +161,22 @@ export default function App() {
     await logout();
     setMyPages([]);
     setActivePage(null);
-    setScreen('login');
+    setScreen('landing');
   };
 
   if (!ready) {
     return <ScreenFallback dark={dark} />;
+  }
+
+  if (screen === 'landing') {
+    return (
+      <LandingPage
+        dark={dark}
+        setDark={setDark}
+        onLogin={() => setScreen('login')}
+        onSignup={() => setScreen('signup')}
+      />
+    );
   }
 
   if (screen === 'login') {
