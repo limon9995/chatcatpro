@@ -304,6 +304,7 @@ export class AdminService {
         pageId: true,
         pageName: true,
         isActive: true,
+        automationOn: true,
         ownerId: true,
         owner: { select: { id: true, username: true, name: true } },
       },

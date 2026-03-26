@@ -39,8 +39,11 @@ export class WebhookService {
     if (!body || body.object !== 'page') return;
 
     for (const entry of body.entry ?? []) {
+      const lookupId = String(entry.id);
+      const allPages = await this.prisma.page.findMany({ select: { pageId: true, isActive: true } });
+      this.logger.log(`[Webhook] DEBUG lookup="${lookupId}" allPages=${JSON.stringify(allPages)}`);
       const page = await this.prisma.page.findFirst({
-        where: { pageId: String(entry.id), isActive: true },
+        where: { pageId: lookupId, isActive: true },
       });
 
       if (!page) {
@@ -942,18 +945,13 @@ export class WebhookService {
    */
   private async handleAgentEcho(page: any, customerPsid: string): Promise<void> {
     const pageId = page.id as number;
-    const agentOrder = await this.prisma.order.findFirst({
-      where: { pageIdRef: pageId, customerPsid, paymentStatus: 'agent_required' },
-      select: { id: true },
-    });
-    if (agentOrder) {
-      const already = await this.ctx.isAgentHandling(pageId, customerPsid);
-      if (!already) {
-        await this.ctx.setAgentHandling(pageId, customerPsid, true);
-        this.logger.log(
-          `[AgentEcho] Auto-muted bot for psid=${customerPsid} page=${page.pageId}`,
-        );
-      }
+    // Agent manually replied → reset agentHandling so bot re-activates for next customer message
+    const wasHandling = await this.ctx.isAgentHandling(pageId, customerPsid);
+    if (wasHandling) {
+      await this.ctx.setAgentHandling(pageId, customerPsid, false);
+      this.logger.log(
+        `[AgentEcho] Agent replied — bot re-activated for psid=${customerPsid} page=${page.pageId}`,
+      );
     }
   }
 
