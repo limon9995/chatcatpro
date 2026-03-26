@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { PageService } from '../page/page.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { ConversationContextService } from '../conversation-context/conversation-context.service';
 
 @Injectable()
 export class BotKnowledgeService {
@@ -20,6 +21,7 @@ export class BotKnowledgeService {
   constructor(
     private readonly pageService: PageService,
     private readonly prisma: PrismaService,
+    private readonly ctx: ConversationContextService,
   ) {
     fs.mkdirSync(this.storageRoot, { recursive: true });
 
@@ -393,7 +395,7 @@ export class BotKnowledgeService {
   async resolveReply(pageId: number, message: string, psid?: string) {
     const cfg = await this.getConfig(pageId);
     const settings: any = await this.pageService.getBusinessSettings(pageId);
-    const product = await this.findRelevantProduct(pageId, message);
+    const product = await this.findRelevantProduct(pageId, message, psid);
     const result = this.evaluate(pageId, message, settings, cfg, product);
 
     const top = result.matchedQuestions[0];
@@ -452,13 +454,33 @@ export class BotKnowledgeService {
     );
   }
 
-  private async findRelevantProduct(pageId: number, message: string) {
+  private async findRelevantProduct(
+    pageId: number,
+    message: string,
+    psid?: string,
+  ) {
     const code = this.extractCode(message);
-    if (!code) return null;
+    if (code) {
+      try {
+        return await this.prisma.product.findUnique({
+          where: { pageId_code: { pageId, code } },
+        });
+      } catch {
+        return null;
+      }
+    }
 
     try {
+      if (!psid) return null;
+      const lastPresented = await this.ctx.getLastPresentedProducts(pageId, psid);
+      if (lastPresented.length !== 1 || !lastPresented[0]?.code) return null;
       return await this.prisma.product.findUnique({
-        where: { pageId_code: { pageId, code } },
+        where: {
+          pageId_code: {
+            pageId,
+            code: String(lastPresented[0].code),
+          },
+        },
       });
     } catch {
       return null;
@@ -563,6 +585,10 @@ export class BotKnowledgeService {
 
     if (question.key === 'advance_payment' && !base) {
       return this.buildAdvanceReply(paymentRules, settings);
+    }
+
+    if (question.key === 'price' && !product) {
+      return 'যে product-এর দাম জানতে চান, তার code লিখুন বা product message-এ reply দিন 💖';
     }
 
     if (
