@@ -334,6 +334,24 @@ export class BotIntentService {
       'badlate chai',
       'badlate cai',
     ],
+    catalogRequest: [
+      // Banglish
+      'ki ki ase', 'ki ki ace', 'ki ki product', 'ki ki dress', 'ki ki item',
+      'ki ase', 'ki ace', 'products ase', 'dress ase', 'items ase',
+      'ki ki available', 'available products', 'available dress',
+      'sob product', 'sob item', 'sob dress', 'sobar product',
+      'product list', 'dress list', 'item list', 'product dekhai',
+      'catalog', 'catalogue', 'catalog daw', 'catalog den', 'catalog dao',
+      'product dekhabo', 'konta ase', 'konta ace', 'kon product ase',
+      'kon dress ase', 'ki ki pawa jay', 'ki ki paben',
+      'ki ki newa jay', 'ki cholche', 'new arrival',
+      'new collection', 'latest product', 'sob dekhao', 'sob dekhan',
+      'full list', 'all product', 'all dress',
+      // Bengali
+      'কি কি আছে', 'কী কী আছে', 'কি আছে', 'কী আছে',
+      'সব প্রোডাক্ট', 'সব পণ্য', 'পণ্য তালিকা', 'ক্যাটালগ',
+      'কি কি পাওয়া যায়', 'কোনটা আছে', 'নতুন পণ্য',
+    ],
     greeting: [
       // English
       'hi', 'hello', 'hey', 'helo', 'hii', 'hiii', 'hiiii',
@@ -382,6 +400,7 @@ export class BotIntentService {
     const t = (text || '').toLowerCase().trim();
     if (!t) return null;
     if (this.includesAny(t, this.KW.greeting)) return 'GREETING';
+    if (this.includesAny(t, this.KW.catalogRequest)) return 'CATALOG_REQUEST';
     if (this.includesAny(t, this.KW.negotiation) || this.looksLikeOffer(t))
       return 'NEGOTIATION';
     if (this.includesAny(t, this.KW.edit)) return 'EDIT_ORDER';

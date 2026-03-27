@@ -440,6 +440,20 @@ export class WebhookService {
       return;
     }
 
+    // ── CATALOG REQUEST ────────────────────────────────────────────────────
+    if (intent === 'CATALOG_REQUEST') {
+      const catalogBaseUrl = (process.env.CATALOG_BASE_URL || 'https://chatcat.pro').replace(/\/$/, '');
+      const slug = page.catalogSlug || String(page.id);
+      const catalogUrl = `${catalogBaseUrl}/catalog/${slug}`;
+      const businessName = page.businessName || page.pageName || 'আমাদের';
+      await this.safeSend(
+        token,
+        psid,
+        `${businessName} এর সব product দেখতে এই link এ click করুন 👇\n\n${catalogUrl}\n\nপছন্দের product এর code বা screenshot দিন — আমরা order নেব 💖`,
+      );
+      return;
+    }
+
     // ── SOFT HESITATION ────────────────────────────────────────────────────
     if (intent === 'SOFT_HESITATION') {
       await this.safeSend(token, psid, 'ঠিক আছে 💖 যখন সুবিধা হয় জানাবেন।');
