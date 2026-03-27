@@ -161,22 +161,48 @@ export function AgentTasksPage({ th, pageId, onToast, onOpenOrders, onOpenPrint,
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [orderData, followUpData, refundData, settingsData] = await Promise.all([
+      const results = await Promise.allSettled([
         request<Order[]>(`${API_BASE}/client-dashboard/${pageId}/orders?status=ALL`),
         request<FollowUpItem[]>(`${API_BASE}/client-dashboard/${pageId}/followup?status=pending`),
         request<RefundQueueItem[]>(`${API_BASE}/client-dashboard/${pageId}/accounting/refund-queue`),
         request<SettingsSummary>(`${API_BASE}/client-dashboard/${pageId}/settings`),
       ]);
-      setOrders(orderData);
-      setFollowUps(followUpData);
-      setRefundQueue(refundData);
-      setSettings(settingsData);
+
+      const [ordersResult, followUpResult, refundResult, settingsResult] = results;
+
+      if (ordersResult.status === 'fulfilled') {
+        setOrders(ordersResult.value);
+      } else {
+        setOrders([]);
+        onToast(copy('Orders load করা যায়নি', 'Failed to load orders'), 'error');
+      }
+
+      if (followUpResult.status === 'fulfilled') {
+        setFollowUps(followUpResult.value);
+      } else {
+        setFollowUps([]);
+        onToast(copy('Follow-up data load করা যায়নি', 'Failed to load follow-up data'), 'error');
+      }
+
+      if (refundResult.status === 'fulfilled') {
+        setRefundQueue(refundResult.value);
+      } else {
+        setRefundQueue([]);
+        onToast(copy('Refund queue load করা যায়নি', 'Failed to load refund queue'), 'error');
+      }
+
+      if (settingsResult.status === 'fulfilled') {
+        setSettings(settingsResult.value);
+      } else {
+        setSettings(null);
+        onToast(copy('Settings load করা যায়নি', 'Failed to load settings'), 'error');
+      }
     } catch (e: any) {
       onToast(e.message, 'error');
     } finally {
       setLoading(false);
     }
-  }, [pageId]);
+  }, [copy, onToast, pageId, request]);
 
   useEffect(() => { load(); }, [load]);
 

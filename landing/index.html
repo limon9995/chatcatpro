@@ -347,7 +347,19 @@ const DASHBOARD_URL = (function() {
   // Try same origin first (if dashboard is served at /dashboard path)
   // Otherwise fall back to port 5173 for local dev, or configurable via meta tag
   var meta = document.querySelector('meta[name="dashboard-url"]');
-  if (meta) return meta.getAttribute('content');
+  if (meta) {
+    var content = String(meta.getAttribute('content') || '').trim();
+    if (
+      content &&
+      content !== 'null' &&
+      content !== 'undefined' &&
+      content !== '/' &&
+      content !== '#'
+    ) {
+      if (/^https?:\/\//i.test(content)) return content.replace(/\/+$/, '');
+      if (content[0] === '/') return window.location.origin + content.replace(/\/+$/, '');
+    }
+  }
   var h = window.location.hostname;
   var proto = window.location.protocol;
   // In production same-origin deployments, dashboard is often at /
@@ -358,11 +370,17 @@ const DASHBOARD_URL = (function() {
 
 ['nav-login','cta-login','hero-signup'].forEach(function(id) {
   var el = document.getElementById(id);
-  if (el) el.href = DASHBOARD_URL + '/?mode=login';
+  if (el) {
+    el.href = DASHBOARD_URL + '/?mode=login';
+    el.target = '_top';
+  }
 });
 ['nav-signup','cta-signup'].forEach(function(id) {
   var el = document.getElementById(id);
-  if (el) el.href = DASHBOARD_URL + '/?mode=signup';
+  if (el) {
+    el.href = DASHBOARD_URL + '/?mode=signup';
+    el.target = '_top';
+  }
 });
 
 const observer = new IntersectionObserver(entries => {
