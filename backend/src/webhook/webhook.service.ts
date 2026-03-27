@@ -433,6 +433,13 @@ export class WebhookService {
       return;
     }
 
+    // ── GREETING ───────────────────────────────────────────────────────────
+    if (intent === 'GREETING') {
+      const greetMsg = await this.botKnowledge.resolveSystemReply(pageId, 'greeting');
+      await this.safeSend(token, psid, greetMsg);
+      return;
+    }
+
     // ── SOFT HESITATION ────────────────────────────────────────────────────
     if (intent === 'SOFT_HESITATION') {
       await this.safeSend(token, psid, 'ঠিক আছে 💖 যখন সুবিধা হয় জানাবেন।');

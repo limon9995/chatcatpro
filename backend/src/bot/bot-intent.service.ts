@@ -334,6 +334,21 @@ export class BotIntentService {
       'badlate chai',
       'badlate cai',
     ],
+    greeting: [
+      // English
+      'hi', 'hello', 'hey', 'helo', 'hii', 'hiii', 'hiiii',
+      'good morning', 'good afternoon', 'good evening', 'good night',
+      // Banglish
+      'assalamu alaikum', 'assalamualaikum', 'salam', 'salaam',
+      'aslam', 'aslam u alaikum', 'as salam', 'walaikum assalam',
+      'achen', 'acen', 'kemon achen', 'kemon acen', 'ki khobor',
+      'ki obostha', 'apni ki achen', 'vai achen', 'apa achen',
+      'bhai', 'apa', 'vai', 'dada', 'didi',
+      'ki boro', 'ki korsen', 'ki hoise',
+      // Bengali
+      'আছেন', 'কেমন আছেন', 'সালাম', 'আসালামু আলাইকুম',
+      'হ্যালো', 'হেলো', 'নমস্কার', 'কি খবর',
+    ],
     hesitation: [
       'apore janabo',
       'ekhon lagbe na',
@@ -366,6 +381,7 @@ export class BotIntentService {
   detectIntent(text: string, awaitingConfirm: boolean): string | null {
     const t = (text || '').toLowerCase().trim();
     if (!t) return null;
+    if (this.includesAny(t, this.KW.greeting)) return 'GREETING';
     if (this.includesAny(t, this.KW.negotiation) || this.looksLikeOffer(t))
       return 'NEGOTIATION';
     if (this.includesAny(t, this.KW.edit)) return 'EDIT_ORDER';
