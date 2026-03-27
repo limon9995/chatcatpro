@@ -140,6 +140,12 @@ export function DashboardLayout({
   const [searchQ, setSearchQ]         = useState('');
   const [searchResults, setSearchResults] = useState<any>(null);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
+    main: true,
+    manage: false,
+    tools: false,
+    settings: false,
+  });
   const searchInputRef = useRef<HTMLInputElement>(null);
   const { request } = useApi();
 
@@ -167,6 +173,12 @@ export function DashboardLayout({
     localStorage.setItem(`dfbot_nav_${activePage.id}`, nav);
     localStorage.setItem(LAST_NAV_KEY, nav);
   }, [activePage?.id, nav]);
+
+  useEffect(() => {
+    const activeGroup = NAV.find((item) => item.key === nav)?.group;
+    if (!activeGroup) return;
+    setOpenGroups((prev) => (prev[activeGroup] ? prev : { ...prev, [activeGroup]: true }));
+  }, [nav]);
 
   useEffect(() => {
     if (!activePage?.id) return;
@@ -257,6 +269,14 @@ export function DashboardLayout({
 
   const openSettingsTab = useCallback((tab: 'PAGE' | 'NEGOTIATION' | 'CALL' | 'VOICE') => {
     setNav(tab);
+  }, []);
+
+  const openNavItem = useCallback((key: NavKey) => {
+    if (key === 'ORDERS') setOrdersPreset(null);
+    if (key === 'PRINT') setPrintPreset(null);
+    if (key === 'FOLLOWUP') setFollowUpPreset(null);
+    if (key === 'ACCOUNTING') setAccountingPreset(null);
+    setNav(key);
   }, []);
 
   const renderPage = () => {
@@ -492,24 +512,42 @@ export function DashboardLayout({
         {/* ── Sidebar ─────────────────────────────────────────────────── */}
         <nav style={th.sidebar}>
           {navGroups.map(g => (
-            <div key={g.key} style={{ marginBottom: (language === 'en' ? g.en : g.bn) ? 12 : 6 }}>
-              {(language === 'en' ? g.en : g.bn) && (
-                <div style={{
-                  fontSize: 10, fontWeight: 700, color: th.muted,
-                  letterSpacing: '0.07em', textTransform: 'uppercase',
-                  padding: '12px 12px 6px',
-                }}>{language === 'en' ? g.en : g.bn}</div>
-              )}
-              {g.items.map(item => {
+            <div key={g.key} style={{ marginBottom: 10 }}>
+              {(() => {
+                const label = language === 'en' ? g.en : g.bn;
+                const isOpen = openGroups[g.key];
+                const hasLabel = Boolean(label);
+                if (hasLabel) {
+                  return (
+                    <button
+                      onClick={() => setOpenGroups(prev => ({ ...prev, [g.key]: !prev[g.key] }))}
+                      style={{
+                        width: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        background: 'transparent',
+                        border: 'none',
+                        color: th.muted,
+                        padding: '12px 12px 8px',
+                        cursor: 'pointer',
+                        fontSize: 10,
+                        fontWeight: 700,
+                        letterSpacing: '0.07em',
+                        textTransform: 'uppercase',
+                      }}
+                    >
+                      <span>{label}</span>
+                      <span style={{ fontSize: 12, opacity: 0.9 }}>{isOpen ? '−' : '+'}</span>
+                    </button>
+                  );
+                }
+                return null;
+              })()}
+              {(openGroups[g.key] || !(language === 'en' ? g.en : g.bn)) && g.items.map(item => {
                 const isActive = nav === item.key;
                 return (
-                  <button key={item.key} onClick={() => {
-                    if (item.key === 'ORDERS') setOrdersPreset(null);
-                    if (item.key === 'PRINT') setPrintPreset(null);
-                    if (item.key === 'FOLLOWUP') setFollowUpPreset(null);
-                    if (item.key === 'ACCOUNTING') setAccountingPreset(null);
-                    setNav(item.key);
-                  }}
+                  <button key={item.key} onClick={() => openNavItem(item.key)}
                     style={{ ...th.navBtn, ...(isActive ? th.navBtnActive : {}), marginBottom: 1 }}
                   >
                     <span style={{ fontSize: 13, opacity: isActive ? 1 : 0.6, width: 16, textAlign: 'center' }}>{item.icon}</span>
