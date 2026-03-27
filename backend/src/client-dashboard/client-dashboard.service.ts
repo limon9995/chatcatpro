@@ -159,21 +159,7 @@ export class ClientDashboardService {
       orderBy: { id: 'desc' },
       take: 300,
     });
-    if (!orders.length) return orders;
-    const printedRows = await this.prisma.$queryRawUnsafe<
-      { id: bigint | number; printedAt: Date | null }[]
-    >(
-      `SELECT id, printedAt FROM "Order" WHERE pageIdRef = ? AND id IN (${orders.map(() => '?').join(',')})`,
-      pageId,
-      ...orders.map((order) => order.id),
-    );
-    const printedMap = new Map(
-      printedRows.map((row) => [Number(row.id), row.printedAt ?? null]),
-    );
-    return orders.map((order) => ({
-      ...order,
-      printedAt: printedMap.get(order.id) ?? null,
-    }));
+    return orders;
   }
 
   async markOrdersPrinted(pageId: number, ids: number[]) {
