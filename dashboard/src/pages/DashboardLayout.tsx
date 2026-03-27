@@ -538,7 +538,17 @@ export function DashboardLayout({
                       }}
                     >
                       <span>{label}</span>
-                      <span style={{ fontSize: 12, opacity: 0.9 }}>{isOpen ? '−' : '+'}</span>
+                      <span
+                        style={{
+                          fontSize: 11,
+                          opacity: 0.9,
+                          transform: isOpen ? 'rotate(0deg)' : 'rotate(-90deg)',
+                          transition: 'transform 0.18s ease',
+                          display: 'inline-block',
+                        }}
+                      >
+                        ▼
+                      </span>
                     </button>
                   );
                 }
