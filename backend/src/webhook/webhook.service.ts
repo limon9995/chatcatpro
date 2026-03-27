@@ -478,11 +478,16 @@ export class WebhookService {
       } catch {}
     }
 
-    // ── UNMATCHED — bot stays silent, flags for agent review ──────────────
-    // Do NOT send a confusing reply. Mute bot and let agent handle manually.
-    await this.ctx.setAgentHandling(pageId, psid, true);
+    // ── UNMATCHED — reply softly instead of muting the bot permanently ────
+    // This keeps admin/test conversations responsive during setup and avoids
+    // getting stuck in BOT OFF after a single unknown message.
+    await this.safeSend(
+      token,
+      psid,
+      'দুঃখিত, আমি এটা পুরোপুরি বুঝতে পারিনি 💖\n\nআপনি product code, screenshot, "catalog", বা "order" লিখে আবার পাঠান।',
+    );
     this.logger.log(
-      `[Webhook] Unmatched message — muted bot, flagged for agent. psid=${psid} page=${page.pageId} text="${text.slice(0, 80)}"`,
+      `[Webhook] Unmatched message — sent fallback reply. psid=${psid} page=${page.pageId} text="${text.slice(0, 80)}"`,
     );
   }
 
