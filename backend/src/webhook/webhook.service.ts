@@ -108,13 +108,14 @@ export class WebhookService {
       return;
     }
 
-    // Agent handling mode — bot stays silent while agent handles this customer manually
+    // Agent handling mode — if a new customer message arrives, re-activate the bot
+    // so matched greetings/order/catalog requests can still receive a reply.
     const agentHandling = await this.ctx.isAgentHandling(pageId, psid);
     if (agentHandling) {
+      await this.ctx.setAgentHandling(pageId, psid, false);
       this.logger.log(
-        `[Webhook] Agent handling active — muting bot for psid=${psid} page=${page.pageId}`,
+        `[Webhook] Agent handling cleared on new inbound message. psid=${psid} page=${page.pageId}`,
       );
-      return;
     }
 
     // ── Image → payment screenshot OR product OCR ─────────────────────────
