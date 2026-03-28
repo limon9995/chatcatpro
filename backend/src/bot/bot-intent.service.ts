@@ -25,6 +25,8 @@ export class BotIntentService {
       'kobe pabo',
     ],
     // Strong confirm — checked globally (not too generic)
+    // NOTE: 'hoy', 'hoi', 'হবে', 'চলবে', 'রাজি' removed — too common in Bengali sentences
+    // (e.g. "delivery kobe hoy?" → was triggering CONFIRM). They remain in confirmWeak (awaitingConfirm only).
     confirm: [
       'yes',
       'hea',
@@ -48,11 +50,6 @@ export class BotIntentService {
       'ready',
       'all ok',
       'all good',
-      'hoy',
-      'hoi',
-      'রাজি',
-      'চলবে',
-      'হবে',
       'ঠিক আছে হ্যাঁ',
     ],
     // Weak confirm — only checked when awaitingConfirm=true (order summary shown)
@@ -150,6 +147,7 @@ export class BotIntentService {
       'na lagbe na',
       'nibo na',
       'nebe na',
+      'nebo na',
       'chai na',
       'chaina',
       'dorkar nai',
@@ -173,6 +171,7 @@ export class BotIntentService {
       'চাই না',
       'লাগবে না',
       'নেব না',
+      'নিব না',
       'ক্যান্সেল',
       'দরকার নেই',
       'দরকার নাই',
@@ -180,9 +179,9 @@ export class BotIntentService {
     ],
     order: [
       // Banglish — order intent
-      'nibo',
+      // NOTE: 'nibo' removed — "pore nibo" / "na nibo" were wrongly triggering ORDER
+      // NOTE: 'nebo' removed — same issue; compound forms below cover real order intent
       'kinbo',
-      'nebo',
       'lagbe',
       'order korbo',
       'order korte chai',
@@ -228,8 +227,7 @@ export class BotIntentService {
       'অর্ডার দেব',
       'অর্ডার নেব',
       'কিনব',
-      'নেব',
-      'নিব',
+      // NOTE: 'নেব', 'নিব' removed — "পরে নিব"/"না নিব" were wrongly triggering ORDER
       // common short forms
       'need this',
       'want this',
@@ -348,7 +346,7 @@ export class BotIntentService {
       'aslam', 'aslam u alaikum', 'as salam', 'walaikum assalam',
       'achen', 'acen', 'kemon achen', 'kemon acen', 'ki khobor',
       'ki obostha', 'apni ki achen', 'vai achen', 'apa achen',
-      'bhai', 'apa', 'vai', 'dada', 'didi',
+      // NOTE: 'bhai', 'apa', 'vai', 'dada', 'didi' removed — appear as honorifics in any message
       'ki boro', 'ki korsen', 'ki hoise',
       // Bengali
       'আছেন', 'কেমন আছেন', 'সালাম', 'আসালামু আলাইকুম',
