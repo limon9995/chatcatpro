@@ -58,6 +58,7 @@ export class ProductsService {
     tags?: string | null;
     imageKeywords?: string | null;
     aiDescription?: string | null;
+    visionSearchable?: boolean;
   }) {
     const code = normalizeProductCode(data.code);
     const existing = await this.prisma.product.findUnique({
@@ -87,6 +88,7 @@ export class ProductsService {
         tags: data.tags ?? null,
         imageKeywords: data.imageKeywords ?? null,
         aiDescription: data.aiDescription ?? null,
+        visionSearchable: data.visionSearchable ?? false,
       },
     });
   }
@@ -132,6 +134,7 @@ export class ProductsService {
       tags?: string | null;
       imageKeywords?: string | null;
       aiDescription?: string | null;
+      visionSearchable?: boolean;
     },
   ) {
     const code = normalizeProductCode(codeRaw);
@@ -164,6 +167,7 @@ export class ProductsService {
     if (data.tags !== undefined) payload.tags = data.tags || null;
     if (data.imageKeywords !== undefined) payload.imageKeywords = data.imageKeywords || null;
     if (data.aiDescription !== undefined) payload.aiDescription = data.aiDescription || null;
+    if (typeof data.visionSearchable === 'boolean') payload.visionSearchable = data.visionSearchable;
     if (Object.keys(payload).length === 0)
       return this.findByCode(pageId, codeRaw);
     return this.prisma.product.update({

@@ -97,6 +97,18 @@ export class WebhookService {
     message: any,
   ): Promise<void> {
     const pageId = page.id as number;
+    await this._processMessageInner(page, psid, message);
+    // Record the current draft step after processing so loop detection can compare next time
+    const updatedDraft = await this.ctx.getActiveDraft(pageId, psid);
+    await this.ctx.recordDraftStepAfterProcessing(pageId, psid, updatedDraft?.currentStep ?? null);
+  }
+
+  private async _processMessageInner(
+    page: any,
+    psid: string,
+    message: any,
+  ): Promise<void> {
+    const pageId = page.id as number;
     const token = page.pageToken as string; // encrypted — MessengerService decrypts it
 
     // FIX 4: skip blocked customers — no reply, no order, no OCR
@@ -178,6 +190,34 @@ export class WebhookService {
       (draft?.pendingMultiPreview?.length ?? 0) > 0;
     const intent = this.botIntent.detectIntent(text, awaitingConfirm);
 
+    // ── LOOP / STUCK DETECTION ────────────────────────────────────────────
+    if (page.textFallbackAiOn) {
+      const loopCount = await this.ctx.checkAndUpdateLoop(
+        pageId, psid, text, draft?.currentStep ?? null,
+      );
+      if (loopCount >= 2) {
+        this.logger.warn(`[Loop] Detected loop (count=${loopCount}) for psid=${psid} step=${draft?.currentStep ?? 'none'} text="${text.slice(0, 60)}"`);
+        const draftSummary = draft
+          ? `Customer has an active order draft (step: ${draft.currentStep ?? 'unknown'}, products: ${(draft.items ?? []).map((i: any) => i.code).join(', ') || 'none'})`
+          : null;
+        const fbResult = await this.fallbackAi.generateReply({
+          customerMessage: text,
+          reason: 'unmatched_intent',
+          businessName: page.businessName ?? undefined,
+          draftStep: draft?.currentStep ?? null,
+          draftSummary,
+        });
+        if (fbResult.reply) {
+          const reply = draft
+            ? `${fbResult.reply}\n\n${this.draftHandler.reminder(draft)}`
+            : fbResult.reply;
+          await this.safeSend(token, psid, reply);
+          await this.ctx.resetLoop(pageId, psid);
+          return;
+        }
+      }
+    }
+
     // ── MULTI-ADDRESS INTENT — 2 products to 2 different addresses ────────
     if (!draft && this.isMultiAddressIntent(text)) {
       await this.safeSend(
@@ -188,10 +228,17 @@ export class WebhookService {
       return;
     }
 
-    // ── CANCEL — highest priority ──────────────────────────────────────────
+    // ── CANCEL — only when there's something to cancel ────────────────────
     if (intent === 'CANCEL') {
-      await this.handleCancel(page, psid, draft);
-      return;
+      const hasOpenOrder = !draft && !!(await this.prisma.order.findFirst({
+        where: { pageIdRef: page.id, customerPsid: psid, status: { in: ['RECEIVED', 'PENDING'] } },
+        select: { id: true },
+      }));
+      if (draft || hasOpenOrder) {
+        await this.handleCancel(page, psid, draft);
+        return;
+      }
+      // Nothing to cancel — treat as unmatched, fall through to normal handling
     }
 
     // ── PENDING MULTI-PRODUCT PREVIEW ──────────────────────────────────────
@@ -479,16 +526,37 @@ export class WebhookService {
       } catch {}
     }
 
-    // ── UNMATCHED — reply softly instead of muting the bot permanently ────
-    // This keeps admin/test conversations responsive during setup and avoids
-    // getting stuck in BOT OFF after a single unknown message.
+    // ── UNMATCHED — try AI fallback if enabled, else soft reply ──────────
+    this.logger.log(
+      `[Webhook] Unmatched message — psid=${psid} page=${page.pageId} text="${text.slice(0, 80)}"`,
+    );
+
+    if (page.textFallbackAiOn) {
+      const draftSummary = draft
+        ? `Customer has an active order draft (step: ${draft.currentStep ?? 'unknown'}, products: ${(draft.items ?? []).map((i: any) => i.code).join(', ') || 'none'})`
+        : null;
+
+      const fbResult = await this.fallbackAi.generateReply({
+        customerMessage: text,
+        reason: 'unmatched_intent',
+        businessName: page.businessName ?? undefined,
+        draftStep: draft?.currentStep ?? null,
+        draftSummary,
+      });
+
+      if (fbResult.reply) {
+        const reply = draft
+          ? `${fbResult.reply}\n\n${this.draftHandler.reminder(draft)}`
+          : fbResult.reply;
+        await this.safeSend(token, psid, reply);
+        return;
+      }
+    }
+
     await this.safeSend(
       token,
       psid,
       'দুঃখিত, আমি এটা পুরোপুরি বুঝতে পারিনি 💖\n\nআপনি product code, screenshot, "catalog", বা "order" লিখে আবার পাঠান।',
-    );
-    this.logger.log(
-      `[Webhook] Unmatched message — sent fallback reply. psid=${psid} page=${page.pageId} text="${text.slice(0, 80)}"`,
     );
   }
 
@@ -991,12 +1059,20 @@ export class WebhookService {
     );
 
     try {
-      // Option B: load all products with postCaption for this page
-      // Used by OCR to verify candidate codes against product captions
+      // Load all active products — check if any use product codes (non-visionSearchable)
       const pageProducts = await this.prisma.product.findMany({
         where: { pageId, isActive: true },
-        select: { code: true, postCaption: true },
+        select: { code: true, postCaption: true, visionSearchable: true },
       });
+
+      // If ALL active products are vision-searchable (none use product codes),
+      // skip OCR entirely and go straight to vision for faster response
+      const hasCodeProducts = pageProducts.some((p) => !p.visionSearchable);
+      if (!hasCodeProducts && page.imageRecognitionOn) {
+        this.logger.log(`[OCR] All products are vision-searchable — skipping OCR, going straight to vision`);
+        await this.visionProductRecognition(page, psid, imageUrl);
+        return;
+      }
 
       // V8: pass page's custom code prefix to OCR
       const customPrefix =

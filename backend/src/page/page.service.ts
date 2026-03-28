@@ -79,6 +79,8 @@ export class PageService {
       data.imageRecognitionOn = body.imageRecognitionOn;
     if (typeof body.imageFallbackAiOn === 'boolean')
       data.imageFallbackAiOn = body.imageFallbackAiOn;
+    if (typeof body.textFallbackAiOn === 'boolean')
+      data.textFallbackAiOn = body.textFallbackAiOn;
     if (body.imageHighConfidence !== undefined)
       data.imageHighConfidence = Math.min(1, Math.max(0, Number(body.imageHighConfidence) || 0.75));
     if (body.imageMediumConfidence !== undefined)

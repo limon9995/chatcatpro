@@ -17,6 +17,10 @@ export interface FallbackContext {
   visionDescription?: string;
   /** Page business name for context */
   businessName?: string;
+  /** Current draft step so AI understands what the bot was waiting for */
+  draftStep?: string | null;
+  /** Active draft summary (e.g. "customer has DF001 in cart, waiting for phone") */
+  draftSummary?: string | null;
 }
 
 export interface FallbackResponse {

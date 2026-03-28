@@ -26,6 +26,7 @@ type RawProduct = {
   imageKeywords: string | null;
   aiDescription: string | null;
   stockQty: number;
+  visionSearchable: boolean;
 };
 
 /**
@@ -60,9 +61,9 @@ export class ProductMatchService {
     attrs: VisionAttributes,
     topN = 4,
   ): Promise<ProductMatchResult[]> {
-    // Load all active products for this page with their image metadata
+    // Load only visionSearchable active products for this page
     const products = (await this.prisma.product.findMany({
-      where: { pageId, isActive: true },
+      where: { pageId, isActive: true, visionSearchable: true },
       select: {
         id: true,
         code: true,
@@ -76,6 +77,7 @@ export class ProductMatchService {
         imageKeywords: true,
         aiDescription: true,
         stockQty: true,
+        visionSearchable: true,
       },
     })) as unknown as RawProduct[];
 

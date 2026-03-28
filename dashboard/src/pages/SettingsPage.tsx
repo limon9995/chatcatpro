@@ -19,6 +19,7 @@ interface Settings {
   // V18: Image recognition
   imageRecognitionOn: boolean; imageHighConfidence: number;
   imageMediumConfidence: number; imageFallbackAiOn: boolean;
+  textFallbackAiOn: boolean;
   pricingPolicy: {
     priceMode: string; allowCustomerOffer: boolean; agentApprovalRequired: boolean;
     fixedPriceReplyText: string; negotiationReplyText: string;
@@ -48,7 +49,7 @@ const S0: Settings = {
   automationOn: false, ocrOn: false,
   infoModeOn: true, orderModeOn: true, printModeOn: false,
   callConfirmModeOn: false, memoSaveModeOn: false, memoTemplateModeOn: false,
-  imageRecognitionOn: false, imageHighConfidence: 0.75, imageMediumConfidence: 0.45, imageFallbackAiOn: false,
+  imageRecognitionOn: false, imageHighConfidence: 0.75, imageMediumConfidence: 0.45, imageFallbackAiOn: false, textFallbackAiOn: false,
   pricingPolicy: {
     priceMode: 'FIXED', allowCustomerOffer: false, agentApprovalRequired: true,
     fixedPriceReplyText: 'দুঃখিত, আমাদের price fixed 💖',
@@ -578,10 +579,15 @@ export function SettingsPage({ th, pageId, tab, onToast }: {
               checked={s.imageRecognitionOn}
               onChange={v => setS(p => ({ ...p, imageRecognitionOn: v }))} />
             <Toggle th={th}
-              label={copy('AI Fallback চালু', 'Enable AI Fallback')}
-              sub={copy('Low confidence match হলে AI fallback reply দেবে। VISION_PROVIDER এবং OPENAI_API_KEY প্রয়োজন।', 'Use AI to generate a reply when confidence is too low. Requires VISION_PROVIDER and OPENAI_API_KEY in server .env')}
+              label={copy('Image AI Fallback চালু', 'Enable Image AI Fallback')}
+              sub={copy('ছবিতে low confidence হলে AI fallback reply দেবে। OPENAI_API_KEY প্রয়োজন।', 'Use AI to generate a reply when image confidence is too low. Requires OPENAI_API_KEY in server .env')}
               checked={s.imageFallbackAiOn}
               onChange={v => setS(p => ({ ...p, imageFallbackAiOn: v }))} />
+            <Toggle th={th}
+              label={copy('Text AI Fallback চালু', 'Enable Text AI Fallback')}
+              sub={copy('Bot বুঝতে না পারলে OpenAI context বুঝে জবাব দেবে। OPENAI_API_KEY প্রয়োজন।', 'When the bot cannot match a message, OpenAI will understand the context and reply. Requires OPENAI_API_KEY in server .env')}
+              checked={s.textFallbackAiOn}
+              onChange={v => setS(p => ({ ...p, textFallbackAiOn: v }))} />
             {s.imageRecognitionOn && (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 4 }}>
                 <div>
@@ -629,6 +635,7 @@ export function SettingsPage({ th, pageId, tab, onToast }: {
           imageHighConfidence: s.imageHighConfidence,
           imageMediumConfidence: s.imageMediumConfidence,
           imageFallbackAiOn: s.imageFallbackAiOn,
+          textFallbackAiOn: s.textFallbackAiOn,
         })} saving={saving}/>
       </div>
     </div>

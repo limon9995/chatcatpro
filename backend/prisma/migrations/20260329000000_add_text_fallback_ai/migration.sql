@@ -1,0 +1,1 @@
+ALTER TABLE "Page" ADD COLUMN "textFallbackAiOn" BOOLEAN NOT NULL DEFAULT false;

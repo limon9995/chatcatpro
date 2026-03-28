@@ -14,6 +14,7 @@ type Product = {
   // V18: Image recognition metadata
   category: string | null; color: string | null;
   tags: string | null; imageKeywords: string | null;
+  visionSearchable: boolean;
 };
 
 type EditData = {
@@ -22,9 +23,10 @@ type EditData = {
   description?: string; imageUrl?: string; variantOptions?: string;
   // V18: Image recognition metadata
   category?: string; color?: string; tags?: string; imageKeywords?: string;
+  visionSearchable?: boolean;
 };
 
-const EMPTY = { code: '', name: '', price: 0, costPrice: 0, stockQty: 0, postCaption: '', videoUrl: '', catalogVisible: true, description: '', imageUrl: '', variantOptions: '', category: '', color: '', tags: '', imageKeywords: '' };
+const EMPTY = { code: '', name: '', price: 0, costPrice: 0, stockQty: 0, postCaption: '', videoUrl: '', catalogVisible: true, description: '', imageUrl: '', variantOptions: '', category: '', color: '', tags: '', imageKeywords: '', visionSearchable: false };
 
 /** Convert DB JSON variantOptions → textarea text ("Size: S,M,L,XL\nColor: Red,Blue") */
 function variantOptionsToText(json: string | null): string {
@@ -67,7 +69,7 @@ export function ProductsPage({ th, pageId, onToast }: {
 
   const openEdit = (p: Product) => {
     setEditId(p.id);
-    setEditData({ name: p.name ?? '', price: p.price, costPrice: p.costPrice, stockQty: p.stockQty, postCaption: p.postCaption ?? '', videoUrl: p.videoUrl ?? '', catalogVisible: p.catalogVisible ?? true, description: p.description ?? '', imageUrl: p.imageUrl ?? '', variantOptions: variantOptionsToText(p.variantOptions), category: p.category ?? '', color: p.color ?? '', tags: p.tags ?? '', imageKeywords: p.imageKeywords ?? '' });
+    setEditData({ name: p.name ?? '', price: p.price, costPrice: p.costPrice, stockQty: p.stockQty, postCaption: p.postCaption ?? '', videoUrl: p.videoUrl ?? '', catalogVisible: p.catalogVisible ?? true, description: p.description ?? '', imageUrl: p.imageUrl ?? '', variantOptions: variantOptionsToText(p.variantOptions), category: p.category ?? '', color: p.color ?? '', tags: p.tags ?? '', imageKeywords: p.imageKeywords ?? '', visionSearchable: p.visionSearchable ?? false });
   };
 
   const saveEdit = async (p: Product) => {
@@ -375,6 +377,13 @@ export function ProductsPage({ th, pageId, onToast }: {
                         <div style={{ padding: '8px 10px', borderRadius: 8, background: `${th.accent}0d`, border: `1px solid ${th.accent}22` }}>
                           <div style={{ fontSize: 10, fontWeight: 700, color: th.accent, marginBottom: 8, letterSpacing: '0.05em', textTransform: 'uppercase' }}>AI Tags</div>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, cursor: 'pointer', userSelect: 'none' }}>
+                              <input type="checkbox" checked={editData.visionSearchable ?? false}
+                                onChange={e => setEditData(d => ({ ...d, visionSearchable: e.target.checked }))} />
+                              <span style={{ color: th.text }}>
+                                {copy('AI Vision দিয়ে খোঁজা হবে (code নেই)', 'Find via AI Vision (no product code)')}
+                              </span>
+                            </label>
                             <input style={{ ...th.input, fontSize: 12 }} placeholder="Category (dress, saree…)" value={editData.category ?? ''}
                               onChange={e => setEditData(d => ({ ...d, category: e.target.value }))} />
                             <input style={{ ...th.input, fontSize: 12 }} placeholder="Color (black, red…)" value={editData.color ?? ''}

@@ -22,9 +22,19 @@ export class OpenAIFallbackProvider implements BotFallbackProvider {
   private readonly apiKey: string;
   private readonly model: string;
 
+  // Step labels in Bangla for richer OpenAI context
+  private static readonly STEP_LABELS: Record<string, string> = {
+    name: 'নাম চাওয়া হচ্ছিল',
+    phone: 'ফোন নম্বর চাওয়া হচ্ছিল',
+    address: 'ঠিকানা চাওয়া হচ্ছিল',
+    confirm: 'order confirm করতে বলা হচ্ছিল',
+    advance_payment: 'advance payment-এর transaction ID বা screenshot চাওয়া হচ্ছিল',
+  };
+
   constructor() {
     this.apiKey = process.env.OPENAI_API_KEY ?? '';
-    this.model = process.env.FALLBACK_AI_MODEL ?? 'gpt-4o';
+    // Default to gpt-4o-mini — much cheaper, sufficient for recovery replies
+    this.model = process.env.FALLBACK_AI_MODEL ?? 'gpt-4o-mini';
   }
 
   async generateReply(context: FallbackContext): Promise<FallbackResponse> {
@@ -34,20 +44,36 @@ export class OpenAIFallbackProvider implements BotFallbackProvider {
     }
 
     const businessCtx = context.businessName
-      ? `You work for "${context.businessName}".`
-      : 'You work for a Bangladeshi fashion e-commerce store on Facebook Messenger.';
+      ? `তুমি "${context.businessName}" এর customer service assistant।`
+      : 'তুমি একটি Bangladeshi fashion e-commerce shop-এর Facebook Messenger customer service assistant।';
 
-    const systemPrompt = `${businessCtx}
-You are a helpful, friendly customer service assistant for a Bangladeshi e-commerce shop.
-You reply in Bangla (Bengali script) unless the customer writes in English.
-Keep replies short, helpful, and commerce-focused.
-Do NOT make up prices or product names. If you don't know, politely ask for clarification.
-Do NOT promise delivery dates or discounts unless asked to confirm.
-If the customer is asking about a product, help them describe it better so you can find it.`;
+    // Build a clear situation description for OpenAI
+    let situationCtx = '';
+    if (context.draftStep) {
+      const stepLabel = OpenAIFallbackProvider.STEP_LABELS[context.draftStep] ?? `"${context.draftStep}" step চলছিল`;
+      situationCtx = `\nBot এর current situation: ${stepLabel}।`;
+      if (context.draftSummary) {
+        situationCtx += ` (${context.draftSummary})`;
+      }
+    } else if (context.draftSummary) {
+      situationCtx = `\nBot এর current situation: ${context.draftSummary}।`;
+    }
+
+    const systemPrompt = `${businessCtx}${situationCtx}
+
+তোমার কাজ: Bot যে situation-এ আটকে গেছে সেটা সামলানো।
+- Customer কে warmly respond করো
+- Bot যা চাইছিল সেদিকে customer কে ফিরিয়ে আনো
+- Off-topic হলে হাসিমুখে redirect করো
+- Frustrated হলে acknowledge করে সামনে এগিয়ে যাও
+- সর্বোচ্চ 2-3 sentence
+- Customer Bangla লিখলে Bangla তে reply করো, English লিখলে English এ
+- কোনো price বা product নাম বানিয়ে বলবে না
+- Order complete করতে সাহায্য করাই মূল লক্ষ্য`;
 
     const userMsg =
       context.reason === 'image_unclear' && context.visionDescription
-        ? `Customer sent an image. Vision analysis: "${context.visionDescription}". Customer message: "${context.customerMessage}"`
+        ? `Customer একটি ছবি পাঠিয়েছে। Vision analysis: "${context.visionDescription}"। Customer message: "${context.customerMessage}"`
         : context.customerMessage;
 
     try {
@@ -59,7 +85,7 @@ If the customer is asking about a product, help them describe it better so you c
         },
         body: JSON.stringify({
           model: this.model,
-          max_tokens: 200,
+          max_tokens: 120,
           messages: [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: userMsg },

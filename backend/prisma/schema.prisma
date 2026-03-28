@@ -131,6 +131,7 @@ model Page {
   imageHighConfidence     Float   @default(0.75)   // >= this: auto-proceed with top match
   imageMediumConfidence   Float   @default(0.45)   // >= this: show options, ask customer
   imageFallbackAiOn       Boolean @default(false)  // use AI fallback when low confidence
+  textFallbackAiOn        Boolean @default(false)  // use AI fallback for unmatched text messages
 
   callLanguage        String    @default("BN")
   voiceType           String    @default("FEMALE")
@@ -192,11 +193,12 @@ model Product {
   variantOptions   String?
 
   // V18: Image recognition metadata — used for vision-based product matching
-  category      String?   // dress, saree, panjabi, shirt, t-shirt, kurti, etc.
-  color         String?   // red, black, white, multicolor, etc.
-  tags          String?   // JSON array of string tags, e.g. ["floral","summer","cotton"]
-  imageKeywords String?   // space-separated keywords, e.g. "floral printed maxi"
-  aiDescription String?   // optional AI-generated description for matching
+  category         String?   // dress, saree, panjabi, shirt, t-shirt, kurti, etc.
+  color            String?   // red, black, white, multicolor, etc.
+  tags             String?   // JSON array of string tags, e.g. ["floral","summer","cotton"]
+  imageKeywords    String?   // space-separated keywords, e.g. "floral printed maxi"
+  aiDescription    String?   // optional AI-generated description for matching
+  visionSearchable Boolean @default(false) // if true, this product is matched via OpenAI vision (no code needed)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -290,6 +292,11 @@ model ConversationSession {
   lastIntent                String?
   referencedMessageId       String?
   agentHandling             Boolean @default(false) // true = bot stays silent, agent is handling
+
+  // Loop / stuck detection
+  lastCustomerMsg  String?          // last message text customer sent
+  lastDraftStep    String?          // draft step after last message was processed
+  loopCount        Int     @default(0) // consecutive messages without progress
 
   updatedAt DateTime @updatedAt
   createdAt DateTime @default(now())

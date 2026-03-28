@@ -54,6 +54,9 @@ export class ConversationContextService {
       lastIntent?: string | null;
       referencedMessageId?: string | null;
       agentHandling?: boolean;
+      lastCustomerMsg?: string | null;
+      lastDraftStep?: string | null;
+      loopCount?: number;
     },
   ) {
     return this.prisma.conversationSession.upsert({
@@ -61,6 +64,53 @@ export class ConversationContextService {
       create: { pageIdRef, customerPsid, ...patch },
       update: patch,
     });
+  }
+
+  /**
+   * Call at the START of each message to detect loops.
+   * Returns the current loopCount AFTER incrementing (if stuck).
+   * Resets to 0 if progress was made.
+   *
+   * "Stuck" = same customer message OR same draft step as last time.
+   */
+  async checkAndUpdateLoop(
+    pageIdRef: number,
+    customerPsid: string,
+    currentMsg: string,
+    currentDraftStep: string | null,
+  ): Promise<number> {
+    const session = await this.getSession(pageIdRef, customerPsid);
+    const lastMsg = session?.lastCustomerMsg ?? null;
+    const lastStep = session?.lastDraftStep ?? null;
+    const prevCount = session?.loopCount ?? 0;
+
+    const sameMessage = lastMsg !== null && lastMsg.toLowerCase().trim() === currentMsg.toLowerCase().trim();
+    const sameStep = currentDraftStep !== null && lastStep !== null && lastStep === currentDraftStep;
+
+    const newCount = (sameMessage || sameStep) ? prevCount + 1 : 0;
+    await this.upsertSession(pageIdRef, customerPsid, {
+      lastCustomerMsg: currentMsg,
+      loopCount: newCount,
+    });
+    return newCount;
+  }
+
+  /** Call AFTER processing a message to record which draft step we ended on. */
+  async recordDraftStepAfterProcessing(
+    pageIdRef: number,
+    customerPsid: string,
+    draftStep: string | null,
+  ): Promise<void> {
+    await this.upsertSession(pageIdRef, customerPsid, {
+      lastDraftStep: draftStep,
+      // Reset loop count on successful step change
+      ...(draftStep === null ? { loopCount: 0 } : {}),
+    });
+  }
+
+  /** Reset loop counter (call when meaningful progress is made). */
+  async resetLoop(pageIdRef: number, customerPsid: string): Promise<void> {
+    await this.upsertSession(pageIdRef, customerPsid, { loopCount: 0, lastDraftStep: null });
   }
 
   async getActiveDraft(
