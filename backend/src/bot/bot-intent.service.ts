@@ -388,6 +388,8 @@ export class BotIntentService {
     if (!t) return null;
     if (this.includesAny(t, this.KW.greeting)) return 'GREETING';
     if (this.includesAny(t, this.KW.catalogRequest)) return 'CATALOG_REQUEST';
+    // CANCEL must be checked before ORDER_INTENT — "nibo na" contains "nibo" (order keyword)
+    if (this.includesAny(t, this.KW.cancel)) return 'CANCEL';
     if (this.includesAny(t, this.KW.negotiation) || this.looksLikeOffer(t))
       return 'NEGOTIATION';
     if (this.includesAny(t, this.KW.edit)) return 'EDIT_ORDER';
@@ -405,7 +407,6 @@ export class BotIntentService {
       return 'CONFIRM';
     if (awaitingConfirm && this.includesAny(t, this.KW.confirmWeak))
       return 'CONFIRM';
-    if (this.includesAny(t, this.KW.cancel)) return 'CANCEL';
     if (this.includesAny(t, this.KW.confirm)) return 'CONFIRM';
     return null;
   }
