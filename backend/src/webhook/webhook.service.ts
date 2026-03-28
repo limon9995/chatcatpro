@@ -236,9 +236,11 @@ export class WebhookService {
       }));
       if (draft || hasOpenOrder) {
         await this.handleCancel(page, psid, draft);
-        return;
+      } else {
+        // Nothing to cancel — acknowledge softly and stop, don't fall through to order flow
+        await this.safeSend(token, psid, 'ঠিক আছে 💖 কোনো সমস্যা নেই। কিছু জানার থাকলে বলুন।');
       }
-      // Nothing to cancel — treat as unmatched, fall through to normal handling
+      return;
     }
 
     // ── PENDING MULTI-PRODUCT PREVIEW ──────────────────────────────────────
