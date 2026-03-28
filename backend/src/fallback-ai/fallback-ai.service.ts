@@ -38,6 +38,11 @@ export class FallbackAiService {
     }
   }
 
+  /** Returns true if a real AI provider (not mock) is configured */
+  isAvailable(): boolean {
+    return this.provider !== this.mockProvider;
+  }
+
   async generateReply(context: FallbackContext): Promise<FallbackResponse> {
     this.logger.log(`[FallbackAI] Triggered — reason=${context.reason}`);
     try {

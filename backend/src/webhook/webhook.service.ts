@@ -191,7 +191,8 @@ export class WebhookService {
     const intent = this.botIntent.detectIntent(text, awaitingConfirm);
 
     // ── LOOP / STUCK DETECTION ────────────────────────────────────────────
-    if (page.textFallbackAiOn) {
+    const aiEnabled = page.textFallbackAiOn || this.fallbackAi.isAvailable();
+    if (aiEnabled) {
       const loopCount = await this.ctx.checkAndUpdateLoop(
         pageId, psid, text, draft?.currentStep ?? null,
       );
@@ -348,6 +349,26 @@ export class WebhookService {
       }
 
       if (typeof result === 'string') {
+        // If AI is available and this looks like a validation retry (not a progress message),
+        // let AI generate a warmer contextual response instead of the rigid retry message
+        const isRetry = result.includes('আবার দিন') || result.includes('পুরো');
+        if (isRetry && aiEnabled) {
+          const updatedDraft = await this.ctx.getActiveDraft(pageId, psid);
+          const draftSummary = updatedDraft
+            ? `Customer has an active order draft (step: ${updatedDraft.currentStep ?? 'unknown'}, products: ${(updatedDraft.items ?? []).map((i: any) => i.code).join(', ') || 'none'})`
+            : null;
+          const fbResult = await this.fallbackAi.generateReply({
+            customerMessage: text,
+            reason: 'unmatched_intent',
+            businessName: page.businessName ?? undefined,
+            draftStep: updatedDraft?.currentStep ?? draft.currentStep ?? null,
+            draftSummary,
+          });
+          if (fbResult.reply) {
+            await this.safeSend(token, psid, fbResult.reply);
+            return;
+          }
+        }
         await this.safeSend(token, psid, result);
         return;
       }
@@ -533,7 +554,7 @@ export class WebhookService {
       `[Webhook] Unmatched message — psid=${psid} page=${page.pageId} text="${text.slice(0, 80)}"`,
     );
 
-    if (page.textFallbackAiOn) {
+    if (aiEnabled) {
       const draftSummary = draft
         ? `Customer has an active order draft (step: ${draft.currentStep ?? 'unknown'}, products: ${(draft.items ?? []).map((i: any) => i.code).join(', ') || 'none'})`
         : null;
