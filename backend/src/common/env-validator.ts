@@ -87,6 +87,11 @@ export function validateEnv(): void {
   const redirectUri = String(process.env.FB_REDIRECT_URI || '').trim();
   const storagePublicUrl = String(process.env.STORAGE_PUBLIC_URL || '').trim();
   const oauthStateSecret = String(process.env.FB_OAUTH_STATE_SECRET || '').trim();
+  const openAiApiKey = String(process.env.OPENAI_API_KEY || '').trim();
+  const fallbackProvider = String(process.env.FALLBACK_AI_PROVIDER || '').trim().toLowerCase();
+  const visionProvider = String(process.env.VISION_PROVIDER || '').trim().toLowerCase();
+  const fallbackModel = String(process.env.FALLBACK_AI_MODEL || '').trim();
+  const visionModel = String(process.env.VISION_MODEL || '').trim();
 
   if (databaseUrl.startsWith('file:')) {
     warnings.push(
@@ -115,6 +120,24 @@ export function validateEnv(): void {
   if (isProduction && !oauthStateSecret) {
     errors.push(
       '  ❌ FB_OAUTH_STATE_SECRET is required in production\n     → Set a dedicated secret for signed OAuth state validation.',
+    );
+  }
+
+  if ((fallbackProvider === 'openai' || visionProvider === 'openai') && !openAiApiKey) {
+    warnings.push(
+      '  ⚠️  OPENAI_API_KEY not set\n     → Required when FALLBACK_AI_PROVIDER=openai or VISION_PROVIDER=openai.',
+    );
+  }
+
+  if (fallbackProvider === 'openai' && !fallbackModel) {
+    warnings.push(
+      '  ⚠️  FALLBACK_AI_MODEL not set\n     → Defaulting to gpt-4o for AI fallback replies.',
+    );
+  }
+
+  if (visionProvider === 'openai' && !visionModel) {
+    warnings.push(
+      '  ⚠️  VISION_MODEL not set\n     → Defaulting to gpt-4o for product image analysis.',
     );
   }
 

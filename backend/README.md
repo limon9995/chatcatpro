@@ -29,7 +29,18 @@
 
 ```bash
 $ npm install
+$ cp .env.example .env
 ```
+
+Set secrets in `backend/.env`. If you want real OpenAI fallback replies or image analysis, set:
+
+```env
+OPENAI_API_KEY=your_new_openai_key
+FALLBACK_AI_PROVIDER=openai
+VISION_PROVIDER=openai
+```
+
+Keep the key on the backend only. Do not place it in frontend files like `landing/index.html`.
 
 ## Compile and run the project
 
