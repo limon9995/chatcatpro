@@ -263,6 +263,10 @@ export class DraftOrderHandler {
     // If smart parser found nothing, apply strict current-step logic
     if (!parsed.name && !parsed.phone && !parsed.address) {
       if (step === 'name') {
+        // Reject clearly negative/cancel responses as names
+        if (this.botIntent.detectIntent(text, false) === 'CANCEL') {
+          return 'আপনার নামটা দিন 💖 (যেমন: রাহেলা বেগম)';
+        }
         draft.customerName = text.trim().slice(0, 80);
       } else if (step === 'phone') {
         const ph = this.extractPhone(text);
