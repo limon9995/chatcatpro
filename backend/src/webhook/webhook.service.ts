@@ -122,14 +122,13 @@ export class WebhookService {
       return;
     }
 
-    // Agent handling mode — if a new customer message arrives, re-activate the bot
-    // so matched greetings/order/catalog requests can still receive a reply.
+    // Agent handling mode — bot stays silent until agent resumes bot from dashboard
     const agentHandling = await this.ctx.isAgentHandling(pageId, psid);
     if (agentHandling) {
-      await this.ctx.setAgentHandling(pageId, psid, false);
       this.logger.log(
-        `[Webhook] Agent handling cleared on new inbound message. psid=${psid} page=${page.pageId}`,
+        `[Webhook] Bot muted (agent mode) — ignoring message. psid=${psid} page=${page.pageId}`,
       );
+      return;
     }
 
     // ── Image → payment screenshot OR product OCR ─────────────────────────
@@ -1416,14 +1415,11 @@ export class WebhookService {
    */
   private async handleAgentEcho(page: any, customerPsid: string): Promise<void> {
     const pageId = page.id as number;
-    // Agent manually replied → reset agentHandling so bot re-activates for next customer message
-    const wasHandling = await this.ctx.isAgentHandling(pageId, customerPsid);
-    if (wasHandling) {
-      await this.ctx.setAgentHandling(pageId, customerPsid, false);
-      this.logger.log(
-        `[AgentEcho] Agent replied — bot re-activated for psid=${customerPsid} page=${page.pageId}`,
-      );
-    }
+    // Agent manually replied → mute the bot for this customer until dashboard resume
+    await this.ctx.setAgentHandling(pageId, customerPsid, true);
+    this.logger.log(
+      `[AgentEcho] Agent replied — bot muted for psid=${customerPsid} page=${page.pageId}`,
+    );
   }
 
   /** Safe sendText — logs error but does not throw */

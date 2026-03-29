@@ -39,6 +39,13 @@ interface FollowUpItem {
   scheduledAt: string;
 }
 
+interface AgentMutedItem {
+  customerPsid: string;
+  customerName: string | null;
+  phone: string | null;
+  issueType: string;
+}
+
 interface RefundQueueItem {
   id: number;
   orderId: number;
@@ -156,6 +163,8 @@ export function AgentTasksPage({ th, pageId, onToast, onOpenOrders, onOpenPrint,
   const [followUps, setFollowUps] = useState<FollowUpItem[]>([]);
   const [refundQueue, setRefundQueue] = useState<RefundQueueItem[]>([]);
   const [settings, setSettings] = useState<SettingsSummary | null>(null);
+  const [agentMuted, setAgentMuted] = useState<AgentMutedItem[]>([]);
+  const [resumingPsid, setResumingPsid] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const load = useCallback(async () => {
@@ -166,9 +175,10 @@ export function AgentTasksPage({ th, pageId, onToast, onOpenOrders, onOpenPrint,
         request<FollowUpItem[]>(`${API_BASE}/client-dashboard/${pageId}/followup?status=pending`),
         request<RefundQueueItem[]>(`${API_BASE}/client-dashboard/${pageId}/accounting/refund-queue`),
         request<SettingsSummary>(`${API_BASE}/client-dashboard/${pageId}/settings`),
+        request<AgentMutedItem[]>(`${API_BASE}/orders/agent-issues?pageId=${pageId}`),
       ]);
 
-      const [ordersResult, followUpResult, refundResult, settingsResult] = results;
+      const [ordersResult, followUpResult, refundResult, settingsResult, agentIssuesResult] = results;
 
       if (ordersResult.status === 'fulfilled') {
         setOrders(ordersResult.value);
@@ -196,6 +206,12 @@ export function AgentTasksPage({ th, pageId, onToast, onOpenOrders, onOpenPrint,
       } else {
         setSettings(null);
         onToast(copy('Settings load করা যায়নি', 'Failed to load settings'), 'error');
+      }
+
+      if (agentIssuesResult.status === 'fulfilled') {
+        setAgentMuted((agentIssuesResult.value as any[]).filter((i) => i.issueType === 'unmatched'));
+      } else {
+        setAgentMuted([]);
       }
     } catch (e: any) {
       onToast(e.message, 'error');
@@ -497,6 +513,22 @@ export function AgentTasksPage({ th, pageId, onToast, onOpenOrders, onOpenPrint,
           'There are no order flows or setup tasks yet, so the automation impact is currently 0%.',
         );
 
+  const resumeBot = async (psid: string) => {
+    setResumingPsid(psid);
+    try {
+      await request(`${API_BASE}/orders/toggle-bot-psid`, {
+        method: 'POST',
+        body: JSON.stringify({ pageId, psid, mute: false }),
+      });
+      setAgentMuted((prev) => prev.filter((i) => i.customerPsid !== psid));
+      onToast(copy('Bot চালু হয়েছে', 'Bot resumed'), 'success');
+    } catch {
+      onToast(copy('Error হয়েছে', 'Something went wrong'), 'error');
+    } finally {
+      setResumingPsid(null);
+    }
+  };
+
   if (loading && !orders.length) {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: 80 }}>
@@ -705,6 +737,60 @@ export function AgentTasksPage({ th, pageId, onToast, onOpenOrders, onOpenPrint,
           />
         </div>
       )}
+
+      {/* Agent Mode — Bot Muted Conversations */}
+      <div style={{ ...th.card, padding: '18px 20px', border: `1px solid ${agentMuted.length ? '#f59e0b44' : th.border}` }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 14 }}>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: th.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              {copy('Agent Mode', 'Agent Mode')}
+            </div>
+            <div style={{ fontSize: 16, fontWeight: 800, marginTop: 4, color: agentMuted.length ? '#f59e0b' : '#16a34a' }}>
+              {agentMuted.length
+                ? copy(`${agentMuted.length}টি conversation-এ bot বন্ধ আছে`, `Bot is muted for ${agentMuted.length} conversation(s)`)
+                : copy('সব conversation-এ bot চালু আছে', 'Bot is active for all conversations')}
+            </div>
+            <div style={{ fontSize: 12.5, color: th.muted, marginTop: 3 }}>
+              {copy(
+                'Agent reply করলে bot auto-mute হয়। নিচ থেকে "Bot চালু করো" চাপলে bot আবার active হবে।',
+                'Bot auto-mutes when an agent replies. Press "Resume Bot" below to reactivate.',
+              )}
+            </div>
+          </div>
+        </div>
+
+        {agentMuted.length > 0 ? (
+          <div style={{ display: 'grid', gap: 8 }}>
+            {agentMuted.map((item) => (
+              <div key={item.customerPsid} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 10, background: th.surface, border: `1px solid #f59e0b33` }}>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 13.5 }}>
+                    {item.customerName || copy('নাম নেই', 'No name')}
+                  </div>
+                  <div style={{ fontSize: 12, color: th.muted, marginTop: 3 }}>
+                    {item.phone || item.customerPsid}
+                  </div>
+                </div>
+                <button
+                  style={{ ...th.btnPrimary, background: '#16a34a', fontSize: 12.5 }}
+                  disabled={resumingPsid === item.customerPsid}
+                  onClick={() => resumeBot(item.customerPsid)}
+                >
+                  {resumingPsid === item.customerPsid
+                    ? <Spinner size={13} />
+                    : copy('Bot চালু করো', 'Resume Bot')}
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <EmptyState
+            icon="✅"
+            title={copy('কোনো muted conversation নেই', 'No muted conversations')}
+            sub={copy('Agent reply করলে এখানে দেখাবে', 'Conversations will appear here after an agent replies')}
+          />
+        )}
+      </div>
     </div>
   );
 }
