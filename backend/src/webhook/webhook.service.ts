@@ -18,6 +18,7 @@ import { CrmService } from '../crm/crm.service';
 import { VisionAnalysisService } from '../vision-analysis/vision-analysis.service';
 import { ProductMatchService, ProductMatchResult } from '../product-match/product-match.service';
 import { FallbackAiService } from '../fallback-ai/fallback-ai.service';
+import { AiIntentService } from '../bot/ai-intent.service';
 
 @Injectable()
 export class WebhookService {
@@ -39,6 +40,7 @@ export class WebhookService {
     private readonly visionAnalysis: VisionAnalysisService,
     private readonly productMatch: ProductMatchService,
     private readonly fallbackAi: FallbackAiService,
+    private readonly aiIntent: AiIntentService,
   ) {}
 
   // ── Entry point ────────────────────────────────────────────────────────────
@@ -188,7 +190,17 @@ export class WebhookService {
     const awaitingConfirm =
       draft?.currentStep === 'confirm' ||
       (draft?.pendingMultiPreview?.length ?? 0) > 0;
-    const intent = this.botIntent.detectIntent(text, awaitingConfirm);
+
+    // AI-first intent detection — falls back to keyword matching on any API error/quota
+    const aiResult = await this.aiIntent.detectIntent(
+      text,
+      awaitingConfirm,
+      draft?.currentStep ?? null,
+      page.businessName ?? null,
+    );
+    const intent = aiResult.intent !== null && aiResult.intent !== 'UNKNOWN'
+      ? aiResult.intent
+      : this.botIntent.detectIntent(text, awaitingConfirm);
 
     // ── LOOP / STUCK DETECTION ────────────────────────────────────────────
     const aiEnabled = page.textFallbackAiOn || this.fallbackAi.isAvailable();
@@ -549,11 +561,21 @@ export class WebhookService {
       } catch {}
     }
 
-    // ── UNMATCHED — try AI fallback if enabled, else soft reply ──────────
+    // ── UNMATCHED — use AI reply (already generated above) or fallback AI ──
     this.logger.log(
       `[Webhook] Unmatched message — psid=${psid} page=${page.pageId} text="${text.slice(0, 80)}"`,
     );
 
+    // If AI already generated a reply for UNKNOWN intent, use it directly (no 2nd API call)
+    if (aiResult.reply) {
+      const reply = draft
+        ? `${aiResult.reply}\n\n${this.draftHandler.reminder(draft)}`
+        : aiResult.reply;
+      await this.safeSend(token, psid, reply);
+      return;
+    }
+
+    // AI was unavailable (quota/error) — try fallbackAi as last resort
     if (aiEnabled) {
       const draftSummary = draft
         ? `Customer has an active order draft (step: ${draft.currentStep ?? 'unknown'}, products: ${(draft.items ?? []).map((i: any) => i.code).join(', ') || 'none'})`
