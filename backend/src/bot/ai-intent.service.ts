@@ -169,11 +169,13 @@ Valid intents:
 - UNKNOWN — উপরের কোনোটাই না, বা random/অপ্রাসঙ্গিক message
 
 গুরুত্বপূর্ণ নিয়ম:
-1. Step "name" চলাকালে customer যদি না-সূচক কিছু বলে ("nibo na", "lagbe na", "cancel" etc.) → সেটা নাম না, সেটা CANCEL।
-2. Step "phone" চলাকালে customer ফোন নম্বর ছাড়া অন্য কিছু বললে context দেখো — cancel/edit হতে পারে।
-3. awaitingConfirm=true হলে "ok", "thik", "ha", "done" → CONFIRM।
-4. UNKNOWN হলে reply field-এ 2 sentence Bangla/Banglish warm reply দাও।
-5. অন্য সব intent-এ reply=null।`;
+1. Step "name" চলাকালে customer যদি না-সূচক কিছু বলে ("nibo na", "lagbe na", "cancel" etc.) → CANCEL।
+2. Step "name" চলাকালে customer যদি greeting ("hi", "hello", "salam") বলে → GREETING (নাম হিসেবে নেবে না)।
+3. Step "phone" চলাকালে customer ফোন নম্বর ছাড়া অন্য কিছু বললে context দেখো — cancel/edit হতে পারে।
+4. awaitingConfirm=true হলে "ok", "thik", "ha", "done" → CONFIRM।
+5. Draft step চলাকালে (name/phone/address/confirm) customer যদি সম্পূর্ণ অপ্রাসঙ্গিক কথা বলে (joke, random text, অন্য topic) → UNKNOWN। reply-এ বলো "অর্ডারটি complete করতে [step] দিন।"
+6. UNKNOWN হলে reply field-এ 2 sentence Bangla/Banglish warm reply দাও।
+7. অন্য সব intent-এ reply=null।`;
   }
 
   private buildUserMessage(

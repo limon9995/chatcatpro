@@ -336,6 +336,13 @@ export class WebhookService {
       return;
     }
 
+    // ── DRAFT: skip field capture for off-topic messages ─────────────────
+    // GREETING/CATALOG_REQUEST/SOFT_HESITATION during draft = off-topic, re-prompt
+    if (draft && page.orderModeOn && (intent === 'GREETING' || intent === 'CATALOG_REQUEST' || intent === 'SOFT_HESITATION')) {
+      await this.safeSend(token, psid, this.draftHandler.reminder(draft));
+      return;
+    }
+
     // ── ACTIVE DRAFT: capture next field ──────────────────────────────────
     if (draft && page.orderModeOn) {
       const result = await this.draftHandler.captureField(
