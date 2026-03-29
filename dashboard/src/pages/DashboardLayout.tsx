@@ -118,6 +118,8 @@ export function DashboardLayout({
   onLogout: () => void;
 }) {
   const { copy, language } = useLanguage();
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activePage, setActivePage] = useState<PageItem | null>(initialActivePage);
   const [nav, setNav] = useState<NavKey>(() => {
     const navFromUrl = paramToNav(new URLSearchParams(window.location.search).get('tab'));
@@ -148,6 +150,12 @@ export function DashboardLayout({
   });
   const searchInputRef = useRef<HTMLInputElement>(null);
   const { request } = useApi();
+
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   const th = getTheme(dark);
 
@@ -277,6 +285,7 @@ export function DashboardLayout({
     if (key === 'FOLLOWUP') setFollowUpPreset(null);
     if (key === 'ACCOUNTING') setAccountingPreset(null);
     setNav(key);
+    setSidebarOpen(false); // close sidebar on mobile after navigation
   }, []);
 
   const renderPage = () => {
@@ -404,10 +413,21 @@ export function DashboardLayout({
     <div style={th.app}>
       {/* ── Topbar ──────────────────────────────────────────────────────── */}
       <header style={th.topbar}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 8 : 14 }}>
+          {/* Hamburger — mobile only */}
+          {isMobile && (
+            <button
+              onClick={() => setSidebarOpen(prev => !prev)}
+              style={{ ...th.btnGhost, padding: '6px 9px', fontSize: 18, borderRadius: 8, lineHeight: 1 }}
+              aria-label="Toggle menu"
+            >
+              ☰
+            </button>
+          )}
+
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <img src="/logo.png" alt="ChatCat Pro" style={{ width: 32, height: 32, objectFit: 'cover', borderRadius: '50%' }} />
-            <span style={{ fontWeight: 800, fontSize: 15, letterSpacing: '-0.03em', color: th.text }}>ChatCat Pro</span>
+            {!isMobile && <span style={{ fontWeight: 800, fontSize: 15, letterSpacing: '-0.03em', color: th.text }}>ChatCat Pro</span>}
           </div>
 
           {myPages.length > 1 ? (
@@ -421,14 +441,14 @@ export function DashboardLayout({
                 setSearchOpen(false);
               }}
               style={{
-                minWidth: 220,
-                maxWidth: 320,
-                padding: '7px 10px',
+                minWidth: isMobile ? 110 : 220,
+                maxWidth: isMobile ? 160 : 320,
+                padding: '7px 8px',
                 borderRadius: 8,
                 border: `1px solid ${th.border}`,
                 background: th.panel,
                 color: th.text,
-                fontSize: 13,
+                fontSize: isMobile ? 12 : 13,
                 fontWeight: 600,
                 outline: 'none',
               }}
@@ -441,39 +461,49 @@ export function DashboardLayout({
               ))}
             </select>
           ) : (
-            <span style={{ fontSize: 13, color: th.muted, fontWeight: 500 }}>
+            <span style={{ fontSize: isMobile ? 12 : 13, color: th.muted, fontWeight: 500, maxWidth: isMobile ? 110 : undefined, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {activePage.pageName}
             </span>
           )}
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 4 : 8 }}>
+          {/* Search — icon only on mobile */}
           <button onClick={openSearch}
-            style={{ ...th.btnGhost, padding: '6px 14px', fontSize: 13, borderRadius: 8, display: 'flex', alignItems: 'center', gap: 7, color: th.muted }}>
-            🔍 <span>{copy('সার্চ', 'Search')}</span>
-            <span style={{ fontSize: 10.5, background: th.surface, border: `1px solid ${th.border}`, borderRadius: 4, padding: '1px 5px', color: th.muted, letterSpacing: '0.02em' }}>Ctrl+K</span>
+            style={{ ...th.btnGhost, padding: isMobile ? '7px 9px' : '6px 14px', fontSize: 13, borderRadius: 8, display: 'flex', alignItems: 'center', gap: 7, color: th.muted }}>
+            🔍
+            {!isMobile && <><span>{copy('সার্চ', 'Search')}</span>
+            <span style={{ fontSize: 10.5, background: th.surface, border: `1px solid ${th.border}`, borderRadius: 4, padding: '1px 5px', color: th.muted, letterSpacing: '0.02em' }}>Ctrl+K</span></>}
           </button>
-          <button
-            onClick={onManagePages}
-            style={{ ...th.btnGhost, padding: '6px 10px', fontSize: 12, borderRadius: 8 }}
-            title={copy('পেজ connect / disconnect করুন', 'Manage connected Facebook pages')}
-          >
-            {copy('Facebook Page', 'Facebook Page')}
-          </button>
+
+          {/* Facebook Page — hidden on mobile */}
+          {!isMobile && (
+            <button
+              onClick={onManagePages}
+              style={{ ...th.btnGhost, padding: '6px 10px', fontSize: 12, borderRadius: 8 }}
+              title={copy('পেজ connect / disconnect করুন', 'Manage connected Facebook pages')}
+            >
+              {copy('Facebook Page', 'Facebook Page')}
+            </button>
+          )}
+
           <LanguageSwitch dark={dark} compact />
+
           <button onClick={() => setDark(!dark)} style={{ ...th.btnGhost, padding: '6px 10px', fontSize: 15, borderRadius: 8 }}>
-            {dark ? copy('☀ লাইট', '☀ Light') : copy('☾ ডার্ক', '☾ Dark')}
+            {dark ? '☀' : '☾'}
+            {!isMobile && <span style={{ fontSize: 13 }}>{dark ? copy(' লাইট', ' Light') : copy(' ডার্ক', ' Dark')}</span>}
           </button>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <div style={{
               width: 30, height: 30, borderRadius: '50%',
               background: th.accentSoft,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 12, fontWeight: 800, color: th.accentText,
+              fontSize: 12, fontWeight: 800, color: th.accentText, flexShrink: 0,
             }}>
               {(user?.name || user?.username || 'U')[0].toUpperCase()}
             </div>
-            <span style={{ fontSize: 13, fontWeight: 600, color: th.textSub }}>{user?.name || user?.username}</span>
+            {!isMobile && <span style={{ fontSize: 13, fontWeight: 600, color: th.textSub }}>{user?.name || user?.username}</span>}
             <button onClick={onLogout} style={{ ...th.btnGhost, padding: '5px 10px', fontSize: 12 }}>{copy('লগআউট', 'Logout')}</button>
           </div>
         </div>
@@ -508,9 +538,38 @@ export function DashboardLayout({
         return null;
       })()}
 
-      <div style={th.layout}>
+      <div style={{ ...th.layout, ...(isMobile ? { display: 'block', gridTemplateColumns: undefined } : {}) }}>
+        {/* ── Mobile sidebar backdrop ──────────────────────────────────── */}
+        {isMobile && sidebarOpen && (
+          <div
+            onClick={() => setSidebarOpen(false)}
+            style={{ position: 'fixed', inset: 0, zIndex: 199, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(2px)', WebkitBackdropFilter: 'blur(2px)' }}
+          />
+        )}
+
         {/* ── Sidebar ─────────────────────────────────────────────────── */}
-        <nav style={th.sidebar}>
+        <nav style={{
+          ...th.sidebar,
+          ...(isMobile ? {
+            position: 'fixed',
+            top: 0,
+            left: sidebarOpen ? 0 : -290,
+            bottom: 0,
+            width: 272,
+            height: '100vh',
+            zIndex: 200,
+            transition: 'left 0.25s cubic-bezier(0.4,0,0.2,1)',
+            paddingTop: 56,
+          } : {}),
+        }}>
+          {/* Mobile close button inside sidebar */}
+          {isMobile && (
+            <button
+              onClick={() => setSidebarOpen(false)}
+              style={{ position: 'absolute', top: 14, right: 14, ...th.btnGhost, padding: '4px 10px', fontSize: 16, borderRadius: 8, lineHeight: 1 }}
+            >✕</button>
+          )}
+
           {navGroups.map(g => (
             <div key={g.key} style={{ marginBottom: 10 }}>
               {(() => {
@@ -577,13 +636,13 @@ export function DashboardLayout({
         </nav>
 
         {/* ── Main Content ─────────────────────────────────────────────── */}
-        <main style={th.main}>
+        <main style={{ ...th.main, ...(isMobile ? { padding: '16px 14px' } : {}) }}>
           {renderPage()}
         </main>
       </div>
 
       {/* ── Toasts ───────────────────────────────────────────────────────── */}
-      <div style={{ position: 'fixed', bottom: 24, right: 24, zIndex: 9999, display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ position: 'fixed', bottom: 16, right: isMobile ? 8 : 24, left: isMobile ? 8 : 'auto', zIndex: 9999, display: 'flex', flexDirection: 'column', gap: 8 }}>
         {toasts.map(t => (
           <Toast key={t.id} message={t.msg} type={t.type}
             onClose={() => setToasts(ts => ts.filter(x => x.id !== t.id))} />
@@ -593,10 +652,11 @@ export function DashboardLayout({
       {/* ── Global Search Modal ──────────────────────────────────────── */}
       {searchOpen && (
         <div onClick={() => setSearchOpen(false)}
-          style={{ position: 'fixed', inset: 0, zIndex: 10000, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)', display: 'flex', justifyContent: 'center', paddingTop: 80 }}>
+          style={{ position: 'fixed', inset: 0, zIndex: 10000, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)', display: 'flex', justifyContent: 'center', alignItems: isMobile ? 'flex-end' : 'flex-start', paddingTop: isMobile ? 0 : 80 }}>
           <div onClick={e => e.stopPropagation()}
-            style={{ width: '100%', maxWidth: 640, maxHeight: '70vh', display: 'flex', flexDirection: 'column',
-              background: th.panel, borderRadius: 16, boxShadow: '0 24px 80px rgba(0,0,0,0.4)', border: `1px solid ${th.border}`, overflow: 'hidden' }}>
+            style={{ width: '100%', maxWidth: 640, maxHeight: isMobile ? '85vh' : '70vh', display: 'flex', flexDirection: 'column',
+              background: th.panel, borderRadius: isMobile ? '16px 16px 0 0' : 16, boxShadow: '0 24px 80px rgba(0,0,0,0.4)', border: `1px solid ${th.border}`, overflow: 'hidden',
+              ...(isMobile ? { position: 'fixed', bottom: 0, left: 0, right: 0 } : {}) }}>
 
             {/* Search input */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 18px', borderBottom: `1px solid ${th.border}` }}>
@@ -717,6 +777,25 @@ export function DashboardLayout({
         ::-webkit-scrollbar-thumb { background: rgba(128,128,128,0.25); border-radius: 99px; }
         select option { background: ${dark ? '#1a1a24' : '#fff'}; color: ${th.text}; }
         input::placeholder, textarea::placeholder { color: ${th.muted}; }
+        @media (max-width: 767px) {
+          /* Force all multi-column inline grids to single column on mobile */
+          [style*="grid-template-columns"] {
+            grid-template-columns: 1fr !important;
+          }
+          /* Tables / fixed-column row grids: let them scroll horizontally */
+          [style*="gridTemplateColumns: '1fr"] {
+            overflow-x: auto;
+          }
+          /* Reduce card padding on mobile */
+          [style*="border-radius: 24px"] {
+            padding: 16px 14px !important;
+            border-radius: 16px !important;
+          }
+          /* Prevent horizontal overflow */
+          main > * { max-width: 100%; }
+          /* Allow tables/rows to scroll horizontally instead of breaking layout */
+          .mobile-scroll-x { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        }
       `}</style>
     </div>
   );
