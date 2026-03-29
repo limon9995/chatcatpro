@@ -154,7 +154,7 @@ Return JSON only:
 Valid intents:
 - GREETING — সালাম/হ্যালো/hi/hello type message
 - ORDER_INTENT — কিনতে চায়, order করতে চায়, lagbe, kinbo
-- CANCEL — বাতিল করতে চায়, cancel, lagbe na, chai na
+- CANCEL — order বাতিল করতে চায়। যেকোনো step-এ হোক — "nibo na", "lagbe na", "chai na", "bad den", "cancel", "na nibo na", "দরকার নেই", "বাতিল" এসব দেখলে CANCEL দাও। Step "name"/"phone"/"address" হলেও customer যদি না চাওয়ার কথা বলে সেটা CANCEL।
 - CONFIRM — order confirm করছে (awaitingConfirm=true হলে বেশি likely)
 - EDIT_ORDER — কিছু change/update/বদলাতে চায় (নাম, ঠিকানা, ফোন, size)
 - NEGOTIATION — দাম কমাতে চায়, discount চায়, last price
@@ -168,8 +168,12 @@ Valid intents:
 - MULTI_CONFIRM — একসাথে অনেকগুলো order দিতে চায় (sob nibo, duto nibo)
 - UNKNOWN — উপরের কোনোটাই না, বা random/অপ্রাসঙ্গিক message
 
-UNKNOWN হলে reply field-এ 2 sentence-এ Bangla/Banglish-এ warm reply দাও।
-অন্য সব intent-এ reply=null।`;
+গুরুত্বপূর্ণ নিয়ম:
+1. Step "name" চলাকালে customer যদি না-সূচক কিছু বলে ("nibo na", "lagbe na", "cancel" etc.) → সেটা নাম না, সেটা CANCEL।
+2. Step "phone" চলাকালে customer ফোন নম্বর ছাড়া অন্য কিছু বললে context দেখো — cancel/edit হতে পারে।
+3. awaitingConfirm=true হলে "ok", "thik", "ha", "done" → CONFIRM।
+4. UNKNOWN হলে reply field-এ 2 sentence Bangla/Banglish warm reply দাও।
+5. অন্য সব intent-এ reply=null।`;
   }
 
   private buildUserMessage(

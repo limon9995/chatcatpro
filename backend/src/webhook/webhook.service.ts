@@ -190,18 +190,13 @@ export class WebhookService {
       draft?.currentStep === 'confirm' ||
       (draft?.pendingMultiPreview?.length ?? 0) > 0;
 
-    // CANCEL always checked first via keywords — AI can misread "nibo na" / "chai na" as name input
-    const cancelByKeyword = this.botIntent.detectIntent(text, awaitingConfirm) === 'CANCEL';
-
     // AI-first intent detection — falls back to keyword matching on any API error/quota
-    const aiResult = cancelByKeyword
-      ? { intent: 'CANCEL', reply: null }
-      : await this.aiIntent.detectIntent(
-          text,
-          awaitingConfirm,
-          draft?.currentStep ?? null,
-          page.businessName ?? null,
-        );
+    const aiResult = await this.aiIntent.detectIntent(
+      text,
+      awaitingConfirm,
+      draft?.currentStep ?? null,
+      page.businessName ?? null,
+    );
     const intent = aiResult.intent !== null && aiResult.intent !== 'UNKNOWN'
       ? aiResult.intent
       : this.botIntent.detectIntent(text, awaitingConfirm);
