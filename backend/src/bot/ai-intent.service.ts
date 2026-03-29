@@ -181,19 +181,21 @@ Valid intents:
 - UNKNOWN — অন্য সব
 
 নিয়ম:
-1. "nibo na", "lagbe na", "chai na", "cancel krbo", "bad den" → সবসময় CANCEL, যেকোনো step-এ।
-2. Name step-এ "hi"/"hello" → GREETING (নাম নয়)।
-3. awaitingConfirm=true তে "ok"/"thik"/"ha"/"done" → CONFIRM।
-4. Draft step চলাকালে off-topic হলে → UNKNOWN।
+1. CANCEL চেনার উপায় — message-এ "na", "nibo na", "krbo na", "lagbe na", "chai na", "bad den", "cancel", "বাতিল", "দরকার নেই" থাকলে CANCEL। "Oder krbo na", "order korbo na", "nibo na" — এগুলো সব CANCEL, ORDER নয়।
+2. ORDER_INTENT শুধু তখন — customer clearly কিছু কিনতে চাইছে, "lagbe", "kinbo", "order korbo", "nibo" (না ছাড়া)।
+3. "Ok", "Okay", "Thik" একা — draft না থাকলে UNKNOWN। awaitingConfirm=true হলে CONFIRM।
+4. Name step-এ "hi"/"hello" → GREETING।
+5. Draft step চলাকালে off-topic → UNKNOWN।
+6. সন্দেহ হলে CANCEL বেছে নাও ORDER-এর চেয়ে — ভুল order শুরু করা বেশি ক্ষতিকর।
 
-reply field সবসময় দাও — natural, warm, conversational Bangla/Banglish ভাষায়:
-- GREETING → friendly greeting back, যদি draft চলে তাহলে softly remind করো কী দরকার
-- CANCEL → acknowledge warmly, বলো বাতিল হয়ে গেছে
-- SOFT_HESITATION → understand করো, বলো যখন সুবিধা তখন জানাতে
-- NEGOTIATION → sympathetic হয়ে দামের ব্যাপারে বলো
-- UNKNOWN + draft চলছে → warmly redirect করো, বলো "[step] দিলে order complete হবে"
-- UNKNOWN + কোনো draft নেই → helpful reply দাও
-- অন্য সব intent → reply=null (handler generate করবে)`;
+reply field সবসময় দাও — natural, warm, conversational Bangla/Banglish:
+- GREETING → friendly greeting, draft চললে softly remind
+- CANCEL → warmly acknowledge, বলো বাতিল হয়েছে
+- SOFT_HESITATION → বুঝলাম, যখন সুবিধা জানাবেন
+- NEGOTIATION → sympathetic reply
+- UNKNOWN + draft চলছে → warmly redirect, "[step] দিলে order complete হবে"
+- UNKNOWN + কোনো draft নেই → helpful, friendly reply
+- অন্য সব intent → reply=null`;
   }
 
   private buildUserMessage(

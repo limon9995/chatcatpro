@@ -190,7 +190,7 @@ export class WebhookService {
       draft?.currentStep === 'confirm' ||
       (draft?.pendingMultiPreview?.length ?? 0) > 0;
 
-    // AI-first intent detection — falls back to keyword matching on any API error/quota
+    // AI-only intent detection — no keyword fallback
     const aiResult = await this.aiIntent.detectIntent(
       text,
       awaitingConfirm,
@@ -199,7 +199,7 @@ export class WebhookService {
     );
     const intent = aiResult.intent !== null && aiResult.intent !== 'UNKNOWN'
       ? aiResult.intent
-      : this.botIntent.detectIntent(text, awaitingConfirm);
+      : null;
 
     // ── LOOP / STUCK DETECTION ────────────────────────────────────────────
     const aiEnabled = page.textFallbackAiOn || this.fallbackAi.isAvailable();
