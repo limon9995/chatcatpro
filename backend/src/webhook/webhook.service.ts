@@ -247,10 +247,10 @@ export class WebhookService {
         select: { id: true },
       }));
       if (draft || hasOpenOrder) {
-        await this.handleCancel(page, psid, draft);
+        await this.handleCancel(page, psid, draft, aiResult.reply ?? undefined);
       } else {
-        // Nothing to cancel — acknowledge softly and stop, don't fall through to order flow
-        await this.safeSend(token, psid, 'ঠিক আছে 💖 কোনো সমস্যা নেই। কিছু জানার থাকলে বলুন।');
+        const msg = aiResult.reply ?? 'ঠিক আছে 💖 কোনো সমস্যা নেই। কিছু জানার থাকলে বলুন।';
+        await this.safeSend(token, psid, msg);
       }
       return;
     }
@@ -339,7 +339,8 @@ export class WebhookService {
     // ── DRAFT: skip field capture for off-topic messages ─────────────────
     // GREETING/CATALOG_REQUEST/SOFT_HESITATION during draft = off-topic, re-prompt
     if (draft && page.orderModeOn && (intent === 'GREETING' || intent === 'CATALOG_REQUEST' || intent === 'SOFT_HESITATION')) {
-      await this.safeSend(token, psid, this.draftHandler.reminder(draft));
+      const msg = aiResult.reply ?? this.draftHandler.reminder(draft);
+      await this.safeSend(token, psid, msg);
       return;
     }
 
@@ -545,7 +546,8 @@ export class WebhookService {
 
     // ── SOFT HESITATION ────────────────────────────────────────────────────
     if (intent === 'SOFT_HESITATION') {
-      await this.safeSend(token, psid, 'ঠিক আছে 💖 যখন সুবিধা হয় জানাবেন।');
+      const msg = aiResult.reply ?? 'ঠিক আছে 💖 যখন সুবিধা হয় জানাবেন।';
+      await this.safeSend(token, psid, msg);
       return;
     }
 
@@ -617,6 +619,7 @@ export class WebhookService {
     page: any,
     psid: string,
     draft: DraftSession | null,
+    aiReply?: string,
   ): Promise<void> {
     if (draft) {
       await this.ctx.clearDraft(page.id, psid);
@@ -639,10 +642,8 @@ export class WebhookService {
         );
       }
     }
-    const reply = await this.botKnowledge.resolveSystemReply(
-      page.id,
-      'order_cancelled',
-    );
+    // Use AI-generated cancel reply if available, else knowledge base
+    const reply = aiReply ?? await this.botKnowledge.resolveSystemReply(page.id, 'order_cancelled');
     await this.safeSend(page.pageToken, psid, reply);
   }
 

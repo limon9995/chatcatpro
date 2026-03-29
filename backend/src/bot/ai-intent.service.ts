@@ -3,18 +3,13 @@ import { Injectable, Logger } from '@nestjs/common';
 /**
  * AiIntentService — PRIMARY intent detector using gpt-4o-mini
  *
- * Flow:
- *   1. Send customer message + context to OpenAI
- *   2. OpenAI returns { intent, reply }
- *   3. On any error (429, quota, no key, timeout) → returns null → caller falls back to keyword matching
- *
- * Cost: gpt-4o-mini @ ~$0.15/1M input tokens. Typical call < 200 tokens.
- * Speed: ~300–600ms average.
+ * Returns both intent AND a natural conversational reply.
+ * On any API error (429, quota, timeout) → returns null → keyword fallback.
  */
 
 export interface AiIntentResult {
-  intent: string | null;   // null = AI couldn't classify, use keyword fallback
-  reply: string | null;    // only set for UNKNOWN intent — AI-generated reply
+  intent: string | null;   // null = use keyword fallback
+  reply: string | null;    // AI-generated natural reply (always set when AI succeeds)
 }
 
 const VALID_INTENTS = new Set([
@@ -35,13 +30,29 @@ const VALID_INTENTS = new Set([
   'UNKNOWN',
 ]);
 
+// Intents where AI reply replaces the hardcoded template
+const AI_REPLY_INTENTS = new Set([
+  'GREETING',
+  'CANCEL',
+  'SOFT_HESITATION',
+  'NEGOTIATION',
+  'UNKNOWN',
+]);
+
+const STEP_LABELS: Record<string, string> = {
+  name: 'নাম',
+  phone: 'ফোন নম্বর',
+  address: 'পুরো ঠিকানা',
+  confirm: 'order confirm করতে হ্যাঁ/না বলুন',
+  advance_payment: 'advance payment-এর transaction ID বা screenshot',
+};
+
 @Injectable()
 export class AiIntentService {
   private readonly logger = new Logger(AiIntentService.name);
   private readonly apiKey: string;
   private readonly model: string;
 
-  // Track consecutive failures to avoid hammering a dead API key
   private failCount = 0;
   private readonly MAX_FAILS = 5;
   private cooldownUntil = 0;
@@ -53,7 +64,7 @@ export class AiIntentService {
     if (this.apiKey) {
       this.logger.log(`[AiIntent] Enabled — model=${this.model}`);
     } else {
-      this.logger.warn('[AiIntent] OPENAI_API_KEY not set — will use keyword fallback only');
+      this.logger.warn('[AiIntent] OPENAI_API_KEY not set — keyword fallback only');
     }
   }
 
@@ -69,7 +80,7 @@ export class AiIntentService {
   ): Promise<AiIntentResult> {
     if (!this.isAvailable()) return { intent: null, reply: null };
 
-    const systemPrompt = this.buildSystemPrompt(businessName);
+    const systemPrompt = this.buildSystemPrompt(businessName, draftStep);
     const userMsg = this.buildUserMessage(text, awaitingConfirm, draftStep);
 
     try {
@@ -81,8 +92,8 @@ export class AiIntentService {
         },
         body: JSON.stringify({
           model: this.model,
-          max_tokens: 120,
-          temperature: 0,
+          max_tokens: 200,
+          temperature: 0.4,
           response_format: { type: 'json_object' },
           messages: [
             { role: 'system', content: systemPrompt },
@@ -92,9 +103,8 @@ export class AiIntentService {
         signal: AbortSignal.timeout(8_000),
       });
 
-      // Rate limit / quota exceeded → trigger cooldown, fall back to keywords
       if (response.status === 429 || response.status === 402) {
-        this.logger.warn(`[AiIntent] API limit/quota hit (${response.status}) — switching to keyword fallback`);
+        this.logger.warn(`[AiIntent] Quota/limit hit (${response.status}) — keyword fallback`);
         this.enterCooldown();
         return { intent: null, reply: null };
       }
@@ -119,20 +129,14 @@ export class AiIntentService {
 
       const intent: string = (parsed?.intent ?? '').toUpperCase().trim();
       if (!VALID_INTENTS.has(intent)) {
-        this.logger.warn(`[AiIntent] Unknown intent returned: "${intent}"`);
+        this.logger.warn(`[AiIntent] Invalid intent: "${intent}"`);
         return { intent: null, reply: null };
       }
 
-      this.failCount = 0; // reset on success
-
-      if (intent === 'UNKNOWN') {
-        const reply = (parsed?.reply ?? '').trim() || null;
-        this.logger.log(`[AiIntent] UNKNOWN — AI reply: ${reply?.slice(0, 80) ?? 'none'}`);
-        return { intent: 'UNKNOWN', reply };
-      }
-
-      this.logger.log(`[AiIntent] Detected intent=${intent} for text="${text.slice(0, 60)}"`);
-      return { intent, reply: null };
+      this.failCount = 0;
+      const reply = (parsed?.reply ?? '').trim() || null;
+      this.logger.log(`[AiIntent] intent=${intent} reply="${reply?.slice(0, 80) ?? 'none'}"`);
+      return { intent, reply };
 
     } catch (err: any) {
       this.logger.error(`[AiIntent] Request failed: ${err?.message ?? err}`);
@@ -141,41 +145,55 @@ export class AiIntentService {
     }
   }
 
-  private buildSystemPrompt(businessName: string | null): string {
+  /** Returns true if AI reply should replace the hardcoded template for this intent */
+  shouldUseAiReply(intent: string): boolean {
+    return AI_REPLY_INTENTS.has(intent);
+  }
+
+  private buildSystemPrompt(businessName: string | null, draftStep: string | null): string {
     const shop = businessName
-      ? `"${businessName}" নামের একটি Bangladeshi e-commerce shop`
+      ? `"${businessName}" নামের Bangladeshi e-commerce shop`
       : 'একটি Bangladeshi fashion e-commerce shop';
 
-    return `তুমি ${shop}-এর Facebook Messenger bot। Customer-এর message দেখে intent classify করো।
+    const stepCtx = draftStep
+      ? `\nএখন bot customer-এর কাছ থেকে "${STEP_LABELS[draftStep] ?? draftStep}" চাইছে।`
+      : '';
 
-Return JSON only:
-{ "intent": "<INTENT>", "reply": "<reply if UNKNOWN, else null>" }
+    return `তুমি ${shop}-এর Facebook Messenger-এ কথা বলছ।${stepCtx}
+Customer-এর message দেখে JSON return করো:
+{ "intent": "<INTENT>", "reply": "<natural reply>" }
 
 Valid intents:
-- GREETING — সালাম/হ্যালো/hi/hello type message
-- ORDER_INTENT — কিনতে চায়, order করতে চায়, lagbe, kinbo
-- CANCEL — order বাতিল করতে চায়। যেকোনো step-এ হোক — "nibo na", "lagbe na", "chai na", "bad den", "cancel", "na nibo na", "দরকার নেই", "বাতিল" এসব দেখলে CANCEL দাও। Step "name"/"phone"/"address" হলেও customer যদি না চাওয়ার কথা বলে সেটা CANCEL।
-- CONFIRM — order confirm করছে (awaitingConfirm=true হলে বেশি likely)
-- EDIT_ORDER — কিছু change/update/বদলাতে চায় (নাম, ঠিকানা, ফোন, size)
-- NEGOTIATION — দাম কমাতে চায়, discount চায়, last price
+- GREETING — hi/hello/সালাম জাতীয় কথা
+- ORDER_INTENT — কিনতে/order করতে চায়
+- CANCEL — order বাতিল করতে চায় ("nibo na", "lagbe na", "chai na", "cancel", "বাতিল" — যেকোনো step-এ)
+- CONFIRM — order confirm করছে
+- EDIT_ORDER — কিছু change করতে চায় (নাম/ফোন/ঠিকানা/size)
+- NEGOTIATION — দাম কমাতে চায়
 - SIZE_REQUEST — size জিজ্ঞেস করছে
 - PHOTO_REQUEST — ছবি চাইছে
-- DELIVERY_TIME — কতদিনে পাবে জিজ্ঞেস করছে
+- DELIVERY_TIME — delivery কবে হবে জিজ্ঞেস করছে
 - DELIVERY_FEE — delivery charge জিজ্ঞেস করছে
-- FABRIC_TYPE — কাপড়ের quality/material জিজ্ঞেস করছে
-- CATALOG_REQUEST — কি কি product আছে জানতে চাইছে
-- SOFT_HESITATION — পরে দেখবে, এখন না, ভেবে দেখছে
-- MULTI_CONFIRM — একসাথে অনেকগুলো order দিতে চায় (sob nibo, duto nibo)
-- UNKNOWN — উপরের কোনোটাই না, বা random/অপ্রাসঙ্গিক message
+- FABRIC_TYPE — কাপড়ের quality জিজ্ঞেস করছে
+- CATALOG_REQUEST — product list চাইছে
+- SOFT_HESITATION — পরে দেখবে, এখন না
+- MULTI_CONFIRM — একসাথে অনেক order দিতে চায়
+- UNKNOWN — অন্য সব
 
-গুরুত্বপূর্ণ নিয়ম:
-1. Step "name" চলাকালে customer যদি না-সূচক কিছু বলে ("nibo na", "lagbe na", "cancel" etc.) → CANCEL।
-2. Step "name" চলাকালে customer যদি greeting ("hi", "hello", "salam") বলে → GREETING (নাম হিসেবে নেবে না)।
-3. Step "phone" চলাকালে customer ফোন নম্বর ছাড়া অন্য কিছু বললে context দেখো — cancel/edit হতে পারে।
-4. awaitingConfirm=true হলে "ok", "thik", "ha", "done" → CONFIRM।
-5. Draft step চলাকালে (name/phone/address/confirm) customer যদি সম্পূর্ণ অপ্রাসঙ্গিক কথা বলে (joke, random text, অন্য topic) → UNKNOWN। reply-এ বলো "অর্ডারটি complete করতে [step] দিন।"
-6. UNKNOWN হলে reply field-এ 2 sentence Bangla/Banglish warm reply দাও।
-7. অন্য সব intent-এ reply=null।`;
+নিয়ম:
+1. "nibo na", "lagbe na", "chai na", "cancel krbo", "bad den" → সবসময় CANCEL, যেকোনো step-এ।
+2. Name step-এ "hi"/"hello" → GREETING (নাম নয়)।
+3. awaitingConfirm=true তে "ok"/"thik"/"ha"/"done" → CONFIRM।
+4. Draft step চলাকালে off-topic হলে → UNKNOWN।
+
+reply field সবসময় দাও — natural, warm, conversational Bangla/Banglish ভাষায়:
+- GREETING → friendly greeting back, যদি draft চলে তাহলে softly remind করো কী দরকার
+- CANCEL → acknowledge warmly, বলো বাতিল হয়ে গেছে
+- SOFT_HESITATION → understand করো, বলো যখন সুবিধা তখন জানাতে
+- NEGOTIATION → sympathetic হয়ে দামের ব্যাপারে বলো
+- UNKNOWN + draft চলছে → warmly redirect করো, বলো "[step] দিলে order complete হবে"
+- UNKNOWN + কোনো draft নেই → helpful reply দাও
+- অন্য সব intent → reply=null (handler generate করবে)`;
   }
 
   private buildUserMessage(
@@ -184,21 +202,21 @@ Valid intents:
     draftStep: string | null,
   ): string {
     let ctx = '';
-    if (draftStep) ctx += ` | Current order step: "${draftStep}"`;
-    if (awaitingConfirm) ctx += ' | awaiting order confirmation';
-    return `Message: "${text}"${ctx}`;
+    if (draftStep) ctx += ` | draft_step="${draftStep}"`;
+    if (awaitingConfirm) ctx += ' | awaiting_confirm=true';
+    return `Customer: "${text}"${ctx}`;
   }
 
   private recordFailure(): void {
     this.failCount++;
     if (this.failCount >= this.MAX_FAILS) {
-      this.logger.warn(`[AiIntent] ${this.MAX_FAILS} consecutive failures — cooling down 5 min`);
+      this.logger.warn(`[AiIntent] ${this.MAX_FAILS} failures — cooldown 5min`);
       this.enterCooldown();
     }
   }
 
   private enterCooldown(): void {
-    this.cooldownUntil = Date.now() + 5 * 60 * 1000; // 5 minutes
+    this.cooldownUntil = Date.now() + 5 * 60 * 1000;
     this.failCount = 0;
   }
 }
