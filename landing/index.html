@@ -365,7 +365,7 @@ const DASHBOARD_URL = (function() {
   // In production same-origin deployments, dashboard is often at /
   // For local dev, dashboard runs on :5173
   if (window.location.port === '3000' || window.location.port === '5500') return proto + '//' + h + ':5173';
-  return window.location.origin;
+  return proto + '//' + window.location.host;
 })();
 
 ['nav-login','cta-login','hero-signup'].forEach(function(id) {
