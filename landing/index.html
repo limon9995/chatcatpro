@@ -48,7 +48,7 @@ nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:16px 5%;display:flex
 .btn-ghost:hover{background:rgba(255,255,255,0.08)}
 
 /* Mockup */
-.hero-img{position:relative;margin-top:64px;width:100%;max-width:900px;border-radius:18px;overflow:hidden;border:1px solid var(--border);box-shadow:0 32px 80px rgba(0,0,0,.6)}
+.hero-img{position:relative;margin-top:64px;width:100%;max-width:900px;border-radius:18px;overflow:hidden;border:1px solid var(--border);box-shadow:0 32px 80px rgba(0,0,0,.6);will-change:transform;transform-origin:center center}
 .mockup-bar{background:var(--surface);height:44px;display:flex;align-items:center;padding:0 16px;gap:8px;border-bottom:1px solid var(--border)}
 .dot{width:11px;height:11px;border-radius:50%}
 .mockup-content{background:var(--surface);padding:20px;display:grid;grid-template-columns:180px 1fr;gap:16px;min-height:320px}
@@ -383,6 +383,45 @@ const DASHBOARD_URL = (function() {
   }
 });
 
+// Mouse Parallax Effect
+(function() {
+  var orb1 = document.querySelector('.orb-1');
+  var orb2 = document.querySelector('.orb-2');
+  var heroImg = document.querySelector('.hero-img');
+  var hero = document.querySelector('.hero');
+  var tX1=0,tY1=0,tX2=0,tY2=0,tX3=0,tY3=0;
+  var cX1=0,cY1=0,cX2=0,cY2=0,cX3=0,cY3=0;
+  var raf;
+
+  function lerp(a,b,t){return a+(b-a)*t}
+
+  function animate(){
+    cX1=lerp(cX1,tX1,0.06); cY1=lerp(cY1,tY1,0.06);
+    cX2=lerp(cX2,tX2,0.04); cY2=lerp(cY2,tY2,0.04);
+    cX3=lerp(cX3,tX3,0.05); cY3=lerp(cY3,tY3,0.05);
+    if(orb1) orb1.style.transform='translate('+cX1+'px,'+cY1+'px)';
+    if(orb2) orb2.style.transform='translate('+cX2+'px,'+cY2+'px)';
+    if(heroImg) heroImg.style.transform='perspective(1000px) rotateX('+(cY3*0.01)+'deg) rotateY('+(-cX3*0.01)+'deg) translateZ(0)';
+    raf=requestAnimationFrame(animate);
+  }
+
+  document.addEventListener('mousemove',function(e){
+    if(!hero) return;
+    var r=hero.getBoundingClientRect();
+    var cx=r.left+r.width/2, cy=r.top+r.height/2;
+    var dx=e.clientX-cx, dy=e.clientY-cy;
+    tX1=dx*0.04; tY1=dy*0.04;
+    tX2=-dx*0.06; tY2=-dy*0.06;
+    tX3=dx*0.5; tY3=dy*0.5;
+  });
+
+  document.addEventListener('mouseleave',function(){
+    tX1=tY1=tX2=tY2=tX3=tY3=0;
+  });
+
+  animate();
+})();
+
 const observer = new IntersectionObserver(entries => {
   entries.forEach(e => { if(e.isIntersecting){ e.target.style.opacity='1'; e.target.style.transform='translateY(0)'; }});
 }, {threshold:0.08});
@@ -394,3 +433,4 @@ document.querySelectorAll('.feature-card,.step,.pricing-card').forEach((el,i) =>
 </script>
 </body>
 </html>
+bot off to problm n

@@ -254,7 +254,11 @@ export class DraftOrderHandler {
     // Try to extract all three from a single customer message first.
     // Then fall back to strict per-step handling for whatever is still missing.
     //
-    const parsed = this.parseCustomerInfo(text);
+    // For phone/address steps, name is already collected — skip multi-field parsing
+    // to prevent unrelated text being mis-classified as a name and bypassing validation.
+    const parsed = (step === 'phone' || step === 'address')
+      ? { name: undefined, phone: this.parseCustomerInfo(text).phone, address: this.parseCustomerInfo(text).address }
+      : this.parseCustomerInfo(text);
 
     if (!draft.customerName && parsed.name) draft.customerName = parsed.name;
     if (!draft.phone && parsed.phone) draft.phone = parsed.phone;
@@ -269,6 +273,10 @@ export class DraftOrderHandler {
         }
         draft.customerName = text.trim().slice(0, 80);
       } else if (step === 'phone') {
+        if (this.botIntent.detectIntent(text, false) === 'CANCEL') {
+          await this.ctx.clearDraft(pageId, psid);
+          return null;
+        }
         const ph = this.extractPhone(text);
         if (!ph) return 'ফোন নাম্বারটা আবার দিন 💖 (01XXXXXXXXX)';
         draft.phone = ph;
