@@ -176,6 +176,17 @@ export class BotIntentService {
       'দরকার নেই',
       'দরকার নাই',
       'মাফ করবেন',
+      // negated order/buy forms — must catch before 'oder'/'kinbo' hit ORDER_INTENT
+      'krbo na',
+      'korbo na',
+      'krbona',
+      'korbona',
+      'order na',
+      'oder na',
+      'kinbo na',
+      'kinbona',
+      'buy korbo na',
+      'buy korbona',
     ],
     order: [
       // Banglish — order intent
@@ -386,8 +397,13 @@ export class BotIntentService {
     if (!t) return null;
     if (this.includesAny(t, this.KW.greeting)) return 'GREETING';
     if (this.includesAny(t, this.KW.catalogRequest)) return 'CATALOG_REQUEST';
-    // CANCEL must be checked before ORDER_INTENT — "nibo na" contains "nibo" (order keyword)
+
+    // CANCEL: keyword list first, then regex negation catch-all
+    // Regex catches: "oder krbo na", "order korbo na", "kinbo na", "buy korbo na", etc.
+    // — must run BEFORE ORDER_INTENT so negated forms don't fall through
     if (this.includesAny(t, this.KW.cancel)) return 'CANCEL';
+    if (this.isNegatedOrderIntent(t)) return 'CANCEL';
+
     if (this.includesAny(t, this.KW.negotiation) || this.looksLikeOffer(t))
       return 'NEGOTIATION';
     if (this.includesAny(t, this.KW.edit)) return 'EDIT_ORDER';
@@ -401,6 +417,8 @@ export class BotIntentService {
     if (this.extractRemoveCode(t)) return 'ORDER_REMOVE_ITEM';
     if (awaitingConfirm && this.includesAny(t, this.KW.multiConfirm))
       return 'MULTI_CONFIRM';
+    // "ok" / "okay" / "thik" — only CONFIRM when bot is awaiting order confirmation.
+    // Standalone "ok" during field capture (name/phone/address step) → null → treated as field input.
     if (awaitingConfirm && this.includesAny(t, this.KW.confirm))
       return 'CONFIRM';
     if (awaitingConfirm && this.includesAny(t, this.KW.confirmWeak))
@@ -477,6 +495,19 @@ export class BotIntentService {
       'DELIVERY_FEE',
       'FABRIC_TYPE',
     ].includes(intent || '');
+  }
+
+  /**
+   * Detects negated order intent — e.g. "oder krbo na", "order korbo na", "kinbo na".
+   * Catches cases where an order keyword appears within ~20 chars of a trailing "na"/"না".
+   * Runs BEFORE ORDER_INTENT check so positive keywords don't fire on negated sentences.
+   */
+  private isNegatedOrderIntent(text: string): boolean {
+    // Banglish: order/oder/kinbo/buy/purchase + optional words (≤20 chars) + "na"
+    if (/\b(order|oder|ordar|oda|kinbo|kinte|buy|purchase)\b.{0,20}\bna\b/.test(text)) return true;
+    // Bengali: অর্ডার/কিনব/নেব + না
+    if (/(অর্ডার|কিনব|নেব|নিব).{0,10}না/.test(text)) return true;
+    return false;
   }
 
   private looksLikeOffer(text: string): boolean {
