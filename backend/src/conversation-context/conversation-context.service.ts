@@ -26,6 +26,7 @@ export interface DraftSession {
   orderNote?: string;
   pendingMultiPreview?: string[];
   pendingVisionMatches?: string[];
+  visionSelectionRetryCount?: number;
   // V17: product-specific custom fields (size, color, etc.)
   pendingCustomFields?: CustomFieldDef[];
   customFieldValues?: Record<string, string>;
@@ -212,6 +213,7 @@ export class ConversationContextService {
     const draft =
       (await this.getActiveDraft(pageIdRef, customerPsid)) || this.emptyDraft();
     draft.pendingVisionMatches = codes;
+    draft.visionSelectionRetryCount = 0;
     draft.currentStep = 'vision_select';
     await this.saveDraft(pageIdRef, customerPsid, draft);
   }
@@ -220,6 +222,7 @@ export class ConversationContextService {
     const draft = await this.getActiveDraft(pageIdRef, customerPsid);
     if (draft) {
       draft.pendingVisionMatches = [];
+      draft.visionSelectionRetryCount = 0;
       if (draft.currentStep === 'vision_select') {
         draft.currentStep = 'name';
       }

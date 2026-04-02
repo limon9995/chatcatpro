@@ -14,6 +14,7 @@ import { CrmModule } from '../crm/crm.module';
 import { CourierModule } from '../courier/courier.module';
 import { FollowUpModule } from '../followup/followup.module';
 import { BroadcastModule } from '../broadcast/broadcast.module';
+import { VisionOpsModule } from '../vision-ops/vision-ops.module';
 import { ClientDashboardService } from './client-dashboard.service';
 import { ClientDashboardController } from './client-dashboard.controller';
 
@@ -29,6 +30,7 @@ import { ClientDashboardController } from './client-dashboard.controller';
     PrintModule,
     MemoModule,
     BotKnowledgeModule,
+    VisionOpsModule,
     AccountingModule,
     CrmModule,
     CourierModule,

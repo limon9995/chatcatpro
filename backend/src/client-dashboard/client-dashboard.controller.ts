@@ -227,6 +227,52 @@ export class ClientDashboardController {
   ) {
     return this.svc.deleteProduct(this.pid(r, p), c);
   }
+  @Post(':pageId/products/upload-image')
+  @UseInterceptors(FileInterceptor('file'))
+  uploadProductImage(
+    @Param('pageId') p: string,
+    @UploadedFile() file: any,
+    @Req() r: any,
+  ) {
+    return this.svc.uploadProductImage(this.pid(r, p), file);
+  }
+  @Post(':pageId/products/analyze-image')
+  analyzeProductImage(
+    @Param('pageId') p: string,
+    @Body() b: any,
+    @Req() r: any,
+  ) {
+    return this.svc.analyzeProductImage(this.pid(r, p), b || {});
+  }
+  @Post(':pageId/products/video-guide')
+  getProductVideoGuide(
+    @Param('pageId') p: string,
+    @Body() b: any,
+    @Req() r: any,
+  ) {
+    return this.svc.getProductVideoGuide(this.pid(r, p), b || {});
+  }
+  @Get(':pageId/vision/summary')
+  getVisionSummary(
+    @Param('pageId') p: string,
+    @Query('days') d: string,
+    @Req() r: any,
+  ): Promise<any> {
+    return this.svc.getVisionSummary(this.pid(r, p), d ? Number(d) : 30);
+  }
+  @Get(':pageId/vision/review-queue')
+  getVisionReviewQueue(@Param('pageId') p: string, @Req() r: any): Promise<any[]> {
+    return this.svc.getVisionReviewQueue(this.pid(r, p));
+  }
+  @Patch(':pageId/vision/review-queue/:id')
+  updateVisionReviewQueueItem(
+    @Param('pageId') p: string,
+    @Param('id') id: string,
+    @Body() b: any,
+    @Req() r: any,
+  ): Promise<any> {
+    return this.svc.updateVisionReviewQueueItem(this.pid(r, p), id, b || {});
+  }
 
   // ── Settings ──────────────────────────────────────────────────────────────
   @Get(':pageId/settings') getSettings(

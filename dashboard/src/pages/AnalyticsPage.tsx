@@ -25,6 +25,22 @@ interface AnalyticsSummary {
   collectionMethods: ColMethod[]; orderStatusDist: { status: string; count: number }[];
   returnTrend: ReturnPoint[]; negotiation: NegotiationA; dataFlags: DataFlags;
 }
+interface VisionSummary {
+  days: number;
+  totals: {
+    imageInquiries: number;
+    highConfidence: number;
+    shortlistShown: number;
+    lowConfidence: number;
+    selectionsConfirmed: number;
+    selectionRetries: number;
+    humanHandoffs: number;
+    unresolvedQueue: number;
+  };
+  reviewQueue: Array<any>;
+  recentEvents: Array<any>;
+  topConfusions: Array<{ label: string; count: number }>;
+}
 
 type Period = 'daily' | 'weekly' | 'monthly';
 const PERIODS: { key: Period; label: string }[] = [
@@ -140,6 +156,7 @@ export function AnalyticsPage({ th, pageId, onToast }: {
   const { request }   = useApi();
   const [period, setPeriod] = useState<Period>('monthly');
   const [data, setData]     = useState<AnalyticsSummary | null>(null);
+  const [vision, setVision] = useState<VisionSummary | null>(null);
   const [loading, setLoading] = useState(false);
 
   const BASE = `${API_BASE}/client-dashboard/${pageId}`;
@@ -149,7 +166,13 @@ export function AnalyticsPage({ th, pageId, onToast }: {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      setData(await request<AnalyticsSummary>(`${BASE}/analytics/summary?period=${period}`));
+      const days = period === 'daily' ? 1 : period === 'weekly' ? 7 : 30;
+      const [analyticsData, visionData] = await Promise.all([
+        request<AnalyticsSummary>(`${BASE}/analytics/summary?period=${period}`),
+        request<VisionSummary>(`${BASE}/vision/summary?days=${days}`),
+      ]);
+      setData(analyticsData);
+      setVision(visionData);
     } catch (e: any) { onToast(e.message, 'error'); }
     finally { setLoading(false); }
   }, [pageId, period]);
@@ -213,6 +236,101 @@ export function AnalyticsPage({ th, pageId, onToast }: {
       </div>
 
       <KPIRow />
+
+      {vision && (
+        <>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(150px,1fr))', gap: 10 }}>
+            {[
+              { icon: '🖼️', label: 'Image Inquiries', val: vision.totals.imageInquiries, color: th.accent },
+              { icon: '🎯', label: 'High Confidence', val: vision.totals.highConfidence, color: '#16a34a' },
+              { icon: '🧩', label: 'Shortlists', val: vision.totals.shortlistShown, color: '#f59e0b' },
+              { icon: '✅', label: 'Selections', val: vision.totals.selectionsConfirmed, color: '#0891b2' },
+              { icon: '🧑', label: 'Human Handoff', val: vision.totals.humanHandoffs, color: '#dc2626' },
+              { icon: '📥', label: 'Review Queue', val: vision.totals.unresolvedQueue, color: '#7c3aed' },
+            ].map((k) => (
+              <div key={k.label} style={{ ...th.card, padding: '14px 16px' }}>
+                <div style={{ fontSize: 18, marginBottom: 4 }}>{k.icon}</div>
+                <div style={{ fontSize: 22, fontWeight: 900, color: k.color }}>{k.val}</div>
+                <div style={{ fontSize: 11, color: th.muted, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 2 }}>{k.label}</div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1.2fr .8fr', gap: 16 }}>
+            <div style={th.card}>
+              <CardHeader th={th} title="🧠 Vision Review Queue" sub="Recent uncertain matches that may need metadata fixes or agent help" />
+              {!vision.reviewQueue.length ? (
+                <EmptyState icon="🟢" title="Queue clear" sub="No unresolved vision review items in this period" />
+              ) : (
+                <div style={{ display: 'grid', gap: 10 }}>
+                  {vision.reviewQueue.slice(0, 6).map((item) => (
+                    <div key={item.id} style={{ ...th.card2, padding: '12px 14px', borderRadius: 12 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                        <div style={{ fontSize: 12.5, fontWeight: 700 }}>
+                          {item.status.replace(/_/g, ' ')}
+                        </div>
+                        <div style={{ fontSize: 11.5, color: th.muted }}>{String(item.createdAt || '').slice(0, 16).replace('T', ' ')}</div>
+                      </div>
+                      <div style={{ fontSize: 12, color: th.muted, marginTop: 6 }}>
+                        {(item.matches || []).slice(0, 3).map((m: any) => m.productCode).join(' / ') || 'No candidate'}
+                      </div>
+                      {item.note && <div style={{ fontSize: 12, marginTop: 6 }}>{item.note}</div>}
+                      <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                        <button style={th.btnSmSuccess} onClick={async () => {
+                          await request(`${BASE}/vision/review-queue/${item.id}`, {
+                            method: 'PATCH',
+                            body: JSON.stringify({ status: 'resolved', note: 'Resolved from dashboard' }),
+                          });
+                          load();
+                        }}>Resolve</button>
+                        <button style={th.btnSmGhost} onClick={async () => {
+                          await request(`${BASE}/vision/review-queue/${item.id}`, {
+                            method: 'PATCH',
+                            body: JSON.stringify({ status: 'dismissed', note: 'Dismissed from dashboard' }),
+                          });
+                          load();
+                        }}>Dismiss</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: 'grid', gap: 16 }}>
+              <div style={th.card}>
+                <CardHeader th={th} title="🔍 Top Confusions" sub="Product groups customers confuse most often" />
+                {vision.topConfusions.length ? (
+                  <BarChart
+                    data={vision.topConfusions.map((entry) => ({ label: entry.label, value: entry.count }))}
+                    valueKey="value"
+                    labelKey="label"
+                    colors={CHART_COLORS}
+                  />
+                ) : (
+                  <EmptyState icon="🧩" title="No confusion clusters yet" sub="This will fill in after more image matching activity" />
+                )}
+              </div>
+              <div style={th.card}>
+                <CardHeader th={th} title="📝 Match Audit" sub="Latest vision decisions for quick debugging" />
+                <div style={{ display: 'grid', gap: 8 }}>
+                  {(vision.recentEvents || []).slice(0, 8).map((event) => (
+                    <div key={event.id} style={{ ...th.card2, padding: '10px 12px', borderRadius: 10 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 11.5 }}>
+                        <strong>{event.type.replace(/_/g, ' ')}</strong>
+                        <span style={{ color: th.muted }}>{String(event.createdAt || '').slice(5, 16).replace('T', ' ')}</span>
+                      </div>
+                      <div style={{ fontSize: 12, color: th.muted, marginTop: 4 }}>
+                        {event.topMatch?.productCode || event.selectedCode || event.note || 'No details'}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Profit Trend */}
       <ChartSection th={th} title="📈 Profit Trend" sub="Revenue · Expenses · Gross & Net Profit" show={flags.hasTrend}>

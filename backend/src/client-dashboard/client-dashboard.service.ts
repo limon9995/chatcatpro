@@ -14,6 +14,7 @@ import { PrintService } from '../print/print.service';
 import { BotKnowledgeService } from '../bot-knowledge/bot-knowledge.service';
 import { CallService } from '../call/call.service';
 import { TtsService } from '../call/tts.service';
+import { VisionOpsService } from '../vision-ops/vision-ops.service';
 
 @Injectable()
 export class ClientDashboardService {
@@ -39,6 +40,7 @@ export class ClientDashboardService {
     private readonly botKnowledgeService: BotKnowledgeService,
     private readonly callService: CallService,
     private readonly ttsService: TtsService,
+    private readonly visionOps: VisionOpsService,
   ) {}
 
   // ── Summary ────────────────────────────────────────────────────────────────
@@ -304,6 +306,8 @@ export class ClientDashboardService {
       description: body.description || undefined,
       imageUrl: body.imageUrl || undefined,
       referenceImagesJson: body.referenceImagesJson || undefined,
+      productGroup: body.productGroup || undefined,
+      variantLabel: body.variantLabel || undefined,
       videoUrl: body.videoUrl || undefined,
       postCaption: body.postCaption || undefined,
       catalogVisible:
@@ -338,6 +342,14 @@ export class ClientDashboardService {
       referenceImagesJson:
         body?.referenceImagesJson !== undefined
           ? String(body.referenceImagesJson || '')
+          : undefined,
+      productGroup:
+        body?.productGroup !== undefined
+          ? String(body.productGroup || '')
+          : undefined,
+      variantLabel:
+        body?.variantLabel !== undefined
+          ? String(body.variantLabel || '')
           : undefined,
       videoUrl:
         body?.videoUrl !== undefined ? String(body.videoUrl || '') : undefined,
@@ -392,6 +404,55 @@ export class ClientDashboardService {
   }
   async deleteProduct(pageId: number, code: string) {
     return this.productsService.deleteOne(pageId, code);
+  }
+
+  async uploadProductImage(pageId: number, file: any) {
+    if (!file?.buffer) throw new BadRequestException('Image file required');
+    return this.visionOps.uploadProductAsset(pageId, file);
+  }
+
+  async analyzeProductImage(pageId: number, body: any) {
+    const imageUrl = String(body?.imageUrl || '').trim();
+    if (!imageUrl) throw new BadRequestException('Image URL required');
+    const result = await this.visionOps.analyzeProductImage(imageUrl);
+    await this.visionOps.logVisionAttempt({
+      pageId,
+      type: 'product_analyze',
+      imageUrl,
+      note: 'Admin analyzed product image from dashboard',
+      attrs: result.attrs,
+      confidence: result.attrs.confidence,
+    });
+    return result;
+  }
+
+  async getProductVideoGuide(pageId: number, body: any) {
+    const videoUrl = String(body?.videoUrl || '').trim();
+    const existingImages = Number(body?.existingImages || 0);
+    return this.visionOps.buildVideoCaptureGuide(videoUrl, existingImages);
+  }
+
+  async getVisionSummary(pageId: number, days = 30): Promise<any> {
+    return this.visionOps.getSummary(pageId, days);
+  }
+
+  async getVisionReviewQueue(pageId: number): Promise<any[]> {
+    return this.visionOps.getReviewQueue(pageId);
+  }
+
+  async updateVisionReviewQueueItem(
+    pageId: number,
+    itemId: string,
+    body: any,
+  ): Promise<any> {
+    const status = String(body?.status || '').trim() as any;
+    if (!status) throw new BadRequestException('Status required');
+    return this.visionOps.updateReviewQueueItem(
+      pageId,
+      itemId,
+      status,
+      body?.note,
+    );
   }
 
   // ── Settings: unified load ─────────────────────────────────────────────────

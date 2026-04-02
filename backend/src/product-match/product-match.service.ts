@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { VisionAttributes } from '../vision-analysis/vision-analysis.interface';
+import { ProductsService } from '../products/products.service';
 
 export interface ProductMatchResult {
   productCode: string;
@@ -27,6 +28,8 @@ type RawProduct = {
   aiDescription: string | null;
   stockQty: number;
   visionSearchable: boolean;
+  productGroup?: string | null;
+  variantLabel?: string | null;
 };
 
 /**
@@ -48,7 +51,10 @@ type RawProduct = {
 export class ProductMatchService {
   private readonly logger = new Logger(ProductMatchService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly products: ProductsService,
+  ) {}
 
   /**
    * Find top matching products for given vision attributes.
@@ -86,7 +92,11 @@ export class ProductMatchService {
       return [];
     }
 
-    const scored = products.map((p) => this.scoreProduct(p, attrs));
+    const enrichedProducts = (await this.products.attachReferenceImagesList(
+      pageId,
+      products,
+    )) as RawProduct[];
+    const scored = enrichedProducts.map((p) => this.scoreProduct(p, attrs));
 
     // Sort by score descending, take top N with score > 0
     const results = scored
@@ -115,6 +125,8 @@ export class ProductMatchService {
       if (catScore > 0) {
         score += catScore * 0.40;
         reasons.push(`category~${attrs.category}`);
+      } else if (product.category && product.category !== attrs.category) {
+        score -= 0.08;
       }
     }
 
@@ -124,6 +136,8 @@ export class ProductMatchService {
       if (colorScore > 0) {
         score += colorScore * 0.30;
         reasons.push(`color~${attrs.color}`);
+      } else if (product.color && attrs.color) {
+        score -= 0.05;
       }
     }
 
@@ -145,6 +159,16 @@ export class ProductMatchService {
       if (genderScore > 0) {
         score += genderScore * 0.10;
         reasons.push(`gender~${attrs.gender}`);
+      } else {
+        score -= 0.03;
+      }
+    }
+
+    if (attrs.rawDescription) {
+      const descScore = this.keywordScore(product, attrs.rawDescription.split(/\s+/));
+      if (descScore > 0.15) {
+        score += Math.min(0.12, descScore * 0.12);
+        reasons.push('description_overlap');
       }
     }
 
@@ -153,9 +177,35 @@ export class ProductMatchService {
       productName: product.name,
       price: product.price,
       imageUrl: product.imageUrl,
-      matchScore: Math.min(1, score),
+      matchScore: Math.min(1, Math.max(0, score)),
       matchReasons: reasons,
     };
+  }
+
+  private normalizeText(text: string): string {
+    const replacements: Array<[RegExp, string]> = [
+      [/নীল|blue|navy|sky blue|royal blue/gi, ' blue '],
+      [/কালো|black/gi, ' black '],
+      [/সাদা|white|off white|cream/gi, ' white '],
+      [/লাল|red|maroon|burgundy|wine/gi, ' red '],
+      [/সবুজ|green|olive/gi, ' green '],
+      [/হলুদ|yellow|golden/gi, ' yellow '],
+      [/গোলাপী|pink/gi, ' pink '],
+      [/বেগুনী|purple|violet|lavender/gi, ' purple '],
+      [/ধূসর|grey|gray|silver/gi, ' grey '],
+      [/কুর্তি|kurti/gi, ' kurti '],
+      [/থ্রি পিস|3 piece|three piece/gi, ' three_piece '],
+      [/সালোয়ার কামিজ|salwar|kameez|shalwar/gi, ' salwar_kameez '],
+      [/পাঞ্জাবি|panjabi|punjabi/gi, ' panjabi '],
+      [/শাড়ি|saree|sari/gi, ' saree '],
+      [/ড্রেস|dress|gown|maxi|frock/gi, ' dress '],
+      [/প্রিন্টেড|printed|floral|embroidered|striped|checked/gi, ' printed '],
+    ];
+    let normalized = ` ${String(text || '').toLowerCase()} `;
+    for (const [pattern, value] of replacements) {
+      normalized = normalized.replace(pattern, value);
+    }
+    return normalized.replace(/\s+/g, ' ').trim();
   }
 
   /** Score 0–1 for category match against product fields */
@@ -169,16 +219,17 @@ export class ProductMatchService {
     }
 
     // Check name, description, tags, aiDescription, imageKeywords
-    const textCorpus = [
+    const textCorpus = this.normalizeText([
       product.name,
       product.description,
       product.tags,
       product.aiDescription,
       product.imageKeywords,
+      product.productGroup,
+      product.variantLabel,
     ]
       .filter(Boolean)
-      .join(' ')
-      .toLowerCase();
+      .join(' '));
 
     if (textCorpus.includes(target)) return 0.7;
 
@@ -214,16 +265,16 @@ export class ProductMatchService {
       if (pc.includes(target) || target.includes(pc)) return 0.8;
     }
 
-    const textCorpus = [
+    const textCorpus = this.normalizeText([
       product.name,
       product.description,
       product.tags,
       product.aiDescription,
       product.imageKeywords,
+      product.variantLabel,
     ]
       .filter(Boolean)
-      .join(' ')
-      .toLowerCase();
+      .join(' '));
 
     if (textCorpus.includes(target)) return 0.6;
 
@@ -253,17 +304,18 @@ export class ProductMatchService {
 
   /** Score 0–1 for keyword list against product text */
   private keywordScore(product: RawProduct, keywords: string[]): number {
-    const textCorpus = [
+    const textCorpus = this.normalizeText([
       product.name,
       product.description,
       product.tags,
       product.aiDescription,
       product.imageKeywords,
       product.category,
+      product.productGroup,
+      product.variantLabel,
     ]
       .filter(Boolean)
-      .join(' ')
-      .toLowerCase();
+      .join(' '));
 
     let hits = 0;
     for (const kw of keywords) {

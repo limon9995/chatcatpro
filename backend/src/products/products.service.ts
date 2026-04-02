@@ -62,12 +62,18 @@ function normalizeReferenceImagesJson(input?: string | null): string | null {
   return normalized.length ? JSON.stringify(normalized) : null;
 }
 
+type ProductSidecarMeta = {
+  referenceImagesJson?: string | null;
+  productGroup?: string | null;
+  variantLabel?: string | null;
+};
+
 @Injectable()
 export class ProductsService {
   private readonly referenceImagesFile = join(
     process.cwd(),
     'data',
-    'product-reference-images.json',
+    'product-sidecar-meta.json',
   );
 
   constructor(private prisma: PrismaService) {}
@@ -76,11 +82,35 @@ export class ProductsService {
     return `${pageId}:${code}`;
   }
 
-  private async loadReferenceImagesMap(): Promise<Record<string, string>> {
+  private normalizeSidecarValue(value: unknown): ProductSidecarMeta {
+    if (!value) return {};
+    if (typeof value === 'string') {
+      return { referenceImagesJson: value };
+    }
+    if (typeof value === 'object') {
+      const raw = value as Record<string, unknown>;
+      return {
+        referenceImagesJson: normalizeReferenceImagesJson(
+          raw.referenceImagesJson as string | null | undefined,
+        ),
+        productGroup: String(raw.productGroup || '').trim() || null,
+        variantLabel: String(raw.variantLabel || '').trim() || null,
+      };
+    }
+    return {};
+  }
+
+  private async loadReferenceImagesMap(): Promise<Record<string, ProductSidecarMeta>> {
     try {
       const raw = await fs.readFile(this.referenceImagesFile, 'utf8');
       const parsed = JSON.parse(raw);
-      return parsed && typeof parsed === 'object' ? parsed : {};
+      if (!parsed || typeof parsed !== 'object') return {};
+      return Object.fromEntries(
+        Object.entries(parsed).map(([key, value]) => [
+          key,
+          this.normalizeSidecarValue(value),
+        ]),
+      );
     } catch (error: any) {
       if (error?.code === 'ENOENT') return {};
       throw error;
@@ -88,7 +118,7 @@ export class ProductsService {
   }
 
   private async saveReferenceImagesMap(
-    data: Record<string, string>,
+    data: Record<string, ProductSidecarMeta>,
   ): Promise<void> {
     await fs.mkdir(join(process.cwd(), 'data'), { recursive: true });
     await fs.writeFile(
@@ -98,20 +128,31 @@ export class ProductsService {
     );
   }
 
-  private async setReferenceImagesForProduct(
+  private async setSidecarMetaForProduct(
     pageId: number,
     code: string,
-    raw?: string | null,
+    meta: ProductSidecarMeta,
   ): Promise<void> {
-    const normalized = normalizeReferenceImagesJson(raw);
     const all = await this.loadReferenceImagesMap();
     const key = this.productRefKey(pageId, code);
-    if (normalized) all[key] = normalized;
-    else delete all[key];
+    const nextValue: ProductSidecarMeta = {
+      referenceImagesJson: normalizeReferenceImagesJson(meta.referenceImagesJson),
+      productGroup: String(meta.productGroup || '').trim() || null,
+      variantLabel: String(meta.variantLabel || '').trim() || null,
+    };
+    if (
+      !nextValue.referenceImagesJson &&
+      !nextValue.productGroup &&
+      !nextValue.variantLabel
+    ) {
+      delete all[key];
+    } else {
+      all[key] = nextValue;
+    }
     await this.saveReferenceImagesMap(all);
   }
 
-  private async removeReferenceImagesForProduct(
+  private async removeSidecarMetaForProduct(
     pageId: number,
     code: string,
   ): Promise<void> {
@@ -123,24 +164,49 @@ export class ProductsService {
   async attachReferenceImages<T extends { code: string }>(
     pageId: number,
     product: T,
-  ): Promise<T & { referenceImagesJson: string | null }> {
+  ): Promise<
+    T & {
+      referenceImagesJson: string | null;
+      productGroup: string | null;
+      variantLabel: string | null;
+    }
+  > {
     const all = await this.loadReferenceImagesMap();
+    const meta = this.normalizeSidecarValue(
+      all[this.productRefKey(pageId, product.code)],
+    );
     return {
       ...product,
-      referenceImagesJson:
-        all[this.productRefKey(pageId, product.code)] || null,
+      referenceImagesJson: meta.referenceImagesJson || null,
+      productGroup: meta.productGroup || null,
+      variantLabel: meta.variantLabel || null,
     };
   }
 
   async attachReferenceImagesList<T extends { code: string }>(
     pageId: number,
     products: T[],
-  ): Promise<Array<T & { referenceImagesJson: string | null }>> {
+  ): Promise<
+    Array<
+      T & {
+        referenceImagesJson: string | null;
+        productGroup: string | null;
+        variantLabel: string | null;
+      }
+    >
+  > {
     const all = await this.loadReferenceImagesMap();
     return products.map((product) => ({
       ...product,
       referenceImagesJson:
-        all[this.productRefKey(pageId, product.code)] || null,
+        this.normalizeSidecarValue(all[this.productRefKey(pageId, product.code)])
+          .referenceImagesJson || null,
+      productGroup:
+        this.normalizeSidecarValue(all[this.productRefKey(pageId, product.code)])
+          .productGroup || null,
+      variantLabel:
+        this.normalizeSidecarValue(all[this.productRefKey(pageId, product.code)])
+          .variantLabel || null,
     }));
   }
 
@@ -154,6 +220,8 @@ export class ProductsService {
     description?: string;
     imageUrl?: string;
     referenceImagesJson?: string | null;
+    productGroup?: string | null;
+    variantLabel?: string | null;
     postCaption?: string;
     videoUrl?: string;
     catalogVisible?: boolean;
@@ -198,10 +266,14 @@ export class ProductsService {
         visionSearchable: data.visionSearchable ?? false,
       },
     });
-    await this.setReferenceImagesForProduct(
+    await this.setSidecarMetaForProduct(
       data.pageId,
       created.code,
-      data.referenceImagesJson,
+      {
+        referenceImagesJson: data.referenceImagesJson,
+        productGroup: data.productGroup,
+        variantLabel: data.variantLabel,
+      },
     );
     return this.attachReferenceImages(data.pageId, created);
   }
@@ -237,6 +309,8 @@ export class ProductsService {
       description?: string;
       imageUrl?: string;
       referenceImagesJson?: string | null;
+      productGroup?: string | null;
+      variantLabel?: string | null;
       isActive?: boolean;
       postCaption?: string;
       videoUrl?: string;
@@ -283,17 +357,34 @@ export class ProductsService {
     if (data.imageKeywords !== undefined) payload.imageKeywords = data.imageKeywords || null;
     if (data.aiDescription !== undefined) payload.aiDescription = data.aiDescription || null;
     if (typeof data.visionSearchable === 'boolean') payload.visionSearchable = data.visionSearchable;
-    if (Object.keys(payload).length === 0)
+    const sidecarOnlyUpdate =
+      data.referenceImagesJson !== undefined ||
+      data.productGroup !== undefined ||
+      data.variantLabel !== undefined;
+    if (Object.keys(payload).length === 0 && !sidecarOnlyUpdate)
       return this.findByCode(pageId, codeRaw);
-    const updated = await this.prisma.product.update({
-      where: { pageId_code: { pageId, code } },
-      data: payload,
-    });
-    if (data.referenceImagesJson !== undefined) {
-      await this.setReferenceImagesForProduct(
+    const updated =
+      Object.keys(payload).length === 0
+        ? await this.prisma.product.findUniqueOrThrow({
+            where: { pageId_code: { pageId, code } },
+          })
+        : await this.prisma.product.update({
+            where: { pageId_code: { pageId, code } },
+            data: payload,
+          });
+    if (
+      data.referenceImagesJson !== undefined ||
+      data.productGroup !== undefined ||
+      data.variantLabel !== undefined
+    ) {
+      await this.setSidecarMetaForProduct(
         pageId,
         updated.code,
-        data.referenceImagesJson,
+        {
+          referenceImagesJson: data.referenceImagesJson,
+          productGroup: data.productGroup,
+          variantLabel: data.variantLabel,
+        },
       );
     }
     return this.attachReferenceImages(pageId, updated);
@@ -319,7 +410,7 @@ export class ProductsService {
     await this.prisma.product.delete({
       where: { pageId_code: { pageId, code } },
     });
-    await this.removeReferenceImagesForProduct(pageId, code);
+    await this.removeSidecarMetaForProduct(pageId, code);
     return { success: true };
   }
 

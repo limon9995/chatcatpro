@@ -19,6 +19,7 @@ import { VisionAnalysisService } from '../vision-analysis/vision-analysis.servic
 import { ProductMatchService, ProductMatchResult } from '../product-match/product-match.service';
 import { FallbackAiService } from '../fallback-ai/fallback-ai.service';
 import { AiIntentService } from '../bot/ai-intent.service';
+import { VisionOpsService } from '../vision-ops/vision-ops.service';
 
 @Injectable()
 export class WebhookService {
@@ -41,6 +42,7 @@ export class WebhookService {
     private readonly productMatch: ProductMatchService,
     private readonly fallbackAi: FallbackAiService,
     private readonly aiIntent: AiIntentService,
+    private readonly visionOps: VisionOpsService,
   ) {}
 
   // ── Entry point ────────────────────────────────────────────────────────────
@@ -722,6 +724,30 @@ export class WebhookService {
 
     const selectedCode = this.resolveVisionSelectionCode(text, shortlist);
     if (!selectedCode) {
+      const retryCount = (draft.visionSelectionRetryCount || 0) + 1;
+      draft.visionSelectionRetryCount = retryCount;
+      await this.ctx.saveDraft(page.id, psid, draft);
+      await this.visionOps.logSelectionRetry(
+        page.id,
+        psid,
+        `Shortlist selection not understood (attempt ${retryCount})`,
+      );
+
+      if (retryCount >= 2) {
+        await this.ctx.setAgentHandling(page.id, psid, true);
+        await this.visionOps.logHumanHandoff(
+          page.id,
+          psid,
+          'Customer could not clarify shortlist choice after repeated retries',
+        );
+        await this.safeSend(
+          token,
+          psid,
+          'আপনাকে ভুল product ধরতে চাই না 💖 তাই একজন agent এই shortlist টি দেখে help করবে। চাইলে meanwhile exact code/number লিখে দিতে পারেন।',
+        );
+        return;
+      }
+
       const options = shortlist
         .map(
           (item, index) =>
@@ -731,11 +757,17 @@ export class WebhookService {
       await this.safeSend(
         token,
         psid,
-        `আমি এখনো বুঝতে পারিনি কোনটা নিতে চান 💖\n\n${options}\n\nযেটা নিতে চান তার code বা নম্বর লিখুন। চাইলে shortlist link খুলেও select করতে পারেন:\n${this.buildVisionShortlistUrl(page, pendingCodes)}`,
+        `আমি এখনো বুঝতে পারিনি কোনটা নিতে চান 💖\n\n${options}\n\nযেটা নিতে চান তার code বা নম্বর লিখুন। ${retryCount === 1 ? 'অথবা shortlist link খুলে product page-এ "এই Product টা Select করুন" চাপুন।' : 'না পারলে আমি agent-কে notify করব।'}\n${this.buildVisionShortlistUrl(page, pendingCodes)}`,
       );
       return;
     }
 
+    await this.visionOps.markSelection(
+      page.id,
+      psid,
+      selectedCode,
+      'Customer confirmed product from shortlist',
+    );
     await this.ctx.clearDraft(page.id, psid);
     await this.handleExplicitProductCode(
       page,
@@ -773,6 +805,17 @@ export class WebhookService {
       shortlist.some((item) => item.code.toUpperCase() === code.toUpperCase()),
     );
     if (byCode) return byCode.toUpperCase();
+
+    const lowered = asciiNormalized.toLowerCase();
+    const byName = shortlist.find((item) => {
+      const tokens = String(item.name || '')
+        .toLowerCase()
+        .split(/[^a-z0-9\u0980-\u09ff]+/i)
+        .map((token) => token.trim())
+        .filter((token) => token.length >= 4);
+      return tokens.some((token) => lowered.includes(token));
+    });
+    if (byName) return byName.code;
 
     const ordinalMap: Array<[RegExp, number]> = [
       [/\b(first|1st|prothom|prothomta)\b/i, 0],
@@ -1383,6 +1426,15 @@ export class WebhookService {
       // If vision provider itself has zero confidence (mock or bad image)
       if (attrs.confidence <= 0 || !attrs.category) {
         this.logger.warn(`[VisionRecog] Zero confidence from vision provider — falling back`);
+        await this.visionOps.logVisionAttempt({
+          pageId,
+          psid,
+          imageUrl,
+          type: 'low_confidence',
+          confidence: attrs.confidence,
+          note: 'Vision provider returned zero confidence or no category',
+          attrs,
+        });
         await this.visionLowConfidenceFallback(page, psid, attrs, null);
         return;
       }
@@ -1399,6 +1451,15 @@ export class WebhookService {
 
       if (!matches.length) {
         // No products matched at all
+        await this.visionOps.logVisionAttempt({
+          pageId,
+          psid,
+          imageUrl,
+          type: 'low_confidence',
+          confidence: attrs.confidence,
+          note: 'No products matched extracted attributes',
+          attrs,
+        });
         await this.visionLowConfidenceFallback(page, psid, attrs, null);
         return;
       }
@@ -1410,6 +1471,17 @@ export class WebhookService {
       if (topScore >= highThreshold) {
         // HIGH confidence — proceed as if customer sent the product code directly
         this.logger.log(`[VisionRecog] HIGH confidence (${topScore.toFixed(2)}) — auto-proceed with ${topMatch.productCode}`);
+        await this.visionOps.logVisionAttempt({
+          pageId,
+          psid,
+          imageUrl,
+          type: 'high_confidence',
+          confidence: topScore,
+          note: 'Exact product info allowed because confidence crossed high threshold',
+          attrs,
+          matches,
+          topMatch,
+        });
         await this.ctx.clearPendingVisionMatches(pageId, psid);
         await this.safeSend(
           token,
@@ -1423,6 +1495,17 @@ export class WebhookService {
         this.logger.log(
           `[VisionRecog] MEDIUM confidence (${topScore.toFixed(2)}) — showing ${matches.length} options`,
         );
+        await this.visionOps.logVisionAttempt({
+          pageId,
+          psid,
+          imageUrl,
+          type: 'medium_confidence',
+          confidence: topScore,
+          note: 'Shortlist shown instead of direct final answer',
+          attrs,
+          matches,
+          topMatch,
+        });
         await this.ctx.setPendingVisionMatches(
           pageId,
           psid,
@@ -1446,6 +1529,17 @@ export class WebhookService {
       } else {
         // LOW confidence
         this.logger.warn(`[VisionRecog] LOW confidence (${topScore.toFixed(2)}) — triggering fallback`);
+        await this.visionOps.logVisionAttempt({
+          pageId,
+          psid,
+          imageUrl,
+          type: 'low_confidence',
+          confidence: topScore,
+          note: 'Top product score below medium threshold',
+          attrs,
+          matches,
+          topMatch,
+        });
         await this.visionLowConfidenceFallback(page, psid, attrs, matches);
       }
 

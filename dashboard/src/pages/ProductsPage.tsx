@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { EmptyState, FieldWithInfo, Spinner } from '../components/ui';
 import type { Theme } from '../components/ui';
 import { API_BASE, useApi } from '../hooks/useApi';
@@ -11,6 +11,8 @@ type Product = {
   videoUrl: string | null; catalogVisible: boolean;
   imageUrl: string | null; description: string | null;
   referenceImagesJson: string | null;
+  productGroup: string | null;
+  variantLabel: string | null;
   variantOptions: string | null;
   // V18: Image recognition metadata
   category: string | null; color: string | null;
@@ -21,13 +23,13 @@ type Product = {
 type EditData = {
   name?: string; price?: number; costPrice?: number; stockQty?: number;
   postCaption?: string; videoUrl?: string; catalogVisible?: boolean;
-  description?: string; imageUrl?: string; referenceImagesJson?: string; variantOptions?: string;
+  description?: string; imageUrl?: string; referenceImagesJson?: string; productGroup?: string; variantLabel?: string; variantOptions?: string;
   // V18: Image recognition metadata
   category?: string; color?: string; tags?: string; imageKeywords?: string;
   visionSearchable?: boolean;
 };
 
-const EMPTY = { code: '', name: '', price: 0, costPrice: 0, stockQty: 0, postCaption: '', videoUrl: '', catalogVisible: true, description: '', imageUrl: '', referenceImagesJson: '', variantOptions: '', category: '', color: '', tags: '', imageKeywords: '', visionSearchable: false };
+const EMPTY = { code: '', name: '', price: 0, costPrice: 0, stockQty: 0, postCaption: '', videoUrl: '', catalogVisible: true, description: '', imageUrl: '', referenceImagesJson: '', productGroup: '', variantLabel: '', variantOptions: '', category: '', color: '', tags: '', imageKeywords: '', visionSearchable: false };
 
 /** Convert DB JSON variantOptions → textarea text ("Size: S,M,L,XL\nColor: Red,Blue") */
 function variantOptionsToText(json: string | null): string {
@@ -90,6 +92,18 @@ export function ProductsPage({ th, pageId, onToast }: {
   const [newP, setNewP]           = useState(EMPTY);
   const [showNew, setShowNew]     = useState(false);
   const [busy, setBusy]           = useState(false);
+  const [newVideoGuide, setNewVideoGuide] = useState<any | null>(null);
+  const [editVideoGuide, setEditVideoGuide] = useState<any | null>(null);
+  const [analyzingNew, setAnalyzingNew] = useState(false);
+  const [analyzingEdit, setAnalyzingEdit] = useState(false);
+  const [uploadingNewImage, setUploadingNewImage] = useState(false);
+  const [uploadingEditImage, setUploadingEditImage] = useState(false);
+  const [uploadingNewRefs, setUploadingNewRefs] = useState(false);
+  const [uploadingEditRefs, setUploadingEditRefs] = useState(false);
+  const newImageRef = useRef<HTMLInputElement>(null);
+  const newRefsRef = useRef<HTMLInputElement>(null);
+  const editImageRef = useRef<HTMLInputElement>(null);
+  const editRefsRef = useRef<HTMLInputElement>(null);
   const BASE = `${API_BASE}/client-dashboard/${pageId}`;
 
   const load = useCallback(async () => {
@@ -103,7 +117,8 @@ export function ProductsPage({ th, pageId, onToast }: {
 
   const openEdit = (p: Product) => {
     setEditId(p.id);
-    setEditData({ name: p.name ?? '', price: p.price, costPrice: p.costPrice, stockQty: p.stockQty, postCaption: p.postCaption ?? '', videoUrl: p.videoUrl ?? '', catalogVisible: p.catalogVisible ?? true, description: p.description ?? '', imageUrl: p.imageUrl ?? '', referenceImagesJson: referenceImagesToText(p.referenceImagesJson), variantOptions: variantOptionsToText(p.variantOptions), category: p.category ?? '', color: p.color ?? '', tags: p.tags ?? '', imageKeywords: p.imageKeywords ?? '', visionSearchable: p.visionSearchable ?? false });
+    setEditData({ name: p.name ?? '', price: p.price, costPrice: p.costPrice, stockQty: p.stockQty, postCaption: p.postCaption ?? '', videoUrl: p.videoUrl ?? '', catalogVisible: p.catalogVisible ?? true, description: p.description ?? '', imageUrl: p.imageUrl ?? '', referenceImagesJson: referenceImagesToText(p.referenceImagesJson), productGroup: p.productGroup ?? '', variantLabel: p.variantLabel ?? '', variantOptions: variantOptionsToText(p.variantOptions), category: p.category ?? '', color: p.color ?? '', tags: p.tags ?? '', imageKeywords: p.imageKeywords ?? '', visionSearchable: p.visionSearchable ?? false });
+    setEditVideoGuide(null);
   };
 
   const saveEdit = async (p: Product) => {
@@ -131,6 +146,93 @@ export function ProductsPage({ th, pageId, onToast }: {
       await request(`${BASE}/products/${code}`, { method: 'DELETE' });
       onToast(copy('Deleted', 'Deleted')); load();
     } catch (e: any) { onToast(e.message, 'error'); }
+  };
+
+  const uploadProductFile = useCallback(async (file: File): Promise<string> => {
+    const token = localStorage.getItem('dfbot_token') || '';
+    const fd = new FormData();
+    fd.append('file', file);
+    const res = await fetch(`${BASE}/products/upload-image`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      body: fd,
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(text || 'Upload failed');
+    }
+    const data = await res.json();
+    return `${API_BASE.replace(/\/api$/, '')}${data.url}`;
+  }, [BASE]);
+
+  const appendReferenceUrls = (current: string, urls: string[]) => {
+    const merged = [...parseReferenceImages(current), ...urls]
+      .filter((url, index, all) => all.indexOf(url) === index);
+    return merged.join('\n');
+  };
+
+  const analyzeImage = async (imageUrl: string, target: 'new' | 'edit') => {
+    if (!imageUrl.trim()) {
+      onToast(copy('আগে image দিন', 'Add an image first'), 'error');
+      return;
+    }
+    if (target === 'new') setAnalyzingNew(true);
+    else setAnalyzingEdit(true);
+    try {
+      const result = await request<any>(`${BASE}/products/analyze-image`, {
+        method: 'POST',
+        body: JSON.stringify({ imageUrl }),
+      });
+      const suggested = result?.suggested || {};
+      if (target === 'new') {
+        setNewP((p) => ({
+          ...p,
+          category: suggested.category || p.category,
+          color: suggested.color || p.color,
+          imageKeywords: suggested.imageKeywords || p.imageKeywords,
+          tags: suggested.tags || p.tags,
+          visionSearchable:
+            typeof suggested.visionSearchable === 'boolean'
+              ? suggested.visionSearchable
+              : p.visionSearchable,
+        }));
+      } else {
+        setEditData((d) => ({
+          ...d,
+          category: suggested.category || d.category,
+          color: suggested.color || d.color,
+          imageKeywords: suggested.imageKeywords || d.imageKeywords,
+          tags: suggested.tags || d.tags,
+          visionSearchable:
+            typeof suggested.visionSearchable === 'boolean'
+              ? suggested.visionSearchable
+              : d.visionSearchable,
+        }));
+      }
+      onToast(copy('AI analysis applied', 'AI analysis applied'), 'success');
+    } catch (e: any) {
+      onToast(e.message, 'error');
+    } finally {
+      if (target === 'new') setAnalyzingNew(false);
+      else setAnalyzingEdit(false);
+    }
+  };
+
+  const loadVideoGuide = async (videoUrl: string, existingImages: number, target: 'new' | 'edit') => {
+    if (!videoUrl.trim()) {
+      onToast(copy('আগে video URL দিন', 'Add a video URL first'), 'error');
+      return;
+    }
+    try {
+      const guide = await request<any>(`${BASE}/products/video-guide`, {
+        method: 'POST',
+        body: JSON.stringify({ videoUrl, existingImages }),
+      });
+      if (target === 'new') setNewVideoGuide(guide);
+      else setEditVideoGuide(guide);
+    } catch (e: any) {
+      onToast(e.message, 'error');
+    }
   };
 
   const filtered = products.filter(p => {
@@ -211,22 +313,88 @@ export function ProductsPage({ th, pageId, onToast }: {
                 onChange={e => setNewP(p => ({ ...p, stockQty: Number(e.target.value) }))} />
             </FieldWithInfo>
             <FieldWithInfo th={th} label="Image URL" helpText={copy('Product এর ছবির URL', 'Product image URL')}>
-              <input style={th.input} placeholder="https://..." value={newP.imageUrl}
-                onChange={e => setNewP(p => ({ ...p, imageUrl: e.target.value }))} />
+              <div style={{ display: 'grid', gap: 8 }}>
+                <input style={th.input} placeholder="https://..." value={newP.imageUrl}
+                  onChange={e => setNewP(p => ({ ...p, imageUrl: e.target.value }))} />
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <button type="button" style={th.btnGhost} onClick={() => newImageRef.current?.click()} disabled={uploadingNewImage}>
+                    {uploadingNewImage ? copy('Uploading...', 'Uploading...') : copy('Upload Main Image', 'Upload Main Image')}
+                  </button>
+                  <button type="button" style={th.btnGhost} onClick={() => analyzeImage(newP.imageUrl || parseReferenceImages(newP.referenceImagesJson)[0] || '', 'new')} disabled={analyzingNew}>
+                    {analyzingNew ? copy('Analyzing...', 'Analyzing...') : copy('AI Analyze', 'AI Analyze')}
+                  </button>
+                </div>
+                <input
+                  ref={newImageRef}
+                  type="file"
+                  accept="image/*"
+                  style={{ display: 'none' }}
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    setUploadingNewImage(true);
+                    try {
+                      const url = await uploadProductFile(file);
+                      setNewP((p) => ({ ...p, imageUrl: url }));
+                      onToast(copy('Main image uploaded', 'Main image uploaded'), 'success');
+                    } catch (err: any) {
+                      onToast(err.message, 'error');
+                    } finally {
+                      setUploadingNewImage(false);
+                      e.target.value = '';
+                    }
+                  }}
+                />
+              </div>
             </FieldWithInfo>
             <FieldWithInfo th={th} label="Video URL" helpText={copy('YouTube video link দিন, catalog-এ ভিডিও দেখাবে', 'Add a YouTube video link to show it in the catalog')}>
-              <input style={th.input} placeholder="https://youtube.com/watch?v=..." value={newP.videoUrl}
-                onChange={e => setNewP(p => ({ ...p, videoUrl: e.target.value }))} />
+              <div style={{ display: 'grid', gap: 8 }}>
+                <input style={th.input} placeholder="https://youtube.com/watch?v=..." value={newP.videoUrl}
+                  onChange={e => setNewP(p => ({ ...p, videoUrl: e.target.value }))} />
+                <button type="button" style={th.btnGhost} onClick={() => loadVideoGuide(newP.videoUrl, parseReferenceImages(newP.referenceImagesJson).length, 'new')}>
+                  {copy('Video Screenshot Plan', 'Video Screenshot Plan')}
+                </button>
+              </div>
             </FieldWithInfo>
           </div>
           <div style={{ marginTop: 12 }}>
             <FieldWithInfo th={th} label="Reference Images" helpText={copy('একই product-এর front, side, back, close-up, video screenshot আলাদা লাইনে দিন। এতে customer shortlist দেখে সহজে confirm করতে পারবে।', 'Paste multiple angles of the same product, one URL per line: front, side, back, close-up, or clear video screenshots.')}>
-              <textarea
-                style={{ ...th.input, minHeight: 92, resize: 'vertical', fontSize: 12.5 }}
-                placeholder={'https://...\nhttps://...\nhttps://...'}
-                value={newP.referenceImagesJson}
-                onChange={e => setNewP(p => ({ ...p, referenceImagesJson: e.target.value }))}
-              />
+              <div style={{ display: 'grid', gap: 8 }}>
+                <textarea
+                  style={{ ...th.input, minHeight: 92, resize: 'vertical', fontSize: 12.5 }}
+                  placeholder={'https://...\nhttps://...\nhttps://...'}
+                  value={newP.referenceImagesJson}
+                  onChange={e => setNewP(p => ({ ...p, referenceImagesJson: e.target.value }))}
+                />
+                <button type="button" style={th.btnGhost} onClick={() => newRefsRef.current?.click()} disabled={uploadingNewRefs}>
+                  {uploadingNewRefs ? copy('Uploading...', 'Uploading...') : copy('Upload Angle Images', 'Upload Angle Images')}
+                </button>
+                <input
+                  ref={newRefsRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  style={{ display: 'none' }}
+                  onChange={async (e) => {
+                    const files = Array.from(e.target.files || []);
+                    if (!files.length) return;
+                    setUploadingNewRefs(true);
+                    try {
+                      const urls = await Promise.all(files.map(uploadProductFile));
+                      setNewP((p) => ({
+                        ...p,
+                        referenceImagesJson: appendReferenceUrls(p.referenceImagesJson, urls),
+                      }));
+                      onToast(copy('Angle images uploaded', 'Angle images uploaded'), 'success');
+                    } catch (err: any) {
+                      onToast(err.message, 'error');
+                    } finally {
+                      setUploadingNewRefs(false);
+                      e.target.value = '';
+                    }
+                  }}
+                />
+              </div>
             </FieldWithInfo>
             {parseReferenceImages(newP.referenceImagesJson).length > 0 && (
               <div style={{ marginTop: 10, display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(72px,1fr))', gap: 8 }}>
@@ -238,6 +406,17 @@ export function ProductsPage({ th, pageId, onToast }: {
               </div>
             )}
           </div>
+          {newVideoGuide && (
+            <div style={{ marginTop: 12, ...th.card2, borderRadius: 14, padding: 12 }}>
+              <div style={{ fontWeight: 800, marginBottom: 6 }}>Video Screenshot Plan</div>
+              <div style={{ fontSize: 12.5, color: th.muted, marginBottom: 8 }}>{newVideoGuide.reason}</div>
+              <div style={{ display: 'grid', gap: 4 }}>
+                {(newVideoGuide.checklist || []).map((item: string, idx: number) => (
+                  <div key={item + idx} style={{ fontSize: 12.5 }}>{idx + 1}. {item}</div>
+                ))}
+              </div>
+            </div>
+          )}
           {newYtId && (
             <div style={{ marginTop: 12, borderRadius: 12, overflow: 'hidden', aspectRatio: '16/9', background: '#000', border: `1px solid ${th.border}` }}>
               <iframe
@@ -286,6 +465,14 @@ export function ProductsPage({ th, pageId, onToast }: {
               <FieldWithInfo th={th} label="Color" helpText={copy('প্রধান রঙ — black, red, white, multicolor', 'Primary color for image matching, e.g. black, red, white, multicolor')}>
                 <input style={th.input} placeholder="black" value={newP.color}
                   onChange={e => setNewP(p => ({ ...p, color: e.target.value }))} />
+              </FieldWithInfo>
+              <FieldWithInfo th={th} label="Product Group" helpText={copy('Same design family/group name — যেমন: Noor Kurti Set', 'Family/group name for similar variants, e.g. Noor Kurti Set')}>
+                <input style={th.input} placeholder="Noor Kurti Set" value={newP.productGroup}
+                  onChange={e => setNewP(p => ({ ...p, productGroup: e.target.value }))} />
+              </FieldWithInfo>
+              <FieldWithInfo th={th} label="Variant Label" helpText={copy('Variant short label — যেমন: Navy Floral / Size M', 'Short variant label, e.g. Navy Floral / Size M')}>
+                <input style={th.input} placeholder="Navy Floral" value={newP.variantLabel}
+                  onChange={e => setNewP(p => ({ ...p, variantLabel: e.target.value }))} />
               </FieldWithInfo>
               <FieldWithInfo th={th} label="Keywords" helpText={copy('ছবি থেকে পণ্য খুঁজতে কীওয়ার্ড — floral printed maxi', 'Keywords to help match this product from customer images, e.g. floral printed maxi')}>
                 <input style={th.input} placeholder="floral printed summer" value={newP.imageKeywords}
@@ -378,6 +565,11 @@ export function ProductsPage({ th, pageId, onToast }: {
                     <div style={{ padding: '12px 14px' }}>
                       <div style={{ fontSize: 10.5, color: th.muted, fontWeight: 700, letterSpacing: '0.05em', marginBottom: 3 }}>{p.code}</div>
                       <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name || '—'}</div>
+                      {(p.productGroup || p.variantLabel) && (
+                        <div style={{ fontSize: 11, color: th.muted, marginBottom: 6 }}>
+                          {[p.productGroup, p.variantLabel].filter(Boolean).join(' • ')}
+                        </div>
+                      )}
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                         <span style={{ fontWeight: 900, fontSize: 16, color: th.accent, letterSpacing: '-0.03em' }}>৳{p.price.toLocaleString()}</span>
                         {p.costPrice > 0 && <span style={{ fontSize: 11, color: '#16a34a' }}>+৳{(p.price - p.costPrice).toLocaleString()} profit</span>}
@@ -402,11 +594,68 @@ export function ProductsPage({ th, pageId, onToast }: {
                           onChange={e => setEditData(d => ({ ...d, stockQty: Number(e.target.value) }))} />
                         <input style={{ ...th.input, fontSize: 12.5 }} placeholder="Image URL" value={editData.imageUrl ?? ''}
                           onChange={e => setEditData(d => ({ ...d, imageUrl: e.target.value }))} />
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                          <button type="button" style={th.btnSmGhost} onClick={() => editImageRef.current?.click()} disabled={uploadingEditImage}>
+                            {uploadingEditImage ? 'Uploading…' : 'Upload Main'}
+                          </button>
+                          <button type="button" style={th.btnSmGhost} onClick={() => analyzeImage(editData.imageUrl || parseReferenceImages(editData.referenceImagesJson)[0] || '', 'edit')} disabled={analyzingEdit}>
+                            {analyzingEdit ? 'Analyzing…' : 'AI Analyze'}
+                          </button>
+                        </div>
+                        <input
+                          ref={editImageRef}
+                          type="file"
+                          accept="image/*"
+                          style={{ display: 'none' }}
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            setUploadingEditImage(true);
+                            try {
+                              const url = await uploadProductFile(file);
+                              setEditData((d) => ({ ...d, imageUrl: url }));
+                              onToast(copy('Main image uploaded', 'Main image uploaded'), 'success');
+                            } catch (err: any) {
+                              onToast(err.message, 'error');
+                            } finally {
+                              setUploadingEditImage(false);
+                              e.target.value = '';
+                            }
+                          }}
+                        />
                         <textarea
                           style={{ ...th.input, fontSize: 12, minHeight: 82, resize: 'vertical' }}
                           placeholder={'Reference image URLs\nhttps://...\nhttps://...'}
                           value={editData.referenceImagesJson ?? ''}
                           onChange={e => setEditData(d => ({ ...d, referenceImagesJson: e.target.value }))}
+                        />
+                        <button type="button" style={th.btnSmGhost} onClick={() => editRefsRef.current?.click()} disabled={uploadingEditRefs}>
+                          {uploadingEditRefs ? 'Uploading…' : 'Upload Angles'}
+                        </button>
+                        <input
+                          ref={editRefsRef}
+                          type="file"
+                          accept="image/*"
+                          multiple
+                          style={{ display: 'none' }}
+                          onChange={async (e) => {
+                            const files = Array.from(e.target.files || []);
+                            if (!files.length) return;
+                            setUploadingEditRefs(true);
+                            try {
+                              const urls = await Promise.all(files.map(uploadProductFile));
+                              setEditData((d) => ({
+                                ...d,
+                                referenceImagesJson: appendReferenceUrls(d.referenceImagesJson || '', urls),
+                              }));
+                              onToast(copy('Angle images uploaded', 'Angle images uploaded'), 'success');
+                            } catch (err: any) {
+                              onToast(err.message, 'error');
+                            } finally {
+                              setUploadingEditRefs(false);
+                              e.target.value = '';
+                            }
+                          }}
                         />
                         {(editData.referenceImagesJson ?? '').trim() && (
                           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(56px,1fr))', gap: 6 }}>
@@ -422,9 +671,20 @@ export function ProductsPage({ th, pageId, onToast }: {
                           <input style={{ ...th.input, fontSize: 12.5 }} placeholder="YouTube / Facebook video URL"
                             value={editData.videoUrl ?? ''}
                             onChange={e => setEditData(d => ({ ...d, videoUrl: e.target.value }))} />
+                          <button type="button" style={{ ...th.btnSmGhost, marginTop: 6 }} onClick={() => loadVideoGuide(editData.videoUrl || '', parseReferenceImages(editData.referenceImagesJson).length, 'edit')}>
+                            Video Screenshot Plan
+                          </button>
                           {ytId && (
                             <div style={{ marginTop: 6, borderRadius: 8, overflow: 'hidden', aspectRatio: '16/9', background: '#000' }}>
                               <iframe src={`https://www.youtube.com/embed/${ytId}`} style={{ width: '100%', height: '100%', border: 'none', display: 'block' }} allowFullScreen title="preview"/>
+                            </div>
+                          )}
+                          {editVideoGuide && (
+                            <div style={{ marginTop: 6, ...th.card2, borderRadius: 10, padding: 10 }}>
+                              <div style={{ fontSize: 11.5, fontWeight: 800, marginBottom: 6 }}>Manual Capture Guide</div>
+                              {(editVideoGuide.checklist || []).map((item: string, idx: number) => (
+                                <div key={item + idx} style={{ fontSize: 11.5, color: th.muted }}>{idx + 1}. {item}</div>
+                              ))}
                             </div>
                           )}
                         </div>
@@ -460,6 +720,10 @@ export function ProductsPage({ th, pageId, onToast }: {
                               onChange={e => setEditData(d => ({ ...d, category: e.target.value }))} />
                             <input style={{ ...th.input, fontSize: 12 }} placeholder="Color (black, red…)" value={editData.color ?? ''}
                               onChange={e => setEditData(d => ({ ...d, color: e.target.value }))} />
+                            <input style={{ ...th.input, fontSize: 12 }} placeholder="Product group / family" value={editData.productGroup ?? ''}
+                              onChange={e => setEditData(d => ({ ...d, productGroup: e.target.value }))} />
+                            <input style={{ ...th.input, fontSize: 12 }} placeholder="Variant label" value={editData.variantLabel ?? ''}
+                              onChange={e => setEditData(d => ({ ...d, variantLabel: e.target.value }))} />
                             <input style={{ ...th.input, fontSize: 12 }} placeholder="Keywords (floral printed)" value={editData.imageKeywords ?? ''}
                               onChange={e => setEditData(d => ({ ...d, imageKeywords: e.target.value }))} />
                           </div>

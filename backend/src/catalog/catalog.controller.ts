@@ -499,6 +499,11 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:var(--b
 .tips-list{display:grid;gap:7px}
 .tip-row{display:flex;align-items:flex-start;gap:8px;font-size:12.5px;color:var(--sub);line-height:1.6}
 .tip-dot{width:22px;height:22px;border-radius:999px;background:rgba(255,255,255,.72);border:1px solid color-mix(in srgb,var(--p) 16%,#fff);display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0}
+.tips-visual{margin-top:12px;display:grid;grid-template-columns:96px 1fr;gap:10px;align-items:center}
+.tips-frame{position:relative;width:96px;height:118px;border-radius:16px;background:rgba(255,255,255,.82);border:1.5px dashed color-mix(in srgb,var(--p) 18%,#fff)}
+.tips-frame::before{content:'';position:absolute;inset:14px 12px;border:2px solid var(--p);border-radius:12px}
+.tips-frame::after{content:'1 item';position:absolute;bottom:8px;left:8px;padding:4px 8px;border-radius:999px;background:var(--p);color:#fff;font-size:9px;font-weight:800}
+.tips-copy{font-size:12px;color:var(--sub);line-height:1.55}
 
 /* ── INFO CARD ── */
 .info-card{background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow-lg);overflow:hidden}
@@ -684,6 +689,12 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:var(--b
           <div class="tip-row"><span class="tip-dot">2</span><span>পুরো product যেন frame-এর মধ্যে থাকে</span></div>
           <div class="tip-row"><span class="tip-dot">3</span><span>blur / collage না দিয়ে front photo দিন</span></div>
           <div class="tip-row"><span class="tip-dot">4</span><span>চাইলে color/type লিখুন, যেমন: blue kurti</span></div>
+        </div>
+        <div class="tips-visual">
+          <div class="tips-frame"></div>
+          <div class="tips-copy">
+            Full frame, 1 item, paused clear shot. Video থেকে screenshot নিলে front view আর print close-up আলাদা করে দিন।
+          </div>
         </div>
       </div>
     </div>
@@ -939,6 +950,15 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:radial-
 .hero-tips{margin-top:12px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 .hero-tip{display:flex;gap:8px;align-items:flex-start;padding:9px 10px;border-radius:14px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.12);font-size:11.5px;line-height:1.5}
 .hero-tip-badge{width:22px;height:22px;border-radius:999px;background:rgba(255,255,255,.18);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex-shrink:0}
+.hero-guide{margin-top:12px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.12);border-radius:18px;padding:12px;display:grid;grid-template-columns:112px 1fr;gap:12px;align-items:center}
+.hero-guide-frame{position:relative;width:112px;height:138px;border-radius:18px;background:linear-gradient(180deg,rgba(255,255,255,.24),rgba(255,255,255,.08));border:1.5px dashed rgba(255,255,255,.46);overflow:hidden}
+.hero-guide-box{position:absolute;inset:18px 14px;border-radius:14px;border:2px solid rgba(255,255,255,.88)}
+.hero-guide-dot{position:absolute;top:10px;left:50%;transform:translateX(-50%);width:34px;height:6px;border-radius:999px;background:rgba(255,255,255,.9)}
+.hero-guide-badge{position:absolute;padding:4px 8px;border-radius:999px;background:rgba(10,16,28,.72);color:#fff;font-size:9.5px;font-weight:800}
+.hero-guide-badge.top{top:10px;right:8px}
+.hero-guide-badge.bottom{bottom:10px;left:8px}
+.hero-guide-copy{font-size:12px;line-height:1.6;color:rgba(255,255,255,.88)}
+.hero-guide-copy strong{display:block;font-size:13px;color:#fff;margin-bottom:4px}
 
 /* ── SEARCH ── */
 .search-strip{padding:0}
@@ -1193,6 +1213,18 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:radial-
           <div class="hero-tip"><span class="hero-tip-badge">2</span><span>পুরো product যেন clear দেখা যায়</span></div>
           <div class="hero-tip"><span class="hero-tip-badge">3</span><span>blur / collage না দিয়ে front photo দিন</span></div>
           <div class="hero-tip"><span class="hero-tip-badge">4</span><span>চাইলে color/type লিখুন, যেমন: black panjabi</span></div>
+        </div>
+        <div class="hero-guide">
+          <div class="hero-guide-frame">
+            <div class="hero-guide-dot"></div>
+            <div class="hero-guide-box"></div>
+            <div class="hero-guide-badge top">Front</div>
+            <div class="hero-guide-badge bottom">1 item only</div>
+          </div>
+          <div class="hero-guide-copy">
+            <strong>Best match frame</strong>
+            Pause video, keep the full product inside the box, and send one front shot plus one close-up if the print matters.
+          </div>
         </div>
       </div>
         <div class="hero-panel">
