@@ -93,6 +93,15 @@ interface BillingAdminContact {
   messengerUrl?: string;
   email?: string;
   note?: string;
+  websiteUrl?: string;
+}
+
+function buildWhatsAppUrl(rawPhone?: string | null) {
+  const digits = String(rawPhone || '').replace(/[^\d]/g, '');
+  if (!digits) return '';
+  if (digits.startsWith('880')) return `https://wa.me/${digits}`;
+  if (digits.startsWith('0')) return `https://wa.me/88${digits}`;
+  return `https://wa.me/${digits}`;
 }
 
 function navToParam(nav: NavKey) {
@@ -216,15 +225,40 @@ export function DashboardLayout({
   const loadBillingModalData = useCallback(async () => {
     setBillingLoading(true);
     try {
-      const status = await request<any>(`${API_BASE}/billing/status`);
+      const [status, pageSettings] = await Promise.all([
+        request<any>(`${API_BASE}/billing/status`),
+        activePage?.id
+          ? request<any>(`${API_BASE}/client-dashboard/${activePage.id}/settings`).catch(() => null)
+          : Promise.resolve(null),
+      ]);
       setBillingStatus(status);
-      setBillingContact(status?.adminContact || null);
+      const adminContact = status?.adminContact || {};
+      const fallbackContact = {
+        label: pageSettings?.businessName || adminContact?.label || 'Admin Support',
+        phone: adminContact?.phone || pageSettings?.businessPhone || '',
+        messengerUrl:
+          adminContact?.messengerUrl ||
+          pageSettings?.catalogMessengerUrl ||
+          (pageSettings?.fbPageId ? `https://m.me/${pageSettings.fbPageId}` : ''),
+        whatsappUrl:
+          adminContact?.whatsappUrl ||
+          buildWhatsAppUrl(pageSettings?.businessPhone),
+        email: adminContact?.email || '',
+        websiteUrl: pageSettings?.websiteUrl || '',
+        note:
+          adminContact?.note ||
+          copy(
+            'প্রয়োজনে আপনার page link, WhatsApp, বা Messenger দিয়েও admin/contact টিমের সাথে কথা বলতে পারেন।',
+            'You can also use your page link, WhatsApp, or Messenger to contact the admin or support team.',
+          ),
+      };
+      setBillingContact(fallbackContact);
     } catch (e: any) {
       showToast(e.message || 'Failed to load billing info', 'error');
     } finally {
       setBillingLoading(false);
     }
-  }, [request]);
+  }, [API_BASE, activePage?.id, copy, request]);
 
   const openBillingModal = useCallback(async () => {
     setBillingOpen(true);
@@ -738,6 +772,22 @@ export function DashboardLayout({
                               <div style={{ color: th.text, fontWeight: 800 }}>{billingContact.email}</div>
                             </div>
                           )}
+                        </div>
+                      )}
+
+                      {billingContact?.websiteUrl && (
+                        <div style={{ ...th.card2, borderRadius: 12, display: 'grid', gap: 6 }}>
+                          <div style={{ fontSize: 11, fontWeight: 800, color: th.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                            {copy('Page / Website', 'Page / Website')}
+                          </div>
+                          <a
+                            href={billingContact.websiteUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            style={{ color: th.accent, fontWeight: 800, textDecoration: 'none', wordBreak: 'break-all' }}
+                          >
+                            {billingContact.websiteUrl}
+                          </a>
                         </div>
                       )}
 
