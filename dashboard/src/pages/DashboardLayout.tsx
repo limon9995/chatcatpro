@@ -86,8 +86,14 @@ const LAST_NAV_KEY = 'dfbot_last_nav';
 
 interface PageItem { id: number; pageId: string; pageName: string; }
 interface ToastItem { msg: string; type?: 'error' | 'success' | 'info'; id: number; }
-interface BillingPlan { id: string; name: string; displayName: string; priceMonthly: number; }
-interface BillingPayment { id: string; amount: number; method: string; transactionId: string; status: string; createdAt: string; }
+interface BillingAdminContact {
+  label?: string;
+  phone?: string;
+  whatsappUrl?: string;
+  messengerUrl?: string;
+  email?: string;
+  note?: string;
+}
 
 function navToParam(nav: NavKey) {
   return nav.toLowerCase().replace(/_/g, '-');
@@ -142,16 +148,7 @@ export function DashboardLayout({
   const [billingStatus, setBillingStatus] = useState<any>(null);
   const [billingOpen, setBillingOpen] = useState(false);
   const [billingLoading, setBillingLoading] = useState(false);
-  const [billingSubmitting, setBillingSubmitting] = useState(false);
-  const [billingPlans, setBillingPlans] = useState<BillingPlan[]>([]);
-  const [billingPayments, setBillingPayments] = useState<BillingPayment[]>([]);
-  const [billingForm, setBillingForm] = useState({
-    planName: '',
-    amount: '',
-    method: 'bkash',
-    transactionId: '',
-    note: '',
-  });
+  const [billingContact, setBillingContact] = useState<BillingAdminContact | null>(null);
   const [searchOpen, setSearchOpen]   = useState(false);
   const [searchQ, setSearchQ]         = useState('');
   const [searchResults, setSearchResults] = useState<any>(null);
@@ -219,24 +216,9 @@ export function DashboardLayout({
   const loadBillingModalData = useCallback(async () => {
     setBillingLoading(true);
     try {
-      const [status, plans, payments] = await Promise.all([
-        request<any>(`${API_BASE}/billing/status`),
-        request<BillingPlan[]>(`${API_BASE}/billing/plans`),
-        request<BillingPayment[]>(`${API_BASE}/billing/payments`),
-      ]);
+      const status = await request<any>(`${API_BASE}/billing/status`);
       setBillingStatus(status);
-      setBillingPlans(plans || []);
-      setBillingPayments(payments || []);
-
-      const selectedPlan =
-        (plans || []).find((plan) => plan.name === status?.planName) ||
-        (plans || [])[0];
-
-      setBillingForm((prev) => ({
-        ...prev,
-        planName: selectedPlan?.name || prev.planName || '',
-        amount: String(selectedPlan?.priceMonthly || status?.priceMonthly || prev.amount || ''),
-      }));
+      setBillingContact(status?.adminContact || null);
     } catch (e: any) {
       showToast(e.message || 'Failed to load billing info', 'error');
     } finally {
@@ -248,43 +230,6 @@ export function DashboardLayout({
     setBillingOpen(true);
     await loadBillingModalData();
   }, [loadBillingModalData]);
-
-  const submitBillingPayment = useCallback(async () => {
-    const amount = Number(billingForm.amount);
-    if (!amount || amount <= 0) {
-      showToast(copy('সঠিক amount দিন', 'Enter a valid amount'), 'error');
-      return;
-    }
-    if (!billingForm.transactionId.trim()) {
-      showToast(copy('Transaction ID দিন', 'Enter the transaction ID'), 'error');
-      return;
-    }
-
-    setBillingSubmitting(true);
-    try {
-      const selectedPlan = billingPlans.find((plan) => plan.name === billingForm.planName);
-      const planLabel = selectedPlan?.displayName || billingForm.planName || billingStatus?.planDisplay || 'Subscription';
-      const note = [planLabel, billingForm.note.trim()].filter(Boolean).join(' | ');
-
-      const result = await request<any>(`${API_BASE}/billing/payments/submit`, {
-        method: 'POST',
-        body: JSON.stringify({
-          amount,
-          method: billingForm.method,
-          transactionId: billingForm.transactionId.trim(),
-          note,
-        }),
-      });
-
-      showToast(result?.message || copy('Payment submit হয়েছে', 'Payment submitted'), 'success');
-      setBillingForm((prev) => ({ ...prev, transactionId: '', note: '' }));
-      await loadBillingModalData();
-    } catch (e: any) {
-      showToast(e.message || 'Payment submit failed', 'error');
-    } finally {
-      setBillingSubmitting(false);
-    }
-  }, [billingForm, billingPlans, billingStatus?.planDisplay, copy, loadBillingModalData, request]);
 
   const showToast = (msg: string, type?: any) => {
     const id = Date.now();
@@ -598,8 +543,8 @@ export function DashboardLayout({
         const { status, daysLeft, canTakeOrders } = billingStatus;
         if (status === 'trial' && daysLeft <= 3) return (
           <div style={{ background: '#f59e0b', color: '#1c1917', fontSize: 13, fontWeight: 600, padding: '8px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-            <span>⏳ Trial আর মাত্র {daysLeft} দিন বাকি — এখনই upgrade করুন!</span>
-            <button onClick={() => void openBillingModal()} style={{ background: '#1c1917', color: '#fef3c7', border: 'none', borderRadius: 6, padding: '4px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Upgrade</button>
+            <span>⏳ Trial আর মাত্র {daysLeft} দিন বাকি — admin এর সাথে কথা বলে plan update করুন</span>
+            <button onClick={() => void openBillingModal()} style={{ background: '#1c1917', color: '#fef3c7', border: 'none', borderRadius: 6, padding: '4px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Contact Admin</button>
           </div>
         );
         if (status === 'trial') return (
@@ -609,14 +554,14 @@ export function DashboardLayout({
         );
         if (status === 'expired' || !canTakeOrders) return (
           <div style={{ background: '#ef4444', color: '#fff', fontSize: 13, fontWeight: 600, padding: '8px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-            <span>❌ Subscription মেয়াদ শেষ — নতুন অর্ডার নেওয়া বন্ধ আছে</span>
-            <button onClick={() => void openBillingModal()} style={{ background: '#fff', color: '#ef4444', border: 'none', borderRadius: 6, padding: '4px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Payment করুন</button>
+            <span>❌ Subscription মেয়াদ শেষ — admin update না করা পর্যন্ত নতুন অর্ডার নেওয়া বন্ধ আছে</span>
+            <button onClick={() => void openBillingModal()} style={{ background: '#fff', color: '#ef4444', border: 'none', borderRadius: 6, padding: '4px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Contact Admin</button>
           </div>
         );
         if (status === 'grace') return (
           <div style={{ background: '#f97316', color: '#fff', fontSize: 13, fontWeight: 600, padding: '8px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-            <span>⚠️ Grace period চলছে — দ্রুত payment করুন</span>
-            <button onClick={() => void openBillingModal()} style={{ background: '#fff', color: '#f97316', border: 'none', borderRadius: 6, padding: '4px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Payment করুন</button>
+            <span>⚠️ Grace period চলছে — access চালু রাখতে admin এর সাথে কথা বলুন</span>
+            <button onClick={() => void openBillingModal()} style={{ background: '#fff', color: '#f97316', border: 'none', borderRadius: 6, padding: '4px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Contact Admin</button>
           </div>
         );
         return null;
@@ -726,7 +671,7 @@ export function DashboardLayout({
       </div>
 
       {/* ── Toasts ───────────────────────────────────────────────────────── */}
-      <div style={{ position: 'fixed', bottom: 16, right: isMobile ? 8 : 24, left: isMobile ? 8 : 'auto', zIndex: 9999, display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ position: 'fixed', bottom: 16, right: isMobile ? 8 : 24, left: isMobile ? 8 : 'auto', zIndex: 10020, display: 'flex', flexDirection: 'column', gap: 8 }}>
         {toasts.map(t => (
           <Toast key={t.id} message={t.msg} type={t.type}
             onClose={() => setToasts(ts => ts.filter(x => x.id !== t.id))} />
@@ -744,9 +689,9 @@ export function DashboardLayout({
           >
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 18 }}>
               <div>
-                <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.04em', color: th.text }}>{copy('Subscription Payment', 'Subscription Payment')}</div>
+                <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.04em', color: th.text }}>{copy('Subscription Access', 'Subscription Access')}</div>
                 <div style={{ fontSize: 12.5, color: th.muted, marginTop: 4 }}>
-                  {copy('Payment submit করলে admin confirm করার পর subscription active হবে।', 'After you submit payment, your subscription will be activated once the admin confirms it.')}
+                  {copy('Subscription, feature access, আর usage duration এখন admin manually control করবে।', 'Subscription, feature access, and usage duration are now controlled manually by the admin.')}
                 </div>
               </div>
               <button onClick={() => setBillingOpen(false)} style={{ ...th.btnGhost, padding: '6px 10px', fontSize: 16, lineHeight: 1 }}>✕</button>
@@ -761,89 +706,54 @@ export function DashboardLayout({
                 <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1.15fr 0.85fr', gap: 16, marginBottom: 18 }}>
                   <div style={{ background: th.surface, border: `1px solid ${th.border}`, borderRadius: 14, padding: 16 }}>
                     <div style={{ fontSize: 11, fontWeight: 800, color: th.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>
-                      {copy('Submit Payment', 'Submit Payment')}
+                      {copy('Contact Admin', 'Contact Admin')}
                     </div>
 
                     <div style={{ display: 'grid', gap: 12 }}>
-                      <div>
-                        <div style={{ fontSize: 11.5, fontWeight: 700, color: th.muted, marginBottom: 6 }}>{copy('Plan', 'Plan')}</div>
-                        <select
-                          value={billingForm.planName}
-                          onChange={(e) => {
-                            const nextPlan = billingPlans.find((plan) => plan.name === e.target.value);
-                            setBillingForm((prev) => ({
-                              ...prev,
-                              planName: e.target.value,
-                              amount: String(nextPlan?.priceMonthly || prev.amount),
-                            }));
-                          }}
-                          style={th.input}
-                        >
-                          {billingPlans.map((plan) => (
-                            <option key={plan.id} value={plan.name}>
-                              {plan.displayName} - {plan.priceMonthly === 0 ? copy('Custom', 'Custom') : `${plan.priceMonthly} BDT/mo`}
-                            </option>
-                          ))}
-                        </select>
+                      <div style={{ ...th.card2, borderRadius: 12, lineHeight: 1.7, fontSize: 13, color: th.text }}>
+                        {copy('এখানে আর package বেছে payment submit করতে হবে না। Admin এখন আপনার package, feature access, order limit, আর কতদিন use করবেন সব manually update করবে।', 'You no longer need to choose a package and submit payment here. The admin now manually updates your package, feature access, order limit, and access duration.')}
                       </div>
 
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                        <div>
-                          <div style={{ fontSize: 11.5, fontWeight: 700, color: th.muted, marginBottom: 6 }}>{copy('Amount', 'Amount')}</div>
-                          <input
-                            style={th.input}
-                            type="number"
-                            min={1}
-                            value={billingForm.amount}
-                            onChange={(e) => setBillingForm((prev) => ({ ...prev, amount: e.target.value }))}
-                            placeholder="999"
-                          />
+                      {billingContact?.note && (
+                        <div style={{ ...th.card2, borderRadius: 12, lineHeight: 1.65, fontSize: 12.5, color: th.muted }}>
+                          {billingContact.note}
                         </div>
-                        <div>
-                          <div style={{ fontSize: 11.5, fontWeight: 700, color: th.muted, marginBottom: 6 }}>{copy('Method', 'Method')}</div>
-                          <select
-                            value={billingForm.method}
-                            onChange={(e) => setBillingForm((prev) => ({ ...prev, method: e.target.value }))}
-                            style={th.input}
-                          >
-                            <option value="bkash">bKash</option>
-                            <option value="nagad">Nagad</option>
-                            <option value="bank">Bank</option>
-                            <option value="cash">Cash</option>
-                          </select>
+                      )}
+
+                      {(billingContact?.phone || billingContact?.email) && (
+                        <div style={{ ...th.card2, borderRadius: 12, display: 'grid', gap: 8 }}>
+                          {billingContact?.phone && (
+                            <div>
+                              <div style={{ fontSize: 11, fontWeight: 800, color: th.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
+                                {copy('Phone', 'Phone')}
+                              </div>
+                              <div style={{ color: th.text, fontWeight: 800 }}>{billingContact.phone}</div>
+                            </div>
+                          )}
+                          {billingContact?.email && (
+                            <div>
+                              <div style={{ fontSize: 11, fontWeight: 800, color: th.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
+                                {copy('Email', 'Email')}
+                              </div>
+                              <div style={{ color: th.text, fontWeight: 800 }}>{billingContact.email}</div>
+                            </div>
+                          )}
                         </div>
-                      </div>
+                      )}
 
-                      <div>
-                        <div style={{ fontSize: 11.5, fontWeight: 700, color: th.muted, marginBottom: 6 }}>{copy('Transaction ID', 'Transaction ID')}</div>
-                        <input
-                          style={th.input}
-                          value={billingForm.transactionId}
-                          onChange={(e) => setBillingForm((prev) => ({ ...prev, transactionId: e.target.value }))}
-                          placeholder={copy('যে transaction ID পেয়েছেন', 'Enter your transaction ID')}
-                        />
-                      </div>
-
-                      <div>
-                        <div style={{ fontSize: 11.5, fontWeight: 700, color: th.muted, marginBottom: 6 }}>{copy('Note', 'Note')}</div>
-                        <textarea
-                          style={{ ...th.input, minHeight: 88, resize: 'vertical', fontFamily: 'inherit' }}
-                          value={billingForm.note}
-                          onChange={(e) => setBillingForm((prev) => ({ ...prev, note: e.target.value }))}
-                          placeholder={copy('চাইলে extra note লিখতে পারেন', 'Optional note for the admin')}
-                        />
-                      </div>
-
-                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+                        {billingContact?.messengerUrl && (
+                          <a href={billingContact.messengerUrl} target="_blank" rel="noreferrer" style={{ ...th.btn, padding: '9px 16px', textDecoration: 'none' }}>
+                            {copy('Messenger এ কথা বলুন', 'Message on Messenger')}
+                          </a>
+                        )}
+                        {billingContact?.whatsappUrl && (
+                          <a href={billingContact.whatsappUrl} target="_blank" rel="noreferrer" style={{ ...th.btnGhost, padding: '9px 16px', textDecoration: 'none' }}>
+                            {copy('WhatsApp এ কথা বলুন', 'Message on WhatsApp')}
+                          </a>
+                        )}
                         <button onClick={() => setBillingOpen(false)} style={{ ...th.btnGhost, padding: '9px 16px' }}>
                           {copy('বন্ধ করুন', 'Close')}
-                        </button>
-                        <button
-                          onClick={() => void submitBillingPayment()}
-                          disabled={billingSubmitting}
-                          style={{ ...th.btn, padding: '9px 18px', opacity: billingSubmitting ? 0.7 : 1 }}
-                        >
-                          {billingSubmitting ? copy('Submit হচ্ছে...', 'Submitting...') : copy('Payment Submit করুন', 'Submit Payment')}
                         </button>
                       </div>
                     </div>
@@ -868,31 +778,17 @@ export function DashboardLayout({
 
                     <div style={{ background: th.surface, border: `1px solid ${th.border}`, borderRadius: 14, padding: 16 }}>
                       <div style={{ fontSize: 11, fontWeight: 800, color: th.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
-                        {copy('Recent Payments', 'Recent Payments')}
+                        {copy('Admin Controlled Access', 'Admin Controlled Access')}
                       </div>
-                      {billingPayments.length === 0 ? (
-                        <div style={{ fontSize: 12.5, color: th.muted }}>{copy('এখনও কোনো payment submit করা হয়নি', 'No payments submitted yet')}</div>
-                      ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                          {billingPayments.slice(0, 5).map((payment) => (
-                            <div key={payment.id} style={{ border: `1px solid ${th.border}`, borderRadius: 10, padding: '10px 12px', background: th.panel }}>
-                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                                <span style={{ fontSize: 13, fontWeight: 700, color: th.text }}>{payment.amount} BDT</span>
-                                <span style={{ fontSize: 11, fontWeight: 700, color: payment.status === 'confirmed' ? '#10b981' : '#f59e0b', textTransform: 'uppercase' }}>{payment.status}</span>
-                              </div>
-                              <div style={{ fontSize: 12, color: th.muted, marginTop: 4 }}>
-                                {payment.method} · {payment.transactionId}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
+                      <div style={{ fontSize: 12.5, color: th.muted, lineHeight: 1.7 }}>
+                        {copy('Admin চাইলে আপনার package upgrade/downgrade, feature চালু/বন্ধ, order limit, আর কতদিন use করবেন সব change করতে পারবে।', 'The admin can upgrade or downgrade your package, enable or disable features, set order limits, and decide how long your access stays active.')}
+                      </div>
                     </div>
                   </div>
                 </div>
 
                 <div style={{ background: th.accentSoft, border: `1px solid ${th.border}`, borderRadius: 12, padding: 14, color: th.textSub, fontSize: 12.5, lineHeight: 1.7 }}>
-                  {copy('Payment number বা merchant account info যদি আলাদা থাকে, সেটা admin থেকে নিয়ে transaction ID এখানে submit করুন।', 'If the payment number or merchant account details are shared separately, complete the payment there and submit the transaction ID here.')}
+                  {copy('যদি access change দরকার হয়, admin-কে বলে দিন কোন package/use case লাগবে। Admin panel থেকে সেখান থেকেই update করে দেবে।', 'If you need access changes, tell the admin what package or use case you need. They will update it directly from the admin panel.')}
                 </div>
               </>
             )}

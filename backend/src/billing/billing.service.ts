@@ -6,13 +6,31 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import * as crypto from 'crypto';
+import * as fs from 'fs';
+import * as path from 'path';
 import { PrismaService } from '../prisma/prisma.service';
 
 const TRIAL_DAYS = 7;
+const PAGE_FEATURE_FIELDS = [
+  'automationAllowed',
+  'ocrAllowed',
+  'infoModeAllowed',
+  'orderModeAllowed',
+  'printModeAllowed',
+  'callConfirmModeAllowed',
+  'memoSaveModeAllowed',
+  'memoTemplateModeAllowed',
+  'autoMemoDesignModeAllowed',
+] as const;
 
 @Injectable()
 export class BillingService {
   private readonly logger = new Logger(BillingService.name);
+  private readonly globalConfigFile = path.join(
+    process.cwd(),
+    'storage',
+    'global-config.json',
+  );
 
   constructor(private readonly prisma: PrismaService) {}
 
@@ -148,6 +166,7 @@ export class BillingService {
       isActive: ['trial', 'active', 'grace'].includes(sub.status),
       canTakeOrders: this.canTakeOrders(sub),
       warnings: this.buildWarnings(sub, daysLeft, usagePct),
+      adminContact: this.getBillingSupportContact(),
     };
   }
 
@@ -295,7 +314,30 @@ export class BillingService {
       where,
       include: {
         plan: true,
-        user: { select: { id: true, username: true, name: true, email: true } },
+        user: {
+          select: {
+            id: true,
+            username: true,
+            name: true,
+            email: true,
+            pages: {
+              select: {
+                id: true,
+                pageName: true,
+                automationAllowed: true,
+                ocrAllowed: true,
+                infoModeAllowed: true,
+                orderModeAllowed: true,
+                printModeAllowed: true,
+                callConfirmModeAllowed: true,
+                memoSaveModeAllowed: true,
+                memoTemplateModeAllowed: true,
+                autoMemoDesignModeAllowed: true,
+              },
+              orderBy: { id: 'asc' },
+            },
+          },
+        },
         payments: { orderBy: { createdAt: 'desc' }, take: 3 },
       },
       orderBy: { createdAt: 'desc' },
@@ -325,7 +367,9 @@ export class BillingService {
       planName: string;
       status: string;
       periodDays?: number;
+      ordersLimit?: number;
       note?: string;
+      featureAccess?: Partial<Record<(typeof PAGE_FEATURE_FIELDS)[number], boolean>>;
     },
   ) {
     const plan = await this.prisma.plan.findFirst({
@@ -339,6 +383,11 @@ export class BillingService {
     const now = new Date();
     const days = body.periodDays ?? 30;
     const periodEnd = new Date(now.getTime() + days * 86_400_000);
+    const nextOrdersLimit =
+      typeof body.ordersLimit === 'number' && Number.isFinite(body.ordersLimit)
+        ? body.ordersLimit
+        : plan.ordersLimit;
+    const pagePatch = this.buildPageFeaturePatch(body.featureAccess);
 
     if (existing) {
       await this.prisma.subscription.update({
@@ -346,7 +395,7 @@ export class BillingService {
         data: {
           planId: plan.id,
           status: body.status,
-          ordersLimit: plan.ordersLimit,
+          ordersLimit: nextOrdersLimit,
           ordersUsed: 0,
           periodStart: now,
           periodEnd,
@@ -362,12 +411,18 @@ export class BillingService {
           userId,
           planId: plan.id,
           status: body.status,
-          ordersLimit: plan.ordersLimit,
+          ordersLimit: nextOrdersLimit,
           periodStart: now,
           periodEnd,
           nextPaymentDue: periodEnd,
           note: body.note ?? null,
         },
+      });
+    }
+    if (Object.keys(pagePatch).length > 0) {
+      await this.prisma.page.updateMany({
+        where: { ownerId: userId },
+        data: pagePatch,
       });
     }
     this.logger.log(
@@ -407,5 +462,42 @@ export class BillingService {
     if (usagePct >= 100 && sub.ordersLimit !== -1)
       w.push('❌ Order limit reached — upgrade করুন');
     return w;
+  }
+
+  private buildPageFeaturePatch(
+    input?: Partial<Record<(typeof PAGE_FEATURE_FIELDS)[number], boolean>>,
+  ) {
+    const patch: Record<string, boolean> = {};
+    for (const field of PAGE_FEATURE_FIELDS) {
+      if (typeof input?.[field] === 'boolean') {
+        patch[field] = input[field] as boolean;
+      }
+    }
+    return patch;
+  }
+
+  private getBillingSupportContact() {
+    try {
+      if (fs.existsSync(this.globalConfigFile)) {
+        const cfg = JSON.parse(fs.readFileSync(this.globalConfigFile, 'utf8'));
+        const support = cfg?.billingSupport || {};
+        return {
+          label: String(support.label || 'Admin Support').trim(),
+          phone: String(support.phone || '').trim(),
+          whatsappUrl: String(support.whatsappUrl || '').trim(),
+          messengerUrl: String(support.messengerUrl || '').trim(),
+          email: String(support.email || '').trim(),
+          note: String(support.note || '').trim(),
+        };
+      }
+    } catch {}
+    return {
+      label: 'Admin Support',
+      phone: '',
+      whatsappUrl: '',
+      messengerUrl: '',
+      email: '',
+      note: '',
+    };
   }
 }

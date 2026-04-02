@@ -11,6 +11,31 @@ interface TutorialsConfig {
   generalOnboarding?: string;
 }
 
+interface BillingSupportConfig {
+  label?: string;
+  phone?: string;
+  whatsappUrl?: string;
+  messengerUrl?: string;
+  email?: string;
+  note?: string;
+}
+
+const BILLING_FEATURES = [
+  { key: 'automationAllowed', label: 'Automation' },
+  { key: 'ocrAllowed', label: 'OCR' },
+  { key: 'infoModeAllowed', label: 'Info Mode' },
+  { key: 'orderModeAllowed', label: 'Order Mode' },
+  { key: 'printModeAllowed', label: 'Print' },
+  { key: 'callConfirmModeAllowed', label: 'Call Confirm' },
+  { key: 'memoSaveModeAllowed', label: 'Memo Save' },
+  { key: 'memoTemplateModeAllowed', label: 'Memo Template' },
+  { key: 'autoMemoDesignModeAllowed', label: 'Auto Memo Design' },
+] as const;
+
+const DEFAULT_FEATURE_ACCESS = Object.fromEntries(
+  BILLING_FEATURES.map((item) => [item.key, true]),
+) as Record<(typeof BILLING_FEATURES)[number]['key'], boolean>;
+
 interface ClientPage {
   id: number; pageId: string; pageName: string;
   isActive: boolean; automationOn: boolean;
@@ -75,6 +100,7 @@ export function AdminPanel({ th, onToast, onLogout }: {
   const [billingData, setBillingData] = useState<{ subscriptions: any[]; pending: any[] }>({ subscriptions: [], pending: [] });
   const [billingLoading, setBillingLoading] = useState(false);
   const [billingSubFilter, setBillingSubFilter] = useState('');
+  const [billingSupport, setBillingSupport] = useState<BillingSupportConfig>({});
 
   // Create client form state
   const [showCreateClient, setShowCreateClient] = useState(false);
@@ -147,14 +173,16 @@ export function AdminPanel({ th, onToast, onLogout }: {
   const loadBilling = useCallback(async () => {
     setBillingLoading(true);
     try {
-      const [subs, pending] = await Promise.all([
+      const [subs, pending, globalCfg] = await Promise.all([
         request<any[]>(`${API_BASE}/billing/admin/subscriptions${billingSubFilter ? `?status=${billingSubFilter}` : ''}`),
         request<any[]>(`${API_BASE}/billing/admin/pending-payments`),
+        request<any>(`${BASE}/global-config`),
       ]);
       setBillingData({ subscriptions: subs || [], pending: pending || [] });
+      setBillingSupport(globalCfg?.billingSupport || {});
     } catch (e: any) { onToast(e.message, 'error'); }
     finally { setBillingLoading(false); }
-  }, [billingSubFilter]);
+  }, [BASE, billingSubFilter]);
 
   const confirmPayment = async (paymentId: string, planName?: string) => {
     try {
@@ -165,13 +193,26 @@ export function AdminPanel({ th, onToast, onLogout }: {
     } catch (e: any) { onToast(e.message, 'error'); }
   };
 
-  const setSubscription = async (userId: string, planName: string, status: string, days: number) => {
+  const setSubscription = async (userId: string, payload: any) => {
     try {
       await request(`${API_BASE}/billing/admin/users/${userId}/subscription`, {
-        method: 'PATCH', body: JSON.stringify({ planName, status, periodDays: days }),
+        method: 'PATCH', body: JSON.stringify(payload),
       });
       onToast('✅ Subscription updated'); loadBilling();
     } catch (e: any) { onToast(e.message, 'error'); }
+  };
+
+  const saveBillingSupport = async (payload: BillingSupportConfig) => {
+    try {
+      const updated = await request<any>(`${BASE}/global-config`, {
+        method: 'PATCH',
+        body: JSON.stringify({ billingSupport: payload }),
+      });
+      setBillingSupport(updated?.billingSupport || payload);
+      onToast('✅ Admin contact info saved');
+    } catch (e: any) {
+      onToast(e.message, 'error');
+    }
   };
 
   const saveTutorials = async () => {
@@ -1114,12 +1155,14 @@ export function AdminPanel({ th, onToast, onLogout }: {
           <BillingTab
             th={th}
             data={billingData}
+            supportConfig={billingSupport}
             loading={billingLoading}
             subFilter={billingSubFilter}
             setSubFilter={setBillingSubFilter}
             onRefresh={loadBilling}
             onConfirmPayment={confirmPayment}
             onSetSubscription={setSubscription}
+            onSaveSupport={saveBillingSupport}
           />
         )}
       </div>
@@ -1541,21 +1584,35 @@ const STATUS_COLOR: Record<string, string> = {
   grace: '#f97316', cancelled: '#9ca3af', pending: '#3b82f6', confirmed: '#16a34a', failed: '#ef4444',
 };
 
-function BillingTab({ th, data, loading, subFilter, setSubFilter, onRefresh, onConfirmPayment, onSetSubscription }: {
+function BillingTab({ th, data, supportConfig, loading, subFilter, setSubFilter, onRefresh, onConfirmPayment, onSetSubscription, onSaveSupport }: {
   th: Theme;
   data: { subscriptions: any[]; pending: any[] };
+  supportConfig: BillingSupportConfig;
   loading: boolean;
   subFilter: string;
   setSubFilter: (v: string) => void;
   onRefresh: () => void;
   onConfirmPayment: (id: string, plan?: string) => void;
-  onSetSubscription: (userId: string, plan: string, status: string, days: number) => void;
+  onSetSubscription: (userId: string, payload: any) => void;
+  onSaveSupport: (payload: BillingSupportConfig) => void;
 }) {
   const [setSubModal, setSetSubModal] = useState<any>(null);
-  const [setSubForm, setSetSubFormState] = useState({ planName: 'starter', status: 'active', days: 30 });
+  const [setSubForm, setSetSubFormState] = useState<any>({
+    planName: 'starter',
+    status: 'active',
+    days: 30,
+    ordersLimit: 500,
+    note: '',
+    featureAccess: { ...DEFAULT_FEATURE_ACCESS },
+  });
+  const [supportForm, setSupportForm] = useState<BillingSupportConfig>(supportConfig || {});
 
   const PLANS = ['starter', 'pro', 'enterprise'];
   const STATUSES = ['trial', 'active', 'grace', 'expired', 'cancelled'];
+
+  useEffect(() => {
+    setSupportForm(supportConfig || {});
+  }, [supportConfig]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -1565,6 +1622,48 @@ function BillingTab({ th, data, loading, subFilter, setSubFilter, onRefresh, onC
           <p style={{ fontSize: 12.5, color: th.muted, margin: '3px 0 0' }}>Subscriptions, payments, and plan management</p>
         </div>
         <button style={th.btnGhost} onClick={onRefresh}>{loading ? <Spinner size={13}/> : '🔄 Refresh'}</button>
+      </div>
+
+      <div style={{ ...th.card }}>
+        <CardHeader
+          th={th}
+          title="📞 Client Contact Admin"
+          sub="Client dashboard-এ package submit এর বদলে এই contact info দেখাবে"
+        />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12, marginBottom: 14 }}>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: th.muted, marginBottom: 6, textTransform: 'uppercase' }}>Label</div>
+            <input style={th.input} value={supportForm.label || ''} onChange={e => setSupportForm(f => ({ ...f, label: e.target.value }))} placeholder="Admin Support" />
+          </div>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: th.muted, marginBottom: 6, textTransform: 'uppercase' }}>Phone</div>
+            <input style={th.input} value={supportForm.phone || ''} onChange={e => setSupportForm(f => ({ ...f, phone: e.target.value }))} placeholder="01XXXXXXXXX" />
+          </div>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: th.muted, marginBottom: 6, textTransform: 'uppercase' }}>WhatsApp URL</div>
+            <input style={th.input} value={supportForm.whatsappUrl || ''} onChange={e => setSupportForm(f => ({ ...f, whatsappUrl: e.target.value }))} placeholder="https://wa.me/8801..." />
+          </div>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: th.muted, marginBottom: 6, textTransform: 'uppercase' }}>Messenger URL</div>
+            <input style={th.input} value={supportForm.messengerUrl || ''} onChange={e => setSupportForm(f => ({ ...f, messengerUrl: e.target.value }))} placeholder="https://m.me/..." />
+          </div>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: th.muted, marginBottom: 6, textTransform: 'uppercase' }}>Email</div>
+            <input style={th.input} value={supportForm.email || ''} onChange={e => setSupportForm(f => ({ ...f, email: e.target.value }))} placeholder="support@example.com" />
+          </div>
+        </div>
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: th.muted, marginBottom: 6, textTransform: 'uppercase' }}>Note</div>
+          <textarea
+            style={{ ...th.input, minHeight: 82, resize: 'vertical', fontFamily: 'inherit' }}
+            value={supportForm.note || ''}
+            onChange={e => setSupportForm(f => ({ ...f, note: e.target.value }))}
+            placeholder="Client-কে কীভাবে যোগাযোগ করতে হবে সেটা লিখুন"
+          />
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button style={th.btnPrimary} onClick={() => onSaveSupport(supportForm)}>💾 Save Contact Info</button>
+        </div>
       </div>
 
       {/* Pending Payments */}
@@ -1647,7 +1746,22 @@ function BillingTab({ th, data, loading, subFilter, setSubFilter, onRefresh, onC
                     </div>
                   </div>
                   <button style={th.btnSmGhost}
-                    onClick={() => { setSetSubModal(sub); setSetSubFormState({ planName: sub.plan?.name || 'starter', status: sub.status, days: 30 }); }}>
+                    onClick={() => {
+                      const firstPage = sub.user?.pages?.[0];
+                      const featureAccess = { ...DEFAULT_FEATURE_ACCESS };
+                      for (const item of BILLING_FEATURES) {
+                        featureAccess[item.key] = firstPage?.[item.key] !== false;
+                      }
+                      setSetSubModal(sub);
+                      setSetSubFormState({
+                        planName: sub.plan?.name || 'starter',
+                        status: sub.status,
+                        days: 30,
+                        ordersLimit: sub.ordersLimit === -1 ? -1 : Number(sub.ordersLimit || 0),
+                        note: sub.note || '',
+                        featureAccess,
+                      });
+                    }}>
                     ✏️ Edit
                   </button>
                 </div>
@@ -1664,18 +1778,18 @@ function BillingTab({ th, data, loading, subFilter, setSubFilter, onRefresh, onC
             title={`✏️ Edit Subscription — ${setSubModal.user?.name || setSubModal.user?.username}`}
             action={<button style={th.btnGhost} onClick={() => setSetSubModal(null)}>✕</button>}
           />
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 16 }}>
             <div>
               <div style={{ fontSize: 11, fontWeight: 700, color: th.muted, marginBottom: 6, textTransform: 'uppercase' }}>Plan</div>
               <select style={th.input} value={setSubForm.planName}
-                onChange={e => setSetSubFormState(f => ({ ...f, planName: e.target.value }))}>
+                onChange={e => setSetSubFormState((f: any) => ({ ...f, planName: e.target.value }))}>
                 {PLANS.map(p => <option key={p} value={p}>{p}</option>)}
               </select>
             </div>
             <div>
               <div style={{ fontSize: 11, fontWeight: 700, color: th.muted, marginBottom: 6, textTransform: 'uppercase' }}>Status</div>
               <select style={th.input} value={setSubForm.status}
-                onChange={e => setSetSubFormState(f => ({ ...f, status: e.target.value }))}>
+                onChange={e => setSetSubFormState((f: any) => ({ ...f, status: e.target.value }))}>
                 {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
@@ -1683,12 +1797,55 @@ function BillingTab({ th, data, loading, subFilter, setSubFilter, onRefresh, onC
               <div style={{ fontSize: 11, fontWeight: 700, color: th.muted, marginBottom: 6, textTransform: 'uppercase' }}>Days</div>
               <input style={th.input} type="number" min={1} max={365}
                 value={setSubForm.days}
-                onChange={e => setSetSubFormState(f => ({ ...f, days: Number(e.target.value) }))} />
+                onChange={e => setSetSubFormState((f: any) => ({ ...f, days: Number(e.target.value) }))} />
+            </div>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: th.muted, marginBottom: 6, textTransform: 'uppercase' }}>Orders Limit</div>
+              <input style={th.input} type="number" min={-1}
+                value={setSubForm.ordersLimit}
+                onChange={e => setSetSubFormState((f: any) => ({ ...f, ordersLimit: Number(e.target.value) }))} />
+            </div>
+          </div>
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: th.muted, marginBottom: 6, textTransform: 'uppercase' }}>Admin Note</div>
+            <textarea
+              style={{ ...th.input, minHeight: 72, resize: 'vertical', fontFamily: 'inherit' }}
+              value={setSubForm.note}
+              onChange={e => setSetSubFormState((f: any) => ({ ...f, note: e.target.value }))}
+              placeholder="কেন update/downgrade করা হচ্ছে লিখে রাখুন"
+            />
+          </div>
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: th.muted, marginBottom: 8, textTransform: 'uppercase' }}>Feature Access</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 8 }}>
+              {BILLING_FEATURES.map(item => (
+                <label key={item.key} style={{ ...th.card2, display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: '10px 12px' }}>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(setSubForm.featureAccess?.[item.key])}
+                    onChange={e => setSetSubFormState((f: any) => ({
+                      ...f,
+                      featureAccess: { ...(f.featureAccess || {}), [item.key]: e.target.checked },
+                    }))}
+                  />
+                  <span style={{ fontSize: 12.5, fontWeight: 700, color: th.text }}>{item.label}</span>
+                </label>
+              ))}
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <button style={th.btnPrimary}
-              onClick={() => { onSetSubscription(setSubModal.user?.id, setSubForm.planName, setSubForm.status, setSubForm.days); setSetSubModal(null); }}>
+              onClick={() => {
+                onSetSubscription(setSubModal.user?.id, {
+                  planName: setSubForm.planName,
+                  status: setSubForm.status,
+                  periodDays: setSubForm.days,
+                  ordersLimit: setSubForm.ordersLimit,
+                  note: setSubForm.note,
+                  featureAccess: setSubForm.featureAccess,
+                });
+                setSetSubModal(null);
+              }}>
               💾 Save
             </button>
             <button style={th.btnGhost} onClick={() => setSetSubModal(null)}>Cancel</button>

@@ -14,6 +14,14 @@ export interface CallServerConfig {
 export interface GlobalConfig {
   callFeatureEnabled: boolean;
   callServers: CallServerConfig[];
+  billingSupport?: {
+    label?: string;
+    phone?: string;
+    whatsappUrl?: string;
+    messengerUrl?: string;
+    email?: string;
+    note?: string;
+  };
 }
 
 const DEFAULT_CALL_SERVERS: CallServerConfig[] = [
@@ -326,7 +334,18 @@ export class AdminService {
         return JSON.parse(fs.readFileSync(this.globalConfigFile, 'utf8')) as GlobalConfig;
       }
     } catch {}
-    return { callFeatureEnabled: false, callServers: DEFAULT_CALL_SERVERS };
+    return {
+      callFeatureEnabled: false,
+      callServers: DEFAULT_CALL_SERVERS,
+      billingSupport: {
+        label: 'Admin Support',
+        phone: '',
+        whatsappUrl: '',
+        messengerUrl: '',
+        email: '',
+        note: '',
+      },
+    };
   }
 
   private _writeGlobalConfig(cfg: GlobalConfig): GlobalConfig {
@@ -348,6 +367,18 @@ export class AdminService {
       callServers: Array.isArray(input.callServers)
         ? input.callServers
         : existing.callServers,
+      billingSupport: {
+        label: String(input.billingSupport?.label ?? existing.billingSupport?.label ?? 'Admin Support').trim(),
+        phone: String(input.billingSupport?.phone ?? existing.billingSupport?.phone ?? '').trim(),
+        whatsappUrl: this._sanitizeUrl(
+          input.billingSupport?.whatsappUrl ?? existing.billingSupport?.whatsappUrl ?? '',
+        ),
+        messengerUrl: this._sanitizeUrl(
+          input.billingSupport?.messengerUrl ?? existing.billingSupport?.messengerUrl ?? '',
+        ),
+        email: String(input.billingSupport?.email ?? existing.billingSupport?.email ?? '').trim(),
+        note: String(input.billingSupport?.note ?? existing.billingSupport?.note ?? '').trim(),
+      },
     };
     return this._writeGlobalConfig(merged);
   }
