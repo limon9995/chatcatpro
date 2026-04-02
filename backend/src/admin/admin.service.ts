@@ -187,6 +187,7 @@ export class AdminService {
       'businessName',
       'businessPhone',
       'businessAddress',
+      'websiteUrl',
       'currencySymbol',
       'codLabel',
       'deliveryFeeInsideDhaka',

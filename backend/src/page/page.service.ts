@@ -23,6 +23,7 @@ export class PageService {
       businessName: page.businessName || page.pageName || '',
       businessPhone: page.businessPhone || page.phone || '',
       businessAddress: page.businessAddress || page.address || '',
+      websiteUrl: page.websiteUrl || '',
       logoUrl: page.logoUrl || '',
       memoFooterText: page.memoFooterText || 'Thank you for your order',
       codLabel: page.codLabel || 'COD',
@@ -92,6 +93,8 @@ export class PageService {
       data.businessPhone = body.businessPhone.trim();
     if (typeof body.businessAddress === 'string')
       data.businessAddress = body.businessAddress.trim();
+    if (typeof body.websiteUrl === 'string')
+      data.websiteUrl = body.websiteUrl.trim();
     if (typeof body.logoUrl === 'string') data.logoUrl = body.logoUrl.trim();
     if (typeof body.memoFooterText === 'string')
       data.memoFooterText = body.memoFooterText.trim();

@@ -7,6 +7,7 @@ import { useLanguage } from '../i18n';
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface Settings {
   businessName: string; businessPhone: string; businessAddress: string;
+  websiteUrl: string;
   catalogMessengerUrl: string;
   catalogSlug: string;
   currencySymbol: string; codLabel: string; productCodePrefix: string;
@@ -41,6 +42,7 @@ interface Settings {
 
 const S0: Settings = {
   businessName: '', businessPhone: '', businessAddress: '',
+  websiteUrl: '',
   catalogMessengerUrl: '',
   catalogSlug: '',
   currencySymbol: '৳', codLabel: 'COD', productCodePrefix: 'DF',
@@ -392,6 +394,18 @@ export function SettingsPage({ th, pageId, tab, onToast }: {
               <input style={inp} value={s.businessAddress} onChange={e => setS(p => ({ ...p, businessAddress: e.target.value }))} placeholder="Dhaka, Bangladesh"/>
             </div>
             <div style={{ gridColumn: '1 / -1' }}>
+              <Label text="Website / Store Link" hint={copy('আপনার নিজের website/store link থাকলে bot catalog এর বদলে এই link পাঠাবে', 'If you already have your own website/store, the bot will send this instead of the hosted catalog link')}/>
+              <input
+                style={inp}
+                value={s.websiteUrl}
+                onChange={e => setS(p => ({ ...p, websiteUrl: e.target.value }))}
+                placeholder="https://yourstore.com"
+              />
+              <div style={{ fontSize: 11.5, color: th.muted, marginTop: 5 }}>
+                {copy('খালি রাখলে bot আপনার ChatCat catalog link পাঠাবে।', 'Leave empty to use your ChatCat hosted catalog link.')}
+              </div>
+            </div>
+            <div style={{ gridColumn: '1 / -1' }}>
               <Label text="🌐 Catalog URL Slug" hint={copy('Catalog এর সুন্দর URL — যেমন: limon-tech-diary → /catalog/limon-tech-diary', 'Friendly catalog URL, for example: limon-tech-diary -> /catalog/limon-tech-diary')}/>
               <div style={{ display: 'flex', gap: 8 }}>
                 <div style={{ flex: 1, position: 'relative' }}>
@@ -612,7 +626,7 @@ export function SettingsPage({ th, pageId, tab, onToast }: {
 
         <SaveRow onClick={() => save({
           businessName: s.businessName, businessPhone: s.businessPhone,
-          businessAddress: s.businessAddress, deliveryTimeText: s.deliveryTimeText,
+          businessAddress: s.businessAddress, websiteUrl: s.websiteUrl, deliveryTimeText: s.deliveryTimeText,
           deliveryFeeInsideDhaka: s.deliveryFeeInsideDhaka,
           deliveryFeeOutsideDhaka: s.deliveryFeeOutsideDhaka,
           currencySymbol: s.currencySymbol, codLabel: s.codLabel,

@@ -102,6 +102,7 @@ model Page {
   primaryColor            String?
   catalogMessengerUrl     String?               // Custom link for catalog "Order on Messenger" button
   catalogSlug             String?  @unique      // e.g. "limon-tech-diary" → /catalog/limon-tech-diary
+  websiteUrl              String?               // Optional external store/website URL; bot can send this instead of hosted catalog
   // V8: Custom product code prefix (e.g. "SK", "FZ", "BD"). Default "DF"
   productCodePrefix       String  @default("DF")
   deliveryFeeInsideDhaka  Float   @default(80)

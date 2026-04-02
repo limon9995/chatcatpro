@@ -338,12 +338,11 @@ export class WebhookService {
       return;
     }
 
-    // ── DRAFT: skip field capture for off-topic messages ─────────────────
-    // GREETING/CATALOG_REQUEST/SOFT_HESITATION during draft = off-topic, re-prompt
+    // ── DRAFT: OpenAI/intent may decide the customer left the order flow ──
+    // In that case clear the draft and let the normal routing below handle it.
     if (draft && page.orderModeOn && (intent === 'GREETING' || intent === 'CATALOG_REQUEST' || intent === 'SOFT_HESITATION')) {
-      const msg = aiResult.reply ?? this.draftHandler.reminder(draft);
-      await this.safeSend(token, psid, msg);
-      return;
+      await this.ctx.clearDraft(pageId, psid);
+      draft = null;
     }
 
     // ── ACTIVE DRAFT: capture next field ──────────────────────────────────
@@ -534,10 +533,20 @@ export class WebhookService {
 
     // ── CATALOG REQUEST ────────────────────────────────────────────────────
     if (intent === 'CATALOG_REQUEST') {
+      const businessName = page.businessName || page.pageName || 'আমাদের';
+      const websiteUrl = String(page.websiteUrl || '').trim();
+      if (websiteUrl) {
+        await this.safeSend(
+          token,
+          psid,
+          `${businessName} এর সব product দেখতে এই website/page visit করুন 👇\n\n${websiteUrl}\n\nপছন্দের item দেখে আমাদের message দিন, আমরা help করব 💖`,
+        );
+        return;
+      }
+
       const catalogBaseUrl = (process.env.CATALOG_BASE_URL || 'https://chatcat.pro').replace(/\/$/, '');
       const slug = page.catalogSlug || String(page.id);
       const catalogUrl = `${catalogBaseUrl}/catalog/${slug}`;
-      const businessName = page.businessName || page.pageName || 'আমাদের';
       await this.safeSend(
         token,
         psid,
