@@ -86,6 +86,8 @@ const LAST_NAV_KEY = 'dfbot_last_nav';
 
 interface PageItem { id: number; pageId: string; pageName: string; }
 interface ToastItem { msg: string; type?: 'error' | 'success' | 'info'; id: number; }
+interface BillingPlan { id: string; name: string; displayName: string; priceMonthly: number; }
+interface BillingPayment { id: string; amount: number; method: string; transactionId: string; status: string; createdAt: string; }
 
 function navToParam(nav: NavKey) {
   return nav.toLowerCase().replace(/_/g, '-');
@@ -138,6 +140,18 @@ export function DashboardLayout({
   const [accountingPreset, setAccountingPreset] = useState<AccountingPagePreset | null>(null);
   const [toasts, setToasts]         = useState<ToastItem[]>([]);
   const [billingStatus, setBillingStatus] = useState<any>(null);
+  const [billingOpen, setBillingOpen] = useState(false);
+  const [billingLoading, setBillingLoading] = useState(false);
+  const [billingSubmitting, setBillingSubmitting] = useState(false);
+  const [billingPlans, setBillingPlans] = useState<BillingPlan[]>([]);
+  const [billingPayments, setBillingPayments] = useState<BillingPayment[]>([]);
+  const [billingForm, setBillingForm] = useState({
+    planName: '',
+    amount: '',
+    method: 'bkash',
+    transactionId: '',
+    note: '',
+  });
   const [searchOpen, setSearchOpen]   = useState(false);
   const [searchQ, setSearchQ]         = useState('');
   const [searchResults, setSearchResults] = useState<any>(null);
@@ -201,6 +215,76 @@ export function DashboardLayout({
   useEffect(() => {
     request(`${API_BASE}/billing/status`).then(setBillingStatus).catch(() => {});
   }, []);
+
+  const loadBillingModalData = useCallback(async () => {
+    setBillingLoading(true);
+    try {
+      const [status, plans, payments] = await Promise.all([
+        request<any>(`${API_BASE}/billing/status`),
+        request<BillingPlan[]>(`${API_BASE}/billing/plans`),
+        request<BillingPayment[]>(`${API_BASE}/billing/payments`),
+      ]);
+      setBillingStatus(status);
+      setBillingPlans(plans || []);
+      setBillingPayments(payments || []);
+
+      const selectedPlan =
+        (plans || []).find((plan) => plan.name === status?.planName) ||
+        (plans || [])[0];
+
+      setBillingForm((prev) => ({
+        ...prev,
+        planName: selectedPlan?.name || prev.planName || '',
+        amount: String(selectedPlan?.priceMonthly || status?.priceMonthly || prev.amount || ''),
+      }));
+    } catch (e: any) {
+      showToast(e.message || 'Failed to load billing info', 'error');
+    } finally {
+      setBillingLoading(false);
+    }
+  }, [request]);
+
+  const openBillingModal = useCallback(async () => {
+    setBillingOpen(true);
+    await loadBillingModalData();
+  }, [loadBillingModalData]);
+
+  const submitBillingPayment = useCallback(async () => {
+    const amount = Number(billingForm.amount);
+    if (!amount || amount <= 0) {
+      showToast(copy('সঠিক amount দিন', 'Enter a valid amount'), 'error');
+      return;
+    }
+    if (!billingForm.transactionId.trim()) {
+      showToast(copy('Transaction ID দিন', 'Enter the transaction ID'), 'error');
+      return;
+    }
+
+    setBillingSubmitting(true);
+    try {
+      const selectedPlan = billingPlans.find((plan) => plan.name === billingForm.planName);
+      const planLabel = selectedPlan?.displayName || billingForm.planName || billingStatus?.planDisplay || 'Subscription';
+      const note = [planLabel, billingForm.note.trim()].filter(Boolean).join(' | ');
+
+      const result = await request<any>(`${API_BASE}/billing/payments/submit`, {
+        method: 'POST',
+        body: JSON.stringify({
+          amount,
+          method: billingForm.method,
+          transactionId: billingForm.transactionId.trim(),
+          note,
+        }),
+      });
+
+      showToast(result?.message || copy('Payment submit হয়েছে', 'Payment submitted'), 'success');
+      setBillingForm((prev) => ({ ...prev, transactionId: '', note: '' }));
+      await loadBillingModalData();
+    } catch (e: any) {
+      showToast(e.message || 'Payment submit failed', 'error');
+    } finally {
+      setBillingSubmitting(false);
+    }
+  }, [billingForm, billingPlans, billingStatus?.planDisplay, copy, loadBillingModalData, request]);
 
   const showToast = (msg: string, type?: any) => {
     const id = Date.now();
@@ -515,7 +599,7 @@ export function DashboardLayout({
         if (status === 'trial' && daysLeft <= 3) return (
           <div style={{ background: '#f59e0b', color: '#1c1917', fontSize: 13, fontWeight: 600, padding: '8px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
             <span>⏳ Trial আর মাত্র {daysLeft} দিন বাকি — এখনই upgrade করুন!</span>
-            <button onClick={() => setNav('PAGE' as any)} style={{ background: '#1c1917', color: '#fef3c7', border: 'none', borderRadius: 6, padding: '4px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Upgrade</button>
+            <button onClick={() => void openBillingModal()} style={{ background: '#1c1917', color: '#fef3c7', border: 'none', borderRadius: 6, padding: '4px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Upgrade</button>
           </div>
         );
         if (status === 'trial') return (
@@ -526,13 +610,13 @@ export function DashboardLayout({
         if (status === 'expired' || !canTakeOrders) return (
           <div style={{ background: '#ef4444', color: '#fff', fontSize: 13, fontWeight: 600, padding: '8px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
             <span>❌ Subscription মেয়াদ শেষ — নতুন অর্ডার নেওয়া বন্ধ আছে</span>
-            <button onClick={() => setNav('PAGE' as any)} style={{ background: '#fff', color: '#ef4444', border: 'none', borderRadius: 6, padding: '4px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Payment করুন</button>
+            <button onClick={() => void openBillingModal()} style={{ background: '#fff', color: '#ef4444', border: 'none', borderRadius: 6, padding: '4px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Payment করুন</button>
           </div>
         );
         if (status === 'grace') return (
           <div style={{ background: '#f97316', color: '#fff', fontSize: 13, fontWeight: 600, padding: '8px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
             <span>⚠️ Grace period চলছে — দ্রুত payment করুন</span>
-            <button onClick={() => setNav('PAGE' as any)} style={{ background: '#fff', color: '#f97316', border: 'none', borderRadius: 6, padding: '4px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Payment করুন</button>
+            <button onClick={() => void openBillingModal()} style={{ background: '#fff', color: '#f97316', border: 'none', borderRadius: 6, padding: '4px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Payment করুন</button>
           </div>
         );
         return null;
@@ -648,6 +732,173 @@ export function DashboardLayout({
             onClose={() => setToasts(ts => ts.filter(x => x.id !== t.id))} />
         ))}
       </div>
+
+      {billingOpen && (
+        <div
+          onClick={() => setBillingOpen(false)}
+          style={{ position: 'fixed', inset: 0, zIndex: 10001, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: isMobile ? 'flex-end' : 'center', justifyContent: 'center', padding: isMobile ? 0 : 20 }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ width: '100%', maxWidth: 720, maxHeight: isMobile ? '88vh' : '86vh', overflowY: 'auto', background: th.panel, border: `1px solid ${th.border}`, borderRadius: isMobile ? '18px 18px 0 0' : 18, boxShadow: '0 24px 80px rgba(0,0,0,0.45)', padding: 20 }}
+          >
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 18 }}>
+              <div>
+                <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.04em', color: th.text }}>{copy('Subscription Payment', 'Subscription Payment')}</div>
+                <div style={{ fontSize: 12.5, color: th.muted, marginTop: 4 }}>
+                  {copy('Payment submit করলে admin confirm করার পর subscription active হবে।', 'After you submit payment, your subscription will be activated once the admin confirms it.')}
+                </div>
+              </div>
+              <button onClick={() => setBillingOpen(false)} style={{ ...th.btnGhost, padding: '6px 10px', fontSize: 16, lineHeight: 1 }}>✕</button>
+            </div>
+
+            {billingLoading ? (
+              <div style={{ display: 'flex', justifyContent: 'center', padding: 36 }}>
+                <Spinner size={22} color={th.accent} />
+              </div>
+            ) : (
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1.15fr 0.85fr', gap: 16, marginBottom: 18 }}>
+                  <div style={{ background: th.surface, border: `1px solid ${th.border}`, borderRadius: 14, padding: 16 }}>
+                    <div style={{ fontSize: 11, fontWeight: 800, color: th.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>
+                      {copy('Submit Payment', 'Submit Payment')}
+                    </div>
+
+                    <div style={{ display: 'grid', gap: 12 }}>
+                      <div>
+                        <div style={{ fontSize: 11.5, fontWeight: 700, color: th.muted, marginBottom: 6 }}>{copy('Plan', 'Plan')}</div>
+                        <select
+                          value={billingForm.planName}
+                          onChange={(e) => {
+                            const nextPlan = billingPlans.find((plan) => plan.name === e.target.value);
+                            setBillingForm((prev) => ({
+                              ...prev,
+                              planName: e.target.value,
+                              amount: String(nextPlan?.priceMonthly || prev.amount),
+                            }));
+                          }}
+                          style={th.input}
+                        >
+                          {billingPlans.map((plan) => (
+                            <option key={plan.id} value={plan.name}>
+                              {plan.displayName} - {plan.priceMonthly === 0 ? copy('Custom', 'Custom') : `${plan.priceMonthly} BDT/mo`}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                        <div>
+                          <div style={{ fontSize: 11.5, fontWeight: 700, color: th.muted, marginBottom: 6 }}>{copy('Amount', 'Amount')}</div>
+                          <input
+                            style={th.input}
+                            type="number"
+                            min={1}
+                            value={billingForm.amount}
+                            onChange={(e) => setBillingForm((prev) => ({ ...prev, amount: e.target.value }))}
+                            placeholder="999"
+                          />
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 11.5, fontWeight: 700, color: th.muted, marginBottom: 6 }}>{copy('Method', 'Method')}</div>
+                          <select
+                            value={billingForm.method}
+                            onChange={(e) => setBillingForm((prev) => ({ ...prev, method: e.target.value }))}
+                            style={th.input}
+                          >
+                            <option value="bkash">bKash</option>
+                            <option value="nagad">Nagad</option>
+                            <option value="bank">Bank</option>
+                            <option value="cash">Cash</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div>
+                        <div style={{ fontSize: 11.5, fontWeight: 700, color: th.muted, marginBottom: 6 }}>{copy('Transaction ID', 'Transaction ID')}</div>
+                        <input
+                          style={th.input}
+                          value={billingForm.transactionId}
+                          onChange={(e) => setBillingForm((prev) => ({ ...prev, transactionId: e.target.value }))}
+                          placeholder={copy('যে transaction ID পেয়েছেন', 'Enter your transaction ID')}
+                        />
+                      </div>
+
+                      <div>
+                        <div style={{ fontSize: 11.5, fontWeight: 700, color: th.muted, marginBottom: 6 }}>{copy('Note', 'Note')}</div>
+                        <textarea
+                          style={{ ...th.input, minHeight: 88, resize: 'vertical', fontFamily: 'inherit' }}
+                          value={billingForm.note}
+                          onChange={(e) => setBillingForm((prev) => ({ ...prev, note: e.target.value }))}
+                          placeholder={copy('চাইলে extra note লিখতে পারেন', 'Optional note for the admin')}
+                        />
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+                        <button onClick={() => setBillingOpen(false)} style={{ ...th.btnGhost, padding: '9px 16px' }}>
+                          {copy('বন্ধ করুন', 'Close')}
+                        </button>
+                        <button
+                          onClick={() => void submitBillingPayment()}
+                          disabled={billingSubmitting}
+                          style={{ ...th.btn, padding: '9px 18px', opacity: billingSubmitting ? 0.7 : 1 }}
+                        >
+                          {billingSubmitting ? copy('Submit হচ্ছে...', 'Submitting...') : copy('Payment Submit করুন', 'Submit Payment')}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'grid', gap: 16 }}>
+                    <div style={{ background: th.surface, border: `1px solid ${th.border}`, borderRadius: 14, padding: 16 }}>
+                      <div style={{ fontSize: 11, fontWeight: 800, color: th.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
+                        {copy('Current Plan', 'Current Plan')}
+                      </div>
+                      <div style={{ fontSize: 19, fontWeight: 800, color: th.text }}>{billingStatus?.planDisplay || 'Starter'}</div>
+                      <div style={{ fontSize: 12.5, color: th.muted, marginTop: 4 }}>
+                        {copy('Status', 'Status')}: <span style={{ color: th.text, fontWeight: 700 }}>{billingStatus?.status || '-'}</span>
+                      </div>
+                      <div style={{ fontSize: 12.5, color: th.muted, marginTop: 4 }}>
+                        {copy('Monthly Price', 'Monthly Price')}: <span style={{ color: th.text, fontWeight: 700 }}>{billingStatus?.priceMonthly || 0} BDT</span>
+                      </div>
+                      <div style={{ fontSize: 12.5, color: th.muted, marginTop: 4 }}>
+                        {copy('Days Left', 'Days Left')}: <span style={{ color: th.text, fontWeight: 700 }}>{billingStatus?.daysLeft ?? '-'}</span>
+                      </div>
+                    </div>
+
+                    <div style={{ background: th.surface, border: `1px solid ${th.border}`, borderRadius: 14, padding: 16 }}>
+                      <div style={{ fontSize: 11, fontWeight: 800, color: th.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
+                        {copy('Recent Payments', 'Recent Payments')}
+                      </div>
+                      {billingPayments.length === 0 ? (
+                        <div style={{ fontSize: 12.5, color: th.muted }}>{copy('এখনও কোনো payment submit করা হয়নি', 'No payments submitted yet')}</div>
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          {billingPayments.slice(0, 5).map((payment) => (
+                            <div key={payment.id} style={{ border: `1px solid ${th.border}`, borderRadius: 10, padding: '10px 12px', background: th.panel }}>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                                <span style={{ fontSize: 13, fontWeight: 700, color: th.text }}>{payment.amount} BDT</span>
+                                <span style={{ fontSize: 11, fontWeight: 700, color: payment.status === 'confirmed' ? '#10b981' : '#f59e0b', textTransform: 'uppercase' }}>{payment.status}</span>
+                              </div>
+                              <div style={{ fontSize: 12, color: th.muted, marginTop: 4 }}>
+                                {payment.method} · {payment.transactionId}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ background: th.accentSoft, border: `1px solid ${th.border}`, borderRadius: 12, padding: 14, color: th.textSub, fontSize: 12.5, lineHeight: 1.7 }}>
+                  {copy('Payment number বা merchant account info যদি আলাদা থাকে, সেটা admin থেকে নিয়ে transaction ID এখানে submit করুন।', 'If the payment number or merchant account details are shared separately, complete the payment there and submit the transaction ID here.')}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ── Global Search Modal ──────────────────────────────────────── */}
       {searchOpen && (
