@@ -2,6 +2,7 @@ import { Controller, Get, Param, Query, Res } from '@nestjs/common';
 import { SkipThrottle } from '@nestjs/throttler';
 import type { Response } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
+import { ProductsService } from '../products/products.service';
 
 // ── Video URL helpers ─────────────────────────────────────────────────────────
 
@@ -110,7 +111,10 @@ function poweredByBadge(): string {
 @SkipThrottle() // Public catalog page — no auth needed
 @Controller('catalog')
 export class CatalogController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly productsService: ProductsService,
+  ) {}
 
   private normalizeCodeList(raw?: string): string[] {
     return String(raw || '')
@@ -119,6 +123,27 @@ export class CatalogController {
       .filter(Boolean)
       .filter((value, index, all) => all.indexOf(value) === index)
       .slice(0, 12);
+  }
+
+  private parseReferenceImages(raw?: string | null): string[] {
+    const value = String(raw || '').trim();
+    if (!value) return [];
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) {
+        return parsed
+          .map((item) => String(item || '').trim())
+          .filter(Boolean)
+          .filter((url, index, all) => all.indexOf(url) === index);
+      }
+    } catch {
+      // Allow legacy plain-text values.
+    }
+    return value
+      .split(/[\n,]+/)
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .filter((url, index, all) => all.indexOf(url) === index);
   }
 
   // JSON API — used by dashboard preview
@@ -181,6 +206,9 @@ export class CatalogController {
       return;
     }
 
+    const productWithReferenceImages =
+      await this.productsService.attachReferenceImages(page.id, product);
+
     const pageInfo = {
       id: page.id,
       pageId: page.pageId,
@@ -199,7 +227,7 @@ export class CatalogController {
     };
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.send(
-      this.buildProductHtml(pageInfo, product, {
+      this.buildProductHtml(pageInfo, productWithReferenceImages, {
         selectionMode: select === '1',
         shortlistCodes: this.normalizeCodeList(codes),
       }),
@@ -331,7 +359,12 @@ export class CatalogController {
     const videoType = detectVideoType(p.videoUrl || '');
     const ytId = videoType === 'youtube' ? extractYouTubeId(p.videoUrl) : null;
     const isFB = videoType === 'facebook';
-    const hasMedia = !!(ytId || isFB || p.imageUrl);
+    const galleryImages = [
+      p.imageUrl,
+      ...this.parseReferenceImages(p.referenceImagesJson),
+    ].filter((value, index, all) => !!value && all.indexOf(value) === index);
+    const primaryImage = galleryImages[0] || '';
+    const hasMedia = !!(ytId || isFB || primaryImage);
 
     let mediaBlock = '';
     if (ytId) {
@@ -339,11 +372,23 @@ export class CatalogController {
     } else if (isFB) {
       const fbUrl = encodeURIComponent(p.videoUrl);
       mediaBlock = `<div class="media-frame video-box fb-box"><iframe src="https://www.facebook.com/plugins/video.php?href=${fbUrl}&width=500&show_text=false" frameborder="0" allowfullscreen scrolling="no" allow="autoplay;clipboard-write;encrypted-media;picture-in-picture;web-share" loading="lazy"></iframe></div>`;
-    } else if (p.imageUrl) {
-      mediaBlock = `<div class="media-frame img-frame"><img src="${esc(p.imageUrl)}" alt="${esc(p.name || p.code)}" loading="lazy" onerror="this.closest('.media-frame').outerHTML=noImgBlock"/></div>`;
+    } else if (primaryImage) {
+      mediaBlock = `<div class="media-frame img-frame"><img src="${esc(primaryImage)}" alt="${esc(p.name || p.code)}" loading="lazy" onerror="this.closest('.media-frame').outerHTML=noImgBlock"/></div>`;
     } else {
       mediaBlock = ``;
     }
+
+    const galleryBlock =
+      galleryImages.length > 1
+        ? `<div class="gallery-strip">
+      ${galleryImages
+        .map(
+          (url: string, index: number) =>
+            `<button class="g-thumb ${index === 0 ? 'active' : ''}" type="button" onclick="setGalleryImage('${esc(url)}', this)"><img src="${esc(url)}" alt="${esc(p.name || p.code)} view ${index + 1}" loading="lazy"/></button>`,
+        )
+        .join('')}
+    </div>`
+        : '';
 
     let variantHtml = '';
     if (p.variantOptions) {
@@ -378,7 +423,7 @@ export class CatalogController {
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <meta name="theme-color" content="${primary}"/>
 <meta property="og:title" content="${esc(p.name || p.code)} — ${esc(page.name)}"/>
-${p.imageUrl ? `<meta property="og:image" content="${esc(p.imageUrl)}"/>` : ''}
+${primaryImage ? `<meta property="og:image" content="${esc(primaryImage)}"/>` : ''}
 <meta property="og:description" content="মূল্য: ${currency}${Number(p.price).toLocaleString()} · ${esc(p.description || p.name || '')}"/>
 <title>${esc(p.name || p.code)} — ${esc(page.name)}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
@@ -422,6 +467,11 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:var(--b
 .media-frame{border-radius:var(--r);overflow:hidden;box-shadow:var(--shadow-lg);background:var(--surface);position:relative}
 .img-frame img{width:100%;aspect-ratio:1;object-fit:cover;display:block;transition:transform .5s cubic-bezier(.25,.46,.45,.94)}
 .img-frame:hover img{transform:scale(1.05)}
+.gallery-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(72px,1fr));gap:10px}
+.g-thumb{appearance:none;border:1.5px solid var(--border);border-radius:14px;overflow:hidden;aspect-ratio:1;background:var(--surface);padding:0;cursor:pointer;box-shadow:var(--shadow);transition:transform .15s,border-color .15s,box-shadow .15s}
+.g-thumb:hover{transform:translateY(-1px);border-color:color-mix(in srgb,var(--p) 30%,#dbe4f0)}
+.g-thumb.active{border-color:var(--p);box-shadow:0 0 0 3px color-mix(in srgb,var(--p) 16%,transparent),var(--shadow)}
+.g-thumb img{width:100%;height:100%;object-fit:cover;display:block}
 .video-box{aspect-ratio:16/9;position:relative}
 .fb-box{aspect-ratio:4/3}
 .video-box iframe{position:absolute;inset:0;width:100%;height:100%;border:none}
@@ -443,6 +493,12 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:var(--b
 .mi-item+.mi-item::before{content:'';position:absolute;left:0;top:10%;bottom:10%;width:1px;background:var(--border)}
 .mi-val{font-size:13px;font-weight:800;color:var(--text);margin-bottom:3px}
 .mi-lbl{font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.06em}
+.tips-card{margin-top:14px;background:linear-gradient(135deg,var(--p-light),color-mix(in srgb,var(--p) 6%,#fff));border:1.5px solid color-mix(in srgb,var(--p) 18%,#fff);border-radius:16px;padding:16px 16px 14px;box-shadow:var(--shadow)}
+.tips-kicker{font-size:10.5px;font-weight:800;color:var(--p);letter-spacing:.12em;text-transform:uppercase;margin-bottom:8px}
+.tips-title{font-size:14px;font-weight:800;color:var(--text);margin-bottom:10px}
+.tips-list{display:grid;gap:7px}
+.tip-row{display:flex;align-items:flex-start;gap:8px;font-size:12.5px;color:var(--sub);line-height:1.6}
+.tip-dot{width:22px;height:22px;border-radius:999px;background:rgba(255,255,255,.72);border:1px solid color-mix(in srgb,var(--p) 16%,#fff);display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0}
 
 /* ── INFO CARD ── */
 .info-card{background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow-lg);overflow:hidden}
@@ -604,6 +660,8 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:var(--b
       </div>`
       }
 
+      ${galleryBlock}
+
       <div class="media-info-strip">
         <div class="mi-item">
           <div class="mi-val">${currency}${Number(p.price).toLocaleString()}</div>
@@ -616,6 +674,16 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:var(--b
         <div class="mi-item">
           <div class="mi-val">${esc(p.code)}</div>
           <div class="mi-lbl">Code</div>
+        </div>
+      </div>
+      <div class="tips-card">
+        <div class="tips-kicker">Best Result</div>
+        <div class="tips-title">ছবি পাঠানোর সময় এভাবে দিলে match better হবে</div>
+        <div class="tips-list">
+          <div class="tip-row"><span class="tip-dot">1</span><span>একবারে ১টা product-এর clear photo দিন</span></div>
+          <div class="tip-row"><span class="tip-dot">2</span><span>পুরো product যেন frame-এর মধ্যে থাকে</span></div>
+          <div class="tip-row"><span class="tip-dot">3</span><span>blur / collage না দিয়ে front photo দিন</span></div>
+          <div class="tip-row"><span class="tip-dot">4</span><span>চাইলে color/type লিখুন, যেমন: blue kurti</span></div>
         </div>
       </div>
     </div>
@@ -726,6 +794,13 @@ ${
 
 <script>
 var noImgBlock = '<div class="no-img-card"><div class="no-img-orb no-img-orb-1"></div><div class="no-img-orb no-img-orb-2"></div><div class="no-img-icon">🛍️</div><div class="no-img-code"><div class="no-img-code-lbl">Product Code</div><div class="no-img-code-val">${esc(p.code)}</div></div><div class="no-img-hint">ছবি শীঘ্রই আসছে</div></div>';
+function setGalleryImage(url, button){
+  var frame = document.querySelector('.img-frame img');
+  if(!frame) return;
+  frame.src = url;
+  document.querySelectorAll('.g-thumb').forEach(function(item){ item.classList.remove('active'); });
+  if(button) button.classList.add('active');
+}
 </script>
 ${poweredByBadge()}
 </body>
@@ -861,6 +936,9 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:radial-
 .hero-stat{padding:8px;border-radius:14px;background:var(--surface-2);border:1px solid var(--border)}
 .hero-stat-num{font-size:16px;font-weight:900;color:var(--p);letter-spacing:-.5px}
 .hero-stat-lbl{font-size:10px;color:var(--sub);margin-top:2px}
+.hero-tips{margin-top:12px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.hero-tip{display:flex;gap:8px;align-items:flex-start;padding:9px 10px;border-radius:14px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.12);font-size:11.5px;line-height:1.5}
+.hero-tip-badge{width:22px;height:22px;border-radius:999px;background:rgba(255,255,255,.18);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex-shrink:0}
 
 /* ── SEARCH ── */
 .search-strip{padding:0}
@@ -948,6 +1026,7 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:radial-
   .hero-panel{display:none}
   .hero-title{max-width:none}
   .stats{align-items:flex-start}
+  .hero-tips{grid-template-columns:1fr}
 }
 @media(max-width:600px){
   .header-inner{padding:14px 16px 10px;align-items:flex-start}
@@ -1101,15 +1180,21 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:radial-
         <div class="hero-copy">
           <div class="hero-kicker">Online Storefront</div>
           <div class="hero-title">${search ? `"${esc(search)}" এর result` : `${esc(page.name)} collection`}</div>
-          <div class="hero-text">
-            ${search ? 'Search result থেকে product বেছে নিয়ে সরাসরি order করুন।' : 'Product browse করুন, detail দেখুন, তারপর message দিয়ে order করুন।'}
-          </div>
-          <div class="hero-points">
-            <div class="hero-pill">⚡ Fast Response</div>
-            <div class="hero-pill">🛒 Direct Order</div>
-            <div class="hero-pill">🎬 Photo / Video Ready</div>
-          </div>
+        <div class="hero-text">
+          ${search ? 'Search result থেকে product বেছে নিয়ে সরাসরি order করুন।' : 'Product browse করুন, detail দেখুন, তারপর message দিয়ে order করুন।'}
         </div>
+        <div class="hero-points">
+          <div class="hero-pill">⚡ Fast Response</div>
+          <div class="hero-pill">🛒 Direct Order</div>
+          <div class="hero-pill">🎬 Photo / Video Ready</div>
+        </div>
+        <div class="hero-tips">
+          <div class="hero-tip"><span class="hero-tip-badge">1</span><span>একবারে ১টা product-এর photo দিন</span></div>
+          <div class="hero-tip"><span class="hero-tip-badge">2</span><span>পুরো product যেন clear দেখা যায়</span></div>
+          <div class="hero-tip"><span class="hero-tip-badge">3</span><span>blur / collage না দিয়ে front photo দিন</span></div>
+          <div class="hero-tip"><span class="hero-tip-badge">4</span><span>চাইলে color/type লিখুন, যেমন: black panjabi</span></div>
+        </div>
+      </div>
         <div class="hero-panel">
           <div class="hero-panel-label">Store Snapshot</div>
           <div class="hero-panel-title">${esc(page.name)}</div>

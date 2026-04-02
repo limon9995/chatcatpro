@@ -1563,14 +1563,16 @@ export class BotKnowledgeService {
   private defaultSystemReplies() {
     return this.normalizeSystemReplies({
       ocr_processing: {
-        template: 'স্ক্রিনশট পেয়েছি ✅ Processing হচ্ছে... ⏳',
-        fallback: 'স্ক্রিনশট পেয়েছি ✅ Processing হচ্ছে... ⏳',
+        template:
+          'ছবিটা পেয়েছি ✅ মিলিয়ে দেখছি... ⏳\n\nভালো match পেতে একবারে ১টা product-এর clear photo দিন। চাইলে সাথে color/type-ও লিখতে পারেন 💖',
+        fallback:
+          'ছবিটা পেয়েছি ✅ মিলিয়ে দেখছি... ⏳\n\nভালো match পেতে একবারে ১টা product-এর clear photo দিন। চাইলে সাথে color/type-ও লিখতে পারেন 💖',
       },
       ocr_fail: {
         template:
-          'দুঃখিত, ছবিটি থেকে code পড়া যায়নি। পরিষ্কার screenshot বা code দিন।',
+          'দুঃখিত, ছবিটি থেকে code পড়া যায়নি। পরিষ্কার photo/screenshot বা product code দিন।\n\nভালো match পেতে:\n• একবারে ১টা product দিন\n• পুরো product যেন দেখা যায়\n• blur ছাড়া clear photo দিন\n• চাইলে color/type লিখুন 💖',
         fallback:
-          'দুঃখিত, ছবিটি থেকে code পড়া যায়নি। পরিষ্কার screenshot বা code দিন।',
+          'দুঃখিত, ছবিটি থেকে code পড়া যায়নি। পরিষ্কার photo/screenshot বা product code দিন।\n\nভালো match পেতে:\n• একবারে ১টা product দিন\n• পুরো product যেন দেখা যায়\n• blur ছাড়া clear photo দিন\n• চাইলে color/type লিখুন 💖',
       },
       order_received: {
         template:

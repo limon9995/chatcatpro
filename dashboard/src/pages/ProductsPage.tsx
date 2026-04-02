@@ -10,6 +10,7 @@ type Product = {
   isActive: boolean; postCaption: string | null;
   videoUrl: string | null; catalogVisible: boolean;
   imageUrl: string | null; description: string | null;
+  referenceImagesJson: string | null;
   variantOptions: string | null;
   // V18: Image recognition metadata
   category: string | null; color: string | null;
@@ -20,13 +21,13 @@ type Product = {
 type EditData = {
   name?: string; price?: number; costPrice?: number; stockQty?: number;
   postCaption?: string; videoUrl?: string; catalogVisible?: boolean;
-  description?: string; imageUrl?: string; variantOptions?: string;
+  description?: string; imageUrl?: string; referenceImagesJson?: string; variantOptions?: string;
   // V18: Image recognition metadata
   category?: string; color?: string; tags?: string; imageKeywords?: string;
   visionSearchable?: boolean;
 };
 
-const EMPTY = { code: '', name: '', price: 0, costPrice: 0, stockQty: 0, postCaption: '', videoUrl: '', catalogVisible: true, description: '', imageUrl: '', variantOptions: '', category: '', color: '', tags: '', imageKeywords: '', visionSearchable: false };
+const EMPTY = { code: '', name: '', price: 0, costPrice: 0, stockQty: 0, postCaption: '', videoUrl: '', catalogVisible: true, description: '', imageUrl: '', referenceImagesJson: '', variantOptions: '', category: '', color: '', tags: '', imageKeywords: '', visionSearchable: false };
 
 /** Convert DB JSON variantOptions → textarea text ("Size: S,M,L,XL\nColor: Red,Blue") */
 function variantOptionsToText(json: string | null): string {
@@ -35,6 +36,39 @@ function variantOptionsToText(json: string | null): string {
     const arr: { label: string; choices?: string[] }[] = JSON.parse(json);
     return arr.map(v => v.choices?.length ? `${v.label}: ${v.choices.join(',')}` : v.label).join('\n');
   } catch { return ''; }
+}
+
+function referenceImagesToText(value: string | null): string {
+  if (!value) return '';
+  try {
+    const arr = JSON.parse(value);
+    if (Array.isArray(arr)) {
+      return arr
+        .map(item => String(item || '').trim())
+        .filter(Boolean)
+        .join('\n');
+    }
+  } catch {}
+  return value;
+}
+
+function parseReferenceImages(value: string | null | undefined): string[] {
+  const raw = String(value || '').trim();
+  if (!raw) return [];
+  try {
+    const arr = JSON.parse(raw);
+    if (Array.isArray(arr)) {
+      return arr
+        .map(item => String(item || '').trim())
+        .filter(Boolean)
+        .filter((url, index, all) => all.indexOf(url) === index);
+    }
+  } catch {}
+  return raw
+    .split(/[\n,]+/)
+    .map(item => item.trim())
+    .filter(Boolean)
+    .filter((url, index, all) => all.indexOf(url) === index);
 }
 
 function extractYouTubeId(url: string): string | null {
@@ -69,7 +103,7 @@ export function ProductsPage({ th, pageId, onToast }: {
 
   const openEdit = (p: Product) => {
     setEditId(p.id);
-    setEditData({ name: p.name ?? '', price: p.price, costPrice: p.costPrice, stockQty: p.stockQty, postCaption: p.postCaption ?? '', videoUrl: p.videoUrl ?? '', catalogVisible: p.catalogVisible ?? true, description: p.description ?? '', imageUrl: p.imageUrl ?? '', variantOptions: variantOptionsToText(p.variantOptions), category: p.category ?? '', color: p.color ?? '', tags: p.tags ?? '', imageKeywords: p.imageKeywords ?? '', visionSearchable: p.visionSearchable ?? false });
+    setEditData({ name: p.name ?? '', price: p.price, costPrice: p.costPrice, stockQty: p.stockQty, postCaption: p.postCaption ?? '', videoUrl: p.videoUrl ?? '', catalogVisible: p.catalogVisible ?? true, description: p.description ?? '', imageUrl: p.imageUrl ?? '', referenceImagesJson: referenceImagesToText(p.referenceImagesJson), variantOptions: variantOptionsToText(p.variantOptions), category: p.category ?? '', color: p.color ?? '', tags: p.tags ?? '', imageKeywords: p.imageKeywords ?? '', visionSearchable: p.visionSearchable ?? false });
   };
 
   const saveEdit = async (p: Product) => {
@@ -110,6 +144,7 @@ export function ProductsPage({ th, pageId, onToast }: {
     active:   products.filter(p => p.isActive).length,
     lowStock: products.filter(p => p.stockQty <= 3 && p.isActive).length,
     withImg:  products.filter(p => p.imageUrl).length,
+    withAngles: products.filter(p => parseReferenceImages(p.referenceImagesJson).length > 0).length,
     withVid:  products.filter(p => p.videoUrl).length,
   };
 
@@ -136,6 +171,7 @@ export function ProductsPage({ th, pageId, onToast }: {
           { label: 'Active',    val: stats.active,   color: '#16a34a' },
           { label: 'Low Stock', val: stats.lowStock, color: stats.lowStock > 0 ? '#ea580c' : '#16a34a' },
           { label: 'With Photo',val: stats.withImg,  color: '#8b5cf6' },
+          { label: 'Multi Angle',val: stats.withAngles,  color: '#ec4899' },
           { label: 'With Video',val: stats.withVid,  color: '#0891b2' },
         ].map(k => (
           <div key={k.label} style={{ ...th.card2, textAlign: 'center', padding: '12px 8px' }}>
@@ -182,6 +218,25 @@ export function ProductsPage({ th, pageId, onToast }: {
               <input style={th.input} placeholder="https://youtube.com/watch?v=..." value={newP.videoUrl}
                 onChange={e => setNewP(p => ({ ...p, videoUrl: e.target.value }))} />
             </FieldWithInfo>
+          </div>
+          <div style={{ marginTop: 12 }}>
+            <FieldWithInfo th={th} label="Reference Images" helpText={copy('একই product-এর front, side, back, close-up, video screenshot আলাদা লাইনে দিন। এতে customer shortlist দেখে সহজে confirm করতে পারবে।', 'Paste multiple angles of the same product, one URL per line: front, side, back, close-up, or clear video screenshots.')}>
+              <textarea
+                style={{ ...th.input, minHeight: 92, resize: 'vertical', fontSize: 12.5 }}
+                placeholder={'https://...\nhttps://...\nhttps://...'}
+                value={newP.referenceImagesJson}
+                onChange={e => setNewP(p => ({ ...p, referenceImagesJson: e.target.value }))}
+              />
+            </FieldWithInfo>
+            {parseReferenceImages(newP.referenceImagesJson).length > 0 && (
+              <div style={{ marginTop: 10, display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(72px,1fr))', gap: 8 }}>
+                {parseReferenceImages(newP.referenceImagesJson).slice(0, 6).map((url, idx) => (
+                  <div key={url + idx} style={{ borderRadius: 12, overflow: 'hidden', border: `1px solid ${th.border}`, background: th.surface, aspectRatio: '1 / 1' }}>
+                    <img src={url} alt={`reference-${idx + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
           {newYtId && (
             <div style={{ marginTop: 12, borderRadius: 12, overflow: 'hidden', aspectRatio: '16/9', background: '#000', border: `1px solid ${th.border}` }}>
@@ -290,6 +345,7 @@ export function ProductsPage({ th, pageId, onToast }: {
             {filtered.map(p => {
               const isEditing = editId === p.id;
               const ytId = extractYouTubeId(editData.videoUrl ?? p.videoUrl ?? '');
+              const referenceCount = parseReferenceImages(p.referenceImagesJson).length;
 
               return (
                 <div key={p.id} style={{
@@ -306,6 +362,7 @@ export function ProductsPage({ th, pageId, onToast }: {
                     {/* Badges */}
                     <div style={{ position: 'absolute', top: 8, left: 8, display: 'flex', gap: 4 }}>
                       {p.videoUrl && <span style={{ ...th.pill, background: '#0891b244', color: '#0891b2', border: '1px solid #0891b244', fontSize: 9.5 }}>🎬</span>}
+                      {referenceCount > 0 && <span style={{ ...th.pill, background: '#ec489922', color: '#db2777', border: '1px solid #ec489944', fontSize: 9.5 }}>📸 {referenceCount + 1}</span>}
                       {!p.catalogVisible && <span style={{ ...th.pill, ...th.pillGray, fontSize: 9.5 }}>Hidden</span>}
                     </div>
                     {/* Stock badge */}
@@ -345,6 +402,21 @@ export function ProductsPage({ th, pageId, onToast }: {
                           onChange={e => setEditData(d => ({ ...d, stockQty: Number(e.target.value) }))} />
                         <input style={{ ...th.input, fontSize: 12.5 }} placeholder="Image URL" value={editData.imageUrl ?? ''}
                           onChange={e => setEditData(d => ({ ...d, imageUrl: e.target.value }))} />
+                        <textarea
+                          style={{ ...th.input, fontSize: 12, minHeight: 82, resize: 'vertical' }}
+                          placeholder={'Reference image URLs\nhttps://...\nhttps://...'}
+                          value={editData.referenceImagesJson ?? ''}
+                          onChange={e => setEditData(d => ({ ...d, referenceImagesJson: e.target.value }))}
+                        />
+                        {(editData.referenceImagesJson ?? '').trim() && (
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(56px,1fr))', gap: 6 }}>
+                            {parseReferenceImages(editData.referenceImagesJson).slice(0, 6).map((url, idx) => (
+                              <div key={url + idx} style={{ borderRadius: 8, overflow: 'hidden', border: `1px solid ${th.border}`, aspectRatio: '1 / 1', background: th.surface }}>
+                                <img src={url} alt={`edit-reference-${idx + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                              </div>
+                            ))}
+                          </div>
+                        )}
                         {/* Video URL */}
                         <div>
                           <input style={{ ...th.input, fontSize: 12.5 }} placeholder="YouTube / Facebook video URL"
@@ -435,6 +507,11 @@ export function ProductsPage({ th, pageId, onToast }: {
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                           {p.imageUrl && <img src={p.imageUrl} style={{ width: 32, height: 32, borderRadius: 6, objectFit: 'cover' }} onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}/>}
                           <span style={{ fontWeight: 600 }}>{p.name || '—'}</span>
+                          {parseReferenceImages(p.referenceImagesJson).length > 0 && (
+                            <span style={{ ...th.pill, background: '#ec489922', color: '#db2777', border: '1px solid #ec489944', fontSize: 9.5 }}>
+                              {parseReferenceImages(p.referenceImagesJson).length + 1} views
+                            </span>
+                          )}
                         </div>
                       </td>
                       <td style={{ ...th.td, fontWeight: 700 }}>৳{p.price.toLocaleString()}</td>

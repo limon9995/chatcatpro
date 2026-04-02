@@ -303,6 +303,7 @@ export class ClientDashboardService {
       name: body.name || undefined,
       description: body.description || undefined,
       imageUrl: body.imageUrl || undefined,
+      referenceImagesJson: body.referenceImagesJson || undefined,
       videoUrl: body.videoUrl || undefined,
       postCaption: body.postCaption || undefined,
       catalogVisible:
@@ -316,6 +317,10 @@ export class ClientDashboardService {
       tags: body.tags || undefined,
       imageKeywords: body.imageKeywords || undefined,
       aiDescription: body.aiDescription || undefined,
+      visionSearchable:
+        body.visionSearchable !== undefined
+          ? Boolean(body.visionSearchable)
+          : undefined,
     });
   }
   async updateProduct(pageId: number, code: string, body: any) {
@@ -330,6 +335,10 @@ export class ClientDashboardService {
       isActive: body?.isActive,
       imageUrl:
         body?.imageUrl !== undefined ? String(body.imageUrl || '') : undefined,
+      referenceImagesJson:
+        body?.referenceImagesJson !== undefined
+          ? String(body.referenceImagesJson || '')
+          : undefined,
       videoUrl:
         body?.videoUrl !== undefined ? String(body.videoUrl || '') : undefined,
       postCaption:
@@ -354,6 +363,10 @@ export class ClientDashboardService {
       tags: body?.tags !== undefined ? String(body.tags || '') : undefined,
       imageKeywords: body?.imageKeywords !== undefined ? String(body.imageKeywords || '') : undefined,
       aiDescription: body?.aiDescription !== undefined ? String(body.aiDescription || '') : undefined,
+      visionSearchable:
+        body?.visionSearchable !== undefined
+          ? Boolean(body.visionSearchable)
+          : undefined,
     });
   }
 

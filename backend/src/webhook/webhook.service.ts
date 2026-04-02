@@ -754,8 +754,13 @@ export class WebhookService {
   ): string | null {
     const normalized = text.trim();
     if (!normalized) return null;
+    const asciiNormalized = normalized.replace(/[০-৯]/g, (digit) =>
+      String('০১২৩৪৫৬৭৮৯'.indexOf(digit)),
+    );
 
-    const structured = normalized.match(/SELECT_PRODUCT[:#\s-]*([A-Z0-9-]+)/i);
+    const structured = asciiNormalized.match(
+      /SELECT_PRODUCT[:#\s-]*([A-Z0-9-]+)/i,
+    );
     if (structured) {
       const code = structured[1].toUpperCase();
       return (
@@ -763,13 +768,28 @@ export class WebhookService {
       );
     }
 
-    const explicitCodes = this.botIntent.extractAllCodes(normalized);
+    const explicitCodes = this.botIntent.extractAllCodes(asciiNormalized);
     const byCode = explicitCodes.find((code) =>
       shortlist.some((item) => item.code.toUpperCase() === code.toUpperCase()),
     );
     if (byCode) return byCode.toUpperCase();
 
-    const numMatch = normalized.match(/\b([1-9])\b/);
+    const ordinalMap: Array<[RegExp, number]> = [
+      [/\b(first|1st|prothom|prothomta)\b/i, 0],
+      [/\b(second|2nd|ditio|ditiyota|2 no|2 number)\b/i, 1],
+      [/\b(third|3rd|tritio|tritiyota|3 no|3 number)\b/i, 2],
+      [/\b(fourth|4th|4 no|4 number)\b/i, 3],
+      [/\b(last|শেষ|shesh)\b/i, shortlist.length - 1],
+    ];
+    for (const [pattern, index] of ordinalMap) {
+      if (index >= 0 && pattern.test(asciiNormalized) && shortlist[index]) {
+        return shortlist[index].code;
+      }
+    }
+
+    const numMatch = asciiNormalized.match(
+      /(?:^|[^\d])([1-9])(?:\s*(?:no|number|num|টা|ta))?(?:[^\d]|$)/i,
+    );
     if (numMatch) {
       const index = Number(numMatch[1]) - 1;
       if (shortlist[index]) return shortlist[index].code;
@@ -1215,6 +1235,8 @@ export class WebhookService {
     const pageId = page.id as number;
     const token = page.pageToken as string;
 
+    await this.ctx.clearPendingVisionMatches(pageId, psid);
+
     this.logger.log(
       `[OCR] Starting for page=${page.pageId} psid=${psid} hasCustomerText=${Boolean(customerText)}`,
     );
@@ -1388,6 +1410,7 @@ export class WebhookService {
       if (topScore >= highThreshold) {
         // HIGH confidence — proceed as if customer sent the product code directly
         this.logger.log(`[VisionRecog] HIGH confidence (${topScore.toFixed(2)}) — auto-proceed with ${topMatch.productCode}`);
+        await this.ctx.clearPendingVisionMatches(pageId, psid);
         await this.safeSend(
           token,
           psid,
@@ -1447,7 +1470,7 @@ export class WebhookService {
     const patternLabel = attrs.pattern && attrs.pattern !== 'plain' ? ` ${attrs.pattern}` : '';
     return (
       `আপনার ছবিটা দেখে মনে হচ্ছে এটা${colorLabel}${patternLabel} ${catLabel} টাইপের। ` +
-      `এই পণ্যটি পেয়েছি:`
+      `এই পণ্যটি পেয়েছি:\n\nযদি এটা ঠিক না হয়, আরেকটা clear photo বা product code পাঠান 💖`
     );
   }
 
@@ -1473,7 +1496,7 @@ export class WebhookService {
     return (
       header +
       lines.join('\n') +
-      `\n\nযেটা নিতে চান তার code বা নম্বর লিখুন। চাইলে shortlist link খুলে exact product select করতে পারেন:\n${this.buildVisionShortlistUrl(
+      `\n\nযেটা নিতে চান তার code বা নম্বর লিখুন। চাইলে shortlist link খুলে product page-এ গিয়ে "এই Product টা Select করুন" button চাপতে পারেন:\n${this.buildVisionShortlistUrl(
         page,
         matches.map((m) => m.productCode),
       )}`
@@ -1491,6 +1514,7 @@ export class WebhookService {
     _partialMatches: ProductMatchResult[] | null,
   ): Promise<void> {
     const token = page.pageToken as string;
+    await this.ctx.clearPendingVisionMatches(page.id, psid);
 
     if (page.imageFallbackAiOn) {
       const fbResult = await this.fallbackAi.generateReply({
@@ -1513,8 +1537,7 @@ export class WebhookService {
     await this.safeSend(
       token,
       psid,
-      'ছবিটা থেকে পণ্যটি চেনা যাচ্ছে না। আপনি কি আরও স্পষ্ট ছবি পাঠাবেন, ' +
-        'অথবা পণ্যের কোড জানালে সাহায্য করতে পারব।',
+      'ছবিটা থেকে exact product বুঝতে পারিনি 💖\n\nভালো match পেতে:\n• একবারে ১টা product-এর photo দিন\n• পুরো product যেন frame-এ থাকে\n• front side / clear light-এ ছবি দিন\n• blur বা collage এড়িয়ে চলুন\n• সাথে color/type লিখলে আরো ভালো match হবে\n\nচাইলে product code-ও পাঠাতে পারেন।',
     );
   }
 

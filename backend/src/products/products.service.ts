@@ -3,6 +3,8 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
+import { promises as fs } from 'fs';
+import { join } from 'path';
 import { PrismaService } from '../prisma/prisma.service';
 
 /**
@@ -34,9 +36,113 @@ export function normalizeProductCode(input: string, prefix = 'DF'): string {
   return `${codePrefix}-${digits}`;
 }
 
+function normalizeReferenceImagesJson(input?: string | null): string | null {
+  const raw = String(input || '').trim();
+  if (!raw) return null;
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      const normalized = parsed
+        .map((item) => String(item || '').trim())
+        .filter(Boolean)
+        .filter((value, index, all) => all.indexOf(value) === index);
+      return normalized.length ? JSON.stringify(normalized) : null;
+    }
+  } catch {
+    // Allow one-URL-per-line textarea input.
+  }
+
+  const normalized = raw
+    .split(/[\n,]+/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .filter((value, index, all) => all.indexOf(value) === index);
+
+  return normalized.length ? JSON.stringify(normalized) : null;
+}
+
 @Injectable()
 export class ProductsService {
+  private readonly referenceImagesFile = join(
+    process.cwd(),
+    'data',
+    'product-reference-images.json',
+  );
+
   constructor(private prisma: PrismaService) {}
+
+  private productRefKey(pageId: number, code: string): string {
+    return `${pageId}:${code}`;
+  }
+
+  private async loadReferenceImagesMap(): Promise<Record<string, string>> {
+    try {
+      const raw = await fs.readFile(this.referenceImagesFile, 'utf8');
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (error: any) {
+      if (error?.code === 'ENOENT') return {};
+      throw error;
+    }
+  }
+
+  private async saveReferenceImagesMap(
+    data: Record<string, string>,
+  ): Promise<void> {
+    await fs.mkdir(join(process.cwd(), 'data'), { recursive: true });
+    await fs.writeFile(
+      this.referenceImagesFile,
+      JSON.stringify(data, null, 2),
+      'utf8',
+    );
+  }
+
+  private async setReferenceImagesForProduct(
+    pageId: number,
+    code: string,
+    raw?: string | null,
+  ): Promise<void> {
+    const normalized = normalizeReferenceImagesJson(raw);
+    const all = await this.loadReferenceImagesMap();
+    const key = this.productRefKey(pageId, code);
+    if (normalized) all[key] = normalized;
+    else delete all[key];
+    await this.saveReferenceImagesMap(all);
+  }
+
+  private async removeReferenceImagesForProduct(
+    pageId: number,
+    code: string,
+  ): Promise<void> {
+    const all = await this.loadReferenceImagesMap();
+    delete all[this.productRefKey(pageId, code)];
+    await this.saveReferenceImagesMap(all);
+  }
+
+  async attachReferenceImages<T extends { code: string }>(
+    pageId: number,
+    product: T,
+  ): Promise<T & { referenceImagesJson: string | null }> {
+    const all = await this.loadReferenceImagesMap();
+    return {
+      ...product,
+      referenceImagesJson:
+        all[this.productRefKey(pageId, product.code)] || null,
+    };
+  }
+
+  async attachReferenceImagesList<T extends { code: string }>(
+    pageId: number,
+    products: T[],
+  ): Promise<Array<T & { referenceImagesJson: string | null }>> {
+    const all = await this.loadReferenceImagesMap();
+    return products.map((product) => ({
+      ...product,
+      referenceImagesJson:
+        all[this.productRefKey(pageId, product.code)] || null,
+    }));
+  }
 
   async create(data: {
     pageId: number;
@@ -47,6 +153,7 @@ export class ProductsService {
     name?: string;
     description?: string;
     imageUrl?: string;
+    referenceImagesJson?: string | null;
     postCaption?: string;
     videoUrl?: string;
     catalogVisible?: boolean;
@@ -68,7 +175,7 @@ export class ProductsService {
       throw new BadRequestException(
         `Product ${code} already exists for this page`,
       );
-    return this.prisma.product.create({
+    const created = await this.prisma.product.create({
       data: {
         pageId: data.pageId,
         code,
@@ -91,16 +198,23 @@ export class ProductsService {
         visionSearchable: data.visionSearchable ?? false,
       },
     });
+    await this.setReferenceImagesForProduct(
+      data.pageId,
+      created.code,
+      data.referenceImagesJson,
+    );
+    return this.attachReferenceImages(data.pageId, created);
   }
 
   async listByPage(pageId: number, query?: string) {
     const where: any = { pageId };
     if (query) where.code = { contains: query.toUpperCase() };
-    return this.prisma.product.findMany({
+    const products = await this.prisma.product.findMany({
       where,
       orderBy: { id: 'desc' },
       take: 500,
     });
+    return this.attachReferenceImagesList(pageId, products);
   }
 
   async findByCode(pageId: number, codeRaw: string) {
@@ -109,7 +223,7 @@ export class ProductsService {
       where: { pageId_code: { pageId, code } },
     });
     if (!p) throw new NotFoundException('Product not found');
-    return p;
+    return this.attachReferenceImages(pageId, p);
   }
 
   async updateOne(
@@ -122,6 +236,7 @@ export class ProductsService {
       name?: string;
       description?: string;
       imageUrl?: string;
+      referenceImagesJson?: string | null;
       isActive?: boolean;
       postCaption?: string;
       videoUrl?: string;
@@ -170,10 +285,18 @@ export class ProductsService {
     if (typeof data.visionSearchable === 'boolean') payload.visionSearchable = data.visionSearchable;
     if (Object.keys(payload).length === 0)
       return this.findByCode(pageId, codeRaw);
-    return this.prisma.product.update({
+    const updated = await this.prisma.product.update({
       where: { pageId_code: { pageId, code } },
       data: payload,
     });
+    if (data.referenceImagesJson !== undefined) {
+      await this.setReferenceImagesForProduct(
+        pageId,
+        updated.code,
+        data.referenceImagesJson,
+      );
+    }
+    return this.attachReferenceImages(pageId, updated);
   }
   async updateStock(pageId: number, codeRaw: string, delta: number) {
     const p = await this.findByCode(pageId, codeRaw);
@@ -196,6 +319,7 @@ export class ProductsService {
     await this.prisma.product.delete({
       where: { pageId_code: { pageId, code } },
     });
+    await this.removeReferenceImagesForProduct(pageId, code);
     return { success: true };
   }
 
