@@ -261,6 +261,9 @@ export default function App() {
   }
 
   if (screen === 'connect-page') {
+    if (!user) {
+      return <ScreenFallback dark={dark} />;
+    }
     return (
       <Suspense fallback={<ScreenFallback dark={dark} />}>
         <ConnectPageScreen dark={dark} userId={user?.id || ''} onConnected={loadMyPages} onLogout={handleLogout} />
@@ -300,5 +303,5 @@ export default function App() {
     return <ScreenFallback dark={dark} />;
   }
 
-  return null;
+  return <ScreenFallback dark={dark} />;
 }

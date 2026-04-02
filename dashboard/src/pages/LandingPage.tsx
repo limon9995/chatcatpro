@@ -1,3 +1,5 @@
+import { useState } from 'react';
+
 interface Props {
   dark: boolean;
   setDark: (next: boolean) => void;
@@ -330,17 +332,53 @@ document.querySelectorAll('.feature-card,.step,.pricing-card').forEach(function(
 </html>`;
 
 export function LandingPage(_props: Props) {
+  const [loaded, setLoaded] = useState(false);
+
   return (
-    <iframe
-      title="ChatCat Pro Landing"
-      srcDoc={LANDING_HTML}
+    <div
       style={{
-        width: '100%',
+        position: 'relative',
         minHeight: '100vh',
-        border: 'none',
-        display: 'block',
         background: '#06060a',
       }}
-    />
+    >
+      {!loaded && (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background:
+              'radial-gradient(circle at top, rgba(79,70,229,0.22), transparent 38%), #06060a',
+            color: '#f0f0f5',
+            fontFamily: '"DM Sans","Noto Sans Bengali",system-ui,sans-serif',
+            zIndex: 0,
+          }}
+        >
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: 30, fontWeight: 800, letterSpacing: '-0.04em' }}>ChatCat Pro</div>
+            <div style={{ marginTop: 10, fontSize: 13, opacity: 0.6 }}>লোড হচ্ছে...</div>
+          </div>
+        </div>
+      )}
+      <iframe
+        title="ChatCat Pro Landing"
+        srcDoc={LANDING_HTML}
+        onLoad={() => setLoaded(true)}
+        style={{
+          width: '100%',
+          minHeight: '100vh',
+          border: 'none',
+          display: 'block',
+          background: '#06060a',
+          position: 'relative',
+          zIndex: 1,
+          opacity: loaded ? 1 : 0.01,
+          transition: 'opacity .18s ease',
+        }}
+      />
+    </div>
   );
 }
