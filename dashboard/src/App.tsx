@@ -21,9 +21,20 @@ const AdminPanel = lazy(async () => {
 type MyPage = { id: number; pageId: string; pageName: string; isActive: boolean; automationOn: boolean };
 type Screen = 'landing' | 'login' | 'signup' | 'forgot-password' | 'change-password' | 'connect-page' | 'dashboard' | 'admin';
 
+function normalizePathname(pathname: string) {
+  const cleaned = String(pathname || '/')
+    .replace(/\/+(null|undefined)(?=\/|$)/gi, '')
+    .replace(/\/{2,}/g, '/')
+    .trim();
+  if (!cleaned || cleaned === '') return '/';
+  return cleaned.startsWith('/') ? cleaned : `/${cleaned}`;
+}
+
 function replaceUrl(params: URLSearchParams) {
   const query = params.toString();
-  const next = query ? `/?${query}` : '/';
+  const nextPath = normalizePathname(window.location.pathname);
+  const safePath = nextPath === '/' ? '/' : '/';
+  const next = query ? `${safePath}?${query}` : safePath;
   window.history.replaceState({}, '', next);
 }
 
@@ -79,7 +90,7 @@ export default function App() {
   }, [dark]);
 
   useEffect(() => {
-    if (window.location.pathname !== '/') {
+    if (normalizePathname(window.location.pathname) !== '/') {
       const params = new URLSearchParams(window.location.search);
       replaceUrl(params);
     }

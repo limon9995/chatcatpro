@@ -300,10 +300,12 @@ footer{border-top:1px solid var(--border);padding:40px 5%;display:flex;justify-c
 const DASHBOARD_URL = (function() {
   var meta = document.querySelector('meta[name="dashboard-url"]');
   if (meta) {
-    var content = meta.getAttribute('content');
-    if (content && content !== 'null' && content !== 'undefined') return content;
+    var content = String(meta.getAttribute('content') || '').trim();
+    if (content && content !== 'null' && content !== 'undefined') {
+      return content.replace(/\/+(null|undefined)(?=\/|$)/gi, '').replace(/\/+$/,'');
+    }
   }
-  return window.location.origin;
+  return String(window.location.origin || '').replace(/\/+$/,'');
 })();
 ['nav-login','cta-login','hero-signup'].forEach(function(id) {
   var el = document.getElementById(id);

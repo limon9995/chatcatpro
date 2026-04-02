@@ -5,6 +5,22 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>dashboard</title>
+    <script>
+      (function () {
+        try {
+          var path = String(window.location.pathname || '/');
+          var normalized = path
+            .replace(/\/+(null|undefined)(?=\/|$)/gi, '')
+            .replace(/\/{2,}/g, '/');
+          if (!normalized || normalized === '') normalized = '/';
+          if (!normalized.startsWith('/')) normalized = '/' + normalized;
+          if (normalized !== path) {
+            var next = normalized + window.location.search + window.location.hash;
+            window.history.replaceState({}, '', next);
+          }
+        } catch (_) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
