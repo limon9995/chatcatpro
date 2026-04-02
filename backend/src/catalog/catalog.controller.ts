@@ -112,10 +112,23 @@ function poweredByBadge(): string {
 export class CatalogController {
   constructor(private readonly prisma: PrismaService) {}
 
+  private normalizeCodeList(raw?: string): string[] {
+    return String(raw || '')
+      .split(',')
+      .map((item) => item.trim().toUpperCase())
+      .filter(Boolean)
+      .filter((value, index, all) => all.indexOf(value) === index)
+      .slice(0, 12);
+  }
+
   // JSON API — used by dashboard preview
   @Get(':pageId/data')
-  async getCatalogData(@Param('pageId') pid: string, @Query('q') q?: string) {
-    return this.buildData(pid, q);
+  async getCatalogData(
+    @Param('pageId') pid: string,
+    @Query('q') q?: string,
+    @Query('codes') codes?: string,
+  ) {
+    return this.buildData(pid, q, codes);
   }
 
   // Single product HTML page
@@ -124,6 +137,8 @@ export class CatalogController {
     @Param('pageId') pid: string,
     @Param('code') code: string,
     @Res() res: Response,
+    @Query('select') select?: string,
+    @Query('codes') codes?: string,
   ) {
     const page = await this.prisma.page.findFirst({
       where: pageWhere(pid),
@@ -183,17 +198,24 @@ export class CatalogController {
       ),
     };
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.send(this.buildProductHtml(pageInfo, product));
+    res.send(
+      this.buildProductHtml(pageInfo, product, {
+        selectionMode: select === '1',
+        shortlistCodes: this.normalizeCodeList(codes),
+      }),
+    );
   }
 
   // Public HTML catalog page
   @Get(':pageId')
   async getCatalogHtml(
     @Param('pageId') pid: string,
-    @Query('q') q: string,
     @Res() res: Response,
+    @Query('q') q: string,
+    @Query('codes') codes?: string,
+    @Query('select') select?: string,
   ) {
-    const data = await this.buildData(pid, q);
+    const data = await this.buildData(pid, q, codes);
     if ('error' in data) {
       res
         .status(404)
@@ -203,11 +225,16 @@ export class CatalogController {
       return;
     }
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.send(this.buildHtml(data, q || ''));
+    res.send(
+      this.buildHtml(data, q || '', {
+        selectionMode: select === '1',
+        shortlistCodes: this.normalizeCodeList(codes),
+      }),
+    );
   }
 
   // ── Data builder ────────────────────────────────────────────────────────
-  private async buildData(pageId: string, search?: string) {
+  private async buildData(pageId: string, search?: string, codeFilterRaw?: string) {
     const page = await this.prisma.page.findFirst({
       where: pageWhere(pageId),
       select: {
@@ -238,6 +265,10 @@ export class CatalogController {
         { code: { contains: search.toUpperCase() } },
         { description: { contains: search } },
       ];
+    }
+    const filteredCodes = this.normalizeCodeList(codeFilterRaw);
+    if (filteredCodes.length > 0) {
+      where.code = { in: filteredCodes };
     }
 
     const products = await this.prisma.product.findMany({
@@ -280,10 +311,22 @@ export class CatalogController {
   }
 
   // ── Single product HTML page ─────────────────────────────────────────────
-  private buildProductHtml(page: any, p: any): string {
+  private buildProductHtml(
+    page: any,
+    p: any,
+    opts?: { selectionMode?: boolean; shortlistCodes?: string[] },
+  ): string {
     const primary = esc(page.primaryColor);
     const currency = esc(page.currency);
     const inStock = p.stockQty > 0;
+    const selectionMode = Boolean(opts?.selectionMode);
+    const shortlistCodes = opts?.shortlistCodes || [];
+    const shortlistQuery = shortlistCodes.length
+      ? `?select=1&codes=${encodeURIComponent(shortlistCodes.join(','))}`
+      : '?select=1';
+    const catalogHref = shortlistCodes.length
+      ? `/catalog/${esc(page.id)}${shortlistQuery}`
+      : `/catalog/${esc(page.id)}`;
 
     const videoType = detectVideoType(p.videoUrl || '');
     const ytId = videoType === 'youtube' ? extractYouTubeId(p.videoUrl) : null;
@@ -325,6 +368,7 @@ export class CatalogController {
     }
 
     const orderText = encodeURIComponent(`${p.code} order করতে চাই`);
+    const selectText = encodeURIComponent(`SELECT_PRODUCT:${p.code}`);
     const priceFormatted = Number(p.price).toLocaleString('bn-BD');
 
     return `<!DOCTYPE html>
@@ -530,7 +574,7 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:var(--b
         : `<div class="nav-logo-ph">🛍️</div>`
     }
     <span class="nav-biz">${esc(page.name)}</span>
-    <a href="/catalog/${esc(page.id)}" class="nav-back">
+    <a href="${catalogHref}" class="nav-back">
       <svg viewBox="0 0 20 20"><path d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z"/></svg>
       সব Product
     </a>
@@ -607,6 +651,17 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:var(--b
         }
 
         <div class="cta-stack">
+          ${
+            selectionMode
+              ? `<a class="btn-order${!inStock ? ' disabled' : ''}"
+            href="${esc(page.messengerUrl)}?text=${selectText}"
+            target="_blank" rel="noopener"
+            ${!inStock ? 'onclick="return false"' : ''}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            ${inStock ? 'এই Product টা Select করুন' : 'Stock নেই'}
+          </a>`
+              : ''
+          }
           <a class="btn-order${!inStock ? ' disabled' : ''}"
             href="${esc(page.messengerUrl)}?text=${orderText}"
             target="_blank" rel="noopener"
@@ -614,8 +669,8 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:var(--b
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
             ${inStock ? 'Messenger এ Order করুন' : 'Stock নেই'}
           </a>
-          <a class="btn-secondary" href="/catalog/${esc(page.id)}">
-            🛍️ সব Product দেখুন
+          <a class="btn-secondary" href="${catalogHref}">
+            🛍️ ${shortlistCodes.length ? 'শর্টলিস্টে ফিরে যান' : 'সব Product দেখুন'}
           </a>
         </div>
 
@@ -678,10 +733,19 @@ ${poweredByBadge()}
   }
 
   // ── Catalog HTML page ──────────────────────────────────────────────────────
-  private buildHtml(data: any, search: string): string {
+  private buildHtml(
+    data: any,
+    search: string,
+    opts?: { selectionMode?: boolean; shortlistCodes?: string[] },
+  ): string {
     const { page, products } = data;
     const primary = esc(page.primaryColor);
     const currency = esc(page.currency);
+    const selectionMode = Boolean(opts?.selectionMode);
+    const shortlistCodes = opts?.shortlistCodes || [];
+    const shortlistQuery = shortlistCodes.length
+      ? `?select=1&codes=${encodeURIComponent(shortlistCodes.join(','))}`
+      : '?select=1';
 
     const cards = products
       .map((p: any, idx: number) => {
@@ -705,7 +769,7 @@ ${poweredByBadge()}
         }
 
         return `
-      <a class="card" href="/catalog/${esc(page.id)}/product/${esc(p.code)}" style="animation-delay:${delay}ms" id="p-${esc(p.id)}" data-price="${Number(p.price) || 0}" data-custom-index="${idx}" data-new-index="${idx}" data-product-id="${esc(p.id)}">
+      <a class="card" href="/catalog/${esc(page.id)}/product/${esc(p.code)}${selectionMode ? shortlistQuery : ''}" style="animation-delay:${delay}ms" id="p-${esc(p.id)}" data-price="${Number(p.price) || 0}" data-custom-index="${idx}" data-new-index="${idx}" data-product-id="${esc(p.id)}">
         <div class="c-media">
           ${topBlock}
           ${!inStock ? '<div class="c-out-badge">Stock Out</div>' : ''}
@@ -717,7 +781,7 @@ ${poweredByBadge()}
           ${p.description ? `<div class="c-desc">${esc(p.description)}</div>` : ''}
           <div class="c-footer">
             <div class="c-price">${currency}${Number(p.price).toLocaleString()}</div>
-            <div class="c-order ${!inStock ? 'c-order-dis' : ''}">${inStock ? '💬 Order' : 'Out'}</div>
+            <div class="c-order ${!inStock ? 'c-order-dis' : ''}">${inStock ? (selectionMode ? '✅ Select' : '💬 Order') : 'Out'}</div>
           </div>
         </div>
       </a>`;
@@ -729,8 +793,8 @@ ${poweredByBadge()}
         ? `
       <div class="empty">
         <div class="empty-icon">🔍</div>
-        <div class="empty-title">${search ? `"${esc(search)}" পাওয়া যায়নি` : 'কোনো product নেই'}</div>
-        ${search ? `<a href="/catalog/${esc(page.id)}" class="empty-btn">সব product দেখুন</a>` : ''}
+        <div class="empty-title">${search ? `"${esc(search)}" পাওয়া যায়নি` : selectionMode ? 'ম্যাচ করা shortlist এ কোনো product নেই' : 'কোনো product নেই'}</div>
+        ${(search || selectionMode) ? `<a href="/catalog/${esc(page.id)}" class="empty-btn">সব product দেখুন</a>` : ''}
       </div>`
         : '';
 

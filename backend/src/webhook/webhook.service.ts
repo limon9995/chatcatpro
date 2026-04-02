@@ -188,7 +188,8 @@ export class WebhookService {
     }
     const awaitingConfirm =
       draft?.currentStep === 'confirm' ||
-      (draft?.pendingMultiPreview?.length ?? 0) > 0;
+      (draft?.pendingMultiPreview?.length ?? 0) > 0 ||
+      (draft?.pendingVisionMatches?.length ?? 0) > 0;
 
     // OpenAI decides first; keyword matcher takes over if AI is unavailable/unknown.
     const aiResult = await this.aiIntent.detectIntent(
@@ -254,6 +255,11 @@ export class WebhookService {
         const msg = aiResult.reply ?? 'ঠিক আছে 💖 কোনো সমস্যা নেই। কিছু জানার থাকলে বলুন।';
         await this.safeSend(token, psid, msg);
       }
+      return;
+    }
+
+    if ((draft?.pendingVisionMatches?.length ?? 0) > 0) {
+      await this.handlePendingVisionSelection(page, psid, text, draft!);
       return;
     }
 
@@ -687,6 +693,98 @@ export class WebhookService {
         'সবগুলো order করতে **confirm** লিখুন, বাতিল করতে **cancel** লিখুন 💖',
       );
     }
+  }
+
+  private async handlePendingVisionSelection(
+    page: any,
+    psid: string,
+    text: string,
+    draft: DraftSession,
+  ): Promise<void> {
+    const token = page.pageToken as string;
+    const pendingCodes = (draft.pendingVisionMatches || []).map((code) =>
+      String(code).toUpperCase(),
+    );
+    const presented = await this.ctx.getLastPresentedProducts(page.id, psid);
+    const shortlist = presented.filter((item) =>
+      pendingCodes.includes(String(item.code).toUpperCase()),
+    );
+
+    if (!shortlist.length) {
+      await this.ctx.clearDraft(page.id, psid);
+      await this.safeSend(
+        token,
+        psid,
+        'Shortlist টি আর active নেই 💖 আবার product এর ছবি দিন বা code লিখুন।',
+      );
+      return;
+    }
+
+    const selectedCode = this.resolveVisionSelectionCode(text, shortlist);
+    if (!selectedCode) {
+      const options = shortlist
+        .map(
+          (item, index) =>
+            `${index + 1}. ${item.code}${item.name ? ` — ${item.name}` : ''}`,
+        )
+        .join('\n');
+      await this.safeSend(
+        token,
+        psid,
+        `আমি এখনো বুঝতে পারিনি কোনটা নিতে চান 💖\n\n${options}\n\nযেটা নিতে চান তার code বা নম্বর লিখুন। চাইলে shortlist link খুলেও select করতে পারেন:\n${this.buildVisionShortlistUrl(page, pendingCodes)}`,
+      );
+      return;
+    }
+
+    await this.ctx.clearDraft(page.id, psid);
+    await this.handleExplicitProductCode(
+      page,
+      psid,
+      `${selectedCode} order করতে চাই`,
+      'ORDER_INTENT',
+      null,
+      {},
+      selectedCode,
+    );
+  }
+
+  private resolveVisionSelectionCode(
+    text: string,
+    shortlist: Array<{ code: string; price: number; name?: string | null }>,
+  ): string | null {
+    const normalized = text.trim();
+    if (!normalized) return null;
+
+    const structured = normalized.match(/SELECT_PRODUCT[:#\s-]*([A-Z0-9-]+)/i);
+    if (structured) {
+      const code = structured[1].toUpperCase();
+      return (
+        shortlist.find((item) => item.code.toUpperCase() === code)?.code || null
+      );
+    }
+
+    const explicitCodes = this.botIntent.extractAllCodes(normalized);
+    const byCode = explicitCodes.find((code) =>
+      shortlist.some((item) => item.code.toUpperCase() === code.toUpperCase()),
+    );
+    if (byCode) return byCode.toUpperCase();
+
+    const numMatch = normalized.match(/\b([1-9])\b/);
+    if (numMatch) {
+      const index = Number(numMatch[1]) - 1;
+      if (shortlist[index]) return shortlist[index].code;
+    }
+
+    return null;
+  }
+
+  private buildVisionShortlistUrl(page: any, codes: string[]): string {
+    const base = (process.env.CATALOG_BASE_URL || 'https://chatcat.pro').replace(
+      /\/$/,
+      '',
+    );
+    const pageKey = page.catalogSlug || page.pageId || page.id;
+    return `${base}/catalog/${encodeURIComponent(String(pageKey))}?select=1&codes=${encodeURIComponent(codes.join(','))}`;
   }
 
   private async handleExplicitProductCode(
@@ -1302,16 +1400,24 @@ export class WebhookService {
         this.logger.log(
           `[VisionRecog] MEDIUM confidence (${topScore.toFixed(2)}) — showing ${matches.length} options`,
         );
-        await this.safeSend(
-          token,
+        await this.ctx.setPendingVisionMatches(
+          pageId,
           psid,
-          this.buildVisionMediumConfidenceMsg(attrs, matches),
+          matches.map((m) => m.productCode),
         );
-        // Save matches as "last presented" so customer can reply with a number or code
         await this.ctx.setLastPresentedProducts(
           pageId,
           psid,
-          matches.map((m) => ({ code: m.productCode, price: m.price })),
+          matches.map((m) => ({
+            code: m.productCode,
+            price: m.price,
+            name: m.productName,
+          })),
+        );
+        await this.safeSend(
+          token,
+          psid,
+          this.buildVisionMediumConfidenceMsg(page, attrs, matches),
         );
 
       } else {
@@ -1347,6 +1453,7 @@ export class WebhookService {
 
   /** Build reply for medium-confidence vision match — show options list */
   private buildVisionMediumConfidenceMsg(
+    page: any,
     attrs: import('../vision-analysis/vision-analysis.interface').VisionAttributes,
     matches: ProductMatchResult[],
   ): string {
@@ -1363,7 +1470,14 @@ export class WebhookService {
       return `${i + 1}. ${m.productCode}${name} (৳${m.price})`;
     });
 
-    return header + lines.join('\n') + '\n\nকোনটি নিতে চান? কোড বা নম্বর লিখুন।';
+    return (
+      header +
+      lines.join('\n') +
+      `\n\nযেটা নিতে চান তার code বা নম্বর লিখুন। চাইলে shortlist link খুলে exact product select করতে পারেন:\n${this.buildVisionShortlistUrl(
+        page,
+        matches.map((m) => m.productCode),
+      )}`
+    );
   }
 
   /**
