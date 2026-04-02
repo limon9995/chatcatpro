@@ -4,6 +4,7 @@ import { API_BASE, useApi } from '../hooks/useApi';
 import { useLanguage } from '../i18n';
 
 type ConnectedPage = { id: number; pageId: string; pageName: string; isActive: boolean };
+type OAuthPage = { pageId: string; pageName: string; pageToken: string };
 
 interface Props {
   dark: boolean; userId: string;
@@ -22,6 +23,10 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
   const [manualToken, setManualToken]       = useState('');
   const [manualBusy, setManualBusy]         = useState(false);
   const [manualSuccess, setManualSuccess]   = useState(false);
+  const [tab, setTab] = useState<'oauth' | 'manual'>('oauth');
+  const [oauthBusy, setOauthBusy] = useState(false);
+  const [oauthPages, setOauthPages] = useState<OAuthPage[]>([]);
+  const [oauthConnectingPageId, setOauthConnectingPageId] = useState<string | null>(null);
 
   const bg     = dark ? '#080e1c' : '#f1f3fa';
   const panel  = dark ? '#0d1526' : '#fff';
@@ -36,6 +41,26 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
       .then(pages => setAlreadyConnected(pages || []))
       .catch(() => {});
   }, [request]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const oauthResultId = params.get('oauthResult');
+    if (!oauthResultId) return;
+
+    setOauthBusy(true);
+    setError('');
+    request<{ pages: OAuthPage[] }>(`${API_BASE}/facebook/oauth-result/${encodeURIComponent(oauthResultId)}`)
+      .then((result) => {
+        setOauthPages(result?.pages || []);
+        setTab('oauth');
+        const nextParams = new URLSearchParams(window.location.search);
+        nextParams.delete('oauthResult');
+        const next = nextParams.toString() ? `/?${nextParams.toString()}` : '/?mode=connect-page';
+        window.history.replaceState({}, '', next);
+      })
+      .catch((e: any) => setError(e?.message || copy('Facebook page list load করা যায়নি', 'Could not load Facebook pages')))
+      .finally(() => setOauthBusy(false));
+  }, [copy, request]);
 
   const connectManual = async () => {
     const pname = manualPageName.trim();
@@ -55,6 +80,39 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
         setError(e?.message || copy('Connect করা যায়নি', 'Connect failed'));
         setManualBusy(false);
       }
+    }
+  };
+
+  const startOAuthConnect = async () => {
+    setOauthBusy(true);
+    setError('');
+    try {
+      const result = await request<{ url: string }>(`${API_BASE}/facebook/oauth-url`);
+      if (!result?.url) throw new Error('Facebook OAuth URL missing');
+      window.location.href = result.url;
+    } catch (e: any) {
+      setError(e?.message || copy('Facebook login শুরু করা যায়নি', 'Could not start Facebook login'));
+      setOauthBusy(false);
+    }
+  };
+
+  const connectOAuthPage = async (page: OAuthPage) => {
+    setOauthConnectingPageId(page.pageId);
+    setError('');
+    try {
+      await request(`${API_BASE}/facebook/connect`, {
+        method: 'POST',
+        body: JSON.stringify({
+          pageId: page.pageId,
+          pageName: page.pageName,
+          pageToken: page.pageToken,
+        }),
+      });
+      onConnected();
+    } catch (e: any) {
+      setError(e?.message || copy('Page connect করা যায়নি', 'Page connect failed'));
+    } finally {
+      setOauthConnectingPageId(null);
     }
   };
 
@@ -200,6 +258,98 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
         )}
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <button
+              onClick={() => setTab('oauth')}
+              style={{
+                padding: '10px 12px',
+                borderRadius: 12,
+                border: `1px solid ${tab === 'oauth' ? '#6366f1' : border}`,
+                background: tab === 'oauth' ? (dark ? 'rgba(99,102,241,0.16)' : 'rgba(99,102,241,0.08)') : 'transparent',
+                color: tab === 'oauth' ? '#6366f1' : text,
+                fontWeight: 800,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+              }}
+            >
+              {copy('Facebook Login', 'Facebook Login')}
+            </button>
+            <button
+              onClick={() => setTab('manual')}
+              style={{
+                padding: '10px 12px',
+                borderRadius: 12,
+                border: `1px solid ${tab === 'manual' ? '#6366f1' : border}`,
+                background: tab === 'manual' ? (dark ? 'rgba(99,102,241,0.16)' : 'rgba(99,102,241,0.08)') : 'transparent',
+                color: tab === 'manual' ? '#6366f1' : text,
+                fontWeight: 800,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+              }}
+            >
+              {copy('Manual Token', 'Manual Token')}
+            </button>
+          </div>
+
+          {tab === 'oauth' ? (
+            <>
+              <div style={{ background: dark ? 'rgba(99,102,241,0.08)' : 'rgba(99,102,241,0.05)', border: '1px solid rgba(99,102,241,0.18)', borderRadius: 12, padding: '12px 15px', fontSize: 12.5, color: text, lineHeight: 1.85 }}>
+                📘 <strong>{copy('সবচেয়ে সহজ উপায়', 'The easiest way')}</strong><br />
+                <span style={{ color: muted }}>
+                  {copy('1. Facebook login করুন', '1. Log in with Facebook')}<br />
+                  {copy('2. Permission allow করুন', '2. Approve the requested permissions')}<br />
+                  {copy('3. ফিরে এসে আপনার page select করুন', '3. Come back and select your page')}<br />
+                  {copy('4. Done — token manually দিতে হবে না', '4. Done — no need to paste tokens manually')}
+                </span>
+              </div>
+
+              {oauthPages.length === 0 ? (
+                <button onClick={startOAuthConnect} disabled={oauthBusy}
+                  style={{
+                    width: '100%', padding: '13px', borderRadius: 13, border: 'none',
+                    background: oauthBusy ? 'rgba(99,102,241,0.5)' : '#6366f1',
+                    color: '#fff', fontWeight: 800, fontSize: 15,
+                    cursor: oauthBusy ? 'default' : 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+                    fontFamily: 'inherit',
+                  }}>
+                  {oauthBusy ? <><Spinner size={15} /> {copy('Opening Facebook...', 'Opening Facebook...')}</> : copy('f Facebook Login করুন', 'f Continue with Facebook')}
+                </button>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div style={{ fontSize: 12, color: muted, fontWeight: 700 }}>
+                    {copy('একটা page select করুন', 'Select a page')}
+                  </div>
+                  {oauthPages.map((page) => (
+                    <div key={page.pageId} style={{ border: `1px solid ${border}`, borderRadius: 12, padding: '11px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                      <div>
+                        <div style={{ fontWeight: 800, color: text, fontSize: 13.5 }}>{page.pageName}</div>
+                        <div style={{ fontSize: 11.5, color: muted }}>{page.pageId}</div>
+                      </div>
+                      <button
+                        onClick={() => connectOAuthPage(page)}
+                        disabled={oauthConnectingPageId === page.pageId}
+                        style={{
+                          border: 'none',
+                          borderRadius: 10,
+                          padding: '9px 14px',
+                          background: '#6366f1',
+                          color: '#fff',
+                          fontWeight: 800,
+                          cursor: oauthConnectingPageId === page.pageId ? 'default' : 'pointer',
+                          fontFamily: 'inherit',
+                          minWidth: 110,
+                        }}
+                      >
+                        {oauthConnectingPageId === page.pageId ? copy('Connecting...', 'Connecting...') : copy('এইটা Use করুন', 'Use This')}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          ) : (
+            <>
           <div style={{ background: dark ? 'rgba(99,102,241,0.08)' : 'rgba(99,102,241,0.05)', border: '1px solid rgba(99,102,241,0.18)', borderRadius: 12, padding: '12px 15px', fontSize: 12.5, color: text, lineHeight: 1.85 }}>
             📌 <strong>{copy('কিভাবে Access Token পাবেন?', 'How to get the Access Token?')}</strong><br />
             <span style={{ color: muted }}>
@@ -246,6 +396,8 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
                 {copy('→ Dashboard-এ যান', 'Go to Dashboard')}
               </button>
             </div>
+          )}
+            </>
           )}
         </div>
 

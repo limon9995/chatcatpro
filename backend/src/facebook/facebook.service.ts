@@ -9,6 +9,12 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuthService } from '../auth/auth.service';
 import { EncryptionService } from '../common/encryption.service';
 
+type PendingOAuthResult = {
+  userId: string;
+  pages: FacebookPageInfo[];
+  createdAt: number;
+};
+
 @Injectable()
 export class FacebookService {
   private readonly logger = new Logger(FacebookService.name);
@@ -18,6 +24,7 @@ export class FacebookService {
     process.env.FB_OAUTH_STATE_SECRET || this.appSecret || 'dfbot_state_secret';
   private readonly redirectUri =
     process.env.FB_REDIRECT_URI || 'http://localhost:3000/facebook/callback';
+  private readonly pendingOAuthResults = new Map<string, PendingOAuthResult>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -49,6 +56,25 @@ export class FacebookService {
     const userToken = await this.exchangeCodeForToken(code);
     const pages = await this.getUserPages(userToken);
     return { pages, userId };
+  }
+
+  createPendingOAuthResult(userId: string, pages: FacebookPageInfo[]): string {
+    const id = crypto.randomUUID();
+    this.pendingOAuthResults.set(id, {
+      userId,
+      pages,
+      createdAt: Date.now(),
+    });
+    this.cleanupPendingOAuthResults();
+    return id;
+  }
+
+  consumePendingOAuthResult(userId: string, id: string) {
+    const item = this.pendingOAuthResults.get(id);
+    if (!item) throw new BadRequestException('OAuth result not found or expired');
+    if (item.userId !== userId) throw new ForbiddenException('OAuth result does not belong to this user');
+    this.pendingOAuthResults.delete(id);
+    return { pages: item.pages };
   }
 
   async connectPage(
@@ -217,6 +243,29 @@ export class FacebookService {
       },
       orderBy: { id: 'desc' },
     });
+  }
+
+  getFrontendBaseUrl() {
+    const landingUrl = String(process.env.LANDING_PAGE_URL || '').trim();
+    if (landingUrl) return landingUrl.replace(/\/+$/, '');
+
+    const storageUrl = String(process.env.STORAGE_PUBLIC_URL || '').trim();
+    if (storageUrl) return storageUrl.replace(/\/storage\/?$/, '').replace(/\/+$/, '');
+
+    try {
+      return new URL(this.redirectUri).origin;
+    } catch {
+      return 'http://localhost:3000';
+    }
+  }
+
+  private cleanupPendingOAuthResults() {
+    const now = Date.now();
+    for (const [key, value] of this.pendingOAuthResults.entries()) {
+      if (now - value.createdAt > 10 * 60 * 1000) {
+        this.pendingOAuthResults.delete(key);
+      }
+    }
   }
 
   private async exchangeCodeForToken(code: string): Promise<string> {

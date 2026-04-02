@@ -7,11 +7,13 @@ import {
   Post,
   Query,
   Req,
+  Res,
   UseGuards,
 } from '@nestjs/common';
 import { SkipThrottle } from '@nestjs/throttler';
 import { AuthGuard } from '../auth/auth.guard';
 import { FacebookService } from './facebook.service';
+import type { Response } from 'express';
 
 @SkipThrottle({ global: true, auth: true })
 @Controller('facebook')
@@ -27,10 +29,26 @@ export class FacebookController {
 
   // GET /facebook/callback?code=...&state=...  → called by Facebook after login
   @Get('callback')
-  async callback(@Query('code') code: string, @Query('state') state: string) {
+  async callback(
+    @Query('code') code: string,
+    @Query('state') state: string,
+    @Res() res: Response,
+  ) {
     const result = await this.fb.handleCallback(code, state);
-    // Return pages list for client to select which to connect
-    return result;
+    const resultId = this.fb.createPendingOAuthResult(
+      result.userId,
+      result.pages,
+    );
+    const redirectBase = this.fb.getFrontendBaseUrl();
+    return res.redirect(
+      `${redirectBase}/?mode=connect-page&oauthResult=${encodeURIComponent(resultId)}`,
+    );
+  }
+
+  @Get('oauth-result/:id')
+  @UseGuards(AuthGuard)
+  oauthResult(@Req() req: any, @Param('id') id: string) {
+    return this.fb.consumePendingOAuthResult(req.authUser.id, id);
   }
 
   // POST /facebook/connect  → client selects a page to connect
