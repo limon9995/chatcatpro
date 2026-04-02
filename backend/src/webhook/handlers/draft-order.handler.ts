@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { BotIntentService } from '../../bot/bot-intent.service';
+import { AiIntentService } from '../../bot/ai-intent.service';
 import {
   ConversationContextService,
   DraftSession,
@@ -20,6 +21,7 @@ export class DraftOrderHandler {
   constructor(
     private readonly prisma: PrismaService,
     private readonly botIntent: BotIntentService,
+    private readonly aiIntent: AiIntentService,
     private readonly ctx: ConversationContextService,
     private readonly callService: CallService,
     private readonly products: ProductsService,
@@ -132,11 +134,33 @@ export class DraftOrderHandler {
     page: any,
   ): Promise<string | null | false> {
     const step = draft.currentStep;
+    let workingText = text;
+
+    const aiReview = await this.aiIntent.reviewDraftStep(
+      text,
+      step,
+      page?.businessName ?? null,
+    );
+    if (aiReview) {
+      if (aiReview.action === 'EXIT_DRAFT') {
+        await this.ctx.clearDraft(pageId, psid);
+        return aiReview.reply ?? 'ঠিক আছে 💖 আপনি যা জানতে চান সেটাই বলুন।';
+      }
+      if (aiReview.action === 'RETRY') {
+        return aiReview.reply ?? this.reminder(draft);
+      }
+      if (aiReview.action === 'CONFIRM') workingText = aiReview.normalizedValue ?? 'confirm';
+      if (aiReview.action === 'CANCEL') workingText = aiReview.normalizedValue ?? 'cancel';
+      if (aiReview.action === 'EDIT') workingText = aiReview.normalizedValue ?? 'change';
+      if (aiReview.action === 'CAPTURE' && aiReview.normalizedValue) {
+        workingText = aiReview.normalizedValue;
+      }
+    }
 
     // ── CONFIRM SAVED ADDRESS (returning customer) ────────────────────────────
     if (step === 'confirm_address') {
-      const confirmIntent = this.botIntent.detectIntent(text, true);
-      if (confirmIntent === 'CONFIRM' || /^(ha|haa|hea|yes|ok|হ্যাঁ|জি|ঠিক)/i.test(text.trim())) {
+      const confirmIntent = this.botIntent.detectIntent(workingText, true);
+      if (confirmIntent === 'CONFIRM' || /^(ha|haa|hea|yes|ok|হ্যাঁ|জি|ঠিক)/i.test(workingText.trim())) {
         // Keep saved address → move to advance_payment check or confirm
         if (this.isAdvanceNeeded(draft, page)) {
           draft.currentStep = 'advance_payment';
@@ -148,8 +172,8 @@ export class DraftOrderHandler {
         return this.buildSummary(draft, page);
       }
       // Customer gave a new address
-      if (this.isAddressLike(text)) {
-        draft.address = text.trim();
+      if (this.isAddressLike(workingText)) {
+        draft.address = workingText.trim();
         if (this.isAdvanceNeeded(draft, page)) {
           draft.currentStep = 'advance_payment';
           await this.ctx.saveDraft(pageId, psid, draft);
@@ -164,7 +188,7 @@ export class DraftOrderHandler {
 
     // ── CONFIRM ──────────────────────────────────────────────────────────────
     if (step === 'confirm') {
-      const intent = this.botIntent.detectIntent(text, true);
+      const intent = this.botIntent.detectIntent(workingText, true);
       if (intent === 'CONFIRM') {
         // Check subscription before accepting order
         if (page.ownerId) {
@@ -186,11 +210,11 @@ export class DraftOrderHandler {
         return false;
       }
       // If customer sends a bare phone number, update it directly
-      const inlinePhone = this.extractPhone(text);
+      const inlinePhone = this.extractPhone(workingText);
       if (
         inlinePhone &&
         /^\+?8?8?01[3-9]\d{8}$/.test(inlinePhone) &&
-        text.trim().replace(/\D/g, '').length >= 10
+        workingText.trim().replace(/\D/g, '').length >= 10
       ) {
         draft.phone = inlinePhone;
         draft.currentStep = 'confirm';
@@ -203,8 +227,8 @@ export class DraftOrderHandler {
     // ── ADVANCE PAYMENT PROOF ─────────────────────────────────────────────────
     if (step === 'advance_payment') {
       // Detect problem/complaint instead of payment proof → route to agent
-      if (this.isPaymentProblem(text)) {
-        draft.paymentIssueNote = text.trim().slice(0, 300);
+      if (this.isPaymentProblem(workingText)) {
+        draft.paymentIssueNote = workingText.trim().slice(0, 300);
         await this.finalizeDraftOrder(pageId, psid, draft, page);
         // Mute bot for this customer — agent will handle manually
         await this.ctx.setAgentHandling(pageId, psid, true);
@@ -212,8 +236,8 @@ export class DraftOrderHandler {
       }
       // Try to extract TxID from natural sentences like:
       // "আমার last digit হলো 1234" / "আমার txid হলো 8N7G3DKXYZ" / "আমি 8N7 দিয়ে পাঠিয়েছি"
-      const extracted = this.extractTxIdFromSentence(text);
-      const proofText = extracted || text.trim();
+      const extracted = this.extractTxIdFromSentence(workingText);
+      const proofText = extracted || workingText.trim();
 
       const screenshotAlreadySent = Boolean(draft.paymentScreenshotUrl);
       if (!screenshotAlreadySent && !this.isValidTransactionId(proofText)) {
@@ -230,7 +254,7 @@ export class DraftOrderHandler {
       const fieldLabel = step.slice(3);
       draft.customFieldValues = {
         ...(draft.customFieldValues || {}),
-        [fieldLabel]: text.trim(),
+        [fieldLabel]: workingText.trim(),
       };
       draft.pendingCustomFields = (draft.pendingCustomFields || []).filter(
         (f) => f.label !== fieldLabel,
@@ -257,8 +281,8 @@ export class DraftOrderHandler {
     // For phone/address steps, name is already collected — skip multi-field parsing
     // to prevent unrelated text being mis-classified as a name and bypassing validation.
     const parsed = (step === 'phone' || step === 'address')
-      ? { name: undefined, phone: this.parseCustomerInfo(text).phone, address: this.parseCustomerInfo(text).address }
-      : this.parseCustomerInfo(text);
+      ? { name: undefined, phone: this.parseCustomerInfo(workingText).phone, address: this.parseCustomerInfo(workingText).address }
+      : this.parseCustomerInfo(workingText);
 
     if (!draft.customerName && parsed.name) draft.customerName = parsed.name;
     if (!draft.phone && parsed.phone) draft.phone = parsed.phone;
@@ -268,22 +292,22 @@ export class DraftOrderHandler {
     if (!parsed.name && !parsed.phone && !parsed.address) {
       if (step === 'name') {
         // Reject clearly negative/cancel responses as names
-        if (this.botIntent.detectIntent(text, false) === 'CANCEL') {
+        if (this.botIntent.detectIntent(workingText, false) === 'CANCEL') {
           return 'আপনার নামটা দিন 💖 (যেমন: রাহেলা বেগম)';
         }
-        draft.customerName = text.trim().slice(0, 80);
+        draft.customerName = workingText.trim().slice(0, 80);
       } else if (step === 'phone') {
-        if (this.botIntent.detectIntent(text, false) === 'CANCEL') {
+        if (this.botIntent.detectIntent(workingText, false) === 'CANCEL') {
           await this.ctx.clearDraft(pageId, psid);
           return null;
         }
-        const ph = this.extractPhone(text);
+        const ph = this.extractPhone(workingText);
         if (!ph) return 'ফোন নাম্বারটা আবার দিন 💖 (01XXXXXXXXX)';
         draft.phone = ph;
       } else if (step === 'address') {
-        if (!this.isAddressLike(text))
+        if (!this.isAddressLike(workingText))
           return 'পুরো ঠিকানাটা দিন 💖 (বাসা/রোড/এলাকা/জেলা)';
-        draft.address = text.trim();
+        draft.address = workingText.trim();
       }
     }
 

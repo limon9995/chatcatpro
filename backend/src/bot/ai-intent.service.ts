@@ -12,6 +12,18 @@ export interface AiIntentResult {
   reply: string | null;    // AI-generated natural reply (always set when AI succeeds)
 }
 
+export interface DraftStepReviewResult {
+  action:
+    | 'CAPTURE'
+    | 'RETRY'
+    | 'EXIT_DRAFT'
+    | 'CONFIRM'
+    | 'CANCEL'
+    | 'EDIT';
+  reply: string | null;
+  normalizedValue: string | null;
+}
+
 const VALID_INTENTS = new Set([
   'GREETING',
   'ORDER_INTENT',
@@ -145,6 +157,79 @@ export class AiIntentService {
     }
   }
 
+  async reviewDraftStep(
+    text: string,
+    draftStep: string,
+    businessName: string | null,
+  ): Promise<DraftStepReviewResult | null> {
+    if (!this.isAvailable()) return null;
+
+    const systemPrompt = this.buildDraftReviewPrompt(businessName, draftStep);
+    const userMsg = `Customer message: "${text}"`;
+
+    try {
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.apiKey}`,
+        },
+        body: JSON.stringify({
+          model: this.model,
+          max_tokens: 180,
+          temperature: 0.2,
+          response_format: { type: 'json_object' },
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userMsg },
+          ],
+        }),
+        signal: AbortSignal.timeout(8_000),
+      });
+
+      if (response.status === 429 || response.status === 402) {
+        this.logger.warn(`[AiIntent] Draft review quota/limit hit (${response.status})`);
+        this.enterCooldown();
+        return null;
+      }
+
+      if (!response.ok) {
+        this.logger.error(`[AiIntent] Draft review API error ${response.status}`);
+        this.recordFailure();
+        return null;
+      }
+
+      const data = await response.json() as any;
+      const raw = (data?.choices?.[0]?.message?.content ?? '').trim();
+
+      let parsed: any;
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        this.logger.warn(`[AiIntent] Draft review JSON parse failed: ${raw.slice(0, 80)}`);
+        this.recordFailure();
+        return null;
+      }
+
+      const action = String(parsed?.action ?? '').toUpperCase().trim();
+      if (!['CAPTURE', 'RETRY', 'EXIT_DRAFT', 'CONFIRM', 'CANCEL', 'EDIT'].includes(action)) {
+        this.logger.warn(`[AiIntent] Invalid draft action: "${action}"`);
+        return null;
+      }
+
+      this.failCount = 0;
+      return {
+        action: action as DraftStepReviewResult['action'],
+        reply: (parsed?.reply ?? '').trim() || null,
+        normalizedValue: (parsed?.normalizedValue ?? '').trim() || null,
+      };
+    } catch (err: any) {
+      this.logger.error(`[AiIntent] Draft review failed: ${err?.message ?? err}`);
+      this.recordFailure();
+      return null;
+    }
+  }
+
   /** Returns true if AI reply should replace the hardcoded template for this intent */
   shouldUseAiReply(intent: string): boolean {
     return AI_REPLY_INTENTS.has(intent);
@@ -207,6 +292,43 @@ reply field সবসময় দাও — natural, warm, conversational Bangl
     if (draftStep) ctx += ` | draft_step="${draftStep}"`;
     if (awaitingConfirm) ctx += ' | awaiting_confirm=true';
     return `Customer: "${text}"${ctx}`;
+  }
+
+  private buildDraftReviewPrompt(
+    businessName: string | null,
+    draftStep: string,
+  ): string {
+    const shop = businessName
+      ? `"${businessName}" নামের Bangladeshi e-commerce shop`
+      : 'একটি Bangladeshi e-commerce shop';
+
+    const stepLabel = STEP_LABELS[draftStep] ?? draftStep;
+
+    return `তুমি ${shop}-এর Messenger order flow monitor করছ।
+Bot এখন customer-এর কাছ থেকে "${stepLabel}" চাইছে।
+
+Customer message দেখে strict JSON return করো:
+{ "action": "<ACTION>", "normalizedValue": "<value or null>", "reply": "<reply or null>" }
+
+Allowed ACTION:
+- CAPTURE: customer requested info-টাই দিয়েছে; normalizedValue-এ clean value দাও
+- RETRY: customer flow-তেই আছে কিন্তু expected answer দেয়নি/invalid দিয়েছে; reply-তে same step gently re-ask করো
+- EXIT_DRAFT: customer clearly off-topic / topic change / normal chat / unrelated question; reply-তে normal conversational উত্তর দাও, order flow continue করবে না
+- CONFIRM: confirm/yes দিয়েছে
+- CANCEL: cancel/not interested দিয়েছে
+- EDIT: change করতে চায়
+
+Rules:
+1. step=name হলে শুধু মানুষের নাম হলে CAPTURE। greeting, প্রশ্ন, product query, address-like text, long sentence, phone number, negotiation text name না।
+2. step=phone হলে valid Bangladeshi phone number থাকলে CAPTURE। অন্য কিছু RETRY বা EXIT_DRAFT।
+3. step=address হলে full location/address-like text হলে CAPTURE। ছোট chat message address না।
+4. step=confirm হলে confirm/cancel/edit আলাদা action দাও। unrelated হলে RETRY বা EXIT_DRAFT।
+5. step=confirm_address হলে "হ্যাঁ/ঠিক আছে" টাইপ হলে CONFIRM, নতুন address হলে CAPTURE।
+6. step=advance_payment হলে valid transaction id / payment proof হলে CAPTURE। সমস্যা/agent/help চাইলে RETRY with helpful guidance, clear cancel হলে CANCEL।
+7. step=cf:... হলে only direct option/value হলে CAPTURE। unrelated হলে RETRY বা EXIT_DRAFT।
+8. User যদি order context ছেড়ে অন্য topic-এ চলে যায়, EXIT_DRAFT বেছে নাও।
+9. reply field RETRY বা EXIT_DRAFT হলে সবসময় দাও। CAPTURE/CONFIRM/CANCEL/EDIT হলে reply=null।
+10. normalizedValue-এ শুধু clean user value দাও; না থাকলে null।`;
   }
 
   private recordFailure(): void {

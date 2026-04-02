@@ -190,16 +190,18 @@ export class WebhookService {
       draft?.currentStep === 'confirm' ||
       (draft?.pendingMultiPreview?.length ?? 0) > 0;
 
-    // AI-only intent detection — no keyword fallback
+    // OpenAI decides first; keyword matcher takes over if AI is unavailable/unknown.
     const aiResult = await this.aiIntent.detectIntent(
       text,
       awaitingConfirm,
       draft?.currentStep ?? null,
       page.businessName ?? null,
     );
-    const intent = aiResult.intent !== null && aiResult.intent !== 'UNKNOWN'
-      ? aiResult.intent
-      : null;
+    const keywordIntent = this.botIntent.detectIntent(text, awaitingConfirm);
+    const intent =
+      aiResult.intent !== null && aiResult.intent !== 'UNKNOWN'
+        ? aiResult.intent
+        : keywordIntent;
 
     // ── LOOP / STUCK DETECTION ────────────────────────────────────────────
     const aiEnabled = page.textFallbackAiOn || this.fallbackAi.isAvailable();
