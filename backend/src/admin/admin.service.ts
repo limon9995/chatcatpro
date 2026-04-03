@@ -503,7 +503,7 @@ export class AdminService {
       where,
       include: {
         items: true,
-        page: { select: { id: true, name: true } },
+        page: { select: { id: true, pageName: true } },
       },
       orderBy: { createdAt: 'asc' },
       take: 500,
