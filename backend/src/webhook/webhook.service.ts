@@ -212,7 +212,9 @@ export class WebhookService {
       const loopCount = await this.ctx.checkAndUpdateLoop(
         pageId, psid, text, draft?.currentStep ?? null,
       );
-      if (loopCount >= 2) {
+      // Only intercept when intent is truly unresolved — never block a recognised intent
+      // (e.g. customer sending "ki ki products" twice must still get the catalog link)
+      if (loopCount >= 2 && !intent) {
         this.logger.warn(`[Loop] Detected loop (count=${loopCount}) for psid=${psid} step=${draft?.currentStep ?? 'none'} text="${text.slice(0, 60)}"`);
         const draftSummary = draft
           ? `Customer has an active order draft (step: ${draft.currentStep ?? 'unknown'}, products: ${(draft.items ?? []).map((i: any) => i.code).join(', ') || 'none'})`
