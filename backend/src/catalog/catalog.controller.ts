@@ -681,12 +681,6 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:var(--b
           <div class="mi-lbl">Code</div>
         </div>
       </div>
-        <div class="tips-visual">
-          <div class="tips-frame"></div>
-          <div class="tips-copy">
-            Full frame, 1 item, paused clear shot. Video থেকে screenshot নিলে front view আর print close-up আলাদা করে দিন।
-          </div>
-        </div>
       </div>
     </div>
 
@@ -1187,45 +1181,6 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:radial-
           </div>
         </div>
       </div>
-      <div class="hero-grid">
-        <div class="hero-copy">
-          <div class="hero-kicker">Online Storefront</div>
-          <div class="hero-title">${search ? `"${esc(search)}" এর result` : `${esc(page.name)} collection`}</div>
-        <div class="hero-text">
-          ${search ? 'Search result থেকে product বেছে নিয়ে সরাসরি order করুন।' : 'Product browse করুন, detail দেখুন, তারপর message দিয়ে order করুন।'}
-        </div>
-        <div class="hero-points">
-          <div class="hero-pill">⚡ Fast Response</div>
-          <div class="hero-pill">🛒 Direct Order</div>
-          <div class="hero-pill">🎬 Photo / Video Ready</div>
-        </div>
-          <div class="hero-guide-copy">
-            <strong>Best match frame</strong>
-            Pause video, keep the full product inside the box, and send one front shot plus one close-up if the print matters.
-          </div>
-        </div>
-      </div>
-        <div class="hero-panel">
-          <div class="hero-panel-label">Store Snapshot</div>
-          <div class="hero-panel-title">${esc(page.name)}</div>
-          <div class="hero-panel-text">
-            ${page.address ? `${esc(page.address)}<br/>` : ''}${page.phone ? `Contact: ${esc(page.phone)}` : 'Messenger এ message দিয়ে সরাসরি order করতে পারবেন।'}
-          </div>
-          <div class="hero-stats">
-            <div class="hero-stat">
-              <div class="hero-stat-num">${products.length}</div>
-              <div class="hero-stat-lbl">Products</div>
-            </div>
-            <div class="hero-stat">
-              <div class="hero-stat-num">${products.filter((p:any) => p.stockQty > 0).length}</div>
-              <div class="hero-stat-lbl">In Stock</div>
-            </div>
-            <div class="hero-stat">
-              <div class="hero-stat-num">${products.filter((p:any) => !!p.videoUrl || !!p.imageUrl).length}</div>
-              <div class="hero-stat-lbl">Media Ready</div>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   </div>
@@ -1238,11 +1193,6 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:radial-
         ? `"${esc(search)}" — <span>${products.length} টি result</span>`
         : `মোট <span>${products.length}</span> টি product`
     }
-  </div>
-  <div class="stats-badges">
-    <div class="stats-badge">💬 Messenger এ Order</div>
-    <div class="stats-badge">🛍️ ছবি ও ভিডিও সহ Product</div>
-    <div class="stats-badge">🚚 দ্রুত Response</div>
   </div>
 </div>
 
