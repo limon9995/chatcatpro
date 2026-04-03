@@ -865,14 +865,12 @@ export class WebhookService {
     // Always show product info first
     await this.productHandler.sendProductInfo(page, psid, code);
 
-    // Broad order-intent check: explicit intent OR common Banglish/Bengali order phrases
-    const isOrderIntent =
-      intent === 'ORDER_INTENT' ||
-      /\b(nibo|lagbe|nite\s*c[ah]i|kinbo|nebo|kinte|order|korte\s*c[ah]i|dite\s*c[ah]i)\b/i.test(
-        text,
-      );
-
-    if (isOrderIntent && page.orderModeOn) {
+    // Create a draft whenever orderMode is on — the product info message already
+    // tells the customer to send their name/phone/address, so we should be ready
+    // to capture it. Previously we only created a draft when the customer used
+    // explicit order words (nibo/lagbe/…) which caused "Limon" sent after seeing
+    // product info to be processed with no context.
+    if (page.orderModeOn) {
       const qtyMap = this.botIntent.extractQuantityMap(text);
       const qty = qtyMap.get(code) ?? 1;
       const product = await this.prisma.product.findFirst({
