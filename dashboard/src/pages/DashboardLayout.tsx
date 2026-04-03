@@ -489,8 +489,8 @@ export function DashboardLayout({
           )}
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <img src="/logo.png" alt="ChatCat Pro" style={{ width: 32, height: 32, objectFit: 'cover', borderRadius: '50%' }} />
-            {!isMobile && <span style={{ fontWeight: 800, fontSize: 15, letterSpacing: '-0.03em', color: th.text }}>ChatCat Pro</span>}
+            <img src="/logo.png" alt="Chatcat" style={{ width: 32, height: 32, objectFit: 'cover', borderRadius: '50%' }} />
+            {!isMobile && <span style={{ fontWeight: 800, fontSize: 15, letterSpacing: '-0.03em', color: th.text }}>Chatcat</span>}
           </div>
 
           {myPages.length > 1 ? (
@@ -579,6 +579,12 @@ export function DashboardLayout({
           <div style={{ background: '#f59e0b', color: '#1c1917', fontSize: 13, fontWeight: 600, padding: '8px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
             <span>⏳ Trial আর মাত্র {daysLeft} দিন বাকি — admin এর সাথে কথা বলে plan update করুন</span>
             <button onClick={() => void openBillingModal()} style={{ background: '#1c1917', color: '#fef3c7', border: 'none', borderRadius: 6, padding: '4px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Contact Admin</button>
+          </div>
+        );
+        if (status === 'active' && daysLeft <= 2) return (
+          <div style={{ background: '#facc15', color: '#422006', fontSize: 13, fontWeight: 700, padding: '8px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <span>⏰ Subscription আর মাত্র {daysLeft} দিন active থাকবে — admin কে এখনই জানান</span>
+            <button onClick={() => void openBillingModal()} style={{ background: '#422006', color: '#fef3c7', border: 'none', borderRadius: 6, padding: '4px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Contact Admin</button>
           </div>
         );
         if (status === 'trial') return (

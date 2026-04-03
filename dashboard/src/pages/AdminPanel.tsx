@@ -1131,7 +1131,7 @@ export function AdminPanel({ th, onToast, onLogout }: {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(135deg,#ef4444,#dc2626)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>🛡️</div>
           <div>
-            <div style={{ fontWeight: 900, fontSize: 15, letterSpacing: '-0.3px', color: '#fff' }}>ChatCat Pro Admin</div>
+            <div style={{ fontWeight: 900, fontSize: 15, letterSpacing: '-0.3px', color: '#fff' }}>Chatcat Admin</div>
             <div style={{ fontSize: 10.5, color: 'rgba(255,255,255,0.55)', letterSpacing: '0.04em' }}>SYSTEM CONTROL PANEL</div>
           </div>
         </div>
@@ -1502,7 +1502,7 @@ function CourierTutorialsTab({ th, tutorials, setTutorials, saveTutorials, savin
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
             <div style={{ fontSize: 22 }}>🎓</div>
             <div>
-              <div style={{ fontWeight: 800, fontSize: 14, color: '#16a34a' }}>ChatCat Pro Onboarding</div>
+              <div style={{ fontWeight: 800, fontSize: 14, color: '#16a34a' }}>Chatcat Onboarding</div>
               <div style={{ fontSize: 12, color: th.muted }}>Platform কীভাবে ব্যবহার করবেন — সম্পূর্ণ guide</div>
             </div>
             {obUrl && <span style={{ ...th.pill, ...th.pillGreen, fontSize: 10, marginLeft: 'auto' }}>✓ Set</span>}

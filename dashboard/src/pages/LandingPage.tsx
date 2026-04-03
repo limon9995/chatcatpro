@@ -12,7 +12,7 @@ const LANDING_HTML = String.raw`<!DOCTYPE html>
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>ChatCat Pro — Facebook Commerce Automation</title>
+<title>Chatcat — Facebook Commerce Automation</title>
 <meta name="description" content="Facebook Messenger দিয়ে automatic order নিন, OCR দিয়ে product detect করুন, courier booking করুন — সব একজায়গায়।"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;0,9..40,900&family=Noto+Sans+Bengali:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
@@ -126,7 +126,7 @@ footer{border-top:1px solid var(--border);padding:40px 5%;display:flex;justify-c
 <nav>
   <div class="logo">
     <div class="logo-icon">🐱</div>
-    <span class="logo-text">ChatCat Pro</span>
+    <span class="logo-text">Chatcat</span>
   </div>
   <div class="nav-links">
     <a href="#features" class="nav-link">Features</a>
@@ -158,7 +158,7 @@ footer{border-top:1px solid var(--border);padding:40px 5%;display:flex;justify-c
       <div class="dot" style="background:#ff5f57"></div>
       <div class="dot" style="background:#febc2e"></div>
       <div class="dot" style="background:#28c840"></div>
-      <div style="flex:1;text-align:center;font-size:12px;opacity:.3">ChatCat Pro Dashboard</div>
+      <div style="flex:1;text-align:center;font-size:12px;opacity:.3">Chatcat Dashboard</div>
     </div>
     <div class="mockup-content">
       <div class="mock-sidebar">
@@ -286,9 +286,9 @@ footer{border-top:1px solid var(--border);padding:40px 5%;display:flex;justify-c
   <div>
     <div class="logo" style="margin-bottom:6px">
       <div class="logo-icon" style="width:26px;height:26px;font-size:13px">D</div>
-      <span class="logo-text" style="font-size:14px">ChatCat Pro</span>
+      <span class="logo-text" style="font-size:14px">Chatcat</span>
     </div>
-    <div class="footer-copy">© 2025 ChatCat Pro. All rights reserved.</div>
+    <div class="footer-copy">© 2025 Chatcat. All rights reserved.</div>
   </div>
   <div class="footer-links">
     <a href="#features" class="footer-link">Features</a>
@@ -360,13 +360,13 @@ export function LandingPage(_props: Props) {
           }}
         >
           <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 30, fontWeight: 800, letterSpacing: '-0.04em' }}>ChatCat Pro</div>
+            <div style={{ fontSize: 30, fontWeight: 800, letterSpacing: '-0.04em' }}>Chatcat</div>
             <div style={{ marginTop: 10, fontSize: 13, opacity: 0.6 }}>লোড হচ্ছে...</div>
           </div>
         </div>
       )}
       <iframe
-        title="ChatCat Pro Landing"
+        title="Chatcat Landing"
         srcDoc={LANDING_HTML}
         onLoad={() => setLoaded(true)}
         style={{
