@@ -352,12 +352,19 @@ export function MemoTemplatePage({ th, pageId, onToast }: {
                   onClick={() => { setPreviewHtml(null); fetchPreview(); }}>
                   🔄 Refresh
                 </button>
-                <a
-                  href={`${API_BASE}/client-dashboard/${pageId}/memo-preview-html`}
-                  target="_blank" rel="noreferrer"
-                  style={{ ...th.btnPrimary, textDecoration: 'none', fontSize: 13 }}>
+                <button
+                  style={{ ...th.btnPrimary, fontSize: 13 }}
+                  onClick={() => {
+                    const html = previewHtml;
+                    if (!html) return;
+                    const tab = window.open('', '_blank');
+                    if (!tab) return;
+                    tab.document.open();
+                    tab.document.write(html);
+                    tab.document.close();
+                  }}>
                   {copy('🖨️ Print Tab', 'Print Tab')}
-                </a>
+                </button>
                 <button style={th.btnGhost} onClick={() => setShowPreview(false)}>✕</button>
               </div>
             </div>
