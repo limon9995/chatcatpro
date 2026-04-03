@@ -4,8 +4,10 @@ import {
   Controller,
   Get,
   Param,
+  ParseIntPipe,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { SkipThrottle } from '@nestjs/throttler';
@@ -137,5 +139,19 @@ export class AdminController {
   @Patch('global-config')
   saveGlobalConfig(@Body() b: any) {
     return this.svc.saveGlobalConfig(b || {});
+  }
+
+  // ── Manual Call Queue ─────────────────────────────────────────────────────
+  @Get('call-queue')
+  getCallQueue(@Query('pageId') pageId?: string) {
+    return this.svc.getAdminCallQueue(pageId ? Number(pageId) : undefined);
+  }
+
+  @Post('orders/:orderId/manual-call-log')
+  adminLogManualCall(
+    @Param('orderId', ParseIntPipe) orderId: number,
+    @Body() b: any,
+  ) {
+    return this.svc.adminLogManualCall(orderId, b || {});
   }
 }

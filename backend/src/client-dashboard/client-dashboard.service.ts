@@ -271,6 +271,79 @@ export class ClientDashboardService {
     return { success, failed, results };
   }
 
+  // ── Manual Call Queue ──────────────────────────────────────────────────────
+  async getCallQueue(pageId: number) {
+    return this.prisma.order.findMany({
+      where: {
+        pageIdRef: pageId,
+        status: { in: ['RECEIVED', 'PENDING'] },
+        callStatus: { not: 'CONFIRMED_BY_CALL' },
+      },
+      include: { items: true },
+      orderBy: { createdAt: 'asc' },
+      take: 300,
+    });
+  }
+
+  async logManualCall(
+    pageId: number,
+    orderId: number,
+    body: { result: 'CONFIRMED' | 'CANCELLED' | 'NOT_ANSWERED' | 'CALLBACK_LATER'; note?: string },
+  ) {
+    await this.ensureOrder(pageId, orderId);
+    const now = new Date();
+
+    const callStatusMap: Record<string, string> = {
+      CONFIRMED: 'CONFIRMED_BY_CALL',
+      CANCELLED: 'CALL_FAILED',
+      NOT_ANSWERED: 'NOT_ANSWERED',
+      CALLBACK_LATER: 'PENDING_CALL',
+    };
+
+    const orderStatusMap: Record<string, string | null> = {
+      CONFIRMED: 'CONFIRMED',
+      CANCELLED: 'CANCELLED',
+      NOT_ANSWERED: null,
+      CALLBACK_LATER: null,
+    };
+
+    const newCallStatus = callStatusMap[body.result];
+    const newOrderStatus = orderStatusMap[body.result];
+
+    await this.prisma.$transaction(async (tx) => {
+      const order = await tx.order.findUnique({
+        where: { id: orderId },
+        select: { callRetryCount: true, phone: true },
+      });
+
+      await tx.callAttempt.create({
+        data: {
+          orderId,
+          pageId,
+          phone: order?.phone || '',
+          callProvider: 'manual',
+          status: body.result === 'CONFIRMED' ? 'ANSWERED' : body.result === 'NOT_ANSWERED' ? 'NOT_ANSWERED' : 'ANSWERED',
+          errorMsg: body.note || null,
+        },
+      });
+
+      const patch: any = {
+        callStatus: newCallStatus,
+        lastCallAt: now,
+        callRetryCount: { increment: 1 },
+      };
+      if (newOrderStatus) {
+        patch.status = newOrderStatus;
+        if (newOrderStatus === 'CONFIRMED') patch.confirmedAt = now;
+      }
+      if (body.note) patch.callResult = body.note;
+
+      await tx.order.update({ where: { id: orderId }, data: patch });
+    });
+
+    return { success: true, result: body.result };
+  }
+
   // ── Call actions ───────────────────────────────────────────────────────────
   async sendCall(pageId: number, orderId: number) {
     await this.ensureOrder(pageId, orderId);

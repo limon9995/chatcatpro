@@ -490,4 +490,79 @@ export class AdminService {
     };
     return this.saveTutorials({ ...existing, courier }).courier;
   }
+
+  // ── Manual Call Queue (Admin) ─────────────────────────────────────────────
+  async getAdminCallQueue(pageId?: number) {
+    const where: any = {
+      status: { in: ['RECEIVED', 'PENDING'] },
+      callStatus: { not: 'CONFIRMED_BY_CALL' },
+    };
+    if (pageId) where.pageIdRef = pageId;
+
+    const orders = await this.prisma.order.findMany({
+      where,
+      include: {
+        items: true,
+        page: { select: { id: true, name: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+      take: 500,
+    });
+
+    return orders;
+  }
+
+  async adminLogManualCall(
+    orderId: number,
+    body: { result: 'CONFIRMED' | 'CANCELLED' | 'NOT_ANSWERED' | 'CALLBACK_LATER'; note?: string },
+  ) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      select: { id: true, pageIdRef: true, phone: true, callRetryCount: true },
+    });
+    if (!order) throw new NotFoundException('Order not found');
+
+    const now = new Date();
+    const callStatusMap: Record<string, string> = {
+      CONFIRMED: 'CONFIRMED_BY_CALL',
+      CANCELLED: 'CALL_FAILED',
+      NOT_ANSWERED: 'NOT_ANSWERED',
+      CALLBACK_LATER: 'PENDING_CALL',
+    };
+    const orderStatusMap: Record<string, string | null> = {
+      CONFIRMED: 'CONFIRMED',
+      CANCELLED: 'CANCELLED',
+      NOT_ANSWERED: null,
+      CALLBACK_LATER: null,
+    };
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.callAttempt.create({
+        data: {
+          orderId,
+          pageId: order.pageIdRef,
+          phone: order.phone || '',
+          callProvider: 'manual',
+          status: body.result === 'NOT_ANSWERED' ? 'NOT_ANSWERED' : 'ANSWERED',
+          errorMsg: body.note || null,
+        },
+      });
+
+      const patch: any = {
+        callStatus: callStatusMap[body.result],
+        lastCallAt: now,
+        callRetryCount: { increment: 1 },
+      };
+      const newOrderStatus = orderStatusMap[body.result];
+      if (newOrderStatus) {
+        patch.status = newOrderStatus;
+        if (newOrderStatus === 'CONFIRMED') patch.confirmedAt = now;
+      }
+      if (body.note) patch.callResult = body.note;
+
+      await tx.order.update({ where: { id: orderId }, data: patch });
+    });
+
+    return { success: true, result: body.result };
+  }
 }

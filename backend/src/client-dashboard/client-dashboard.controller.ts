@@ -159,6 +159,21 @@ export class ClientDashboardController {
   ) {
     return this.svc.markOrdersPrinted(this.pid(r, p), ids || []);
   }
+  @Get(':pageId/orders/call-queue')
+  getCallQueue(@Param('pageId') p: string, @Req() r: any) {
+    return this.svc.getCallQueue(this.pid(r, p));
+  }
+
+  @Post(':pageId/orders/:orderId/manual-call-log')
+  logManualCall(
+    @Param('pageId') p: string,
+    @Param('orderId') o: string,
+    @Body() b: any,
+    @Req() r: any,
+  ) {
+    return this.svc.logManualCall(this.pid(r, p), Number(o), b || {});
+  }
+
   @Post(':pageId/orders/:orderId/send-call') sendCall(
     @Param('pageId') p: string,
     @Param('orderId') o: string,

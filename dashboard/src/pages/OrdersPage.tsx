@@ -247,6 +247,17 @@ export function OrdersPage({ th, pageId, onToast, preset }: {
   const [paymentProofs, setPaymentProofs] = useState<PaymentProof[]>([]);
   const [proofsLoading, setProofsLoading] = useState(false);
   const [verifyingId, setVerifyingId] = useState<number | null>(null);
+
+  interface CallQueueOrder {
+    id: number; customerName: string | null; phone: string | null;
+    address: string | null; status: string; callStatus: string;
+    callRetryCount: number; lastCallAt: string | null; createdAt: string;
+    items: OrderItem[];
+  }
+  const [callQueue, setCallQueue] = useState<CallQueueOrder[]>([]);
+  const [callQueueLoading, setCallQueueLoading] = useState(false);
+  const [loggingCallId, setLoggingCallId] = useState<number | null>(null);
+
   const BASE = `${API_BASE}/client-dashboard/${pageId}`;
 
   const load = useCallback(async () => {
@@ -284,6 +295,37 @@ export function OrdersPage({ th, pageId, onToast, preset }: {
   }, [pageId]);
 
   useEffect(() => { loadPaymentProofs(); }, [loadPaymentProofs]);
+
+  const loadCallQueue = useCallback(async () => {
+    setCallQueueLoading(true);
+    try {
+      const data = await request<CallQueueOrder[]>(`${BASE}/orders/call-queue`);
+      setCallQueue(data);
+    } catch { /* silent */ }
+    finally { setCallQueueLoading(false); }
+  }, [pageId]);
+
+  useEffect(() => { loadCallQueue(); }, [loadCallQueue]);
+
+  const logManualCall = async (orderId: number, result: 'CONFIRMED' | 'CANCELLED' | 'NOT_ANSWERED' | 'CALLBACK_LATER') => {
+    setLoggingCallId(orderId);
+    try {
+      await request(`${BASE}/orders/${orderId}/manual-call-log`, {
+        method: 'POST',
+        body: JSON.stringify({ result }),
+      });
+      const labels: Record<string, string> = {
+        CONFIRMED: '✅ Confirmed! Order confirmed করা হয়েছে',
+        CANCELLED: '❌ Cancelled! Order cancel করা হয়েছে',
+        NOT_ANSWERED: '📵 Not Answered — পরে আবার call করুন',
+        CALLBACK_LATER: '🔁 Callback Later — queue-এ রাখা হয়েছে',
+      };
+      onToast(labels[result] || '✓ Done', result === 'CONFIRMED' ? 'success' : result === 'CANCELLED' ? 'error' : 'success');
+      loadCallQueue();
+      load();
+    } catch (e: any) { onToast(e.message, 'error'); }
+    finally { setLoggingCallId(null); }
+  };
 
   const verifyPayment = async (id: number, status: 'verified' | 'verify_failed') => {
     setVerifyingId(id);
@@ -619,6 +661,108 @@ export function OrdersPage({ th, pageId, onToast, preset }: {
                         </button>
                       </div>
                     )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── Manual Call Queue Panel ──────────────────────────────────────── */}
+      {callQueue.length > 0 && (
+        <div style={{ ...th.card, border: `1.5px solid #2563eb30`, background: '#2563eb05' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 800, color: '#2563eb', display: 'flex', alignItems: 'center', gap: 6 }}>
+                📞 Manual Call Queue
+                <span style={{ background: '#2563eb', color: '#fff', fontSize: 10, borderRadius: 10, padding: '2px 7px', fontWeight: 700 }}>{callQueue.length}</span>
+              </div>
+              <div style={{ fontSize: 11, color: th.muted, marginTop: 2 }}>নিচের orders গুলোতে manually call করে status update করুন</div>
+            </div>
+            <button style={{ ...th.btnGhost, fontSize: 12 }} onClick={loadCallQueue}>
+              {callQueueLoading ? <Spinner size={12} /> : '↺'} Refresh
+            </button>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {callQueue.map(o => {
+              const total = o.items.reduce((s, i) => s + i.unitPrice * i.qty, 0);
+              const isBusy = loggingCallId === o.id;
+              const cleanPhone = (o.phone || '').replace(/[^\d+]/g, '');
+              return (
+                <div key={o.id} style={{
+                  padding: '14px 16px', borderRadius: 12,
+                  background: th.bg, border: `1px solid ${th.border}`,
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, alignItems: 'flex-start' }}>
+                    {/* Left: customer info */}
+                    <div style={{ flex: 1, minWidth: 200 }}>
+                      <div style={{ fontWeight: 700, fontSize: 14, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                        {o.customerName || 'Customer'}
+                        <span style={{ fontSize: 10, color: th.muted, fontWeight: 400 }}>#{o.id}</span>
+                        <StatusBadge th={th} status={o.status} />
+                        {o.callRetryCount > 0 && (
+                          <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 5, background: '#b4530918', color: '#b45309', border: '1px solid #b4530930' }}>
+                            {o.callRetryCount}x called
+                          </span>
+                        )}
+                      </div>
+                      {/* Items */}
+                      <div style={{ fontSize: 12, color: th.muted, marginTop: 5, lineHeight: 1.6 }}>
+                        {o.items.map((i, idx) => (
+                          <span key={idx} style={{ marginRight: 10 }}>{i.productCode} ×{i.qty} (৳{(i.unitPrice * i.qty).toLocaleString()})</span>
+                        ))}
+                      </div>
+                      <div style={{ fontSize: 12, color: th.muted, marginTop: 3, display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+                        <span style={{ fontWeight: 700, color: th.text }}>💰 ৳{total.toLocaleString()}</span>
+                        <span>📅 {new Date(o.createdAt).toLocaleDateString('bn-BD')}</span>
+                        {o.address && <span>📍 {o.address}</span>}
+                        {o.lastCallAt && <span>🕐 Last: {new Date(o.lastCallAt).toLocaleTimeString('bn-BD', { hour: '2-digit', minute: '2-digit' })}</span>}
+                      </div>
+                    </div>
+                    {/* Right: call button + status actions */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end' }}>
+                      {/* The main call button — opens mobile dialer */}
+                      {o.phone ? (
+                        <a
+                          href={`tel:${cleanPhone}`}
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 7,
+                            padding: '10px 20px', borderRadius: 10, fontWeight: 800, fontSize: 14,
+                            background: '#2563eb', color: '#fff', textDecoration: 'none',
+                            border: '2px solid #1d4ed8', boxShadow: '0 2px 8px #2563eb30',
+                            letterSpacing: '-0.01em',
+                          }}
+                        >
+                          📞 {o.phone}
+                        </a>
+                      ) : (
+                        <span style={{ fontSize: 12, color: th.muted, padding: '10px 14px' }}>ফোন নম্বর নেই</span>
+                      )}
+                      {/* Status update buttons */}
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                        <button
+                          disabled={isBusy} onClick={() => logManualCall(o.id, 'CONFIRMED')}
+                          style={{ padding: '6px 12px', borderRadius: 8, fontWeight: 700, fontSize: 11.5, cursor: 'pointer', border: '1.5px solid #16a34a', background: '#16a34a18', color: '#16a34a' }}>
+                          {isBusy ? <Spinner size={10} /> : '✅ Confirmed'}
+                        </button>
+                        <button
+                          disabled={isBusy} onClick={() => logManualCall(o.id, 'NOT_ANSWERED')}
+                          style={{ padding: '6px 12px', borderRadius: 8, fontWeight: 700, fontSize: 11.5, cursor: 'pointer', border: `1.5px solid ${th.border}`, background: 'transparent', color: th.muted }}>
+                          📵 Not Answered
+                        </button>
+                        <button
+                          disabled={isBusy} onClick={() => logManualCall(o.id, 'CALLBACK_LATER')}
+                          style={{ padding: '6px 12px', borderRadius: 8, fontWeight: 700, fontSize: 11.5, cursor: 'pointer', border: '1.5px solid #ca8a04', background: '#ca8a0418', color: '#ca8a04' }}>
+                          🔁 Callback Later
+                        </button>
+                        <button
+                          disabled={isBusy} onClick={() => logManualCall(o.id, 'CANCELLED')}
+                          style={{ padding: '6px 12px', borderRadius: 8, fontWeight: 700, fontSize: 11.5, cursor: 'pointer', border: '1.5px solid #dc2626', background: '#dc262618', color: '#dc2626' }}>
+                          ❌ Cancel
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
               );
