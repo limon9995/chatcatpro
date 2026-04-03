@@ -286,6 +286,7 @@ export class CatalogController {
       pageId: page.id,
       isActive: true,
       catalogVisible: true,
+      stockQty: { gt: 0 },
     };
     if (search?.trim()) {
       where.OR = [
