@@ -683,7 +683,6 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:var(--b
           <div class="mi-lbl">Code</div>
         </div>
       </div>
-      </div>
     </div>
 
     <!-- Right: Info -->
