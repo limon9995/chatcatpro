@@ -133,15 +133,16 @@ export class BillingService {
       sub.status = 'grace';
     }
 
-    const daysLeft = sub.trialEndsAt
-      ? Math.max(
-          0,
-          Math.ceil((sub.trialEndsAt.getTime() - now.getTime()) / 86_400_000),
-        )
-      : Math.max(
-          0,
-          Math.ceil((sub.periodEnd.getTime() - now.getTime()) / 86_400_000),
-        );
+    const daysLeft =
+      sub.status === 'trial' && sub.trialEndsAt
+        ? Math.max(
+            0,
+            Math.ceil((sub.trialEndsAt.getTime() - now.getTime()) / 86_400_000),
+          )
+        : Math.max(
+            0,
+            Math.ceil((sub.periodEnd.getTime() - now.getTime()) / 86_400_000),
+          );
 
     const ordersUsed = sub.ordersUsed;
     const ordersLimit = sub.ordersLimit;
@@ -454,6 +455,8 @@ export class BillingService {
       w.push(`⚠️ Trial ${daysLeft} দিনে শেষ হবে — upgrade করুন`);
     if (sub.status === 'trial' && daysLeft <= 7)
       w.push(`Trial ${daysLeft} দিন বাকি`);
+    if (sub.status === 'active' && daysLeft <= 2)
+      w.push(`⚠️ Subscription ${daysLeft} দিনের মধ্যে শেষ হবে — admin এর সাথে কথা বলুন`);
     if (sub.status === 'expired')
       w.push('❌ Subscription expired — payment করুন');
     if (sub.status === 'grace') w.push('⚠️ Grace period চলছে — payment করুন');
