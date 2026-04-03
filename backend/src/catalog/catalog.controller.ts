@@ -984,12 +984,12 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:radial-
 .filter-btn.active{background:linear-gradient(135deg,var(--p),var(--p2));color:#fff;border-color:transparent;box-shadow:0 14px 28px color-mix(in srgb,var(--p) 28%,transparent)}
 
 /* ── GRID ── */
-.grid-wrap{max-width:1180px;margin:0 auto 70px;padding:0 20px}
+.grid-wrap{max-width:1180px;margin:0 auto 70px;padding:0 28px}
 .section-head{display:flex;align-items:end;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:12px 0 14px}
 .section-kicker{font-size:11px;font-weight:800;letter-spacing:.13em;text-transform:uppercase;color:var(--p)}
 .section-title{margin-top:6px;font-size:28px;font-weight:900;letter-spacing:-.8px}
 .section-text{margin-top:6px;font-size:13px;color:var(--sub)}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:18px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:26px}
 
 /* ── CARD ── */
 .card{position:relative;background:linear-gradient(180deg,#fff 0%,#fbfcff 100%);border-radius:28px;overflow:hidden;text-decoration:none;color:inherit;display:flex;flex-direction:column;border:1px solid rgba(148,163,184,.16);transition:transform .22s cubic-bezier(.25,.46,.45,.94),box-shadow .22s,border-color .22s;box-shadow:var(--shadow-sm);animation:fadeUp .45s ease both}
@@ -1011,7 +1011,7 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:radial-
 .c-store-badge{position:absolute;left:14px;bottom:14px;background:rgba(255,255,255,.88);color:var(--text);font-size:10.5px;font-weight:800;padding:6px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.95);backdrop-filter:blur(8px)}
 
 /* Body */
-.c-body{padding:16px 17px 18px;flex:1;display:flex;flex-direction:column}
+.c-body{padding:18px 20px 20px;flex:1;display:flex;flex-direction:column}
 .c-code{font-size:10.5px;color:var(--muted);font-weight:800;letter-spacing:.14em;text-transform:uppercase;margin-bottom:6px}
 .c-name{font-size:16px;font-weight:800;color:var(--text);margin-bottom:6px;line-height:1.35;flex:1}
 .c-desc{font-size:12px;color:var(--sub);line-height:1.65;margin-bottom:12px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
@@ -1061,11 +1061,11 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:radial-
   .h-msg-btn{padding:9px 14px;font-size:12px}
   .h-msg-btn .h-msg-txt{display:inline}
   .s-input{padding:13px 16px 13px 44px;font-size:13px}
-  .grid{grid-template-columns:repeat(2,1fr);gap:12px}
+  .grid{grid-template-columns:repeat(2,1fr);gap:16px}
   .section-title{font-size:23px}
-  .c-body{padding:12px 12px 14px}
-  .c-name{font-size:13px}
-  .c-price{font-size:16px}
+  .c-body{padding:14px 14px 16px}
+  .c-name{font-size:14px}
+  .c-price{font-size:18px}
   .c-order{font-size:10px;padding:5px 10px}
   .stats-badges{gap:8px}
   .stats-badge{padding:8px 12px;font-size:11px}
