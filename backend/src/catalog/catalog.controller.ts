@@ -459,15 +459,15 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:var(--b
 .nav-back svg{width:13px;height:13px;fill:currentColor}
 
 /* ── LAYOUT ── */
-.wrapper{max-width:980px;margin:28px auto 80px;padding:0 18px}
-.product-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start}
+.wrapper{max-width:1100px;margin:32px auto 100px;padding:0 28px}
+.product-grid{display:grid;grid-template-columns:1fr 1fr;gap:40px;align-items:start}
 
 /* ── MEDIA COLUMN ── */
-.media-col{position:sticky;top:70px;display:flex;flex-direction:column;gap:12px}
-.media-frame{border-radius:var(--r);overflow:hidden;box-shadow:var(--shadow-lg);background:var(--surface);position:relative}
-.img-frame img{width:100%;aspect-ratio:1;object-fit:cover;display:block;transition:transform .5s cubic-bezier(.25,.46,.45,.94)}
-.img-frame:hover img{transform:scale(1.05)}
-.gallery-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(72px,1fr));gap:10px}
+.media-col{position:sticky;top:70px;display:flex;flex-direction:column;gap:16px}
+.media-frame{border-radius:22px;overflow:hidden;box-shadow:var(--shadow-lg);background:var(--surface);position:relative}
+.img-frame img{width:100%;aspect-ratio:4/5;object-fit:cover;display:block;transition:transform .5s cubic-bezier(.25,.46,.45,.94)}
+.img-frame:hover img{transform:scale(1.04)}
+.gallery-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(80px,1fr));gap:12px}
 .g-thumb{appearance:none;border:1.5px solid var(--border);border-radius:14px;overflow:hidden;aspect-ratio:1;background:var(--surface);padding:0;cursor:pointer;box-shadow:var(--shadow);transition:transform .15s,border-color .15s,box-shadow .15s}
 .g-thumb:hover{transform:translateY(-1px);border-color:color-mix(in srgb,var(--p) 30%,#dbe4f0)}
 .g-thumb.active{border-color:var(--p);box-shadow:0 0 0 3px color-mix(in srgb,var(--p) 16%,transparent),var(--shadow)}
@@ -477,7 +477,7 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:var(--b
 .video-box iframe{position:absolute;inset:0;width:100%;height:100%;border:none}
 
 /* No-image placeholder — rich design */
-.no-img-card{background:linear-gradient(145deg,var(--p-light),color-mix(in srgb,var(--p) 6%,#fff));border-radius:var(--r);box-shadow:var(--shadow-lg);overflow:hidden;position:relative;aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:32px;border:1.5px solid color-mix(in srgb,var(--p) 14%,#fff)}
+.no-img-card{background:linear-gradient(145deg,var(--p-light),color-mix(in srgb,var(--p) 6%,#fff));border-radius:22px;box-shadow:var(--shadow-lg);overflow:hidden;position:relative;aspect-ratio:4/5;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:32px;border:1.5px solid color-mix(in srgb,var(--p) 14%,#fff)}
 .no-img-orb{position:absolute;border-radius:50%;opacity:.18;pointer-events:none}
 .no-img-orb-1{width:260px;height:260px;top:-60px;left:-60px;background:radial-gradient(circle,var(--p),transparent 70%)}
 .no-img-orb-2{width:200px;height:200px;bottom:-40px;right:-40px;background:radial-gradient(circle,var(--p-dark),transparent 70%)}
@@ -506,9 +506,9 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:var(--b
 .tips-copy{font-size:12px;color:var(--sub);line-height:1.55}
 
 /* ── INFO CARD ── */
-.info-card{background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow-lg);overflow:hidden}
-.info-card-accent{height:4px;background:linear-gradient(90deg,var(--p),var(--p-dark),color-mix(in srgb,var(--p) 60%,#c084fc))}
-.info-body{padding:26px 26px 28px}
+.info-card{background:var(--surface);border-radius:22px;box-shadow:var(--shadow-lg);overflow:hidden}
+.info-card-accent{height:5px;background:linear-gradient(90deg,var(--p),var(--p-dark),color-mix(in srgb,var(--p) 60%,#c084fc))}
+.info-body{padding:32px 32px 36px}
 
 /* Breadcrumb */
 .bc{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);font-weight:600;letter-spacing:.06em;text-transform:uppercase;margin-bottom:16px}
@@ -520,11 +520,11 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:var(--b
 .code-pill{display:inline-flex;align-items:center;gap:5px;background:var(--p-light);border:1px solid color-mix(in srgb,var(--p) 20%,transparent);color:var(--p);font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;padding:5px 12px;border-radius:8px;margin-bottom:14px}
 
 /* Name */
-.pname{font-size:22px;font-weight:800;line-height:1.35;color:var(--text);letter-spacing:-.3px;margin-bottom:20px}
+.pname{font-size:25px;font-weight:800;line-height:1.35;color:var(--text);letter-spacing:-.4px;margin-bottom:22px}
 
 /* Price block */
-.price-block{display:flex;align-items:center;gap:14px;padding:16px 20px;background:linear-gradient(135deg,var(--p-mid),color-mix(in srgb,var(--p) 8%,transparent));border-radius:14px;border:1.5px solid color-mix(in srgb,var(--p) 18%,transparent);margin-bottom:22px}
-.price-val{font-size:32px;font-weight:900;color:var(--p);letter-spacing:-1px;line-height:1}
+.price-block{display:flex;align-items:center;gap:16px;padding:20px 24px;background:linear-gradient(135deg,var(--p-mid),color-mix(in srgb,var(--p) 8%,transparent));border-radius:16px;border:1.5px solid color-mix(in srgb,var(--p) 18%,transparent);margin-bottom:26px}
+.price-val{font-size:38px;font-weight:900;color:var(--p);letter-spacing:-1px;line-height:1}
 .stock-pill{font-size:11.5px;font-weight:700;padding:5px 13px;border-radius:20px;letter-spacing:.03em;white-space:nowrap}
 .s-in{background:#dcfce7;color:#15803d;border:1px solid #bbf7d0}
 .s-out{background:#fee2e2;color:#dc2626;border:1px solid #fecaca}
@@ -577,13 +577,15 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:var(--b
 
 /* ── MOBILE ── */
 @media(max-width:680px){
-  .wrapper{padding:0 12px;margin-top:16px;margin-bottom:60px}
-  .product-grid{grid-template-columns:1fr;gap:14px}
+  .wrapper{padding:0 14px;margin-top:14px;margin-bottom:80px}
+  .product-grid{grid-template-columns:1fr;gap:18px}
   .media-col{position:static}
-  .info-body{padding:20px 18px 22px}
-  .pname{font-size:19px}
-  .price-val{font-size:28px}
-  .btn-order{font-size:14px;padding:13px 20px}
+  .img-frame img{aspect-ratio:1/1}
+  .info-body{padding:22px 20px 26px}
+  .pname{font-size:20px}
+  .price-val{font-size:32px}
+  .price-block{padding:16px 18px}
+  .btn-order{font-size:15px;padding:15px 20px}
   .mobile-cta{display:block}
   .media-info-strip{display:none}
 }
