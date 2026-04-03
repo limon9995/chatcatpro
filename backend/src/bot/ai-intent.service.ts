@@ -260,7 +260,7 @@ Valid intents:
 - DELIVERY_TIME — delivery কবে হবে জিজ্ঞেস করছে
 - DELIVERY_FEE — delivery charge জিজ্ঞেস করছে
 - FABRIC_TYPE — কাপড়ের quality জিজ্ঞেস করছে
-- CATALOG_REQUEST — product list চাইছে
+- CATALOG_REQUEST — product list / catalog চাইছে (যেমন: "ki ki ache", "ki ki products ache", "apnader ki ki product ache", "catalog dao", "sob product dekhao", "কি কি আছে", "কি আছে", "কি পাওয়া যায়", "product list dao")
 - SOFT_HESITATION — পরে দেখবে, এখন না
 - MULTI_CONFIRM — একসাথে অনেক order দিতে চায়
 - UNKNOWN — অন্য সব
@@ -272,6 +272,7 @@ Valid intents:
 4. Name step-এ "hi"/"hello" → GREETING।
 5. Draft step চলাকালে off-topic → UNKNOWN।
 6. সন্দেহ হলে CANCEL বেছে নাও ORDER-এর চেয়ে — ভুল order শুরু করা বেশি ক্ষতিকর।
+7. "ki ki ache", "ki ki products ache", "apnader ki ki product ache", "konta konta ache", "product list", "catalog" — এগুলো সবসময় CATALOG_REQUEST, ORDER_INTENT নয়।
 
 reply field সবসময় দাও — natural, warm, conversational Bangla/Banglish:
 - GREETING → friendly greeting, draft চললে softly remind
