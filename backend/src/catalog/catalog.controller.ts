@@ -681,15 +681,6 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:var(--b
           <div class="mi-lbl">Code</div>
         </div>
       </div>
-      <div class="tips-card">
-        <div class="tips-kicker">Best Result</div>
-        <div class="tips-title">ছবি পাঠানোর সময় এভাবে দিলে match better হবে</div>
-        <div class="tips-list">
-          <div class="tip-row"><span class="tip-dot">1</span><span>একবারে ১টা product-এর clear photo দিন</span></div>
-          <div class="tip-row"><span class="tip-dot">2</span><span>পুরো product যেন frame-এর মধ্যে থাকে</span></div>
-          <div class="tip-row"><span class="tip-dot">3</span><span>blur / collage না দিয়ে front photo দিন</span></div>
-          <div class="tip-row"><span class="tip-dot">4</span><span>চাইলে color/type লিখুন, যেমন: blue kurti</span></div>
-        </div>
         <div class="tips-visual">
           <div class="tips-frame"></div>
           <div class="tips-copy">
@@ -1208,19 +1199,6 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:radial-
           <div class="hero-pill">🛒 Direct Order</div>
           <div class="hero-pill">🎬 Photo / Video Ready</div>
         </div>
-        <div class="hero-tips">
-          <div class="hero-tip"><span class="hero-tip-badge">1</span><span>একবারে ১টা product-এর photo দিন</span></div>
-          <div class="hero-tip"><span class="hero-tip-badge">2</span><span>পুরো product যেন clear দেখা যায়</span></div>
-          <div class="hero-tip"><span class="hero-tip-badge">3</span><span>blur / collage না দিয়ে front photo দিন</span></div>
-          <div class="hero-tip"><span class="hero-tip-badge">4</span><span>চাইলে color/type লিখুন, যেমন: black panjabi</span></div>
-        </div>
-        <div class="hero-guide">
-          <div class="hero-guide-frame">
-            <div class="hero-guide-dot"></div>
-            <div class="hero-guide-box"></div>
-            <div class="hero-guide-badge top">Front</div>
-            <div class="hero-guide-badge bottom">1 item only</div>
-          </div>
           <div class="hero-guide-copy">
             <strong>Best match frame</strong>
             Pause video, keep the full product inside the box, and send one front shot plus one close-up if the print matters.
