@@ -171,6 +171,30 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
 .fade-up{opacity:0;animation:fadeUp .65s cubic-bezier(.22,1,.36,1) forwards}
 .delay-1{animation-delay:.12s}.delay-2{animation-delay:.22s}.delay-3{animation-delay:.34s}.delay-4{animation-delay:.46s}
 
+/* ══ Custom Cursor ══ */
+@media(pointer:fine){
+  body,a,button,.feature-card,.tcard,.step,.pricing-card,.stat,.mock-card{cursor:none!important}
+}
+#cur-dot{position:fixed;width:8px;height:8px;border-radius:50%;background:var(--accent);pointer-events:none;z-index:99999;transform:translate(-50%,-50%);box-shadow:0 0 10px var(--accent),0 0 22px rgba(91,76,245,.55);transition:width .15s,height .15s,background .15s,box-shadow .15s;opacity:0;will-change:left,top}
+#cur-ring{position:fixed;width:38px;height:38px;border-radius:50%;border:1.5px solid rgba(91,76,245,.45);pointer-events:none;z-index:99998;transform:translate(-50%,-50%);transition:width .22s cubic-bezier(.22,1,.36,1),height .22s cubic-bezier(.22,1,.36,1),border-color .2s,opacity .3s;opacity:0;will-change:left,top}
+#cur-trail{position:fixed;pointer-events:none;z-index:99990;top:0;left:0;width:100%;height:100%;overflow:hidden}
+.trail-dot{position:absolute;border-radius:50%;background:var(--accent);pointer-events:none;transform:translate(-50%,-50%);animation:trailFade .5s ease forwards}
+@keyframes trailFade{from{opacity:.5;width:6px;height:6px}to{opacity:0;width:2px;height:2px}}
+
+/* ══ 3D card enhancements ══ */
+.tcard{transform-style:preserve-3d;transition:transform .28s cubic-bezier(.22,1,.36,1),box-shadow .28s,border-color .28s}
+.tcard:hover{box-shadow:0 20px 60px rgba(91,76,245,.18),0 0 0 1px rgba(91,76,245,.14);border-color:rgba(91,76,245,.25)}
+.stat{transform-style:preserve-3d;transition:transform .25s cubic-bezier(.22,1,.36,1),background .2s}
+.stat:hover{background:rgba(91,76,245,.07);transform:translateY(-4px) scale(1.04)}
+.pricing-card{transform-style:preserve-3d;transition:transform .28s cubic-bezier(.22,1,.36,1),box-shadow .28s}
+.step{transform-style:preserve-3d;transition:transform .22s cubic-bezier(.22,1,.36,1),background .2s}
+.step:hover{transform:translateY(-3px) perspective(600px) rotateX(2deg);background:rgba(91,76,245,.05)}
+
+/* ══ Magnetic button glow ══ */
+.btn-primary,.btn-ghost,.nav-cta{position:relative;overflow:hidden}
+.btn-primary::after,.nav-cta::after{content:'';position:absolute;inset:0;background:radial-gradient(circle at var(--mx,50%) var(--my,50%),rgba(255,255,255,.18),transparent 65%);opacity:0;transition:opacity .2s;pointer-events:none}
+.btn-primary:hover::after,.nav-cta:hover::after{opacity:1}
+
 /* ══ Responsive ══ */
 @media(max-width:768px){
   nav{top:8px;width:calc(100% - 24px);padding:0 14px}
@@ -194,6 +218,9 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
 </style>
 </head>
 <body>
+<div id="cur-dot"></div>
+<div id="cur-ring"></div>
+<div id="cur-trail"></div>
 
 <!-- ══ Nav ══ -->
 <nav>
@@ -676,6 +703,110 @@ document.querySelectorAll('.feature-card').forEach(function(card) {
     card.style.transform = '';
   });
 });
+
+// ── Testimonial card 3D tilt ──
+document.querySelectorAll('.tcard').forEach(function(card) {
+  card.addEventListener('mousemove', function(e) {
+    var r = card.getBoundingClientRect();
+    var cx = (e.clientX - r.left) / r.width - 0.5;
+    var cy = (e.clientY - r.top) / r.height - 0.5;
+    card.style.transform = 'translateY(-6px) perspective(600px) rotateX('+(-cy*9)+'deg) rotateY('+(cx*9)+'deg) scale(1.02)';
+  });
+  card.addEventListener('mouseleave', function() {
+    card.style.transform = '';
+  });
+});
+
+// ── Pricing card 3D tilt ──
+document.querySelectorAll('.pricing-card').forEach(function(card) {
+  card.addEventListener('mousemove', function(e) {
+    var r = card.getBoundingClientRect();
+    var cx = (e.clientX - r.left) / r.width - 0.5;
+    var cy = (e.clientY - r.top) / r.height - 0.5;
+    card.style.transform = 'perspective(800px) rotateX('+(-cy*6)+'deg) rotateY('+(cx*6)+'deg) translateY(-4px)';
+  });
+  card.addEventListener('mouseleave', function() {
+    card.style.transform = '';
+  });
+});
+
+// ── Magnetic glow on buttons ──
+document.querySelectorAll('.btn-primary,.nav-cta').forEach(function(btn) {
+  btn.addEventListener('mousemove', function(e) {
+    var r = btn.getBoundingClientRect();
+    var x = ((e.clientX - r.left) / r.width * 100).toFixed(1) + '%';
+    var y = ((e.clientY - r.top) / r.height * 100).toFixed(1) + '%';
+    btn.style.setProperty('--mx', x);
+    btn.style.setProperty('--my', y);
+  });
+});
+
+// ── Custom cursor ──
+(function() {
+  var isFine = window.matchMedia('(pointer:fine)').matches;
+  if (!isFine) return;
+
+  var dot = document.getElementById('cur-dot');
+  var ring = document.getElementById('cur-ring');
+  var trail = document.getElementById('cur-trail');
+  var mx=window.innerWidth/2, my=window.innerHeight/2;
+  var dx=mx, dy=my, rx=mx, ry=my;
+  var trailTimer=0, trailIdx=0;
+
+  function lerpC(a,b,t){return a+(b-a)*t}
+
+  document.addEventListener('mousemove', function(e) {
+    mx = e.clientX; my = e.clientY;
+    dot.style.opacity = '1'; ring.style.opacity = '1';
+    // trail
+    trailTimer++;
+    if (trailTimer % 3 === 0 && trail) {
+      var p = document.createElement('div');
+      p.className = 'trail-dot';
+      p.style.left = mx + 'px'; p.style.top = my + 'px';
+      p.style.width = '5px'; p.style.height = '5px';
+      p.style.opacity = '0.4';
+      trail.appendChild(p);
+      trailIdx++;
+      setTimeout(function() { if(p.parentNode) p.parentNode.removeChild(p); }, 500);
+      // keep trail clean
+      if (trail.children.length > 30) trail.removeChild(trail.children[0]);
+    }
+  });
+
+  document.addEventListener('mouseleave', function() {
+    dot.style.opacity = '0'; ring.style.opacity = '0';
+  });
+
+  // scale on interactive hover
+  var interactors = 'a,button,.feature-card,.tcard,.step,.pricing-card,.stat,.mock-card,.nav-cta,.btn-primary,.btn-ghost';
+  document.querySelectorAll(interactors).forEach(function(el) {
+    el.addEventListener('mouseenter', function() {
+      dot.style.width = '14px'; dot.style.height = '14px';
+      dot.style.background = '#a78bfa';
+      dot.style.boxShadow = '0 0 16px #a78bfa, 0 0 32px rgba(167,139,250,.6)';
+      ring.style.width = '58px'; ring.style.height = '58px';
+      ring.style.borderColor = 'rgba(167,139,250,.7)';
+    });
+    el.addEventListener('mouseleave', function() {
+      dot.style.width = ''; dot.style.height = '';
+      dot.style.background = ''; dot.style.boxShadow = '';
+      ring.style.width = ''; ring.style.height = '';
+      ring.style.borderColor = '';
+    });
+  });
+
+  function animCursor() {
+    dx = lerpC(dx, mx, 0.22);
+    dy = lerpC(dy, my, 0.22);
+    rx = lerpC(rx, mx, 0.1);
+    ry = lerpC(ry, my, 0.1);
+    dot.style.left = dx + 'px'; dot.style.top = dy + 'px';
+    ring.style.left = rx + 'px'; ring.style.top = ry + 'px';
+    requestAnimationFrame(animCursor);
+  }
+  animCursor();
+})();
 </script>
 </body>
 </html>
