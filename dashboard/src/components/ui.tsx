@@ -189,10 +189,14 @@ export function getTheme(dark: boolean) {
     } as React.CSSProperties,
     navBtnActive: {
       background: dark
-        ? 'linear-gradient(135deg, rgba(79,70,229,0.22), rgba(99,102,241,0.10))'
-        : 'linear-gradient(135deg, rgba(79,70,229,0.14), rgba(99,102,241,0.06))',
+        ? 'linear-gradient(135deg, rgba(79,70,229,0.26), rgba(99,102,241,0.12))'
+        : 'linear-gradient(135deg, rgba(79,70,229,0.12), rgba(99,102,241,0.06))',
       color: accentText, fontWeight: 700,
-      boxShadow: dark ? 'inset 0 0 0 1px rgba(129,140,248,0.16)' : 'inset 0 0 0 1px rgba(79,70,229,0.10)',
+      borderLeft: `3px solid ${accent}`,
+      paddingLeft: 9,
+      boxShadow: dark
+        ? `inset 0 0 0 1px rgba(129,140,248,0.18), 0 2px 12px rgba(79,70,229,0.18)`
+        : `inset 0 0 0 1px rgba(79,70,229,0.12), 0 2px 10px rgba(79,70,229,0.10)`,
     } as React.CSSProperties,
 
     // Toggle

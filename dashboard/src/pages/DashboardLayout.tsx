@@ -685,10 +685,13 @@ export function DashboardLayout({
               {(openGroups[g.key] || !(language === 'en' ? g.en : g.bn)) && g.items.map(item => {
                 const isActive = nav === item.key;
                 return (
-                  <button key={item.key} onClick={() => openNavItem(item.key)}
+                  <button
+                    key={item.key}
+                    onClick={() => openNavItem(item.key)}
+                    className={`nav-lift${isActive ? ' nav-active-glow' : ''}`}
                     style={{ ...th.navBtn, ...(isActive ? th.navBtnActive : {}), marginBottom: 1 }}
                   >
-                    <span style={{ fontSize: 13, opacity: isActive ? 1 : 0.6, width: 16, textAlign: 'center' }}>{item.icon}</span>
+                    <span style={{ fontSize: 13, opacity: isActive ? 1 : 0.7, width: 16, textAlign: 'center', transition: 'opacity .13s' }}>{item.icon}</span>
                     <span style={{ flex: 1 }}>{language === 'en' ? item.en : item.bn}</span>
                     {item.badge && (
                       <span style={{
@@ -696,6 +699,9 @@ export function DashboardLayout({
                         borderRadius: 4, background: th.accentSoft,
                         color: th.accentText, letterSpacing: '0.05em',
                       }}>{item.badge}</span>
+                    )}
+                    {isActive && (
+                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: th.accent, flexShrink: 0, boxShadow: `0 0 6px ${th.accent}` }} />
                     )}
                   </button>
                 );
@@ -706,7 +712,9 @@ export function DashboardLayout({
 
         {/* ── Main Content ─────────────────────────────────────────────── */}
         <main style={{ ...th.main, ...(isMobile ? { padding: '16px 14px' } : {}) }}>
-          {renderPage()}
+          <div key={nav} className="page-enter" style={{ minHeight: '100%' }}>
+            {renderPage()}
+          </div>
         </main>
       </div>
 

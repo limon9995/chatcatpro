@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query, Res } from '@nestjs/common';
+import { Controller, Get, Query, Res } from '@nestjs/common';
 import { SkipThrottle } from '@nestjs/throttler';
 import type { Response } from 'express';
 import { PrintService, PrintStyle } from './print.service';
@@ -9,9 +9,9 @@ export class PrintController {
   constructor(private readonly printService: PrintService) {}
 
   @Get('preview')
-  preview(@Query('ids') idsRaw?: string) {
+  preview(@Query('ids') idsRaw?: string, @Query('pageId') pageId?: string) {
     const ids = this.parseIds(idsRaw);
-    return this.printService.getPrintPreview(ids);
+    return this.printService.getPrintPreview(ids, pageId ? Number(pageId) : undefined);
   }
 
   // ── HTML preview of any print style ───────────────────────────────────────
@@ -19,10 +19,11 @@ export class PrintController {
   async printHtml(
     @Query('ids') idsRaw: string,
     @Query('style') style: string,
+    @Query('pageId') pageId: string | undefined,
     @Res() res: Response,
   ) {
     const ids = this.parseIds(idsRaw);
-    const orders = await this.printService.getOrders(ids);
+    const orders = await this.printService.getOrders(ids, pageId ? Number(pageId) : undefined);
     const validStyle = (
       ['classic', 'modern', 'minimal', 'colorful'].includes(style)
         ? style
@@ -37,6 +38,7 @@ export class PrintController {
   async invoicePDF(
     @Query('ids') idsRaw: string,
     @Query('style') style: string,
+    @Query('pageId') pageId: string | undefined,
     @Res() res: Response,
   ) {
     const ids = this.parseIds(idsRaw);
@@ -45,7 +47,7 @@ export class PrintController {
         ? style
         : 'classic'
     ) as PrintStyle;
-    const pdf = await this.printService.generateInvoicePDF(ids, validStyle);
+    const pdf = await this.printService.generateInvoicePDF(ids, validStyle, pageId ? Number(pageId) : undefined);
     res.set({
       'Content-Type': 'application/pdf',
       'Content-Disposition': 'inline; filename="invoice.pdf"',
@@ -58,6 +60,7 @@ export class PrintController {
     return (raw || '')
       .split(',')
       .map((x) => Number(x.trim()))
-      .filter((x) => Number.isFinite(x) && x > 0);
+      .filter((x) => Number.isFinite(x) && x > 0)
+      .slice(0, 20); // max 20 orders per print
   }
 }

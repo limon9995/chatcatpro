@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
 import sharp from 'sharp';
@@ -36,6 +36,7 @@ export class MemoTemplateAssetService {
       .slice(0, 14);
     const fileName = `page-${pageId}-v${stamp}${ext}`;
     const absPath = path.join(this.storageRoot, fileName);
+    this.validateFileMagicBytes(file.buffer, file?.mimetype || '');
     await fs.promises.writeFile(absPath, file.buffer);
 
     const previous = await this.getTemplate(pageId);
@@ -155,6 +156,43 @@ export class MemoTemplateAssetService {
 
   private metaPath(pageId: number) {
     return path.join(this.storageRoot, `page-${pageId}.json`);
+  }
+
+  private validateFileMagicBytes(buffer: Buffer, mimetype: string): void {
+    if (!buffer || buffer.length < 4) {
+      throw new BadRequestException('File buffer too small to validate');
+    }
+    // PNG: 89 50 4E 47
+    if (mimetype.includes('png')) {
+      if (!(buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47)) {
+        throw new BadRequestException('File content does not match declared PNG type');
+      }
+      return;
+    }
+    // JPEG: FF D8 FF
+    if (mimetype.includes('jpeg') || mimetype.includes('jpg')) {
+      if (!(buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff)) {
+        throw new BadRequestException('File content does not match declared JPEG type');
+      }
+      return;
+    }
+    // WebP: RIFF....WEBP
+    if (mimetype.includes('webp')) {
+      if (!(buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46)) {
+        throw new BadRequestException('File content does not match declared WebP type');
+      }
+      return;
+    }
+    // PDF: %PDF
+    if (mimetype.includes('pdf')) {
+      if (!(buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46)) {
+        throw new BadRequestException('File content does not match declared PDF type');
+      }
+      return;
+    }
+    // HTML/SVG: no magic bytes — allow through
+    if (mimetype.includes('html') || mimetype.includes('svg')) return;
+    throw new BadRequestException(`Unsupported file type: ${mimetype}`);
   }
 
   private extFromMime(mime?: string) {

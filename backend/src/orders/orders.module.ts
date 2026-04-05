@@ -6,9 +6,10 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { MessengerModule } from '../messenger/messenger.module';
 import { BotKnowledgeModule } from '../bot-knowledge/bot-knowledge.module';
 import { ConversationContextModule } from '../conversation-context/conversation-context.module';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
-  imports: [PrismaModule, MessengerModule, BotKnowledgeModule, ConversationContextModule],
+  imports: [PrismaModule, MessengerModule, BotKnowledgeModule, ConversationContextModule, AuthModule],
   controllers: [OrdersController],
   providers: [OrdersService, OrderNotificationService],
   exports: [OrdersService, OrderNotificationService],

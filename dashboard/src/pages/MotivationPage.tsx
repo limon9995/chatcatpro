@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Spinner } from '../components/ui';
 import type { Theme } from '../components/ui';
 import { API_BASE, useApi } from '../hooks/useApi';
@@ -23,7 +23,7 @@ function useCountUp(target: number, duration = 800, key: any) {
   return val;
 }
 
-// ── Stat card with animation ──────────────────────────────────────────────────
+// ── Stat card with 3D tilt ────────────────────────────────────────────────────
 function StatCard({ th, icon, label, value, prev, growth, color, currency = '', animKey }: {
   th: Theme; icon: string; label: string; value: number; prev?: number;
   growth?: { pct: number; direction: string }; color: string;
@@ -32,18 +32,37 @@ function StatCard({ th, icon, label, value, prev, growth, color, currency = '', 
   const animated = useCountUp(Math.round(Number(value) || 0), 800, animKey);
   const up   = growth?.direction === 'up';
   const down = growth?.direction === 'down';
+  const [tilt, setTilt] = useState({ x: 0, y: 0, hover: false });
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const cx = (e.clientX - rect.left) / rect.width - 0.5;
+    const cy = (e.clientY - rect.top) / rect.height - 0.5;
+    setTilt({ x: cy * -10, y: cx * 10, hover: true });
+  };
+  const handleMouseLeave = () => setTilt({ x: 0, y: 0, hover: false });
 
   return (
-    <div style={{
-      background: th.panel, border: `1px solid ${th.border}`,
-      borderRadius: 14, padding: '18px 20px',
-      boxShadow: th.shadow, position: 'relative', overflow: 'hidden',
-    }}>
+    <div
+      className="tilt-card"
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
+      style={{
+        background: th.panel, border: `1px solid ${tilt.hover ? `${color}40` : th.border}`,
+        borderRadius: 14, padding: '18px 20px',
+        boxShadow: tilt.hover ? `${th.shadow}, 0 20px 48px ${color}18` : th.shadow,
+        position: 'relative', overflow: 'hidden',
+        transform: `perspective(700px) rotateX(${tilt.x}deg) rotateY(${tilt.y}deg) scale(${tilt.hover ? 1.035 : 1})`,
+        cursor: 'default',
+      }}
+    >
       {/* Accent glow */}
-      <div style={{ position:'absolute', top:-24, right:-16, width:72, height:72, borderRadius:'50%', background:`${color}20`, pointerEvents:'none' }}/>
+      <div style={{ position:'absolute', top:-24, right:-16, width:80, height:80, borderRadius:'50%', background:`${color}${tilt.hover ? '30' : '20'}`, pointerEvents:'none', transition:'all .18s' }}/>
+      {/* Bottom shimmer line on hover */}
+      <div style={{ position:'absolute', bottom:0, left:0, right:0, height:2, background:`linear-gradient(90deg,transparent,${color}70,transparent)`, opacity: tilt.hover ? 1 : 0, transition:'opacity .18s' }}/>
 
-      <div style={{ fontSize: 18, marginBottom: 10 }}>{icon}</div>
-      <div style={{ fontSize: 26, fontWeight: 900, color, letterSpacing:'-0.05em', lineHeight:1 }}>
+      <div style={{ fontSize: 20, marginBottom: 10 }}>{icon}</div>
+      <div style={{ fontSize: 28, fontWeight: 900, color, letterSpacing:'-0.05em', lineHeight:1 }}>
         {currency}{animated.toLocaleString()}
       </div>
       <div style={{ fontSize: 11, color: th.muted, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em', marginTop:5 }}>

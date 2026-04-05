@@ -5,9 +5,10 @@ import { MemoTemplateService } from './memo-template.service';
 import { MemoThemeService } from './memo-theme.service';
 import { MemoTemplateAssetService } from './memo-template-asset.service';
 import { PrismaModule } from '../prisma/prisma.module';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, AuthModule],
   controllers: [MemoController],
   providers: [
     MemoService,

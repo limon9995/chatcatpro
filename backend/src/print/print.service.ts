@@ -15,16 +15,19 @@ export type PrintStyle =
 export class PrintService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getOrders(ids: number[]) {
+  async getOrders(ids: number[], pageId?: number) {
+    const where: any = { id: { in: ids } };
+    if (pageId) where.pageIdRef = pageId;
     return this.prisma.order.findMany({
-      where: { id: { in: ids } },
+      where,
       include: { items: true },
       orderBy: { id: 'desc' },
+      take: 20,
     });
   }
 
-  async getPrintPreview(ids: number[]) {
-    const orders = await this.getOrders(ids);
+  async getPrintPreview(ids: number[], pageId?: number) {
+    const orders = await this.getOrders(ids, pageId);
     return {
       count: orders.length,
       generatedAt: new Date().toISOString(),
@@ -332,8 +335,8 @@ body{font-family:"Courier New",Courier,monospace;background:#f5f5f5;padding:10px
 <div class="grid">${cards}</div></body></html>`;
   }
 
-  async generateInvoicePDF(ids: number[], style: PrintStyle = 'classic') {
-    const orders = await this.getOrders(ids);
+  async generateInvoicePDF(ids: number[], style: PrintStyle = 'classic', pageId?: number) {
+    const orders = await this.getOrders(ids, pageId);
     if (!orders.length) throw new NotFoundException('No orders found');
     return this.generatePdfFromHtml(this.buildPrintHTML(orders, style));
   }

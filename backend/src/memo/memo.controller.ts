@@ -2,26 +2,34 @@ import {
   BadRequestException,
   Body,
   Controller,
+  ForbiddenException,
   Get,
   Param,
   ParseIntPipe,
   Patch,
   Post,
   Query,
+  Req,
   Res,
   UploadedFile,
+  UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { SkipThrottle } from '@nestjs/throttler';
 import { FileInterceptor } from '@nestjs/platform-express';
 import * as path from 'path';
+import { AuthGuard } from '../auth/auth.guard';
+import { AuthService } from '../auth/auth.service';
 import { MemoService } from './memo.service';
 import { MemoLayout, MemoTheme } from './memo.types';
 
 @SkipThrottle()
 @Controller('memo')
 export class MemoController {
-  constructor(private readonly memoService: MemoService) {}
+  constructor(
+    private readonly memoService: MemoService,
+    private readonly auth: AuthService,
+  ) {}
 
   @Get('html')
   async html(
@@ -54,11 +62,14 @@ export class MemoController {
   }
 
   @Post('template/upload/:pageId')
+  @UseGuards(AuthGuard)
   @UseInterceptors(FileInterceptor('file'))
   async uploadTemplate(
+    @Req() req: any,
     @Param('pageId', ParseIntPipe) pageId: number,
     @UploadedFile() file: any,
   ) {
+    this.auth.ensurePageAccess(req.user || req.authUser, pageId);
     if (!file?.buffer)
       throw new BadRequestException('Template file is required');
     return this.memoService.uploadTemplate(pageId, file);
@@ -131,8 +142,12 @@ export class MemoController {
 
   @Get('template/file/:fileName')
   async getTemplateFile(@Param('fileName') fileName: string, @Res() res: any) {
-    const safeName = String(fileName).replace(/[^a-zA-Z0-9._-]/g, '');
-    const abs = path.join(process.cwd(), 'storage', 'memo-templates', safeName);
+    const safeName = path.basename(fileName); // strips all directory parts
+    const root = path.resolve(process.cwd(), 'storage', 'memo-templates');
+    const abs = path.join(root, safeName);
+    if (!abs.startsWith(root + path.sep) && abs !== root) {
+      throw new ForbiddenException('Invalid file path');
+    }
     res.sendFile(abs);
   }
 }

@@ -1,6 +1,7 @@
 import { setDefaultResultOrder } from 'dns';
 setDefaultResultOrder('ipv4first');
 
+import helmet from 'helmet';
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
@@ -24,6 +25,7 @@ async function bootstrap() {
   // Without this, rate limiting uses Nginx IP instead of real client IP,
   // and X-Forwarded-For / X-Forwarded-Proto headers are ignored.
   app.set('trust proxy', 1);
+  app.use(helmet());
 
   // ── Global validation pipe ────────────────────────────────────────────────
   app.useGlobalPipes(
@@ -48,6 +50,9 @@ async function bootstrap() {
   // ── Static file serving ───────────────────────────────────────────────────
   const storageDir = path.join(process.cwd(), 'storage');
   fs.mkdirSync(storageDir, { recursive: true });
+  app.use('/storage/dev.db', (_req: any, res: any) => {
+    res.status(403).json({ message: 'Forbidden' });
+  });
   app.useStaticAssets(storageDir, { prefix: '/storage' });
 
   // ── Landing page at root "/" ──────────────────────────────────────────────
@@ -65,10 +70,14 @@ async function bootstrap() {
         .filter(Boolean)
     : null;
 
+  const isProduction = process.env.NODE_ENV === 'production';
   app.enableCors({
     origin: (origin, cb) => {
       if (!origin) return cb(null, true);
-      if (!allowedOrigins) return cb(null, true);
+      if (!allowedOrigins) {
+        if (isProduction) return cb(new Error(`CORS blocked: ${origin} — set CORS_ORIGINS`));
+        return cb(null, true);
+      }
       if (allowedOrigins.includes(origin)) return cb(null, true);
       cb(new Error(`CORS blocked: ${origin}`));
     },

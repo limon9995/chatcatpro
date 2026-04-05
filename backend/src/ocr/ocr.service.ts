@@ -303,6 +303,11 @@ export class OcrService {
       const now = Date.now();
       for (const [k, v] of ocrCache.entries())
         if (v.expiry < now) ocrCache.delete(k);
+      // If still over limit after expired cleanup, evict oldest 50 entries
+      if (ocrCache.size > 200) {
+        const toEvict = [...ocrCache.keys()].slice(0, 50);
+        toEvict.forEach((k) => ocrCache.delete(k));
+      }
     }
 
     return merged;

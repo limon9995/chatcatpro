@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { LanguageSwitch } from '../components/ui';
 import { useLanguage } from '../i18n';
 
@@ -20,7 +20,16 @@ export function LoginPage({ dark, setDark, onLogin, onSignup, onForgotPassword }
   const [error, setError]       = useState('');
   const [showPass, setShowPass] = useState(false);
   const [focused, setFocused]   = useState<string | null>(null);
+  const [cardTilt, setCardTilt] = useState({ x: 0, y: 0 });
   const unRef = useRef<HTMLInputElement>(null);
+
+  const handleCardMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const cx = (e.clientX - rect.left) / rect.width - 0.5;
+    const cy = (e.clientY - rect.top) / rect.height - 0.5;
+    setCardTilt({ x: cy * -6, y: cx * 6 });
+  };
+  const handleCardMouseLeave = () => setCardTilt({ x: 0, y: 0 });
 
   useEffect(() => { unRef.current?.focus(); }, []);
 
@@ -33,7 +42,6 @@ export function LoginPage({ dark, setDark, onLogin, onSignup, onForgotPassword }
   };
 
   const bg      = dark ? '#06060a' : '#f7f7f8';
-  const panel   = dark ? '#111118' : '#ffffff';
   const border  = dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)';
   const text    = dark ? '#ededf0' : '#0d0d10';
   const muted   = dark ? 'rgba(237,237,240,0.4)' : 'rgba(13,13,16,0.38)';
@@ -74,15 +82,24 @@ export function LoginPage({ dark, setDark, onLogin, onSignup, onForgotPassword }
       <div style={{ position:'fixed', top:'-10%', left:'-5%', width:600, height:600, borderRadius:'50%', background:`radial-gradient(circle, ${accent}18, transparent 65%)`, pointerEvents:'none' }}/>
       <div style={{ position:'fixed', bottom:'-10%', right:'-5%', width:500, height:500, borderRadius:'50%', background:`radial-gradient(circle, #7c3aed18, transparent 65%)`, pointerEvents:'none' }}/>
 
-      <div className="lcard" style={{
-        width: 400, padding: '40px 36px',
-        background: panel,
-        border: `1px solid ${border}`,
-        borderRadius: 18,
-        boxShadow: dark
-          ? '0 24px 64px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04)'
-          : '0 8px 40px rgba(0,0,0,0.08), 0 0 0 1px rgba(0,0,0,0.04)',
-      }}>
+      <div
+        className="lcard tilt-card"
+        onMouseMove={handleCardMouseMove}
+        onMouseLeave={handleCardMouseLeave}
+        style={{
+          width: 400, padding: '40px 36px',
+          background: dark ? 'rgba(17,17,24,0.85)' : 'rgba(255,255,255,0.88)',
+          backdropFilter: 'blur(24px)',
+          WebkitBackdropFilter: 'blur(24px)',
+          border: `1px solid ${dark ? 'rgba(255,255,255,0.09)' : 'rgba(79,70,229,0.14)'}`,
+          borderRadius: 22,
+          boxShadow: dark
+            ? '0 24px 80px rgba(0,0,0,0.65), 0 0 0 1px rgba(255,255,255,0.05)'
+            : '0 8px 48px rgba(79,70,229,0.12), 0 0 0 1px rgba(79,70,229,0.06)',
+          transform: `perspective(900px) rotateX(${cardTilt.x}deg) rotateY(${cardTilt.y}deg)`,
+          transition: 'transform .18s ease, box-shadow .18s ease',
+        }}
+      >
 
         {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
