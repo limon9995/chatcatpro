@@ -16,7 +16,7 @@
   --accent:#5b4cf5;--accent2:#8b5cf6;--accent3:#06b6d4;
   --gold:#f59e0b;--green:#10b981;--radius:18px;
 }
-html{scroll-behavior:smooth}
+html{scroll-behavior:auto}
 body{font-family:'DM Sans','Noto Sans Bengali',system-ui,sans-serif;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;overflow-x:hidden}
 
 /* ══ Scrollbar ══ */
@@ -745,19 +745,25 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
 
 <script>
 // ── Nav anchor smooth scroll with navbar offset ──
-document.querySelectorAll('a[href^="#"]').forEach(function(a) {
-  a.addEventListener('click', function(e) {
+(function() {
+  function scrollTo(id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    var top = el.getBoundingClientRect().top + document.documentElement.scrollTop - 80;
+    window.scrollTo({ top: top, behavior: 'smooth' });
+  }
+  document.addEventListener('click', function(e) {
+    var a = e.target.closest('a[href^="#"]');
+    if (!a) return;
     var href = a.getAttribute('href');
     if (!href || href === '#') return;
-    var target = document.querySelector(href);
-    if (target) {
-      e.preventDefault();
-      var navH = 80; // fixed navbar height + gap
-      var top = target.getBoundingClientRect().top + window.pageYOffset - navH;
-      window.scrollTo({ top: top, behavior: 'smooth' });
-    }
+    var id = href.slice(1);
+    var el = document.getElementById(id);
+    if (!el) return;
+    e.preventDefault();
+    scrollTo(id);
   });
-});
+})();
 
 // ── Dashboard URL ──
 const DASHBOARD_URL = (function() {
