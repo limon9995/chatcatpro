@@ -287,10 +287,10 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
     <span class="logo-text">Chatcat</span>
   </div>
   <div class="nav-links">
-    <a href="#features" class="nav-link">Features</a>
-    <a href="#how-it-works" class="nav-link">How it works</a>
-    <a href="#pricing" class="nav-link">Pricing</a>
-    <a href="#contact" class="nav-link">Get Started</a>
+    <a href="#features" class="nav-link" onclick="navScrollTo('features');return false;">Features</a>
+    <a href="#how-it-works" class="nav-link" onclick="navScrollTo('how-it-works');return false;">How it works</a>
+    <a href="#pricing" class="nav-link" onclick="navScrollTo('pricing');return false;">Pricing</a>
+    <a href="#contact" class="nav-link" onclick="navScrollTo('contact');return false;">Get Started</a>
     <a id="nav-login" href="#" class="nav-login">Login</a>
     <a id="nav-signup" href="#" class="nav-cta">শুরু করুন →</a>
   </div>
@@ -736,34 +736,22 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
     <div class="footer-copy">© 2025 Chatcat. All rights reserved.</div>
   </div>
   <div class="footer-links">
-    <a href="#features" class="footer-link">Features</a>
-    <a href="#how-it-works" class="footer-link">How it works</a>
-    <a href="#pricing" class="footer-link">Pricing</a>
+    <a href="#features" class="footer-link" onclick="navScrollTo('features');return false;">Features</a>
+    <a href="#how-it-works" class="footer-link" onclick="navScrollTo('how-it-works');return false;">How it works</a>
+    <a href="#pricing" class="footer-link" onclick="navScrollTo('pricing');return false;">Pricing</a>
     <a href="mailto:info@chatcat.pro" class="footer-link">Contact</a>
   </div>
 </footer>
 
 <script>
-// ── Nav anchor smooth scroll with navbar offset ──
-(function() {
-  function scrollTo(id) {
-    var el = document.getElementById(id);
-    if (!el) return;
-    var top = el.getBoundingClientRect().top + document.documentElement.scrollTop - 80;
-    window.scrollTo({ top: top, behavior: 'smooth' });
-  }
-  document.addEventListener('click', function(e) {
-    var a = e.target.closest('a[href^="#"]');
-    if (!a) return;
-    var href = a.getAttribute('href');
-    if (!href || href === '#') return;
-    var id = href.slice(1);
-    var el = document.getElementById(id);
-    if (!el) return;
-    e.preventDefault();
-    scrollTo(id);
-  });
-})();
+// ── Nav anchor smooth scroll ──
+function navScrollTo(id) {
+  var el = document.getElementById(id);
+  if (!el) return false;
+  var top = el.getBoundingClientRect().top + document.documentElement.scrollTop - 80;
+  window.scrollTo({ top: top, behavior: 'smooth' });
+  return true;
+}
 
 // ── Dashboard URL ──
 const DASHBOARD_URL = (function() {
