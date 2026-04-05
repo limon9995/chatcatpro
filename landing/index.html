@@ -171,6 +171,64 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
 .fade-up{opacity:0;animation:fadeUp .65s cubic-bezier(.22,1,.36,1) forwards}
 .delay-1{animation-delay:.12s}.delay-2{animation-delay:.22s}.delay-3{animation-delay:.34s}.delay-4{animation-delay:.46s}
 
+/* ══ Live 3D Demo Scene ══ */
+.demo-sec{padding:110px 5% 80px;overflow:hidden;position:relative;background:rgba(255,255,255,.012);border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+.demo-inner{max-width:1100px;margin:0 auto;text-align:center}
+.demo-title{font-size:clamp(28px,4.5vw,48px);font-weight:900;letter-spacing:-0.04em;margin-bottom:12px}
+.demo-sub{font-size:16px;color:var(--muted);margin:0 auto 64px;line-height:1.7;max-width:480px}
+
+/* Scene container */
+.scene-root{position:relative;width:100%;max-width:680px;height:640px;margin:0 auto;transform-style:preserve-3d;will-change:transform}
+.scene-bg-orb{position:absolute;border-radius:50%;filter:blur(80px);pointer-events:none}
+.s-orb-1{width:380px;height:380px;top:-40px;left:-60px;background:radial-gradient(circle,rgba(91,76,245,.26),transparent 65%)}
+.s-orb-2{width:300px;height:300px;bottom:20px;right:-40px;background:radial-gradient(circle,rgba(139,92,246,.2),transparent 65%)}
+.s-orb-3{width:180px;height:180px;top:38%;left:57%;background:radial-gradient(circle,rgba(6,182,212,.15),transparent 65%)}
+.scene-grid-layer{position:absolute;inset:0;background-image:linear-gradient(rgba(91,76,245,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(91,76,245,.045) 1px,transparent 1px);background-size:48px 48px;mask-image:radial-gradient(ellipse 72% 52% at 50% 50%,black 20%,transparent);-webkit-mask-image:radial-gradient(ellipse 72% 52% at 50% 50%,black 20%,transparent)}
+
+/* Phone */
+.phone-scene-wrap{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);filter:drop-shadow(0 50px 90px rgba(0,0,0,.75)) drop-shadow(0 0 50px rgba(91,76,245,.18))}
+.phone-body{width:264px;background:linear-gradient(155deg,#1c1c2e,#0f0f1c 60%,#141428);border-radius:46px;padding:14px 14px 10px;border:1px solid rgba(255,255,255,.13);box-shadow:inset 0 1px 0 rgba(255,255,255,.09),inset 0 -1px 0 rgba(0,0,0,.4),0 0 0 1px rgba(0,0,0,.6);position:relative}
+.p-notch{width:106px;height:26px;background:#07070f;border-radius:0 0 18px 18px;margin:0 auto 10px;display:flex;align-items:center;justify-content:center;gap:8px}
+.p-notch-cam{width:9px;height:9px;border-radius:50%;background:#1a1a2e;border:1px solid rgba(255,255,255,.09)}
+.p-notch-bar{width:44px;height:4px;background:rgba(255,255,255,.06);border-radius:99px}
+.p-screen{background:#0a0a16;border-radius:34px;overflow:hidden;height:516px;display:flex;flex-direction:column;border:1px solid rgba(255,255,255,.04)}
+.p-btn-r{position:absolute;right:-3px;background:linear-gradient(to right,#111,#1a1a2e);border-radius:0 2px 2px 0;width:3px}
+.p-btn-r-1{top:90px;height:56px}.p-btn-r-2{top:156px;height:34px}
+.p-btn-l{position:absolute;left:-3px;background:linear-gradient(to left,#111,#1a1a2e);border-radius:2px 0 0 2px;width:3px;top:108px;height:70px}
+.p-home{width:90px;height:4px;background:rgba(255,255,255,.2);border-radius:99px;margin:8px auto 3px}
+.p-shine{position:absolute;top:0;left:0;right:0;bottom:0;border-radius:46px;background:linear-gradient(145deg,rgba(255,255,255,.07) 0%,transparent 44%);pointer-events:none;z-index:20}
+
+/* Messenger */
+.ms-hd{background:linear-gradient(135deg,#1877f2,#0d6fe8);padding:11px 13px;display:flex;align-items:center;gap:9px;flex-shrink:0}
+.ms-back-ic{color:rgba(255,255,255,.85);font-size:20px;font-weight:300;line-height:1}
+.ms-av{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#4f46e5,#7c3aed);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:#fff;border:2px solid rgba(255,255,255,.28);flex-shrink:0}
+.ms-nm{font-size:13px;font-weight:700;color:#fff;line-height:1.2}.ms-ac{display:flex;align-items:center;gap:4px;font-size:10px;color:rgba(255,255,255,.7);margin-top:1px}
+.ms-gdot{width:6px;height:6px;border-radius:50%;background:#4ade80;box-shadow:0 0 6px #4ade80;animation:pulse 2s ease infinite;flex-shrink:0}
+.ms-chat-area{flex:1;overflow:hidden;padding:10px 9px;display:flex;flex-direction:column;gap:5px;background:#0c0c1a}
+.ms-bbl{max-width:80%;padding:8px 12px;border-radius:17px;font-size:11.5px;line-height:1.55;font-weight:500;animation:bubbleIn .32s cubic-bezier(.34,1.5,.64,1) both;opacity:0;font-family:'DM Sans','Noto Sans Bengali',sans-serif}
+.ms-bbl.u{align-self:flex-end;background:linear-gradient(135deg,#1877f2,#0d6fe8);color:#fff;border-bottom-right-radius:3px}
+.ms-bbl.b{align-self:flex-start;background:rgba(255,255,255,.1);color:rgba(235,235,255,.88);border:1px solid rgba(255,255,255,.07);border-bottom-left-radius:3px}
+.ms-bbl.b.confirm{background:rgba(16,185,129,.13);border-color:rgba(16,185,129,.22);color:#6ee7b7}
+.ms-typing-d{align-self:flex-start;padding:9px 14px;background:rgba(255,255,255,.1);border-radius:17px;border-bottom-left-radius:3px;display:flex;align-items:center;gap:4px;animation:bubbleIn .2s ease both;opacity:0}
+.ms-typing-d span{width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,.4);animation:typingBounce 1s ease infinite;display:block}
+.ms-typing-d span:nth-child(2){animation-delay:.16s}.ms-typing-d span:nth-child(3){animation-delay:.32s}
+.ms-bar{padding:7px 9px;background:rgba(255,255,255,.025);border-top:1px solid rgba(255,255,255,.04);display:flex;align-items:center;gap:7px;flex-shrink:0}
+.ms-inp-box{flex:1;background:rgba(255,255,255,.07);border-radius:20px;padding:7px 13px;font-size:11px;color:rgba(255,255,255,.25);border:1px solid rgba(255,255,255,.05)}
+.ms-send-ic{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#1877f2,#0d6fe8);display:flex;align-items:center;justify-content:center;color:#fff;flex-shrink:0;box-shadow:0 2px 8px rgba(24,119,242,.4)}
+
+/* Floating chips */
+.sc-chip{position:absolute;background:rgba(9,9,21,.93);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid rgba(255,255,255,.09);border-radius:14px;padding:10px 14px;display:flex;align-items:center;gap:10px;box-shadow:0 8px 30px rgba(0,0,0,.5);white-space:nowrap;animation:chipFloat 4s ease-in-out infinite}
+.sc-ic{width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+.sc-lbl{font-size:10px;color:var(--muted);font-weight:600;margin-bottom:1px;line-height:1}
+.sc-val{font-size:13px;font-weight:800;letter-spacing:-0.02em;line-height:1.2}
+.chip-a{top:4%;right:-6%;color:#10b981;animation-delay:0s}.chip-a .sc-ic{background:rgba(16,185,129,.14);color:#10b981}
+.chip-b{top:35%;left:-18%;color:#818cf8;animation-delay:1.3s}.chip-b .sc-ic{background:rgba(91,76,245,.14);color:#818cf8}
+.chip-c{bottom:26%;right:-14%;color:#4ade80;border-radius:99px;padding:9px 16px;animation-delay:.7s;display:flex;gap:8px;align-items:center}
+.chip-c-dot{width:8px;height:8px;border-radius:50%;background:#4ade80;box-shadow:0 0 10px #4ade80;animation:pulse 2s ease infinite;flex-shrink:0}
+.chip-d{bottom:6%;left:-12%;color:#f59e0b;animation-delay:2s}.chip-d .sc-ic{background:rgba(245,158,11,.14);color:#f59e0b}
+
+@media(max-width:768px){.demo-sec{padding:72px 5% 56px}.scene-root{height:460px;transform:none!important}.sc-chip{display:none}.phone-body{width:224px}.p-screen{height:400px}}
+
 /* ══ Custom Cursor ══ */
 @media(pointer:fine){
   body,a,button,.feature-card,.tcard,.step,.pricing-card,.stat,.mock-card{cursor:none!important}
@@ -370,6 +428,74 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
     <div class="stat-label">Courier Integrated</div>
   </div>
 </div>
+
+<!-- ══ Live 3D Demo ══ -->
+<section class="demo-sec" id="live-demo">
+  <div class="demo-inner">
+    <span class="section-label fade-up">Live Demo</span>
+    <h2 class="demo-title fade-up">Bot কীভাবে order নেয়?</h2>
+    <p class="demo-sub fade-up">Real customer conversation — এটাই আপনার page-এ হবে, ২৪/৭, automatically।</p>
+
+    <div class="scene-root" id="sceneRoot">
+      <!-- BG orbs -->
+      <div class="scene-bg-orb s-orb-1" id="sOrb1"></div>
+      <div class="scene-bg-orb s-orb-2" id="sOrb2"></div>
+      <div class="scene-bg-orb s-orb-3" id="sOrb3"></div>
+      <!-- Depth grid -->
+      <div class="scene-grid-layer" id="sceneGrid"></div>
+
+      <!-- Phone -->
+      <div class="phone-scene-wrap" id="phoneWrap">
+        <div class="phone-body">
+          <div class="p-notch"><div class="p-notch-cam"></div><div class="p-notch-bar"></div></div>
+          <div class="p-screen">
+            <!-- Messenger header -->
+            <div class="ms-hd">
+              <div class="ms-back-ic">‹</div>
+              <div class="ms-av">C</div>
+              <div style="flex:1">
+                <div class="ms-nm">Chatcat Bot</div>
+                <div class="ms-ac"><span class="ms-gdot"></span> Active now</div>
+              </div>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.7)" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+            </div>
+            <!-- Chat area -->
+            <div class="ms-chat-area" id="demoChat"></div>
+            <!-- Input bar -->
+            <div class="ms-bar">
+              <div class="ms-inp-box">Type a message...</div>
+              <div class="ms-send-ic">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="m22 2-7 20-4-9-9-4Z"/></svg>
+              </div>
+            </div>
+          </div>
+          <div class="p-btn-r p-btn-r-1"></div>
+          <div class="p-btn-r p-btn-r-2"></div>
+          <div class="p-btn-l"></div>
+          <div class="p-home"></div>
+          <div class="p-shine"></div>
+        </div>
+      </div>
+
+      <!-- Floating chips -->
+      <div class="sc-chip chip-a" id="chipA">
+        <div class="sc-ic">✓</div>
+        <div><div class="sc-lbl">Order Confirmed</div><div class="sc-val">#CC2847</div></div>
+      </div>
+      <div class="sc-chip chip-b" id="chipB">
+        <div class="sc-ic">৳</div>
+        <div><div class="sc-lbl">Revenue Today</div><div class="sc-val">৳৮৪,৩২০</div></div>
+      </div>
+      <div class="sc-chip chip-c" id="chipC">
+        <span class="chip-c-dot"></span><span style="font-size:12.5px;font-weight:700">Bot Active</span>
+      </div>
+      <div class="sc-chip chip-d" id="chipD">
+        <div class="sc-ic">📦</div>
+        <div><div class="sc-lbl">Pathao Booked</div><div class="sc-val">ETA 2 days</div></div>
+      </div>
+    </div>
+  </div>
+</section>
 
 <!-- ══ Features ══ -->
 <section class="section" id="features">
@@ -740,6 +866,129 @@ document.querySelectorAll('.btn-primary,.nav-cta').forEach(function(btn) {
     btn.style.setProperty('--my', y);
   });
 });
+
+// ── Live 3D Demo: Messenger chat animation ──
+(function() {
+  var chat = document.getElementById('demoChat');
+  if (!chat) return;
+
+  var msgs = [
+    {s:'u', t:'ভাই CC101 available আছে?'},
+    {s:'typing', d:1300},
+    {s:'b', t:'হ্যাঁ! CC101 stock এ আছে 🎉\nদাম ৳৮৫০। নেবেন?'},
+    {s:'u', t:'হ্যাঁ নেবো। Dhaka delivery।'},
+    {s:'b', t:'নাম আর mobile নম্বরটা দিন।'},
+    {s:'u', t:'Karim Ahmed\n01712-345678'},
+    {s:'typing', d:1500},
+    {s:'b', t:'✅ Order Confirmed!\nOrder #CC2847\n📦 Pathao বুক হয়েছে।', cls:'confirm'},
+    {s:'b', t:'Delivery 2-3 দিনে হবে। ধন্যবাদ! 🙏'},
+  ];
+
+  function addMsg(msg) {
+    if (msg.s === 'typing') {
+      var el = document.createElement('div');
+      el.className = 'ms-typing-d'; el.id = 'typingEl';
+      el.innerHTML = '<span></span><span></span><span></span>';
+      chat.appendChild(el); chat.scrollTop = 9999; return el;
+    }
+    var te = document.getElementById('typingEl');
+    if (te) te.remove();
+    var el = document.createElement('div');
+    el.className = 'ms-bbl ' + msg.s + (msg.cls ? ' ' + msg.cls : '');
+    el.style.whiteSpace = 'pre-line';
+    el.textContent = msg.t;
+    chat.appendChild(el); chat.scrollTop = 9999; return el;
+  }
+
+  function runChat() {
+    chat.innerHTML = '';
+    var t = 700;
+    msgs.forEach(function(m) {
+      var gap = m.s === 'u' ? 1600 : m.s === 'typing' ? 200 : m.s === 'b' ? (m.d || 1100) : 900;
+      t += gap;
+      var tt = t;
+      setTimeout(function() { addMsg(m); }, tt);
+    });
+    setTimeout(runChat, t + 3200);
+  }
+
+  var started = false;
+  var obs = new IntersectionObserver(function(en) {
+    en.forEach(function(e) { if (e.isIntersecting && !started) { started=true; setTimeout(runChat,600); } });
+  }, {threshold: 0.25});
+  var sec = document.querySelector('.demo-sec');
+  if (sec) obs.observe(sec);
+})();
+
+// ── Live 3D Demo: scene parallax ──
+(function() {
+  var root = document.getElementById('sceneRoot');
+  if (!root) return;
+  var phone = document.getElementById('phoneWrap');
+  var grid  = document.getElementById('sceneGrid');
+  var orb1  = document.getElementById('sOrb1');
+  var orb2  = document.getElementById('sOrb2');
+  var orb3  = document.getElementById('sOrb3');
+  var chips = [
+    document.getElementById('chipA'),
+    document.getElementById('chipB'),
+    document.getElementById('chipC'),
+    document.getElementById('chipD'),
+  ];
+  var depths = [1.0, 0.8, 1.3, 0.7]; // parallax depth multiplier per chip
+
+  var mx=0,my=0, cx=0,cy=0;
+  function lerp(a,b,t){return a+(b-a)*t}
+
+  document.addEventListener('mousemove', function(e) {
+    var r = root.getBoundingClientRect();
+    if (e.clientY < r.top - 300 || e.clientY > r.bottom + 300) return;
+    mx = (e.clientX / window.innerWidth  - 0.5) * 2;
+    my = (e.clientY / window.innerHeight - 0.5) * 2;
+  });
+
+  function tick() {
+    cx = lerp(cx, mx, 0.055);
+    cy = lerp(cy, my, 0.055);
+
+    // Whole scene gentle tilt
+    root.style.transform =
+      'perspective(1100px) rotateY('+(cx*10)+'deg) rotateX('+(-cy*7)+'deg)';
+
+    // Phone stays centered but tiny z-scale
+    if (phone) phone.style.transform =
+      'translate(-50%,-50%) translateZ(0px)';
+
+    // Grid shifts opposite (depth illusion)
+    if (grid) grid.style.transform =
+      'translateX('+(-cx*7)+'px) translateY('+(-cy*5)+'px)';
+
+    // Background orbs parallax at different depths
+    if (orb1) orb1.style.transform='translate('+(cx*22)+'px,'+(cy*16)+'px)';
+    if (orb2) orb2.style.transform='translate('+(-cx*16)+'px,'+(-cy*12)+'px)';
+    if (orb3) orb3.style.transform='translate('+(cx*10)+'px,'+(cy*8)+'px)';
+
+    // Chips: each pops at its own depth → strongest parallax
+    chips.forEach(function(chip, i) {
+      if (!chip) return;
+      var d = depths[i];
+      var tz = 30 + i*14;
+      chip.style.transform =
+        'translateX('+(cx*26*d)+'px) translateY('+(cy*18*d)+'px) translateZ('+tz+'px)';
+    });
+
+    requestAnimationFrame(tick);
+  }
+  tick();
+
+  // Scroll-driven Y drift
+  window.addEventListener('scroll', function() {
+    var rect = root.getBoundingClientRect();
+    var mid  = rect.top + rect.height/2 - window.innerHeight/2;
+    var prog = mid / window.innerHeight;
+    root.style.marginTop = (-prog * 40) + 'px';
+  }, {passive:true});
+})();
 
 // ── Custom cursor ──
 (function() {
