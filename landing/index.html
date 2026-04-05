@@ -288,8 +288,9 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
   </div>
   <div class="nav-links">
     <a href="#features" class="nav-link">Features</a>
-    <a href="#how-it-works" class="nav-link">কীভাবে কাজ করে</a>
+    <a href="#how-it-works" class="nav-link">How it works</a>
     <a href="#pricing" class="nav-link">Pricing</a>
+    <a href="#contact" class="nav-link">Get Started</a>
     <a id="nav-login" href="#" class="nav-login">Login</a>
     <a id="nav-signup" href="#" class="nav-cta">শুরু করুন →</a>
   </div>
@@ -743,7 +744,7 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
 </footer>
 
 <script>
-// ── Nav anchor smooth scroll (prevent reload) ──
+// ── Nav anchor smooth scroll with navbar offset ──
 document.querySelectorAll('a[href^="#"]').forEach(function(a) {
   a.addEventListener('click', function(e) {
     var href = a.getAttribute('href');
@@ -751,7 +752,9 @@ document.querySelectorAll('a[href^="#"]').forEach(function(a) {
     var target = document.querySelector(href);
     if (target) {
       e.preventDefault();
-      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      var navH = 80; // fixed navbar height + gap
+      var top = target.getBoundingClientRect().top + window.pageYOffset - navH;
+      window.scrollTo({ top: top, behavior: 'smooth' });
     }
   });
 });
