@@ -84,6 +84,7 @@ export class FacebookService {
       pageName: string;
       pageToken: string;
       verifyToken?: string;
+      masterPageId?: number;
     },
   ): Promise<any> {
     const submittedPageId = String(pageInfo.pageId || '').trim();
@@ -118,6 +119,19 @@ export class FacebookService {
       );
     }
 
+    // Validate masterPageId if provided
+    const masterPageId = pageInfo.masterPageId ? Number(pageInfo.masterPageId) : undefined;
+    if (masterPageId) {
+      const master = await this.prisma.page.findUnique({
+        where: { id: masterPageId },
+        select: { ownerId: true, masterPageId: true },
+      });
+      if (!master || master.ownerId !== userId)
+        throw new BadRequestException('Master page not found or not yours');
+      if (master.masterPageId !== null)
+        throw new BadRequestException('Target page is itself a linked page — only standalone pages can be masters');
+    }
+
     const page = existing
       ? await this.prisma.page.update({
           where: { id: existing.id },
@@ -128,6 +142,7 @@ export class FacebookService {
             ownerId: userId,
             isActive: true,
             verifyToken: existing.verifyToken || verifyToken,
+            ...(masterPageId !== undefined ? { masterPageId } : {}),
           },
         })
       : await this.prisma.page.create({
@@ -139,6 +154,7 @@ export class FacebookService {
             ownerId: userId,
             isActive: true,
             automationOn: false,
+            ...(masterPageId !== undefined ? { masterPageId } : {}),
           },
         });
 
@@ -239,6 +255,7 @@ export class FacebookService {
         isActive: true,
         automationOn: true,
         ocrOn: true,
+        masterPageId: true,
         createdAt: true,
       },
       orderBy: { id: 'desc' },
@@ -291,7 +308,7 @@ export class FacebookService {
     }));
   }
 
-  private async verifyPageToken(pageToken: string): Promise<FacebookPageInfo> {
+  async verifyPageToken(pageToken: string): Promise<FacebookPageInfo> {
     const url = `https://graph.facebook.com/v19.0/me?fields=id,name&access_token=${encodeURIComponent(pageToken)}`;
     const res = await fetch(url);
     const data: any = await res.json().catch(() => ({}));

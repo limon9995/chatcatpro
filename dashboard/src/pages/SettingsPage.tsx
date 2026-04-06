@@ -193,6 +193,12 @@ export function SettingsPage({ th, pageId, tab, onToast }: {
   const [saving, setSaving]   = useState(false);
   const [voiceBusy, setVoiceBusy] = useState<Record<string, boolean>>({});
   const [fbTutorialUrl, setFbTutorialUrl] = useState<string>('');
+  // Facebook connection / linked pages state
+  const [linkedPages, setLinkedPages] = useState<{ id: number; pageId: string; pageName: string; isActive: boolean }[]>([]);
+  const [showReconnectModal, setShowReconnectModal] = useState(false);
+  const [reconnectToken, setReconnectToken] = useState('');
+  const [reconnectBusy, setReconnectBusy] = useState(false);
+  const [unlinkingId, setUnlinkingId] = useState<number | null>(null);
   const banglaVoiceUploadRef = useRef<HTMLInputElement>(null);
   const englishVoiceUploadRef = useRef<HTMLInputElement>(null);
   const BASE = `${API_BASE}/client-dashboard/${pageId}`;
@@ -210,10 +216,11 @@ export function SettingsPage({ th, pageId, tab, onToast }: {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [biz, modes, tut] = await Promise.all([
+      const [biz, modes, tut, linked] = await Promise.all([
         request<any>(`${BASE}/settings`),
         request<any>(`${BASE}/modes`),
         request<any>(`${BASE}/tutorials`).catch(() => null),
+        request<any>(`${API_BASE}/page/${pageId}/linked-pages`).catch(() => []),
       ]);
       setS(prev => ({
         ...prev, ...biz, ...modes,
@@ -222,6 +229,7 @@ export function SettingsPage({ th, pageId, tab, onToast }: {
         voiceSettings: biz?.voiceSettings || prev.voiceSettings,
       }));
       if (tut?.facebookAccessToken) setFbTutorialUrl(tut.facebookAccessToken);
+      setLinkedPages(Array.isArray(linked) ? linked : []);
     } catch (e: any) { onToast(e.message, 'error'); }
     finally { setLoading(false); }
   }, [pageId]);
@@ -235,6 +243,33 @@ export function SettingsPage({ th, pageId, tab, onToast }: {
       onToast('✓ Saved');
     } catch (e: any) { onToast(e.message, 'error'); }
     finally { setSaving(false); }
+  };
+
+  const reconnectPage = async () => {
+    if (!reconnectToken.trim()) { onToast(copy('নতুন Page Access Token দিন', 'Enter the new Page Access Token'), 'error'); return; }
+    setReconnectBusy(true);
+    try {
+      const res = await request<any>(`${API_BASE}/page/${pageId}/reconnect`, {
+        method: 'PATCH',
+        body: JSON.stringify({ newPageToken: reconnectToken.trim() }),
+      });
+      onToast(`✅ ${copy('Page পরিবর্তন হয়েছে', 'Page reconnected')}: ${res?.page?.pageName || ''}`);
+      setShowReconnectModal(false);
+      setReconnectToken('');
+      load();
+    } catch (e: any) { onToast(e.message, 'error'); }
+    finally { setReconnectBusy(false); }
+  };
+
+  const unlinkPage = async (linkedPageId: number) => {
+    if (!window.confirm(copy('এই page টি unlink করলে এটি নিজের settings/products পাবে না — standalone হয়ে যাবে। Continue?', 'This page will become standalone and lose access to shared settings/products. Continue?'))) return;
+    setUnlinkingId(linkedPageId);
+    try {
+      await request(`${API_BASE}/page/${linkedPageId}/unlink`, { method: 'PATCH' });
+      setLinkedPages(prev => prev.filter(p => p.id !== linkedPageId));
+      onToast(copy('✓ Page unlink হয়েছে', '✓ Page unlinked'));
+    } catch (e: any) { onToast(e.message, 'error'); }
+    finally { setUnlinkingId(null); }
   };
 
   const saveMode = async (key: string, val: boolean) => {
@@ -621,6 +656,83 @@ export function SettingsPage({ th, pageId, tab, onToast }: {
             <div style={{ fontSize: 12, color: th.muted, padding: '8px 12px', borderRadius: 8, background: th.surface, border: `1px solid ${th.border}` }}>
               {copy('Note: Server-এ VISION_PROVIDER=openai এবং OPENAI_API_KEY set না থাকলে এই feature কাজ করবে না। Product এর Category, Color, Keywords field fill করুন matching ভালো হওয়ার জন্য।', 'Note: This feature requires VISION_PROVIDER=openai and OPENAI_API_KEY set in the server .env file. Fill in Category, Color, and Keywords on each product for better matching accuracy.')}
             </div>
+          </div>
+        </Section>
+
+        {/* ── Facebook Connection ── */}
+        <Section title={copy('Facebook Connection', 'Facebook Connection')} desc={copy('Connected page পরিবর্তন করুন — settings ও products অক্ষুণ্ণ থাকবে', 'Change the connected Facebook page while keeping all settings & products intact')}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700 }}>
+                {(s as any).pageName || copy('(নাম জানা নেই)', '(unknown)')}
+              </div>
+              <div style={{ fontSize: 11.5, color: th.muted }}>
+                FB Page ID: {(s as any).fbPageId || '—'}
+              </div>
+            </div>
+            <button
+              onClick={() => { setReconnectToken(''); setShowReconnectModal(true); }}
+              style={{ ...th.btnGhost, whiteSpace: 'nowrap', fontSize: 12 }}
+            >
+              🔄 {copy('Change FB Page', 'Change FB Page')}
+            </button>
+          </div>
+          {showReconnectModal && (
+            <div style={{ marginTop: 14, padding: '14px', borderRadius: 12, border: `1px solid ${th.borderMd}`, background: th.surface, display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 700 }}>
+                🔄 {copy('নতুন Facebook Page Token দিন', 'Enter new Facebook Page Token')}
+              </div>
+              <div style={{ fontSize: 12, color: th.muted }}>
+                {copy('এই page এর সব settings, products এবং bot training অক্ষুণ্ণ থাকবে।', 'All settings, products, and bot training will be preserved.')}
+              </div>
+              <textarea
+                style={{ ...inp, minHeight: 72, resize: 'vertical', lineHeight: 1.5 }}
+                placeholder="EAAxxxxxx..."
+                value={reconnectToken}
+                onChange={e => setReconnectToken(e.target.value)}
+              />
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={reconnectPage} disabled={reconnectBusy} style={{ ...th.btnPrimary, flex: 1, justifyContent: 'center', opacity: reconnectBusy ? 0.6 : 1 }}>
+                  {reconnectBusy ? <><Spinner size={13} /> {copy('Verifying...', 'Verifying...')}</> : copy('✓ Change Page', '✓ Change Page')}
+                </button>
+                <button onClick={() => setShowReconnectModal(false)} style={{ ...th.btnGhost }}>
+                  {copy('বাতিল', 'Cancel')}
+                </button>
+              </div>
+            </div>
+          )}
+        </Section>
+
+        {/* ── Linked Pages ── */}
+        <Section title={copy('Linked Pages', 'Linked Pages')} desc={copy('এই page এর settings ও products share করছে এমন pages', 'Pages that share this profile\'s settings and products')}>
+          {linkedPages.length === 0 ? (
+            <div style={{ fontSize: 12.5, color: th.muted, padding: '10px 0' }}>
+              {copy('কোনো linked page নেই।', 'No linked pages yet.')}
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {linkedPages.map(lp => (
+                <div key={lp.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '9px 12px', borderRadius: 10, border: `1px solid ${th.border}`, background: th.surface }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 15 }}>{lp.isActive ? '🔗' : '⏸️'}</span>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 13 }}>{lp.pageName}</div>
+                      <div style={{ fontSize: 11.5, color: th.muted }}>FB ID: {lp.pageId}</div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => unlinkPage(lp.id)}
+                    disabled={unlinkingId === lp.id}
+                    style={{ ...th.btnGhost, fontSize: 12, color: '#ef4444', borderColor: 'rgba(239,68,68,0.3)', opacity: unlinkingId === lp.id ? 0.5 : 1 }}
+                  >
+                    {unlinkingId === lp.id ? copy('Unlinking...', 'Unlinking...') : copy('Unlink', 'Unlink')}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          <div style={{ marginTop: 10, fontSize: 12, color: th.muted }}>
+            {copy('নতুন page link করতে "পেজ কানেক্ট" থেকে নতুন page add করুন এবং "Link to existing profile" option select করুন।', 'To add a linked page, go to "Connect Page", add a new page, and select "Link to existing profile".')}
           </div>
         </Section>
 

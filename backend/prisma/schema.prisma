@@ -69,6 +69,11 @@ model Page {
   ownerId String?
   owner   User?   @relation(fields: [ownerId], references: [id], onDelete: SetNull)
 
+  // Linked pages: if masterPageId is set, this page shares settings/products/bot-knowledge from master
+  masterPageId Int?
+  masterPage   Page?  @relation("LinkedPages", fields: [masterPageId], references: [id], onDelete: SetNull)
+  linkedPages  Page[] @relation("LinkedPages")
+
   isActive             Boolean @default(true)
   automationOn         Boolean @default(false)
   automationAllowed    Boolean @default(true)
@@ -147,6 +152,10 @@ model Page {
   englishVoiceFileUrl String?
   voiceGeneratedAt    DateTime?
 
+  // Page reconnect audit
+  lastReconnectedAt DateTime? // when FB page was last changed via reconnect
+  previousPageId    String?   // old FB page ID before the last reconnect
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -167,6 +176,8 @@ model Page {
   followUps        FollowUp[]
   broadcasts       Broadcast[]
   courierShipments CourierShipment[]
+
+  @@index([masterPageId])
 }
 
 model Product {

@@ -38,11 +38,17 @@ export class BotKnowledgeService {
     }
   }
 
+  /** Returns masterPageId if this page is linked, otherwise own id. */
+  private async effectiveId(pageId: number): Promise<number> {
+    return this.pageService.getEffectivePageId(pageId);
+  }
+
   async getConfig(pageId: number) {
     await this.pageService.getById(pageId);
+    const eid = await this.effectiveId(pageId);
 
     const globalCfg = this.readGlobal();
-    const pageCfg = this.readPage(pageId);
+    const pageCfg = this.readPage(eid);
 
     return {
       pageId,
@@ -96,7 +102,8 @@ export class BotKnowledgeService {
   }
 
   async updateQuestions(pageId: number, questions: any[]) {
-    const prev = this.readPage(pageId);
+    const eid = await this.effectiveId(pageId);
+    const prev = this.readPage(eid);
     const existing = this.normalizeQuestions(prev.questions || []);
     const incoming = this.normalizeQuestions(questions || []);
     const map = new Map<string, any>();
@@ -112,7 +119,7 @@ export class BotKnowledgeService {
       ),
       updatedAt: new Date().toISOString(),
     };
-    this.writePage(pageId, next);
+    this.writePage(eid, next);
     return this.getConfig(pageId);
   }
 
@@ -120,18 +127,20 @@ export class BotKnowledgeService {
     pageId: number,
     systemReplies: Record<string, any> | any,
   ) {
-    const prev = this.readPage(pageId);
+    const eid = await this.effectiveId(pageId);
+    const prev = this.readPage(eid);
     const next = {
       ...prev,
       systemReplies: this.normalizeSystemReplies(systemReplies || {}),
       updatedAt: new Date().toISOString(),
     };
-    this.writePage(pageId, next);
+    this.writePage(eid, next);
     return this.getConfig(pageId);
   }
 
   async updatePaymentRules(pageId: number, body: any) {
-    const prev = this.readPage(pageId);
+    const eid = await this.effectiveId(pageId);
+    const prev = this.readPage(eid);
     const current = {
       ...this.defaultPaymentRules(),
       ...(prev.paymentRules || {}),
@@ -194,12 +203,13 @@ export class BotKnowledgeService {
       updatedAt: new Date().toISOString(),
     };
 
-    this.writePage(pageId, next);
+    this.writePage(eid, next);
     return this.getConfig(pageId);
   }
 
   async updateAreaRules(pageId: number, clientCustomAreas: any[]) {
-    const prev = this.readPage(pageId);
+    const eid = await this.effectiveId(pageId);
+    const prev = this.readPage(eid);
     const next = {
       ...prev,
       areaRules: {
@@ -207,12 +217,13 @@ export class BotKnowledgeService {
       },
       updatedAt: new Date().toISOString(),
     };
-    this.writePage(pageId, next);
+    this.writePage(eid, next);
     return this.getConfig(pageId);
   }
 
   async updatePricingPolicy(pageId: number, body: any) {
-    const prev = this.readPage(pageId);
+    const eid = await this.effectiveId(pageId);
+    const prev = this.readPage(eid);
     const current = {
       ...this.defaultPricingPolicy(),
       ...(prev.pricingPolicy || {}),
@@ -251,7 +262,7 @@ export class BotKnowledgeService {
       },
       updatedAt: new Date().toISOString(),
     };
-    this.writePage(pageId, next);
+    this.writePage(eid, next);
     return this.getConfig(pageId);
   }
 
@@ -282,6 +293,7 @@ export class BotKnowledgeService {
   }
 
   async importGlobalQuestion(pageId: number, key: string) {
+    const eid = await this.effectiveId(pageId);
     const globalCfg = this.readGlobal();
     const match = (globalCfg.questions || []).find(
       (q: any) => String(q.key) === String(key),
@@ -291,7 +303,7 @@ export class BotKnowledgeService {
       throw new Error('Global question not found');
     }
 
-    const pageCfg = this.readPage(pageId);
+    const pageCfg = this.readPage(eid);
     const pageQuestions = this.normalizeQuestions(pageCfg.questions || []);
     const idx = pageQuestions.findIndex(
       (q: any) => String(q.key) === String(key),
@@ -310,12 +322,12 @@ export class BotKnowledgeService {
 
     pageCfg.questions = pageQuestions;
     pageCfg.updatedAt = new Date().toISOString();
-    this.writePage(pageId, pageCfg);
+    this.writePage(eid, pageCfg);
 
     return this.getConfig(pageId);
   }
 
-  createQuestionFromLearning(body: {
+  async createQuestionFromLearning(body: {
     logId?: string;
     pageId?: number;
     target?: 'global' | 'client';
@@ -364,14 +376,16 @@ export class BotKnowledgeService {
     ])[0];
 
     if ((body.target || 'global') === 'client' && body.pageId) {
-      const pageCfg = this.readPage(Number(body.pageId));
+      const rawId = Number(body.pageId);
+      const eid = await this.effectiveId(rawId);
+      const pageCfg = this.readPage(eid);
       pageCfg.questions = this.normalizeQuestions([
         ...(pageCfg.questions || []),
         question,
       ]);
       pageCfg.updatedAt = new Date().toISOString();
-      this.writePage(Number(body.pageId), pageCfg);
-      return { target: 'client', pageId: Number(body.pageId), question };
+      this.writePage(eid, pageCfg);
+      return { target: 'client', pageId: rawId, question };
     }
 
     const globalCfg = this.readGlobal();
@@ -459,11 +473,12 @@ export class BotKnowledgeService {
     message: string,
     psid?: string,
   ) {
+    const eid = await this.effectiveId(pageId);
     const code = this.extractCode(message);
     if (code) {
       try {
         return await this.prisma.product.findUnique({
-          where: { pageId_code: { pageId, code } },
+          where: { pageId_code: { pageId: eid, code } },
         });
       } catch {
         return null;
@@ -477,7 +492,7 @@ export class BotKnowledgeService {
       return await this.prisma.product.findUnique({
         where: {
           pageId_code: {
-            pageId,
+            pageId: eid,
             code: String(lastPresented[0].code),
           },
         },

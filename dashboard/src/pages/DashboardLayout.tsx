@@ -84,7 +84,7 @@ const GROUPS = [
 const NAV_KEYS = new Set<NavKey>(NAV.map((item) => item.key));
 const LAST_NAV_KEY = 'dfbot_last_nav';
 
-interface PageItem { id: number; pageId: string; pageName: string; }
+interface PageItem { id: number; pageId: string; pageName: string; masterPageId?: number | null; }
 interface ToastItem { msg: string; type?: 'error' | 'success' | 'info'; id: number; }
 interface BillingAdminContact {
   label?: string;
@@ -519,7 +519,7 @@ export function DashboardLayout({
             >
               {myPages.map((page) => (
                 <option key={page.id} value={page.id}>
-                  {page.pageName || page.pageId}
+                  {page.masterPageId ? `↳ ${page.pageName || page.pageId}` : (page.pageName || page.pageId)}
                 </option>
               ))}
             </select>

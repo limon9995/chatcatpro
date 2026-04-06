@@ -69,12 +69,32 @@ export class WebhookService {
         continue;
       }
 
+      // Linked page: inherit settings from master, keep own credentials + id
+      let resolvedPage = page;
+      if (page.masterPageId) {
+        const masterRows = await this.prisma.$queryRaw<any[]>`
+          SELECT * FROM "Page" WHERE "id" = ${Number(page.masterPageId)} LIMIT 1
+        `;
+        if (masterRows[0]) {
+          resolvedPage = {
+            ...masterRows[0],
+            // Preserve linked page identity (id used for orders/sessions, pageId/token for FB API)
+            id: page.id,
+            pageId: page.pageId,
+            pageName: page.pageName,
+            pageToken: page.pageToken,
+            verifyToken: page.verifyToken,
+            masterPageId: page.masterPageId,
+          };
+        }
+      }
+
       for (const event of entry.messaging ?? []) {
         // Echo: message sent BY the page itself (agent manual reply)
         if (event.message?.is_echo) {
           const customerPsid: string = event?.recipient?.id;
           if (customerPsid) {
-            this.handleAgentEcho(page as any, customerPsid).catch(() => {});
+            this.handleAgentEcho(resolvedPage as any, customerPsid).catch(() => {});
           }
           continue;
         }
@@ -84,9 +104,9 @@ export class WebhookService {
         if (!event.message) continue;
 
         // Process async — do NOT await (webhook must return 200 fast)
-        this.processMessage(page as any, psid, event.message).catch((err) =>
+        this.processMessage(resolvedPage as any, psid, event.message).catch((err) =>
           this.logger.error(
-            `[Webhook] page=${page.pageId} psid=${psid} unhandled: ${err}`,
+            `[Webhook] page=${resolvedPage.pageId} psid=${psid} unhandled: ${err}`,
           ),
         );
       }

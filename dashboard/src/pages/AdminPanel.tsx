@@ -39,6 +39,10 @@ const DEFAULT_FEATURE_ACCESS = Object.fromEntries(
 interface ClientPage {
   id: number; pageId: string; pageName: string;
   isActive: boolean; automationOn: boolean;
+  masterPageId?: number | null;
+  lastReconnectedAt?: string | null;
+  previousPageId?: string | null;
+  createdAt?: string;
   owner?: { id: string; username: string; name: string };
 }
 
@@ -547,8 +551,22 @@ export function AdminPanel({ th, onToast, onLogout }: {
                   }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <div>
-                      <div style={{ fontWeight: 700, fontSize: 13 }}>{pg.pageName}</div>
-                      {pg.owner && <div style={{ fontSize: 11.5, color: th.muted, marginTop: 2 }}>👤 {pg.owner.name || pg.owner.username}</div>}
+                      <div style={{ fontWeight: 700, fontSize: 13 }}>
+                        {pg.masterPageId ? '↳ ' : ''}{pg.pageName}
+                      </div>
+                      {pg.owner && (
+                        <div style={{ fontSize: 11.5, color: th.muted, marginTop: 2 }}>
+                          👤 {pg.owner.name || pg.owner.username}
+                          {' · '}
+                          {pages.filter(p => p.owner?.id === pg.owner?.id).length} page
+                        </div>
+                      )}
+                      {pg.lastReconnectedAt && (
+                        <div style={{ fontSize: 10.5, color: '#f59e0b', marginTop: 2 }}>
+                          🔄 {new Date(pg.lastReconnectedAt).toLocaleDateString('bn-BD', { day:'numeric', month:'short', year:'numeric' })}
+                          {pg.previousPageId && <span style={{ color: th.muted }}> ← {pg.previousPageId}</span>}
+                        </div>
+                      )}
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-end' }}>
                       <span style={{ ...th.pill, ...(pg.automationOn ? th.pillGreen : th.pillRed), fontSize: 10 }}>
@@ -567,12 +585,30 @@ export function AdminPanel({ th, onToast, onLogout }: {
       {selectedPage && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {/* Header */}
-          <div style={{ ...th.card, padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ ...th.card, padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
               <div style={{ fontWeight: 800, fontSize: 14.5 }}>{selectedPage.pageName}</div>
               <div style={{ fontSize: 12, color: th.muted, marginTop: 2 }}>
-                {selectedPage.owner?.name || selectedPage.owner?.username} · #{selectedPage.id}
+                {selectedPage.owner?.name || selectedPage.owner?.username} · #{selectedPage.id} · FB: {selectedPage.pageId}
                 {pageSettings && <span style={{ marginLeft: 8, ...th.pill, ...(pageSettings.automationOn ? th.pillGreen : th.pillRed), fontSize: 10 }}>{pageSettings.automationOn ? '🟢 Bot ON' : '🔴 Bot OFF'}</span>}
+              </div>
+              {/* Reconnect history */}
+              {selectedPage.lastReconnectedAt ? (
+                <div style={{ marginTop: 6, fontSize: 11.5, padding: '5px 10px', borderRadius: 7, background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.25)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <span>🔄</span>
+                  <span style={{ color: '#d97706', fontWeight: 700 }}>
+                    Page পরিবর্তন হয়েছে: {new Date(selectedPage.lastReconnectedAt).toLocaleString('bn-BD', { day:'numeric', month:'long', year:'numeric', hour:'2-digit', minute:'2-digit' })}
+                  </span>
+                  {selectedPage.previousPageId && (
+                    <span style={{ color: th.muted }}>· আগের FB ID: {selectedPage.previousPageId}</span>
+                  )}
+                </div>
+              ) : (
+                <div style={{ marginTop: 5, fontSize: 11, color: th.muted }}>Page কখনো পরিবর্তন হয়নি</div>
+              )}
+              {/* Owner's total page count */}
+              <div style={{ marginTop: 4, fontSize: 11, color: th.muted }}>
+                এই owner এর মোট {pages.filter(p => p.owner?.id === selectedPage.owner?.id).length} টি page আছে
               </div>
             </div>
             <button style={th.btnGhost} onClick={() => { setSelectedPage(null); setClientCfg(null); setPageSettings(null); }}>✕</button>

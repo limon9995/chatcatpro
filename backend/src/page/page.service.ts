@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { EncryptionService } from '../common/encryption.service';
 
@@ -129,5 +134,109 @@ export class PageService {
   async updateBusinessSettings(id: number, body: any) {
     await this.updateById(id, body);
     return this.getBusinessSettings(id);
+  }
+
+  // ── Linked pages helpers ──────────────────────────────────────────────────
+
+  /** Returns the masterPageId if this page is linked, otherwise own id. */
+  async getEffectivePageId(pageId: number): Promise<number> {
+    const page = await this.prisma.page.findUnique({
+      where: { id: pageId },
+      select: { masterPageId: true },
+    });
+    return page?.masterPageId ?? pageId;
+  }
+
+  /** Returns all pages linked to this master page. */
+  async getLinkedPages(masterPageId: number) {
+    return this.prisma.page.findMany({
+      where: { masterPageId },
+      select: { id: true, pageId: true, pageName: true, isActive: true },
+    });
+  }
+
+  /** Link this page to a master page (shares its settings/products/bot-knowledge). */
+  async setMasterPage(pageId: number, masterPageId: number, ownerId: string) {
+    if (pageId === masterPageId) {
+      throw new BadRequestException('A page cannot be linked to itself');
+    }
+
+    const master = await this.prisma.page.findUnique({
+      where: { id: masterPageId },
+      select: { id: true, ownerId: true, masterPageId: true },
+    });
+    if (!master) throw new NotFoundException('Master page not found');
+    if (master.ownerId !== ownerId)
+      throw new ForbiddenException('Master page does not belong to you');
+    if (master.masterPageId !== null)
+      throw new BadRequestException(
+        'Target page is itself a linked page. Only standalone pages can be masters.',
+      );
+
+    // Ensure this page has no linked children (cannot demote a master)
+    const childCount = await this.prisma.page.count({
+      where: { masterPageId: pageId },
+    });
+    if (childCount > 0)
+      throw new BadRequestException(
+        'This page already has linked pages. Unlink them first before linking to another master.',
+      );
+
+    await this.prisma.page.update({
+      where: { id: pageId },
+      data: { masterPageId },
+    });
+    return { success: true };
+  }
+
+  /** Unlink this page from its master (becomes standalone). */
+  async unlinkPage(pageId: number) {
+    await this.prisma.page.update({
+      where: { id: pageId },
+      data: { masterPageId: null },
+    });
+    return { success: true };
+  }
+
+  /**
+   * Swap only the Facebook credentials (pageId + token) on an existing page record.
+   * All settings, products and bot-knowledge remain untouched.
+   */
+  async reconnectFbPage(
+    id: number,
+    verifiedFbPageId: string,
+    verifiedPageName: string,
+    rawToken: string,
+  ) {
+    // Check the new FB page ID is not already owned by a different Page record
+    const existing = await this.prisma.page.findUnique({
+      where: { pageId: verifiedFbPageId },
+      select: { id: true },
+    });
+    if (existing && existing.id !== id) {
+      throw new BadRequestException(
+        `This Facebook page (${verifiedFbPageId}) is already connected to another profile.`,
+      );
+    }
+
+    // Save old FB page ID for audit before updating
+    const current = await this.prisma.page.findUnique({
+      where: { id },
+      select: { pageId: true },
+    });
+
+    const encryptedToken = this.encryption.encryptIfNeeded(rawToken);
+    const updated = await this.prisma.page.update({
+      where: { id },
+      data: {
+        pageId: verifiedFbPageId,
+        pageName: verifiedPageName,
+        pageToken: encryptedToken,
+        lastReconnectedAt: new Date(),
+        previousPageId: current?.pageId ?? null,
+      },
+      select: { id: true, pageId: true, pageName: true, verifyToken: true },
+    });
+    return { success: true, page: updated };
   }
 }

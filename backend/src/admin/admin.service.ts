@@ -126,6 +126,10 @@ export class AdminService {
             pageName: true,
             isActive: true,
             automationOn: true,
+            masterPageId: true,
+            lastReconnectedAt: true,
+            previousPageId: true,
+            createdAt: true,
           },
         },
       },
@@ -139,6 +143,7 @@ export class AdminService {
       isActive: u.isActive,
       createdAt: u.createdAt,
       pages: u.pages,
+      pageCount: u.pages.length,
     }));
   }
 
@@ -315,6 +320,10 @@ export class AdminService {
         isActive: true,
         automationOn: true,
         ownerId: true,
+        masterPageId: true,
+        lastReconnectedAt: true,
+        previousPageId: true,
+        createdAt: true,
         owner: { select: { id: true, username: true, name: true } },
       },
       orderBy: { id: 'desc' },

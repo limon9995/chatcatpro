@@ -3,7 +3,7 @@ import { LanguageSwitch, Spinner } from '../components/ui';
 import { API_BASE, useApi } from '../hooks/useApi';
 import { useLanguage } from '../i18n';
 
-type ConnectedPage = { id: number; pageId: string; pageName: string; isActive: boolean };
+type ConnectedPage = { id: number; pageId: string; pageName: string; isActive: boolean; masterPageId?: number | null };
 type OAuthPage = { pageId: string; pageName: string; pageToken: string };
 
 interface Props {
@@ -27,6 +27,8 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
   const [oauthBusy, setOauthBusy] = useState(false);
   const [oauthPages, setOauthPages] = useState<OAuthPage[]>([]);
   const [oauthConnectingPageId, setOauthConnectingPageId] = useState<string | null>(null);
+  // Linked page: optional master page to share settings from
+  const [selectedMasterId, setSelectedMasterId] = useState<number | ''>('');
 
   const bg     = dark ? '#080e1c' : '#f1f3fa';
   const panel  = dark ? '#0d1526' : '#fff';
@@ -70,7 +72,7 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
     try {
       await request(`${API_BASE}/facebook/connect`, {
         method: 'POST',
-        body: JSON.stringify({ pageId: '', pageName: pname, pageToken: tok }),
+        body: JSON.stringify({ pageId: '', pageName: pname, pageToken: tok, ...(selectedMasterId ? { masterPageId: selectedMasterId } : {}) }),
       });
       setManualSuccess(true);
     } catch (e: any) {
@@ -106,6 +108,7 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
           pageId: page.pageId,
           pageName: page.pageName,
           pageToken: page.pageToken,
+          ...(selectedMasterId ? { masterPageId: selectedMasterId } : {}),
         }),
       });
       onConnected();
@@ -320,6 +323,24 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
                   <div style={{ fontSize: 12, color: muted, fontWeight: 700 }}>
                     {copy('একটা page select করুন', 'Select a page')}
                   </div>
+                  {/* Link to existing page profile (optional) */}
+                  {activePages.length > 0 && (
+                    <div style={{ padding: '10px 12px', borderRadius: 10, border: `1px solid ${border}`, background: dark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)' }}>
+                      <div style={{ fontSize: 12, color: muted, fontWeight: 600, marginBottom: 6 }}>
+                        🔗 {copy('এই page কি কোনো existing profile share করবে? (optional)', 'Link to an existing page profile? (optional)')}
+                      </div>
+                      <select
+                        value={selectedMasterId}
+                        onChange={e => setSelectedMasterId(e.target.value ? Number(e.target.value) : '')}
+                        style={{ ...inp, fontSize: 13, height: 36, padding: '0 10px' }}
+                      >
+                        <option value="">{copy('না — নতুন standalone page হবে', 'No — create as standalone page')}</option>
+                        {activePages.map(p => (
+                          <option key={p.id} value={p.id}>{p.pageName} — {copy('এর settings/products share করবে', 'share settings & products')}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                   {oauthPages.map((page) => (
                     <div key={page.pageId} style={{ border: `1px solid ${border}`, borderRadius: 12, padding: '11px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
                       <div>
@@ -373,6 +394,25 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
               placeholder={copy('EAAxxxxxx... (Graph API Explorer থেকে copy করুন)', 'EAAxxxxxx... (copy from Graph API Explorer)')}
               value={manualToken} onChange={e => setManualToken(e.target.value)} />
           </div>
+
+          {/* Link to existing page profile (optional) — manual tab */}
+          {activePages.length > 0 && (
+            <div style={{ padding: '10px 12px', borderRadius: 10, border: `1px solid ${border}`, background: dark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)' }}>
+              <div style={{ fontSize: 12, color: muted, fontWeight: 600, marginBottom: 6 }}>
+                🔗 {copy('এই page কি কোনো existing profile share করবে? (optional)', 'Link to an existing page profile? (optional)')}
+              </div>
+              <select
+                value={selectedMasterId}
+                onChange={e => setSelectedMasterId(e.target.value ? Number(e.target.value) : '')}
+                style={{ ...inp, fontSize: 13, height: 36, padding: '0 10px' }}
+              >
+                <option value="">{copy('না — নতুন standalone page হবে', 'No — create as standalone page')}</option>
+                {activePages.map(p => (
+                  <option key={p.id} value={p.id}>{p.pageName} — {copy('এর settings/products share করবে', 'share settings & products')}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {!manualSuccess ? (
             <button onClick={connectManual} disabled={manualBusy}

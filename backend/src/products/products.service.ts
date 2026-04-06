@@ -6,6 +6,7 @@ import {
 import { promises as fs } from 'fs';
 import { join } from 'path';
 import { PrismaService } from '../prisma/prisma.service';
+import { PageService } from '../page/page.service';
 
 /**
  * V8: Flexible product code normalization.
@@ -76,7 +77,15 @@ export class ProductsService {
     'product-sidecar-meta.json',
   );
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private pageService: PageService,
+  ) {}
+
+  /** Returns masterPageId if this page is linked, otherwise own id. */
+  private async effectiveId(pageId: number): Promise<number> {
+    return this.pageService.getEffectivePageId(pageId);
+  }
 
   private productRefKey(pageId: number, code: string): string {
     return `${pageId}:${code}`;
@@ -235,9 +244,10 @@ export class ProductsService {
     aiDescription?: string | null;
     visionSearchable?: boolean;
   }) {
+    const eid = await this.effectiveId(data.pageId);
     const code = normalizeProductCode(data.code);
     const existing = await this.prisma.product.findUnique({
-      where: { pageId_code: { pageId: data.pageId, code } },
+      where: { pageId_code: { pageId: eid, code } },
     });
     if (existing)
       throw new BadRequestException(
@@ -245,7 +255,7 @@ export class ProductsService {
       );
     const created = await this.prisma.product.create({
       data: {
-        pageId: data.pageId,
+        pageId: eid,
         code,
         price: data.price,
         costPrice: data.costPrice ?? 0,
@@ -267,7 +277,7 @@ export class ProductsService {
       },
     });
     await this.setSidecarMetaForProduct(
-      data.pageId,
+      eid,
       created.code,
       {
         referenceImagesJson: data.referenceImagesJson,
@@ -275,27 +285,29 @@ export class ProductsService {
         variantLabel: data.variantLabel,
       },
     );
-    return this.attachReferenceImages(data.pageId, created);
+    return this.attachReferenceImages(eid, created);
   }
 
   async listByPage(pageId: number, query?: string) {
-    const where: any = { pageId };
+    const eid = await this.effectiveId(pageId);
+    const where: any = { pageId: eid };
     if (query) where.code = { contains: query.toUpperCase() };
     const products = await this.prisma.product.findMany({
       where,
       orderBy: { id: 'desc' },
       take: 500,
     });
-    return this.attachReferenceImagesList(pageId, products);
+    return this.attachReferenceImagesList(eid, products);
   }
 
   async findByCode(pageId: number, codeRaw: string) {
+    const eid = await this.effectiveId(pageId);
     const code = normalizeProductCode(codeRaw);
     const p = await this.prisma.product.findUnique({
-      where: { pageId_code: { pageId, code } },
+      where: { pageId_code: { pageId: eid, code } },
     });
     if (!p) throw new NotFoundException('Product not found');
-    return this.attachReferenceImages(pageId, p);
+    return this.attachReferenceImages(eid, p);
   }
 
   async updateOne(
@@ -357,6 +369,7 @@ export class ProductsService {
     if (data.imageKeywords !== undefined) payload.imageKeywords = data.imageKeywords || null;
     if (data.aiDescription !== undefined) payload.aiDescription = data.aiDescription || null;
     if (typeof data.visionSearchable === 'boolean') payload.visionSearchable = data.visionSearchable;
+    const eid = await this.effectiveId(pageId);
     const sidecarOnlyUpdate =
       data.referenceImagesJson !== undefined ||
       data.productGroup !== undefined ||
@@ -366,10 +379,10 @@ export class ProductsService {
     const updated =
       Object.keys(payload).length === 0
         ? await this.prisma.product.findUniqueOrThrow({
-            where: { pageId_code: { pageId, code } },
+            where: { pageId_code: { pageId: eid, code } },
           })
         : await this.prisma.product.update({
-            where: { pageId_code: { pageId, code } },
+            where: { pageId_code: { pageId: eid, code } },
             data: payload,
           });
     if (
@@ -378,7 +391,7 @@ export class ProductsService {
       data.variantLabel !== undefined
     ) {
       await this.setSidecarMetaForProduct(
-        pageId,
+        eid,
         updated.code,
         {
           referenceImagesJson: data.referenceImagesJson,
@@ -387,30 +400,33 @@ export class ProductsService {
         },
       );
     }
-    return this.attachReferenceImages(pageId, updated);
+    return this.attachReferenceImages(eid, updated);
   }
   async updateStock(pageId: number, codeRaw: string, delta: number) {
+    const eid = await this.effectiveId(pageId);
     const p = await this.findByCode(pageId, codeRaw);
     return this.prisma.product.update({
-      where: { pageId_code: { pageId, code: p.code } },
+      where: { pageId_code: { pageId: eid, code: p.code } },
       data: { stockQty: p.stockQty + delta },
     });
   }
 
   async updatePrice(pageId: number, codeRaw: string, price: number) {
+    const eid = await this.effectiveId(pageId);
     const p = await this.findByCode(pageId, codeRaw);
     return this.prisma.product.update({
-      where: { pageId_code: { pageId, code: p.code } },
+      where: { pageId_code: { pageId: eid, code: p.code } },
       data: { price },
     });
   }
 
   async deleteOne(pageId: number, codeRaw: string) {
+    const eid = await this.effectiveId(pageId);
     const code = normalizeProductCode(codeRaw);
     await this.prisma.product.delete({
-      where: { pageId_code: { pageId, code } },
+      where: { pageId_code: { pageId: eid, code } },
     });
-    await this.removeSidecarMetaForProduct(pageId, code);
+    await this.removeSidecarMetaForProduct(eid, code);
     return { success: true };
   }
 
@@ -422,16 +438,17 @@ export class ProductsService {
     pageId: number,
     items: { productCode: string; qty: number }[],
   ) {
+    const eid = await this.effectiveId(pageId);
     for (const item of items) {
       try {
         const code = normalizeProductCode(item.productCode);
         const product = await this.prisma.product.findUnique({
-          where: { pageId_code: { pageId, code } },
+          where: { pageId_code: { pageId: eid, code } },
         });
         if (!product) continue;
         const newQty = Math.max(0, product.stockQty - item.qty);
         await this.prisma.product.update({
-          where: { pageId_code: { pageId, code } },
+          where: { pageId_code: { pageId: eid, code } },
           data: { stockQty: newQty },
         });
       } catch {}

@@ -60,6 +60,7 @@ export class FacebookController {
       pageName: String(body.pageName || ''),
       pageToken: String(body.pageToken || ''),
       verifyToken: body.verifyToken,
+      masterPageId: body.masterPageId ? Number(body.masterPageId) : undefined,
     });
   }
 
