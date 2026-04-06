@@ -3,10 +3,12 @@ import {
   Logger,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { MessengerService } from '../messenger/messenger.service';
 import { EncryptionService } from '../common/encryption.service';
+import { BillingService } from '../billing/billing.service';
 
 /**
  * FIX 1: Queue-based broadcast architecture.
@@ -40,6 +42,7 @@ export class BroadcastService {
     private readonly prisma: PrismaService,
     private readonly messenger: MessengerService,
     private readonly encryption: EncryptionService,
+    private readonly billing: BillingService,
   ) {}
 
   async create(
@@ -55,6 +58,19 @@ export class BroadcastService {
     if (!body.title?.trim()) throw new BadRequestException('Title required');
     if (!body.message?.trim())
       throw new BadRequestException('Message required');
+
+    // Basic plan does not include Broadcast
+    const page = await this.prisma.page.findUnique({ where: { id: pageId }, select: { ownerId: true } });
+    if (page?.ownerId) {
+      const sub = await this.billing.getOrCreateSubscription(page.ownerId);
+      const planName = (sub as any).plan?.name ?? 'starter';
+      if (planName === 'basic') {
+        throw new ForbiddenException(
+          'Broadcast feature আপনার Basic plan-এ নেই। Starter বা উপরের plan-এ upgrade করুন।',
+        );
+      }
+    }
+
     return this.prisma.broadcast.create({
       data: {
         pageId,

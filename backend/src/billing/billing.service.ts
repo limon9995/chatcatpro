@@ -3,7 +3,6 @@ import {
   Logger,
   NotFoundException,
   BadRequestException,
-  ForbiddenException,
 } from '@nestjs/common';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
@@ -34,43 +33,67 @@ export class BillingService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  // ── Startup: seed plans if empty ─────────────────────────────────────────
+  // ── Startup: seed / sync plans ───────────────────────────────────────────
   async onModuleInit() {
-    const count = await this.prisma.plan.count();
-    if (count === 0) {
-      await this.prisma.plan.createMany({
-        data: [
-          {
-            id: 'plan_starter',
-            name: 'starter',
-            displayName: 'Starter',
-            priceMonthly: 999,
-            ordersLimit: 500,
-            pagesLimit: 1,
-            agentsLimit: 1,
-          },
-          {
-            id: 'plan_pro',
-            name: 'pro',
-            displayName: 'Pro',
-            priceMonthly: 2499,
-            ordersLimit: -1,
-            pagesLimit: 3,
-            agentsLimit: 3,
-          },
-          {
-            id: 'plan_enterprise',
-            name: 'enterprise',
-            displayName: 'Enterprise',
-            priceMonthly: 0,
-            ordersLimit: -1,
-            pagesLimit: -1,
-            agentsLimit: -1,
-          },
-        ],
+    const plans = [
+      {
+        id: 'plan_basic',
+        name: 'basic',
+        displayName: 'Basic',
+        priceMonthly: 999,
+        ordersLimit: 200,
+        pagesLimit: 1,
+        agentsLimit: 1,
+      },
+      {
+        id: 'plan_starter',
+        name: 'starter',
+        displayName: 'Starter',
+        priceMonthly: 1699,
+        ordersLimit: 400,
+        pagesLimit: 1,
+        agentsLimit: 1,
+      },
+      {
+        id: 'plan_pro',
+        name: 'pro',
+        displayName: 'Pro',
+        priceMonthly: 3499,
+        ordersLimit: 800,
+        pagesLimit: 3,
+        agentsLimit: 3,
+      },
+      {
+        id: 'plan_business',
+        name: 'business',
+        displayName: 'Business',
+        priceMonthly: 7999,
+        ordersLimit: 2000,
+        pagesLimit: 10,
+        agentsLimit: 10,
+      },
+    ];
+
+    for (const plan of plans) {
+      await this.prisma.plan.upsert({
+        where: { name: plan.name },
+        update: {
+          displayName: plan.displayName,
+          priceMonthly: plan.priceMonthly,
+          ordersLimit: plan.ordersLimit,
+          pagesLimit: plan.pagesLimit,
+          agentsLimit: plan.agentsLimit,
+          isActive: true,
+        },
+        create: { ...plan, isActive: true },
       });
-      this.logger.log('[Billing] Default plans seeded');
     }
+    // Deactivate old plans no longer in use (enterprise)
+    await this.prisma.plan.updateMany({
+      where: { name: { in: ['enterprise'] } },
+      data: { isActive: false },
+    });
+    this.logger.log('[Billing] Plans synced (basic/starter/pro/business)');
   }
 
   // ── Get or create subscription for user ──────────────────────────────────

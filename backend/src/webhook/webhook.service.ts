@@ -20,6 +20,7 @@ import { ProductMatchService, ProductMatchResult } from '../product-match/produc
 import { FallbackAiService } from '../fallback-ai/fallback-ai.service';
 import { AiIntentService } from '../bot/ai-intent.service';
 import { VisionOpsService } from '../vision-ops/vision-ops.service';
+import { BillingService } from '../billing/billing.service';
 
 @Injectable()
 export class WebhookService {
@@ -43,6 +44,7 @@ export class WebhookService {
     private readonly fallbackAi: FallbackAiService,
     private readonly aiIntent: AiIntentService,
     private readonly visionOps: VisionOpsService,
+    private readonly billing: BillingService,
   ) {}
 
   // ── Entry point ────────────────────────────────────────────────────────────
@@ -214,12 +216,16 @@ export class WebhookService {
       (draft?.pendingVisionMatches?.length ?? 0) > 0;
 
     // OpenAI decides first; keyword matcher takes over if AI is unavailable/unknown.
-    const aiResult = await this.aiIntent.detectIntent(
-      text,
-      awaitingConfirm,
-      draft?.currentStep ?? null,
-      page.businessName ?? null,
-    );
+    // Basic plan: AI disabled to keep costs low
+    const aiAllowed = await this.isAiAllowedForPage(page.ownerId);
+    const aiResult = aiAllowed
+      ? await this.aiIntent.detectIntent(
+          text,
+          awaitingConfirm,
+          draft?.currentStep ?? null,
+          page.businessName ?? null,
+        )
+      : { intent: null, reply: null };
     const keywordIntent = this.botIntent.detectIntent(text, awaitingConfirm);
     const intent =
       aiResult.intent !== null && aiResult.intent !== 'UNKNOWN'
@@ -1702,6 +1708,18 @@ export class WebhookService {
       await this.messenger.sendText(token, psid, text);
     } catch (err) {
       this.logger.error(`[Webhook] safeSend failed psid=${psid}: ${err}`);
+    }
+  }
+
+  /** Returns false for Basic plan users — AI features are disabled on Basic */
+  private async isAiAllowedForPage(ownerId: string | null): Promise<boolean> {
+    if (!ownerId) return true; // no owner = allow (shouldn't happen in prod)
+    try {
+      const sub = await this.billing.getOrCreateSubscription(ownerId);
+      const planName = (sub as any).plan?.name ?? 'starter';
+      return planName !== 'basic';
+    } catch {
+      return true; // fail-open: if billing check fails, don't break the bot
     }
   }
 }

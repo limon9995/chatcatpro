@@ -158,6 +158,9 @@ export function DashboardLayout({
   const [billingOpen, setBillingOpen] = useState(false);
   const [billingLoading, setBillingLoading] = useState(false);
   const [billingContact, setBillingContact] = useState<BillingAdminContact | null>(null);
+  const [paymentForm, setPaymentForm] = useState({ method: 'bkash', amount: '', transactionId: '', note: '' });
+  const [paymentSubmitting, setPaymentSubmitting] = useState(false);
+  const [paymentSuccess, setPaymentSuccess] = useState(false);
   const [searchOpen, setSearchOpen]   = useState(false);
   const [searchQ, setSearchQ]         = useState('');
   const [searchResults, setSearchResults] = useState<any>(null);
@@ -260,7 +263,27 @@ export function DashboardLayout({
     }
   }, [API_BASE, activePage?.id, copy, request]);
 
+  const handleSubmitPayment = useCallback(async () => {
+    if (!paymentForm.transactionId.trim()) { showToast('Transaction ID দিন', 'error'); return; }
+    if (!paymentForm.amount || Number(paymentForm.amount) <= 0) { showToast('Amount দিন', 'error'); return; }
+    setPaymentSubmitting(true);
+    try {
+      await request(`${API_BASE}/billing/payments/submit`, {
+        method: 'POST',
+        body: JSON.stringify({ method: paymentForm.method, amount: Number(paymentForm.amount), transactionId: paymentForm.transactionId.trim(), note: paymentForm.note }),
+      });
+      setPaymentSuccess(true);
+      setPaymentForm({ method: 'bkash', amount: '', transactionId: '', note: '' });
+      showToast('Payment submitted! Admin confirm করলে plan activate হবে।', 'success');
+    } catch (e: any) {
+      showToast(e.message || 'Payment submit failed', 'error');
+    } finally {
+      setPaymentSubmitting(false);
+    }
+  }, [API_BASE, paymentForm, request]);
+
   const openBillingModal = useCallback(async () => {
+    setPaymentSuccess(false);
     setBillingOpen(true);
     await loadBillingModalData();
   }, [loadBillingModalData]);
@@ -759,7 +782,7 @@ export function DashboardLayout({
 
                     <div style={{ display: 'grid', gap: 12 }}>
                       <div style={{ ...th.card2, borderRadius: 12, lineHeight: 1.7, fontSize: 13, color: th.text }}>
-                        {copy('এখানে আর package বেছে payment submit করতে হবে না। Admin এখন আপনার package, feature access, order limit, আর কতদিন use করবেন সব manually update করবে।', 'You no longer need to choose a package and submit payment here. The admin now manually updates your package, feature access, order limit, and access duration.')}
+                        {copy('Plan কিনতে Messenger বা WhatsApp-এ admin-এর সাথে কথা বলুন। তারপর bKash/Nagad-এ payment করে নিচে Transaction ID submit করুন।', 'Contact admin via Messenger or WhatsApp to buy a plan. Then send payment via bKash/Nagad and submit the Transaction ID below.')}
                       </div>
 
                       {billingContact?.note && (
@@ -768,58 +791,82 @@ export function DashboardLayout({
                         </div>
                       )}
 
-                      {(billingContact?.phone || billingContact?.email) && (
-                        <div style={{ ...th.card2, borderRadius: 12, display: 'grid', gap: 8 }}>
-                          {billingContact?.phone && (
-                            <div>
-                              <div style={{ fontSize: 11, fontWeight: 800, color: th.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
-                                {copy('Phone', 'Phone')}
-                              </div>
-                              <div style={{ color: th.text, fontWeight: 800 }}>{billingContact.phone}</div>
-                            </div>
-                          )}
-                          {billingContact?.email && (
-                            <div>
-                              <div style={{ fontSize: 11, fontWeight: 800, color: th.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
-                                {copy('Email', 'Email')}
-                              </div>
-                              <div style={{ color: th.text, fontWeight: 800 }}>{billingContact.email}</div>
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {billingContact?.websiteUrl && (
-                        <div style={{ ...th.card2, borderRadius: 12, display: 'grid', gap: 6 }}>
+                      {billingContact?.phone && (
+                        <div style={{ ...th.card2, borderRadius: 12, display: 'grid', gap: 4 }}>
                           <div style={{ fontSize: 11, fontWeight: 800, color: th.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                            {copy('Page / Website', 'Page / Website')}
+                            {copy('bKash / Nagad নম্বর', 'bKash / Nagad Number')}
                           </div>
-                          <a
-                            href={billingContact.websiteUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            style={{ color: th.accent, fontWeight: 800, textDecoration: 'none', wordBreak: 'break-all' }}
-                          >
-                            {billingContact.websiteUrl}
-                          </a>
+                          <div style={{ color: th.text, fontWeight: 800, fontSize: 15 }}>{billingContact.phone}</div>
+                          <div style={{ fontSize: 11.5, color: th.muted }}>{copy('Send Money করুন এই নম্বরে', 'Send Money to this number')}</div>
                         </div>
                       )}
 
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
                         {billingContact?.messengerUrl && (
                           <a href={billingContact.messengerUrl} target="_blank" rel="noreferrer" style={{ ...th.btn, padding: '9px 16px', textDecoration: 'none' }}>
-                            {copy('Messenger এ কথা বলুন', 'Message on Messenger')}
+                            💬 {copy('Messenger এ কথা বলুন', 'Message on Messenger')}
                           </a>
                         )}
                         {billingContact?.whatsappUrl && (
                           <a href={billingContact.whatsappUrl} target="_blank" rel="noreferrer" style={{ ...th.btnGhost, padding: '9px 16px', textDecoration: 'none' }}>
-                            {copy('WhatsApp এ কথা বলুন', 'Message on WhatsApp')}
+                            💚 {copy('WhatsApp এ কথা বলুন', 'Message on WhatsApp')}
                           </a>
                         )}
-                        <button onClick={() => setBillingOpen(false)} style={{ ...th.btnGhost, padding: '9px 16px' }}>
-                          {copy('বন্ধ করুন', 'Close')}
-                        </button>
                       </div>
+
+                      {/* Payment submission form */}
+                      <div style={{ borderTop: `1px solid ${th.border}`, paddingTop: 12, display: 'grid', gap: 10 }}>
+                        <div style={{ fontSize: 11, fontWeight: 800, color: th.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                          {copy('Payment Submit করুন', 'Submit Payment')}
+                        </div>
+                        {paymentSuccess ? (
+                          <div style={{ background: '#10b98122', border: '1px solid #10b98144', borderRadius: 10, padding: 14, color: '#10b981', fontWeight: 700, fontSize: 13 }}>
+                            ✅ {copy('Payment submitted! Admin confirm করলে plan activate হবে।', 'Payment submitted! Plan will activate after admin confirms.')}
+                          </div>
+                        ) : (
+                          <>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                              {(['bkash', 'nagad'] as const).map(m => (
+                                <button key={m} onClick={() => setPaymentForm(f => ({ ...f, method: m }))}
+                                  style={{ ...paymentForm.method === m ? th.btn : th.btnGhost, padding: '7px 18px', fontSize: 13, fontWeight: 700 }}>
+                                  {m === 'bkash' ? '🔴 bKash' : '🟠 Nagad'}
+                                </button>
+                              ))}
+                            </div>
+                            <input
+                              style={{ ...th.input, fontSize: 13 }}
+                              placeholder={copy('Amount (৳)', 'Amount (৳)')}
+                              type="number"
+                              min={1}
+                              value={paymentForm.amount}
+                              onChange={e => setPaymentForm(f => ({ ...f, amount: e.target.value }))}
+                            />
+                            <input
+                              style={{ ...th.input, fontSize: 13 }}
+                              placeholder={copy('Transaction ID', 'Transaction ID')}
+                              value={paymentForm.transactionId}
+                              onChange={e => setPaymentForm(f => ({ ...f, transactionId: e.target.value }))}
+                            />
+                            <input
+                              style={{ ...th.input, fontSize: 13 }}
+                              placeholder={copy('Note (optional) — কোন plan নিতে চান ইত্যাদি', 'Note (optional)')}
+                              value={paymentForm.note}
+                              onChange={e => setPaymentForm(f => ({ ...f, note: e.target.value }))}
+                            />
+                            <button
+                              onClick={handleSubmitPayment}
+                              disabled={paymentSubmitting}
+                              style={{ ...th.btn, opacity: paymentSubmitting ? 0.6 : 1 }}
+                            >
+                              {paymentSubmitting ? copy('Submitting…', 'Submitting…') : copy('✅ Payment Submit করুন', '✅ Submit Payment')}
+                            </button>
+                          </>
+                        )}
+                      </div>
+
+                      <button onClick={() => setBillingOpen(false)} style={{ ...th.btnGhost, padding: '9px 16px', marginTop: 2 }}>
+                        {copy('বন্ধ করুন', 'Close')}
+                      </button>
                     </div>
                   </div>
 
@@ -852,7 +899,7 @@ export function DashboardLayout({
                 </div>
 
                 <div style={{ background: th.accentSoft, border: `1px solid ${th.border}`, borderRadius: 12, padding: 14, color: th.textSub, fontSize: 12.5, lineHeight: 1.7 }}>
-                  {copy('যদি access change দরকার হয়, admin-কে বলে দিন কোন package/use case লাগবে। Admin panel থেকে সেখান থেকেই update করে দেবে।', 'If you need access changes, tell the admin what package or use case you need. They will update it directly from the admin panel.')}
+                  {copy('bKash/Nagad-এ Send Money করুন → Transaction ID submit করুন → Admin confirm করলেই plan activate হবে।', 'Send Money via bKash/Nagad → Submit Transaction ID → Admin will confirm and activate your plan.')}
                 </div>
               </>
             )}

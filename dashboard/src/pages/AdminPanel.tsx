@@ -1637,13 +1637,13 @@ function BillingTab({ th, data, supportConfig, loading, subFilter, setSubFilter,
     planName: 'starter',
     status: 'active',
     days: 30,
-    ordersLimit: 500,
+    ordersLimit: 400,
     note: '',
     featureAccess: { ...DEFAULT_FEATURE_ACCESS },
   });
   const [supportForm, setSupportForm] = useState<BillingSupportConfig>(supportConfig || {});
 
-  const PLANS = ['starter', 'pro', 'enterprise'];
+  const PLANS = ['basic', 'starter', 'pro', 'business'];
   const STATUSES = ['trial', 'active', 'grace', 'expired', 'cancelled'];
 
   useEffect(() => {

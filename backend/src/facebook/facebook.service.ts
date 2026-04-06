@@ -8,6 +8,7 @@ import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthService } from '../auth/auth.service';
 import { EncryptionService } from '../common/encryption.service';
+import { BillingService } from '../billing/billing.service';
 
 type PendingOAuthResult = {
   userId: string;
@@ -30,6 +31,7 @@ export class FacebookService {
     private readonly prisma: PrismaService,
     private readonly authService: AuthService,
     private readonly encryption: EncryptionService,
+    private readonly billing: BillingService,
   ) {}
 
   getOAuthUrl(userId: string): string {
@@ -112,6 +114,21 @@ export class FacebookService {
       where: { pageId: verifiedPage.pageId },
       select: { id: true, ownerId: true, verifyToken: true },
     });
+
+    // ── Check pagesLimit from subscription ──────────────────────────────────
+    // Only block new page connections; allow reconnecting an already-owned page
+    if (!existing || existing.ownerId !== userId) {
+      const sub = await this.billing.getOrCreateSubscription(userId);
+      const plan = (sub as any).plan;
+      if (plan && plan.pagesLimit !== -1) {
+        const pageCount = await this.prisma.page.count({ where: { ownerId: userId } });
+        if (pageCount >= plan.pagesLimit) {
+          throw new ForbiddenException(
+            `আপনার ${plan.displayName} plan-এ সর্বোচ্চ ${plan.pagesLimit}টি page সংযুক্ত করা যাবে। আরও page যোগ করতে plan upgrade করুন।`,
+          );
+        }
+      }
+    }
 
     if (existing?.ownerId && existing.ownerId !== userId) {
       throw new ForbiddenException(
