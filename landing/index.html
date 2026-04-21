@@ -801,6 +801,21 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
 </footer>
 
 <script>
+// ── Nav anchor smooth scroll (Robust JS version) ──
+document.querySelectorAll('a[href^="#"]').forEach(function(anchor) {
+  anchor.addEventListener('click', function(e) {
+    var id = this.getAttribute('href').substring(1);
+    if (!id) return;
+    var el = document.getElementById(id);
+    if (el) {
+      e.preventDefault();
+      var top = el.getBoundingClientRect().top + window.scrollY - 80;
+      window.scrollTo({ top: top, behavior: 'smooth' });
+      history.pushState(null, null, '#' + id);
+    }
+  });
+});
+
 // ── Dashboard URL ──
 const DASHBOARD_URL = (function() {
   var meta = document.querySelector('meta[name="dashboard-url"]');
