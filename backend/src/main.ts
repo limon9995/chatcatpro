@@ -25,7 +25,19 @@ async function bootstrap() {
   // Without this, rate limiting uses Nginx IP instead of real client IP,
   // and X-Forwarded-For / X-Forwarded-Proto headers are ignored.
   app.set('trust proxy', 1);
-  app.use(helmet());
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc: ["'self'", "'unsafe-inline'"],
+          styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+          fontSrc: ["'self'", "https://fonts.gstatic.com"],
+          imgSrc: ["'self'", "data:", "https:"],
+        },
+      },
+    }),
+  );
 
   // ── Global validation pipe ────────────────────────────────────────────────
   app.useGlobalPipes(
