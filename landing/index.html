@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Chatcat — Facebook Commerce Automation</title>
 <meta name="description" content="Facebook Messenger দিয়ে automatic order নিন, OCR দিয়ে product detect করুন, courier booking করুন — সব একজায়গায়।"/>
+<meta name="dashboard-url" content="https://app.chatcat.pro"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;0,9..40,900&family=Noto+Sans+Bengali:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
 <style>
@@ -16,7 +17,7 @@
   --accent:#5b4cf5;--accent2:#8b5cf6;--accent3:#06b6d4;
   --gold:#f59e0b;--green:#10b981;--radius:18px;
 }
-html{scroll-behavior:auto}
+html{scroll-behavior:smooth;scroll-padding-top:80px}
 body{font-family:'DM Sans','Noto Sans Bengali',system-ui,sans-serif;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;overflow-x:hidden}
 
 /* ══ Scrollbar ══ */
@@ -287,10 +288,10 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
     <span class="logo-text">Chatcat</span>
   </div>
   <div class="nav-links">
-    <a href="#features" class="nav-link" onclick="navScrollTo('features');return false;">Features</a>
-    <a href="#how-it-works" class="nav-link" onclick="navScrollTo('how-it-works');return false;">How it works</a>
-    <a href="#pricing" class="nav-link" onclick="navScrollTo('pricing');return false;">Pricing</a>
-    <a href="#contact" class="nav-link" onclick="navScrollTo('contact');return false;">Get Started</a>
+    <a href="#features" class="nav-link">Features</a>
+    <a href="#how-it-works" class="nav-link">How it works</a>
+    <a href="#pricing" class="nav-link">Pricing</a>
+    <a href="#contact" class="nav-link">Get Started</a>
     <a id="nav-login" href="#" class="nav-login">Login</a>
     <a id="nav-signup" href="#" class="nav-cta">শুরু করুন →</a>
   </div>
@@ -792,23 +793,14 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
     <div class="footer-copy">© 2025 Chatcat. All rights reserved.</div>
   </div>
   <div class="footer-links">
-    <a href="#features" class="footer-link" onclick="navScrollTo('features');return false;">Features</a>
-    <a href="#how-it-works" class="footer-link" onclick="navScrollTo('how-it-works');return false;">How it works</a>
-    <a href="#pricing" class="footer-link" onclick="navScrollTo('pricing');return false;">Pricing</a>
+    <a href="#features" class="footer-link">Features</a>
+    <a href="#how-it-works" class="footer-link">How it works</a>
+    <a href="#pricing" class="footer-link">Pricing</a>
     <a href="mailto:info@chatcat.pro" class="footer-link">Contact</a>
   </div>
 </footer>
 
 <script>
-// ── Nav anchor smooth scroll ──
-function navScrollTo(id) {
-  var el = document.getElementById(id);
-  if (!el) return false;
-  var top = el.getBoundingClientRect().top + document.documentElement.scrollTop - 80;
-  window.scrollTo({ top: top, behavior: 'smooth' });
-  return true;
-}
-
 // ── Dashboard URL ──
 const DASHBOARD_URL = (function() {
   var meta = document.querySelector('meta[name="dashboard-url"]');
