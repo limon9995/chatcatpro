@@ -191,7 +191,8 @@ model Page {
   courierShipments CourierShipment[]
 
   // Wallet
-  walletTransactions WalletTransaction[]
+  walletTransactions      WalletTransaction[]
+  walletRechargeRequests  WalletRechargeRequest[]
 
   @@index([masterPageId])
 }
@@ -648,4 +649,24 @@ model WalletTransaction {
   createdAt   DateTime @default(now())
 
   @@index([pageId])
+}
+
+model WalletRechargeRequest {
+  id            Int      @id @default(autoincrement())
+  pageId        Int
+  page          Page     @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  amountBdt     Float
+  method        String   // bkash | nagad | bank | manual
+  transactionId String
+  note          String?
+  // pending | approved | rejected
+  status        String   @default("pending")
+  rejectedReason String?
+  approvedAt    DateTime?
+  approvedBy    String?  // admin username
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([pageId])
+  @@index([status])
 }

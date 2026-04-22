@@ -3,7 +3,7 @@ import { CardHeader, EmptyState, FieldWithInfo, InfoButton, Spinner } from '../c
 import type { Theme } from '../components/ui';
 import { API_BASE, useApi } from '../hooks/useApi';
 
-type AdminTab = 'overview' | 'clients' | 'global-questions' | 'global-replies' | 'learning-log' | 'courier-tutorials' | 'billing' | 'call-servers';
+type AdminTab = 'overview' | 'clients' | 'global-questions' | 'global-replies' | 'learning-log' | 'courier-tutorials' | 'billing' | 'call-servers' | 'wallet';
 
 interface TutorialsConfig {
   courier?: { pathao?: string; steadfast?: string; redx?: string; paperfly?: string };
@@ -55,6 +55,7 @@ const ADMIN_TABS: { key: AdminTab; label: string; icon: string; help: string }[]
   { key: 'courier-tutorials', label: 'Courier Tutorials', icon: '🚚', help: 'Client দের courier API setup এর জন্য tutorial video link রাখুন।' },
   { key: 'call-servers',      label: 'Call Servers',      icon: '📞', help: 'Calling feature চালু/বন্ধ করুন এবং call servers manage করুন।' },
   { key: 'billing',           label: 'Billing',           icon: '💳', help: 'Subscriptions, payments, plan management।' },
+  { key: 'wallet',            label: 'Wallet',            icon: '💰', help: 'সব client এর wallet balance দেখুন, recharge approve করুন।' },
 ];
 
 const REPLY_KEY_HELP: Record<string, string> = {
@@ -78,7 +79,7 @@ export function AdminPanel({ th, onToast, onLogout }: {
   const { request } = useApi();
   const [tab, setTab] = useState<AdminTab>(() => {
     const saved = localStorage.getItem('admin_tab') as AdminTab | null;
-    const valid: AdminTab[] = ['overview','clients','global-questions','global-replies','learning-log','courier-tutorials','billing','call-servers'];
+    const valid: AdminTab[] = ['overview','clients','global-questions','global-replies','learning-log','courier-tutorials','billing','call-servers','wallet'];
     return saved && valid.includes(saved) ? saved : 'overview';
   });
   const [overview, setOverview] = useState<any>(null);
@@ -105,6 +106,14 @@ export function AdminPanel({ th, onToast, onLogout }: {
   const [billingLoading, setBillingLoading] = useState(false);
   const [billingSubFilter, setBillingSubFilter] = useState('');
   const [billingSupport, setBillingSupport] = useState<BillingSupportConfig>({});
+
+  // Wallet admin state
+  const [walletPages, setWalletPages]       = useState<any[]>([]);
+  const [walletRequests, setWalletRequests] = useState<any[]>([]);
+  const [walletLoading, setWalletLoading]   = useState(false);
+  const [walletReqFilter, setWalletReqFilter] = useState<'all' | 'pending'>('pending');
+  const [walletDirectForm, setWalletDirectForm] = useState({ pageId: '', amountBdt: '', transactionId: '', note: '' });
+  const [walletDirectSaving, setWalletDirectSaving] = useState(false);
 
   // Create client form state
   const [showCreateClient, setShowCreateClient] = useState(false);
@@ -188,6 +197,62 @@ export function AdminPanel({ th, onToast, onLogout }: {
     finally { setBillingLoading(false); }
   }, [BASE, billingSubFilter]);
 
+  const loadWallet = useCallback(async () => {
+    setWalletLoading(true);
+    try {
+      const [pages, reqs] = await Promise.all([
+        request<any[]>(`${BASE}/wallet`),
+        request<any[]>(`${BASE}/wallet/requests${walletReqFilter === 'pending' ? '?status=pending' : ''}`),
+      ]);
+      setWalletPages(pages || []);
+      setWalletRequests(reqs || []);
+    } catch (e: any) { onToast(e.message, 'error'); }
+    finally { setWalletLoading(false); }
+  }, [BASE, walletReqFilter]);
+
+  const approveRequest = async (id: number) => {
+    try {
+      await request(`${BASE}/wallet/requests/${id}/approve`, { method: 'POST' });
+      onToast('✅ Approved — balance যোগ হয়েছে', 'success');
+      loadWallet();
+    } catch (e: any) { onToast(e.message, 'error'); }
+  };
+
+  const rejectRequest = async (id: number) => {
+    const reason = window.prompt('Rejection কারণ (optional):');
+    if (reason === null) return;
+    try {
+      await request(`${BASE}/wallet/requests/${id}/reject`, {
+        method: 'POST', body: JSON.stringify({ reason }),
+      });
+      onToast('Request rejected');
+      loadWallet();
+    } catch (e: any) { onToast(e.message, 'error'); }
+  };
+
+  const directRecharge = async () => {
+    const pid = Number(walletDirectForm.pageId);
+    const amt = Number(walletDirectForm.amountBdt);
+    if (!pid || !amt || amt <= 0 || !walletDirectForm.transactionId.trim()) {
+      onToast('Page, amount ও Transaction ID দিন', 'error'); return;
+    }
+    setWalletDirectSaving(true);
+    try {
+      await request(`${BASE}/wallet/${pid}/recharge`, {
+        method: 'POST',
+        body: JSON.stringify({
+          amountBdt: amt,
+          transactionId: walletDirectForm.transactionId.trim(),
+          note: walletDirectForm.note.trim() || undefined,
+        }),
+      });
+      onToast(`✅ ৳${amt} balance যোগ হয়েছে`, 'success');
+      setWalletDirectForm({ pageId: '', amountBdt: '', transactionId: '', note: '' });
+      loadWallet();
+    } catch (e: any) { onToast(e.message, 'error'); }
+    finally { setWalletDirectSaving(false); }
+  };
+
   const confirmPayment = async (paymentId: string, planName?: string) => {
     try {
       const r = await request<any>(`${API_BASE}/billing/admin/payments/${paymentId}/confirm`, {
@@ -262,6 +327,7 @@ export function AdminPanel({ th, onToast, onLogout }: {
     if (tab === 'courier-tutorials')                               loadTutorials();
     if (tab === 'call-servers')                                    loadGlobalCfgCall();
     if (tab === 'billing')                                         loadBilling();
+    if (tab === 'wallet')                                          loadWallet();
   }, [tab]);
 
   const loadPageCfg = async (page: ClientPage) => {
@@ -1201,6 +1267,24 @@ export function AdminPanel({ th, onToast, onLogout }: {
             onSaveSupport={saveBillingSupport}
           />
         )}
+
+        {tab === 'wallet' && (
+          <AdminWalletTab
+            th={th}
+            loading={walletLoading}
+            pages={walletPages}
+            requests={walletRequests}
+            reqFilter={walletReqFilter}
+            setReqFilter={setWalletReqFilter}
+            directForm={walletDirectForm}
+            setDirectForm={setWalletDirectForm}
+            directSaving={walletDirectSaving}
+            onRefresh={loadWallet}
+            onApprove={approveRequest}
+            onReject={rejectRequest}
+            onDirectRecharge={directRecharge}
+          />
+        )}
       </div>
     </div>
   );
@@ -1888,6 +1972,195 @@ function BillingTab({ th, data, supportConfig, loading, subFilter, setSubFilter,
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Admin Wallet Tab ──────────────────────────────────────────────────────────
+
+const METHOD_LABELS: Record<string, string> = {
+  bkash: 'bKash', nagad: 'Nagad', bank: 'Bank', manual: 'Manual',
+};
+const STATUS_COLORS_W: Record<string, string> = {
+  pending: '#f59e0b', approved: '#16a34a', rejected: '#ef4444',
+};
+
+function AdminWalletTab({ th, loading, pages, requests, reqFilter, setReqFilter,
+  directForm, setDirectForm, directSaving, onRefresh, onApprove, onReject, onDirectRecharge,
+}: {
+  th: Theme; loading: boolean; pages: any[]; requests: any[];
+  reqFilter: 'all' | 'pending'; setReqFilter: (v: 'all' | 'pending') => void;
+  directForm: any; setDirectForm: (f: any) => void;
+  directSaving: boolean;
+  onRefresh: () => void; onApprove: (id: number) => void;
+  onReject: (id: number) => void; onDirectRecharge: () => void;
+}) {
+  const [showDirect, setShowDirect] = useState(false);
+  const [pageSearch, setPageSearch] = useState('');
+
+  const card: React.CSSProperties = { ...th.card, borderRadius: 12, padding: 18, marginBottom: 16 };
+  const inp: React.CSSProperties = { ...th.input, width: '100%', boxSizing: 'border-box' };
+
+  const filteredPages = pages.filter(p =>
+    !pageSearch || p.pageName?.toLowerCase().includes(pageSearch.toLowerCase()) ||
+    p.owner?.username?.toLowerCase().includes(pageSearch.toLowerCase())
+  );
+
+  if (loading) return <div style={{ padding: 40, textAlign: 'center' }}><Spinner /></div>;
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 16, flexWrap: 'wrap' }}>
+        <h3 style={{ margin: 0, flex: 1, fontSize: 16 }}>💰 Wallet Management</h3>
+        <button style={th.btnGhost} onClick={onRefresh}>↻ Refresh</button>
+        <button style={{ ...th.btnPrimary, fontSize: 13 }} onClick={() => setShowDirect(v => !v)}>
+          {showDirect ? '✕ Close' : '➕ Manual Recharge'}
+        </button>
+      </div>
+
+      {/* ── Direct recharge form ─────────────────────────────────────── */}
+      {showDirect && (
+        <div style={{ ...card, border: `1px solid ${th.accent}40` }}>
+          <div style={{ fontWeight: 700, marginBottom: 12 }}>➕ Manual Balance Add</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div>
+              <label style={{ fontSize: 11, color: th.muted, display: 'block', marginBottom: 3 }}>Page ID (DB id)</label>
+              <input style={inp} placeholder="যেমন: 3" value={directForm.pageId}
+                onChange={e => setDirectForm({ ...directForm, pageId: e.target.value })} />
+            </div>
+            <div>
+              <label style={{ fontSize: 11, color: th.muted, display: 'block', marginBottom: 3 }}>Amount (BDT)</label>
+              <input style={inp} type="number" placeholder="500" value={directForm.amountBdt}
+                onChange={e => setDirectForm({ ...directForm, amountBdt: e.target.value })} />
+            </div>
+            <div>
+              <label style={{ fontSize: 11, color: th.muted, display: 'block', marginBottom: 3 }}>Transaction ID</label>
+              <input style={inp} placeholder="bKash/Nagad TrxID" value={directForm.transactionId}
+                onChange={e => setDirectForm({ ...directForm, transactionId: e.target.value })} />
+            </div>
+            <div>
+              <label style={{ fontSize: 11, color: th.muted, display: 'block', marginBottom: 3 }}>Note (optional)</label>
+              <input style={inp} placeholder="Admin note" value={directForm.note}
+                onChange={e => setDirectForm({ ...directForm, note: e.target.value })} />
+            </div>
+          </div>
+          <button style={{ ...th.btnPrimary, marginTop: 12, width: '100%', padding: '9px 0' }}
+            disabled={directSaving} onClick={onDirectRecharge}>
+            {directSaving ? 'Adding...' : '💰 Balance Add করুন'}
+          </button>
+        </div>
+      )}
+
+      {/* ── Recharge requests ────────────────────────────────────────── */}
+      <div style={card}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <div style={{ fontWeight: 700 }}>📋 Recharge Requests</div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            {(['pending', 'all'] as const).map(f => (
+              <button key={f} onClick={() => { setReqFilter(f); onRefresh(); }} style={{
+                ...th.btnGhost, padding: '4px 10px', fontSize: 12,
+                background: reqFilter === f ? th.accent : 'transparent',
+                color: reqFilter === f ? '#fff' : th.muted,
+              }}>{f === 'pending' ? '⏳ Pending' : '📜 All'}</button>
+            ))}
+          </div>
+        </div>
+        {requests.length === 0 ? (
+          <div style={{ textAlign: 'center', color: th.muted, padding: 28, fontSize: 13 }}>
+            {reqFilter === 'pending' ? 'কোনো pending request নেই।' : 'কোনো request নেই।'}
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {requests.map((r: any) => (
+              <div key={r.id} style={{
+                padding: '12px 14px', borderRadius: 10, border: `1px solid ${th.border}`,
+                background: (th.card as any).background,
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 700, fontSize: 15 }}>
+                      ৳ {r.amountBdt.toLocaleString()} — {METHOD_LABELS[r.method] || r.method}
+                    </div>
+                    <div style={{ fontSize: 12, color: th.muted }}>
+                      <b>{r.page?.pageName || `Page #${r.pageId}`}</b>
+                      {r.page?.owner && ` · @${r.page.owner.username}`}
+                    </div>
+                    <div style={{ fontSize: 12, color: th.muted }}>
+                      TrxID: <b>{r.transactionId}</b>
+                      {r.note && ` · ${r.note}`}
+                    </div>
+                    <div style={{ fontSize: 11, color: th.muted }}>
+                      {new Date(r.createdAt).toLocaleString('en-BD')}
+                    </div>
+                    {r.status === 'rejected' && r.rejectedReason && (
+                      <div style={{ fontSize: 12, color: '#ef4444' }}>কারণ: {r.rejectedReason}</div>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
+                    <span style={{
+                      background: STATUS_COLORS_W[r.status] || '#6b7280', color: '#fff',
+                      borderRadius: 99, fontSize: 11, padding: '3px 10px', fontWeight: 700,
+                    }}>
+                      {r.status === 'pending' ? '⏳ Pending'
+                        : r.status === 'approved' ? '✅ Approved' : '❌ Rejected'}
+                    </span>
+                    {r.status === 'pending' && (
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button style={{ ...th.btnPrimary, fontSize: 12, padding: '5px 12px', background: '#16a34a' }}
+                          onClick={() => onApprove(r.id)}>✅ Approve</button>
+                        <button style={{ ...th.btnGhost, fontSize: 12, padding: '5px 12px', color: '#ef4444' }}
+                          onClick={() => onReject(r.id)}>❌ Reject</button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── All pages wallet summary ─────────────────────────────────── */}
+      <div style={card}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+          <div style={{ fontWeight: 700 }}>📊 সব Client এর Wallet ({pages.length})</div>
+          <input style={{ ...th.input, width: 200, fontSize: 12, padding: '6px 10px' }}
+            placeholder="Search page / username..."
+            value={pageSearch} onChange={e => setPageSearch(e.target.value)} />
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {filteredPages.map((p: any) => (
+            <div key={p.id} style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '10px 12px', borderRadius: 10, border: `1px solid ${th.border}`,
+              background: p.walletBalanceBdt <= 0
+                ? 'rgba(239,68,68,0.07)' : p.walletBalanceBdt < 100
+                  ? 'rgba(245,158,11,0.07)' : (th.card as any).background,
+            }}>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: 13 }}>{p.pageName || p.pageId}</div>
+                {p.owner && <div style={{ fontSize: 11, color: th.muted }}>@{p.owner.username}</div>}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{
+                  fontWeight: 800, fontSize: 14,
+                  color: p.walletBalanceBdt <= 0 ? '#ef4444'
+                    : p.walletBalanceBdt < 100 ? '#f59e0b' : '#22c55e',
+                }}>
+                  ৳ {p.walletBalanceBdt.toFixed(2)}
+                </span>
+                <span style={{
+                  fontSize: 10, padding: '2px 8px', borderRadius: 99, fontWeight: 700,
+                  background: p.subscriptionStatus === 'ACTIVE' ? '#22c55e22' : '#ef444422',
+                  color: p.subscriptionStatus === 'ACTIVE' ? '#16a34a' : '#dc2626',
+                }}>
+                  {p.subscriptionStatus}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

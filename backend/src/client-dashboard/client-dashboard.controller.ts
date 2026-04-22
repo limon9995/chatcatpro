@@ -1052,4 +1052,19 @@ export class ClientDashboardController {
   ) {
     return this.svc.getWalletTransactions(this.pid(r, p), limit ? Number(limit) : 50);
   }
+
+  @Post(':pageId/wallet/recharge-request')
+  submitRechargeRequest(@Param('pageId') p: string, @Req() r: any, @Body() b: any) {
+    return this.svc.submitRechargeRequest(this.pid(r, p), {
+      amountBdt: Number(b?.amountBdt),
+      method: b?.method || 'bkash',
+      transactionId: b?.transactionId || '',
+      note: b?.note,
+    });
+  }
+
+  @Get(':pageId/wallet/recharge-requests')
+  getRechargeRequests(@Param('pageId') p: string, @Req() r: any) {
+    return this.svc.getRechargeRequests(this.pid(r, p));
+  }
 }

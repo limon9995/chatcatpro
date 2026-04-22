@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
 import { PrismaService } from '../prisma/prisma.service';
@@ -644,6 +644,75 @@ export class AdminService {
     if (pricing.costPerImageBdt !== undefined) data.costPerImageBdt = pricing.costPerImageBdt;
     if (pricing.costPerAnalyzeBdt !== undefined) data.costPerAnalyzeBdt = pricing.costPerAnalyzeBdt;
     await this.prisma.page.update({ where: { id: pageId }, data });
+    return { success: true };
+  }
+
+  async getAllPagesWallet() {
+    return this.prisma.page.findMany({
+      select: {
+        id: true,
+        pageId: true,
+        pageName: true,
+        walletBalanceBdt: true,
+        subscriptionStatus: true,
+        nextBillingDate: true,
+        owner: { select: { id: true, username: true, name: true } },
+      },
+      orderBy: { walletBalanceBdt: 'asc' },
+    });
+  }
+
+  async getAllRechargeRequests(status?: string) {
+    return this.prisma.walletRechargeRequest.findMany({
+      where: status ? { status } : undefined,
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+      include: {
+        page: { select: { id: true, pageId: true, pageName: true, owner: { select: { username: true, name: true } } } },
+      },
+    });
+  }
+
+  async approveRechargeRequest(requestId: number, adminUsername: string) {
+    const req = await this.prisma.walletRechargeRequest.findUnique({ where: { id: requestId } });
+    if (!req) throw new NotFoundException('Request not found');
+    if (req.status !== 'pending') throw new BadRequestException('Request is not pending');
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.page.update({
+        where: { id: req.pageId },
+        data: {
+          walletBalanceBdt: { increment: req.amountBdt },
+          subscriptionStatus: 'ACTIVE',
+        },
+      });
+      await tx.walletTransaction.create({
+        data: {
+          pageId: req.pageId,
+          type: 'RECHARGE',
+          amountBdt: req.amountBdt,
+          description: `${req.method.toUpperCase()} Recharge — TrxID: ${req.transactionId}`,
+        },
+      });
+      await tx.walletRechargeRequest.update({
+        where: { id: requestId },
+        data: { status: 'approved', approvedAt: new Date(), approvedBy: adminUsername },
+      });
+    });
+
+    return { success: true };
+  }
+
+  async rejectRechargeRequest(requestId: number, reason?: string) {
+    const req = await this.prisma.walletRechargeRequest.findUnique({ where: { id: requestId } });
+    if (!req) throw new NotFoundException('Request not found');
+    if (req.status !== 'pending') throw new BadRequestException('Request is not pending');
+
+    await this.prisma.walletRechargeRequest.update({
+      where: { id: requestId },
+      data: { status: 'rejected', rejectedReason: reason || null },
+    });
+
     return { success: true };
   }
 }

@@ -23,6 +23,7 @@ const CourierPage     = lazy(() => import('./CourierPage').then(m => ({ default:
 const BroadcastPage   = lazy(() => import('./BroadcastPage').then(m => ({ default: m.BroadcastPage })));
 const FollowUpPage    = lazy(() => import('./FollowUpPage').then(m => ({ default: m.FollowUpPage })));
 const CatalogPage     = lazy(() => import('./CatalogPage').then(m => ({ default: m.CatalogPage })));
+const WalletPage      = lazy(() => import('./WalletPage'));
 
 // ── Error boundary for individual pages ───────────────────────────────────────
 class PageErrorBoundary extends Component<{ children: any; name: string }, { error: any }> {
@@ -42,7 +43,7 @@ class PageErrorBoundary extends Component<{ children: any; name: string }, { err
 type NavKey = 'OVERVIEW' | 'ORDERS' | 'PRODUCTS' | 'ACCOUNTING' | 'ANALYTICS' |
   'BOT_KNOWLEDGE' | 'PRINT' | 'MEMO_TEMPLATE' |
   'CRM' | 'COURIER' | 'BROADCAST' | 'FOLLOWUP' | 'CATALOG' | 'AGENT_TASKS' |
-  'PAGE' | 'NEGOTIATION' | 'CALL' | 'VOICE';
+  'PAGE' | 'NEGOTIATION' | 'CALL' | 'VOICE' | 'WALLET';
 
 interface NavItem {
   key:   NavKey;
@@ -68,6 +69,7 @@ const NAV: NavItem[] = [
   { key: 'FOLLOWUP',       bn: 'ফলো-আপ',            en: 'Follow-up',       icon: '⊖', group: 'tools' },
   { key: 'MEMO_TEMPLATE',  bn: 'মেমো টেমপ্লেট',      en: 'Memo Template',   icon: '⊝', group: 'tools' },
   { key: 'PRINT',          bn: 'প্রিন্ট / ইনভয়েস',   en: 'Print / Invoice', icon: '⊜', group: 'tools' },
+  { key: 'WALLET',         bn: 'ওয়ালেট',            en: 'Wallet',          icon: '💰', group: 'settings' },
   { key: 'PAGE',           bn: 'পেজ সেটিংস',        en: 'Page Settings',   icon: '⊞', group: 'settings' },
   { key: 'NEGOTIATION',    bn: 'নেগোশিয়েশন',        en: 'Negotiation',     icon: '⊟', group: 'settings' },
   { key: 'CALL',           bn: 'কল কনফার্ম',        en: 'Call Confirm',    icon: '⊡', group: 'settings' },
@@ -488,6 +490,13 @@ export function DashboardLayout({
         <PageErrorBoundary name="MemoTemplatePage">
           <Suspense fallback={pageFallback}>
             <MemoTemplatePage th={th} pageId={pageId} onToast={showToast} />
+          </Suspense>
+        </PageErrorBoundary>
+      );
+      case 'WALLET': return (
+        <PageErrorBoundary name="WalletPage">
+          <Suspense fallback={pageFallback}>
+            <WalletPage th={th} pageId={pageId} onToast={showToast} />
           </Suspense>
         </PageErrorBoundary>
       );

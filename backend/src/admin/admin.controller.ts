@@ -8,6 +8,7 @@ import {
   Patch,
   Post,
   Query,
+  Req,
   UseGuards,
 } from '@nestjs/common';
 import { SkipThrottle } from '@nestjs/throttler';
@@ -183,5 +184,32 @@ export class AdminController {
       costPerImageBdt: b?.costPerImageBdt !== undefined ? Number(b.costPerImageBdt) : undefined,
       costPerAnalyzeBdt: b?.costPerAnalyzeBdt !== undefined ? Number(b.costPerAnalyzeBdt) : undefined,
     });
+  }
+
+  @Get('wallet')
+  getAllPagesWallet() {
+    return this.svc.getAllPagesWallet();
+  }
+
+  @Get('wallet/requests')
+  getAllRechargeRequests(@Query('status') status?: string) {
+    return this.svc.getAllRechargeRequests(status);
+  }
+
+  @Post('wallet/requests/:id/approve')
+  approveRechargeRequest(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: any,
+  ) {
+    const adminUsername = req.authUser?.username || req.user?.username || 'admin';
+    return this.svc.approveRechargeRequest(id, adminUsername);
+  }
+
+  @Post('wallet/requests/:id/reject')
+  rejectRechargeRequest(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() b: any,
+  ) {
+    return this.svc.rejectRechargeRequest(id, b?.reason);
   }
 }

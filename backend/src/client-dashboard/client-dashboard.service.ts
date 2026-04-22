@@ -1055,4 +1055,42 @@ export class ClientDashboardService {
       take: Math.min(limit, 200),
     });
   }
+
+  async submitRechargeRequest(
+    pageId: number,
+    body: { amountBdt: number; method: string; transactionId: string; note?: string },
+  ) {
+    const { amountBdt, method, transactionId, note } = body;
+    if (!amountBdt || amountBdt <= 0) throw new BadRequestException('Amount must be positive');
+    if (!transactionId?.trim()) throw new BadRequestException('Transaction ID required');
+
+    const allowed = ['bkash', 'nagad', 'bank', 'manual'];
+    if (!allowed.includes(method)) throw new BadRequestException('Invalid payment method');
+
+    // Prevent duplicate pending request for same TrxID + page
+    const existing = await this.prisma.walletRechargeRequest.findFirst({
+      where: { pageId, transactionId: transactionId.trim(), status: 'pending' },
+    });
+    if (existing) throw new BadRequestException('এই Transaction ID দিয়ে ইতিমধ্যে একটি request pending আছে।');
+
+    const req = await this.prisma.walletRechargeRequest.create({
+      data: {
+        pageId,
+        amountBdt,
+        method,
+        transactionId: transactionId.trim(),
+        note: note?.trim() || null,
+      },
+    });
+
+    return { success: true, requestId: req.id };
+  }
+
+  async getRechargeRequests(pageId: number) {
+    return this.prisma.walletRechargeRequest.findMany({
+      where: { pageId },
+      orderBy: { createdAt: 'desc' },
+      take: 30,
+    });
+  }
 }
