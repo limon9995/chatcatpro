@@ -809,9 +809,13 @@ document.querySelectorAll('a[href^="#"]').forEach(function(anchor) {
     var el = document.getElementById(id);
     if (el) {
       e.preventDefault();
-      var top = el.getBoundingClientRect().top + window.scrollY - 80;
-      window.scrollTo({ top: top, behavior: 'smooth' });
-      history.pushState(null, null, '#' + id);
+      var top = el.getBoundingClientRect().top + (window.pageYOffset || window.scrollY) - 80;
+      try {
+        window.scrollTo({ top: top, behavior: 'smooth' });
+      } catch (err) {
+        window.scrollTo(0, top); // completely fail-safe fallback for older iOS
+      }
+      try { history.pushState(null, null, '#' + id); } catch(e){}
     }
   });
 });
