@@ -21,6 +21,8 @@ import { FallbackAiService } from '../fallback-ai/fallback-ai.service';
 import { AiIntentService } from '../bot/ai-intent.service';
 import { VisionOpsService } from '../vision-ops/vision-ops.service';
 import { BillingService } from '../billing/billing.service';
+import { WalletService } from '../wallet/wallet.service';
+import { WhisperService } from '../whisper/whisper.service';
 
 @Injectable()
 export class WebhookService {
@@ -45,6 +47,8 @@ export class WebhookService {
     private readonly aiIntent: AiIntentService,
     private readonly visionOps: VisionOpsService,
     private readonly billing: BillingService,
+    private readonly walletService: WalletService,
+    private readonly whisper: WhisperService,
   ) {}
 
   // ── Entry point ────────────────────────────────────────────────────────────
@@ -194,6 +198,17 @@ export class WebhookService {
       return;
     }
 
+    // ── Audio (voice message) → Whisper STT ───────────────────────────────
+    const audioAttachment = message.attachments?.find(
+      (a: any) => a.type === 'audio' && a.payload?.url,
+    );
+    if (audioAttachment) {
+      this.ocrQueue.add(() =>
+        this.handleAudioMessage(page, psid, audioAttachment.payload.url),
+      );
+      return;
+    }
+
     const text = (message.text || '').trim();
     if (!text) return;
 
@@ -220,6 +235,7 @@ export class WebhookService {
     const aiAllowed = await this.isAiAllowedForPage(page.ownerId);
     const aiResult = aiAllowed
       ? await this.aiIntent.detectIntent(
+          pageId,
           text,
           awaitingConfirm,
           draft?.currentStep ?? null,
@@ -1441,8 +1457,20 @@ export class WebhookService {
     );
 
     try {
+      // Step 0: Check wallet balance
+      if (!(await this.walletService.canProcessAi(pageId))) {
+        this.logger.warn(`[VisionRecog] pageId=${pageId} suspended or insufficient balance`);
+        // Just send standard fallback
+        const reply = await this.botKnowledge.resolveSystemReply(pageId, 'ocr_fail');
+        await this.safeSend(token, psid, reply);
+        return;
+      }
+
       // Step 1: Analyze image with vision provider
       const attrs = await this.visionAnalysis.analyze(imageUrl);
+      
+      // Deduct balance for customer image analysis
+      await this.walletService.deductUsage(pageId, 'IMAGE');
 
       this.logger.log(
         `[VisionRecog] Attributes — cat=${attrs.category} color=${attrs.color} ` +
@@ -1709,6 +1737,53 @@ export class WebhookService {
     } catch (err) {
       this.logger.error(`[Webhook] safeSend failed psid=${psid}: ${err}`);
     }
+  }
+
+  // ── Voice message handler (Whisper STT) ────────────────────────────────────
+
+  private async handleAudioMessage(page: any, psid: string, audioUrl: string): Promise<void> {
+    const pageId = page.id as number;
+    const token = page.pageToken as string;
+
+    this.logger.log(`[Whisper] Audio message from psid=${psid} page=${page.pageId}`);
+
+    // Guard: automation must be on and wallet must have balance
+    if (!page.automationOn) return;
+
+    if (!(await this.walletService.canProcessAi(pageId))) {
+      this.logger.warn(`[Whisper] pageId=${pageId} insufficient balance — skipping audio`);
+      return;
+    }
+
+    if (!this.whisper.isAvailable()) {
+      this.logger.warn('[Whisper] Service unavailable — no OPENAI_API_KEY');
+      return;
+    }
+
+    // Acknowledge the voice message while transcribing
+    const processingMsg = await this.botKnowledge.resolveSystemReply(pageId, 'voice_processing')
+      .catch(() => 'আপনার voice message শুনছি... ⏳');
+    await this.safeSend(token, psid, processingMsg);
+
+    const transcribed = await this.whisper.transcribe(audioUrl);
+
+    if (!transcribed) {
+      this.logger.warn(`[Whisper] Transcription failed for psid=${psid}`);
+      const failMsg = await this.botKnowledge.resolveSystemReply(pageId, 'voice_fail')
+        .catch(() => 'দুঃখিত, আপনার voice message বুঝতে পারিনি। Text-এ লিখে জানান।');
+      await this.safeSend(token, psid, failMsg);
+      return;
+    }
+
+    // Deduct VOICE cost after successful transcription
+    await this.walletService.deductUsage(pageId, 'VOICE');
+
+    this.logger.log(`[Whisper] Routing transcribed text to bot pipeline: "${transcribed.slice(0, 80)}"`);
+
+    // Route the transcribed text through the normal message pipeline by
+    // constructing a synthetic message object and re-calling processMessage
+    const syntheticMessage = { text: transcribed };
+    await this.processMessage(page, psid, syntheticMessage);
   }
 
   /** Returns false for Basic plan users — AI features are disabled on Basic */

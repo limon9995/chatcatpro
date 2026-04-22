@@ -36,7 +36,7 @@ model OtpToken {
   id        String   @id @default(uuid())
   email     String
   code      String
-  purpose   String   // 'signup' | 'reset'
+  purpose   String // 'signup' | 'reset'
   expiresAt DateTime
   used      Boolean  @default(false)
   createdAt DateTime @default(now())
@@ -74,26 +74,26 @@ model Page {
   masterPage   Page?  @relation("LinkedPages", fields: [masterPageId], references: [id], onDelete: SetNull)
   linkedPages  Page[] @relation("LinkedPages")
 
-  isActive             Boolean @default(true)
-  automationOn         Boolean @default(false)
-  automationAllowed    Boolean @default(true)
-  ocrOn                Boolean @default(false)
-  ocrAllowed           Boolean @default(true)
-  infoModeOn           Boolean @default(true)
-  infoModeAllowed      Boolean @default(true)
-  orderModeOn          Boolean @default(true)
-  orderModeAllowed     Boolean @default(true)
-  printModeOn          Boolean @default(false)
-  printModeAllowed     Boolean @default(true)
-  memoSaveModeOn       Boolean @default(false)
-  memoSaveModeAllowed  Boolean @default(true)
-  memoTemplateModeOn   Boolean @default(false)
-  memoTemplateModeAllowed Boolean @default(true)
-  autoMemoDesignModeOn Boolean @default(false)
+  isActive                  Boolean @default(true)
+  automationOn              Boolean @default(false)
+  automationAllowed         Boolean @default(true)
+  ocrOn                     Boolean @default(false)
+  ocrAllowed                Boolean @default(true)
+  infoModeOn                Boolean @default(true)
+  infoModeAllowed           Boolean @default(true)
+  orderModeOn               Boolean @default(true)
+  orderModeAllowed          Boolean @default(true)
+  printModeOn               Boolean @default(false)
+  printModeAllowed          Boolean @default(true)
+  memoSaveModeOn            Boolean @default(false)
+  memoSaveModeAllowed       Boolean @default(true)
+  memoTemplateModeOn        Boolean @default(false)
+  memoTemplateModeAllowed   Boolean @default(true)
+  autoMemoDesignModeOn      Boolean @default(false)
   autoMemoDesignModeAllowed Boolean @default(true)
-  memoTheme            String  @default("classic")
-  memoLayout           String  @default("memo")
-  memosPerPage         Int     @default(3)
+  memoTheme                 String  @default("classic")
+  memoLayout                String  @default("memo")
+  memosPerPage              Int     @default(3)
 
   businessName            String?
   businessPhone           String?
@@ -105,9 +105,9 @@ model Page {
   codLabel                String  @default("COD")
   currencySymbol          String  @default("৳")
   primaryColor            String?
-  catalogMessengerUrl     String?               // Custom link for catalog "Order on Messenger" button
-  catalogSlug             String?  @unique      // e.g. "limon-tech-diary" → /catalog/limon-tech-diary
-  websiteUrl              String?               // Optional external store/website URL; bot can send this instead of hosted catalog
+  catalogMessengerUrl     String? // Custom link for catalog "Order on Messenger" button
+  catalogSlug             String? @unique // e.g. "limon-tech-diary" → /catalog/limon-tech-diary
+  websiteUrl              String? // Optional external store/website URL; bot can send this instead of hosted catalog
   // V8: Custom product code prefix (e.g. "SK", "FZ", "BD"). Default "DF"
   productCodePrefix       String  @default("DF")
   deliveryFeeInsideDhaka  Float   @default(80)
@@ -118,26 +118,26 @@ model Page {
   // 'cod' = full cash on delivery (default)
   // 'advance_outside' = advance required for outside-Dhaka orders, COD inside
   // 'full_advance' = full advance required for every order
-  paymentMode            String  @default("cod")
-  advanceAmount          Float   @default(0)   // 0 = delivery fee only, >0 = custom fixed amount
-  advanceBkash           String?               // Bkash number shown to customer
-  advanceNagad           String?               // Nagad number shown to customer
-  advancePaymentMessage  String?               // Custom advance payment message template (supports {{amount}}, {{bkash}}, {{nagad}}, {{currency}})
+  paymentMode           String  @default("cod")
+  advanceAmount         Float   @default(0) // 0 = delivery fee only, >0 = custom fixed amount
+  advanceBkash          String? // Bkash number shown to customer
+  advanceNagad          String? // Nagad number shown to customer
+  advancePaymentMessage String? // Custom advance payment message template (supports {{amount}}, {{bkash}}, {{nagad}}, {{currency}})
 
-  callConfirmModeOn     Boolean @default(false)
-  callConfirmModeAllowed Boolean @default(true)
-  callMode              String  @default("MANUAL")
-  callConfirmationScope String  @default("ALL")
-  initialCallDelayMinutes Int   @default(30)
-  retryIntervalMinutes  Int     @default(30)
-  maxCallRetries        Int     @default(3)
+  callConfirmModeOn       Boolean @default(false)
+  callConfirmModeAllowed  Boolean @default(true)
+  callMode                String  @default("MANUAL")
+  callConfirmationScope   String  @default("ALL")
+  initialCallDelayMinutes Int     @default(30)
+  retryIntervalMinutes    Int     @default(30)
+  maxCallRetries          Int     @default(3)
 
   // V18: Image recognition feature settings
-  imageRecognitionOn      Boolean @default(false)  // master toggle for vision-based product search
-  imageHighConfidence     Float   @default(0.75)   // >= this: auto-proceed with top match
-  imageMediumConfidence   Float   @default(0.45)   // >= this: show options, ask customer
-  imageFallbackAiOn       Boolean @default(false)  // use AI fallback when low confidence
-  textFallbackAiOn        Boolean @default(false)  // use AI fallback for unmatched text messages
+  imageRecognitionOn    Boolean @default(false) // master toggle for vision-based product search
+  imageHighConfidence   Float   @default(0.75) // >= this: auto-proceed with top match
+  imageMediumConfidence Float   @default(0.45) // >= this: show options, ask customer
+  imageFallbackAiOn     Boolean @default(false) // use AI fallback when low confidence
+  textFallbackAiOn      Boolean @default(false) // use AI fallback for unmatched text messages
 
   callLanguage        String    @default("BN")
   voiceType           String    @default("FEMALE")
@@ -152,9 +152,22 @@ model Page {
   englishVoiceFileUrl String?
   voiceGeneratedAt    DateTime?
 
+  // -- WALLET SYSTEM --
+  walletBalanceBdt Float @default(0.0) // Core currency balance for usage
+
+  // -- PRICING CONFIG --
+  costPerTextMsgBdt  Float @default(0.05)
+  costPerVoiceMsgBdt Float @default(0.40) // For processing audio voice notes
+  costPerImageBdt    Float @default(1.70) // Customer sending Image
+  costPerAnalyzeBdt  Float @default(1.70) // Admin uploading product
+
+  // -- BASE SUBSCRIPTION --
+  subscriptionStatus String    @default("ACTIVE") // ACTIVE, SUSPENDED
+  nextBillingDate    DateTime?
+
   // Page reconnect audit
   lastReconnectedAt DateTime? // when FB page was last changed via reconnect
-  previousPageId    String?   // old FB page ID before the last reconnect
+  previousPageId    String? // old FB page ID before the last reconnect
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -177,6 +190,9 @@ model Page {
   broadcasts       Broadcast[]
   courierShipments CourierShipment[]
 
+  // Wallet
+  walletTransactions WalletTransaction[]
+
   @@index([masterPageId])
 }
 
@@ -185,16 +201,16 @@ model Product {
   pageId Int
   page   Page @relation(fields: [pageId], references: [id], onDelete: Cascade)
 
-  code             String
-  name             String?
-  price            Float   @default(0)
-  costPrice        Float   @default(0) // V5: for profit estimation
-  stockQty         Int     @default(0)
-  imageUrl         String?
-  description      String?
-  isActive         Boolean @default(true)
+  code        String
+  name        String?
+  price       Float   @default(0)
+  costPrice   Float   @default(0) // V5: for profit estimation
+  stockQty    Int     @default(0)
+  imageUrl    String?
+  description String?
+  isActive    Boolean @default(true)
   // V8: Optional post caption — bot combines with OCR for confident code detection
-  postCaption      String?
+  postCaption String?
 
   // V10: Product Catalog
   videoUrl         String? // YouTube URL
@@ -202,14 +218,14 @@ model Product {
   catalogSortOrder Int     @default(0)
 
   // V17: Bot asks customer for these before order (JSON: [{label,choices?}])
-  variantOptions   String?
+  variantOptions String?
 
   // V18: Image recognition metadata — used for vision-based product matching
-  category         String?   // dress, saree, panjabi, shirt, t-shirt, kurti, etc.
-  color            String?   // red, black, white, multicolor, etc.
-  tags             String?   // JSON array of string tags, e.g. ["floral","summer","cotton"]
-  imageKeywords    String?   // space-separated keywords, e.g. "floral printed maxi"
-  aiDescription    String?   // optional AI-generated description for matching
+  category         String? // dress, saree, panjabi, shirt, t-shirt, kurti, etc.
+  color            String? // red, black, white, multicolor, etc.
+  tags             String? // JSON array of string tags, e.g. ["floral","summer","cotton"]
+  imageKeywords    String? // space-separated keywords, e.g. "floral printed maxi"
+  aiDescription    String? // optional AI-generated description for matching
   visionSearchable Boolean @default(false) // if true, this product is matched via OpenAI vision (no code needed)
 
   createdAt DateTime @default(now())
@@ -244,11 +260,11 @@ model Order {
 
   // V17: Payment tracking (advance / full-advance modes)
   // not_required | pending_proof | advance_paid | agent_required
-  paymentStatus        String  @default("not_required")
+  paymentStatus        String    @default("not_required")
   transactionId        String?
   paymentScreenshotUrl String?
   // pending_review | verified | verify_failed  (only used when paymentStatus=advance_paid)
-  paymentVerifyStatus  String  @default("pending_review")
+  paymentVerifyStatus  String    @default("pending_review")
   printedAt            DateTime?
 
   confirmedAt DateTime?
@@ -306,9 +322,9 @@ model ConversationSession {
   agentHandling             Boolean @default(false) // true = bot stays silent, agent is handling
 
   // Loop / stuck detection
-  lastCustomerMsg  String?          // last message text customer sent
-  lastDraftStep    String?          // draft step after last message was processed
-  loopCount        Int     @default(0) // consecutive messages without progress
+  lastCustomerMsg String? // last message text customer sent
+  lastDraftStep   String? // draft step after last message was processed
+  loopCount       Int     @default(0) // consecutive messages without progress
 
   updatedAt DateTime @updatedAt
   createdAt DateTime @default(now())
@@ -411,7 +427,7 @@ model ReturnEntry {
   note         String?
 
   // Advance refund tracking
-  refundStatus      String    @default("pending")   // pending | given | not_applicable
+  refundStatus      String    @default("pending") // pending | given | not_applicable
   refundGivenAt     DateTime?
   refundGivenAmount Float?
 
@@ -618,4 +634,18 @@ model Payment {
   createdAt   DateTime  @default(now())
 
   @@index([subscriptionId])
+}
+
+// ── V18: WALLET PRICING SYSTEM ────────────────────────────────────────────────
+
+model WalletTransaction {
+  id          Int      @id @default(autoincrement())
+  pageId      Int
+  page        Page     @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  type        String // RECHARGE, DEDUCT_TEXT, DEDUCT_VOICE, DEDUCT_IMAGE, DEDUCT_ADMIN_VISION, DEDUCT_BASE_FEE
+  amountBdt   Float // Positive for recharge, Negative for deduction
+  description String? // e.g. "Voice message processed", "New product Vision analyzed"
+  createdAt   DateTime @default(now())
+
+  @@index([pageId])
 }

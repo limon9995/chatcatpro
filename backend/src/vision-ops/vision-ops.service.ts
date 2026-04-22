@@ -1,4 +1,5 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
+import { WalletService } from '../wallet/wallet.service';
 import { promises as fs } from 'fs';
 import { extname, join } from 'path';
 import { randomUUID } from 'crypto';
@@ -55,7 +56,10 @@ export class VisionOpsService {
   private readonly baseDir = join(process.cwd(), 'storage', 'vision-ops');
   private readonly uploadsDir = join(process.cwd(), 'storage', 'products');
 
-  constructor(private readonly visionAnalysis: VisionAnalysisService) {}
+  constructor(
+    private readonly visionAnalysis: VisionAnalysisService,
+    private readonly walletService: WalletService,
+  ) {}
 
   private eventsFile(pageId: number) {
     return join(this.baseDir, `page-${pageId}-events.json`);
@@ -312,8 +316,19 @@ export class VisionOpsService {
     };
   }
 
-  async analyzeProductImage(imageUrl: string) {
+  async analyzeProductImage(pageId: number, imageUrl: string) {
+    if (!(await this.walletService.canProcessAi(pageId))) {
+      throw new HttpException(
+        'Insufficient wallet balance to analyze image',
+        HttpStatus.PAYMENT_REQUIRED,
+      );
+    }
+
     const attrs = await this.visionAnalysis.analyze(imageUrl);
+
+    // Deduct admin vision usage cost
+    await this.walletService.deductUsage(pageId, 'ADMIN_VISION');
+
     const tokens = [
       attrs.color,
       attrs.pattern && attrs.pattern !== 'plain' ? attrs.pattern : null,

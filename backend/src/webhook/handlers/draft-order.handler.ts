@@ -137,6 +137,7 @@ export class DraftOrderHandler {
     let workingText = text;
 
     const aiReview = await this.aiIntent.reviewDraftStep(
+      pageId,
       text,
       step,
       page?.businessName ?? null,

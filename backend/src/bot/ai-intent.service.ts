@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { WalletService } from '../wallet/wallet.service';
 
 /**
  * AiIntentService — PRIMARY intent detector using gpt-4o-mini
@@ -69,7 +70,7 @@ export class AiIntentService {
   private readonly MAX_FAILS = 5;
   private cooldownUntil = 0;
 
-  constructor() {
+  constructor(private readonly walletService: WalletService) {
     this.apiKey = process.env.OPENAI_API_KEY ?? '';
     this.model = process.env.AI_INTENT_MODEL ?? 'gpt-4o-mini';
 
@@ -85,12 +86,17 @@ export class AiIntentService {
   }
 
   async detectIntent(
+    pageId: number,
     text: string,
     awaitingConfirm: boolean,
     draftStep: string | null,
     businessName: string | null,
   ): Promise<AiIntentResult> {
     if (!this.isAvailable()) return { intent: null, reply: null };
+    if (!(await this.walletService.canProcessAi(pageId))) {
+      this.logger.warn(`[AiIntent] pageId=${pageId} suspended or insufficient balance`);
+      return { intent: null, reply: null };
+    }
 
     const systemPrompt = this.buildSystemPrompt(businessName, draftStep);
     const userMsg = this.buildUserMessage(text, awaitingConfirm, draftStep);
@@ -147,6 +153,10 @@ export class AiIntentService {
 
       this.failCount = 0;
       const reply = (parsed?.reply ?? '').trim() || null;
+      
+      // Deduct balance
+      await this.walletService.deductUsage(pageId, 'TEXT');
+      
       this.logger.log(`[AiIntent] intent=${intent} reply="${reply?.slice(0, 80) ?? 'none'}"`);
       return { intent, reply };
 
@@ -158,11 +168,16 @@ export class AiIntentService {
   }
 
   async reviewDraftStep(
+    pageId: number,
     text: string,
     draftStep: string,
     businessName: string | null,
   ): Promise<DraftStepReviewResult | null> {
     if (!this.isAvailable()) return null;
+    if (!(await this.walletService.canProcessAi(pageId))) {
+       this.logger.warn(`[AiIntent] pageId=${pageId} suspended or insufficient balance for draft review`);
+       return null;
+    }
 
     const systemPrompt = this.buildDraftReviewPrompt(businessName, draftStep);
     const userMsg = `Customer message: "${text}"`;
@@ -218,6 +233,10 @@ export class AiIntentService {
       }
 
       this.failCount = 0;
+      
+      // Deduct balance
+      await this.walletService.deductUsage(pageId, 'TEXT');
+      
       return {
         action: action as DraftStepReviewResult['action'],
         reply: (parsed?.reply ?? '').trim() || null,

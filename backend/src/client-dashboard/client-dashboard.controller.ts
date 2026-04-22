@@ -1037,4 +1037,19 @@ export class ClientDashboardController {
   courierAccountingSummary(@Param('pageId') p: string, @Req() r: any) {
     return this.courierAccounting.getCourierAccountingSummary(this.pid(r, p));
   }
+
+  // ── Wallet ────────────────────────────────────────────────────────────────
+  @Get(':pageId/wallet')
+  getWallet(@Param('pageId') p: string, @Req() r: any) {
+    return this.svc.getWallet(this.pid(r, p));
+  }
+
+  @Get(':pageId/wallet/transactions')
+  getWalletTransactions(
+    @Param('pageId') p: string,
+    @Req() r: any,
+    @Query('limit') limit?: string,
+  ) {
+    return this.svc.getWalletTransactions(this.pid(r, p), limit ? Number(limit) : 50);
+  }
 }

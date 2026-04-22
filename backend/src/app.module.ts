@@ -32,6 +32,8 @@ import { BroadcastModule } from './broadcast/broadcast.module';
 import { V9SchedulerModule } from './scheduler/scheduler.module';
 import { CatalogModule } from './catalog/catalog.module';
 import { BillingModule } from './billing/billing.module';
+import { WalletModule } from './wallet/wallet.module';
+import { WhisperModule } from './whisper/whisper.module';
 
 @Module({
   imports: [
@@ -80,6 +82,8 @@ import { BillingModule } from './billing/billing.module';
     V9SchedulerModule,
     CatalogModule,
     BillingModule,
+    WalletModule,
+    WhisperModule,
   ],
   controllers: [AppController],
   providers: [

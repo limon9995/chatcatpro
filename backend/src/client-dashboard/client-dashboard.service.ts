@@ -487,7 +487,7 @@ export class ClientDashboardService {
   async analyzeProductImage(pageId: number, body: any) {
     const imageUrl = String(body?.imageUrl || '').trim();
     if (!imageUrl) throw new BadRequestException('Image URL required');
-    const result = await this.visionOps.analyzeProductImage(imageUrl);
+    const result = await this.visionOps.analyzeProductImage(pageId, imageUrl);
     await this.visionOps.logVisionAttempt({
       pageId,
       type: 'product_analyze',
@@ -1027,5 +1027,32 @@ export class ClientDashboardService {
     )
       throw new NotFoundException('Some orders not found for this page');
     return orders;
+  }
+
+  // ── Wallet ─────────────────────────────────────────────────────────────────
+
+  async getWallet(pageId: number) {
+    const page = await this.prisma.page.findUnique({
+      where: { id: pageId },
+      select: {
+        walletBalanceBdt: true,
+        costPerTextMsgBdt: true,
+        costPerVoiceMsgBdt: true,
+        costPerImageBdt: true,
+        costPerAnalyzeBdt: true,
+        subscriptionStatus: true,
+        nextBillingDate: true,
+      },
+    });
+    if (!page) throw new NotFoundException('Page not found');
+    return page;
+  }
+
+  async getWalletTransactions(pageId: number, limit = 50) {
+    return this.prisma.walletTransaction.findMany({
+      where: { pageId },
+      orderBy: { createdAt: 'desc' },
+      take: Math.min(limit, 200),
+    });
   }
 }

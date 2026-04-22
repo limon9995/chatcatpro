@@ -1577,6 +1577,14 @@ export class BotKnowledgeService {
 
   private defaultSystemReplies() {
     return this.normalizeSystemReplies({
+      voice_processing: {
+        template: 'আপনার voice message শুনছি... ⏳',
+        fallback: 'আপনার voice message শুনছি... ⏳',
+      },
+      voice_fail: {
+        template: 'দুঃখিত, voice message বুঝতে পারিনি 😔 Text-এ লিখে জানালে সাহায্য করতে পারবো।',
+        fallback: 'দুঃখিত, voice message বুঝতে পারিনি 😔 Text-এ লিখে জানালে সাহায্য করতে পারবো।',
+      },
       ocr_processing: {
         template:
           'ছবিটা পেয়েছি ✅ মিলিয়ে দেখছি... ⏳\n\nভালো match পেতে একবারে ১টা product-এর clear photo দিন। চাইলে সাথে color/type-ও লিখতে পারেন 💖',

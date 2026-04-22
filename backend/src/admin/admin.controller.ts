@@ -154,4 +154,34 @@ export class AdminController {
   ) {
     return this.svc.adminLogManualCall(orderId, b || {});
   }
+
+  // ── Wallet Management ─────────────────────────────────────────────────────
+
+  @Get('wallet/:pageId')
+  getPageWallet(@Param('pageId', ParseIntPipe) pageId: number) {
+    return this.svc.getPageWallet(pageId);
+  }
+
+  @Post('wallet/:pageId/recharge')
+  rechargeWallet(
+    @Param('pageId', ParseIntPipe) pageId: number,
+    @Body() b: any,
+  ) {
+    const amount = Number(b?.amountBdt);
+    if (!amount || amount <= 0) throw new BadRequestException('amountBdt must be positive');
+    return this.svc.rechargePageWallet(pageId, amount, b?.transactionId || 'MANUAL', b?.note);
+  }
+
+  @Patch('wallet/:pageId/pricing')
+  updatePricing(
+    @Param('pageId', ParseIntPipe) pageId: number,
+    @Body() b: any,
+  ) {
+    return this.svc.updatePagePricing(pageId, {
+      costPerTextMsgBdt: b?.costPerTextMsgBdt !== undefined ? Number(b.costPerTextMsgBdt) : undefined,
+      costPerVoiceMsgBdt: b?.costPerVoiceMsgBdt !== undefined ? Number(b.costPerVoiceMsgBdt) : undefined,
+      costPerImageBdt: b?.costPerImageBdt !== undefined ? Number(b.costPerImageBdt) : undefined,
+      costPerAnalyzeBdt: b?.costPerAnalyzeBdt !== undefined ? Number(b.costPerAnalyzeBdt) : undefined,
+    });
+  }
 }

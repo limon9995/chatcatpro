@@ -574,4 +574,76 @@ export class AdminService {
 
     return { success: true, result: body.result };
   }
+
+  // ── Wallet Management ─────────────────────────────────────────────────────
+
+  async getPageWallet(pageId: number) {
+    const page = await this.prisma.page.findUnique({
+      where: { id: pageId },
+      select: {
+        id: true,
+        pageId: true,
+        pageName: true,
+        walletBalanceBdt: true,
+        costPerTextMsgBdt: true,
+        costPerVoiceMsgBdt: true,
+        costPerImageBdt: true,
+        costPerAnalyzeBdt: true,
+        subscriptionStatus: true,
+        nextBillingDate: true,
+      },
+    });
+    if (!page) throw new NotFoundException('Page not found');
+
+    const transactions = await this.prisma.walletTransaction.findMany({
+      where: { pageId },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+
+    return { page, transactions };
+  }
+
+  async rechargePageWallet(pageId: number, amountBdt: number, transactionId: string, note?: string) {
+    if (amountBdt <= 0) throw new NotFoundException('Amount must be positive');
+    const page = await this.prisma.page.findUnique({ where: { id: pageId }, select: { id: true } });
+    if (!page) throw new NotFoundException('Page not found');
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.page.update({
+        where: { id: pageId },
+        data: {
+          walletBalanceBdt: { increment: amountBdt },
+          subscriptionStatus: 'ACTIVE',
+        },
+      });
+      await tx.walletTransaction.create({
+        data: {
+          pageId,
+          type: 'RECHARGE',
+          amountBdt,
+          description: note ? `${note} (Trx: ${transactionId})` : `Recharge via Trx: ${transactionId}`,
+        },
+      });
+    });
+
+    return { success: true, amountBdt };
+  }
+
+  async updatePagePricing(pageId: number, pricing: {
+    costPerTextMsgBdt?: number;
+    costPerVoiceMsgBdt?: number;
+    costPerImageBdt?: number;
+    costPerAnalyzeBdt?: number;
+  }) {
+    const page = await this.prisma.page.findUnique({ where: { id: pageId }, select: { id: true } });
+    if (!page) throw new NotFoundException('Page not found');
+    const data: any = {};
+    if (pricing.costPerTextMsgBdt !== undefined) data.costPerTextMsgBdt = pricing.costPerTextMsgBdt;
+    if (pricing.costPerVoiceMsgBdt !== undefined) data.costPerVoiceMsgBdt = pricing.costPerVoiceMsgBdt;
+    if (pricing.costPerImageBdt !== undefined) data.costPerImageBdt = pricing.costPerImageBdt;
+    if (pricing.costPerAnalyzeBdt !== undefined) data.costPerAnalyzeBdt = pricing.costPerAnalyzeBdt;
+    await this.prisma.page.update({ where: { id: pageId }, data });
+    return { success: true };
+  }
 }
