@@ -39,45 +39,46 @@ function RiskCard({ result, th }: { result: SpamResult; th: Theme }) {
   const cfg = RISK_CONFIG[result.risk] ?? RISK_CONFIG.unknown;
   const darkBg = th.bg === '#111827' || th.bg?.includes('1f2937');
   const cardBg = darkBg ? th.surface : cfg.bg;
-  const borderColor = darkBg ? cfg.color + '50' : cfg.border;
+  const borderColor = darkBg ? cfg.color + '60' : cfg.border;
+  const subText = darkBg ? th.textSub ?? '#cbd5e1' : '#374151';
 
   return (
     <div style={{
       borderRadius: 14, border: `2px solid ${borderColor}`,
       background: cardBg, padding: '20px 22px',
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-        <span style={{ fontSize: 24 }}>{cfg.icon}</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+        <span style={{ fontSize: 28 }}>{cfg.icon}</span>
         <div>
-          <div style={{ fontWeight: 900, fontSize: 18, color: cfg.color }}>{cfg.label}</div>
-          <div style={{ fontSize: 12, color: th.muted, marginTop: 1 }}>
-            Risk Score: {result.score}/100 · Source: {result.source}
+          <div style={{ fontWeight: 900, fontSize: 20, color: cfg.color, letterSpacing: 0.5 }}>{cfg.label}</div>
+          <div style={{ fontSize: 12.5, color: subText, marginTop: 3, fontWeight: 500 }}>
+            Risk Score: <strong style={{ color: th.text }}>{result.score}/100</strong> · Source: <strong style={{ color: th.text }}>{result.source}</strong>
           </div>
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 16 }}>
         {[
           { label: 'Total Orders', value: result.totalOrders },
           { label: 'Delivered', value: result.delivered },
           { label: 'Cancelled', value: result.cancelled },
         ].map(item => (
           <div key={item.label} style={{
-            background: th.bg, borderRadius: 8, padding: '10px 12px',
+            background: th.bg, borderRadius: 8, padding: '12px 12px',
             border: `1px solid ${th.border}`, textAlign: 'center',
           }}>
-            <div style={{ fontSize: 20, fontWeight: 800, color: th.text }}>{item.value}</div>
-            <div style={{ fontSize: 11, color: th.muted, marginTop: 2 }}>{item.label}</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: th.text }}>{item.value}</div>
+            <div style={{ fontSize: 11.5, color: subText, marginTop: 3, fontWeight: 600 }}>{item.label}</div>
           </div>
         ))}
       </div>
 
-      <div style={{ marginBottom: result.courierBreakdown?.length ? 14 : 0 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5, fontSize: 12.5, color: th.muted }}>
+      <div style={{ marginBottom: result.courierBreakdown?.length ? 16 : 0 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 13, color: subText }}>
           <span style={{ fontWeight: 700 }}>Success Rate</span>
-          <span style={{ fontWeight: 800, color: cfg.color }}>{result.successRate.toFixed(1)}%</span>
+          <span style={{ fontWeight: 800, color: cfg.color, fontSize: 14 }}>{result.successRate.toFixed(1)}%</span>
         </div>
-        <div style={{ background: th.border, borderRadius: 99, height: 10, overflow: 'hidden' }}>
+        <div style={{ background: th.border, borderRadius: 99, height: 12, overflow: 'hidden' }}>
           <div style={{
             width: `${result.successRate}%`, height: '100%',
             background: result.successRate >= 76 ? '#16a34a' : result.successRate >= 51 ? '#f59e0b' : '#dc2626',
@@ -88,16 +89,16 @@ function RiskCard({ result, th }: { result: SpamResult; th: Theme }) {
 
       {result.courierBreakdown && result.courierBreakdown.length > 0 && (
         <div>
-          <div style={{ fontSize: 12, fontWeight: 700, color: th.muted, marginBottom: 8 }}>Per-Courier Breakdown</div>
+          <div style={{ fontSize: 12.5, fontWeight: 700, color: subText, marginBottom: 8, marginTop: 4 }}>Per-Courier Breakdown</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {result.courierBreakdown.map(c => (
               <div key={c.name} style={{
                 display: 'flex', alignItems: 'center', gap: 10,
-                background: th.bg, borderRadius: 7, padding: '8px 10px',
+                background: th.bg, borderRadius: 7, padding: '9px 12px',
                 border: `1px solid ${th.border}`,
               }}>
-                <div style={{ flex: 1, fontWeight: 600, fontSize: 12.5, color: th.text }}>{c.name}</div>
-                <div style={{ fontSize: 11.5, color: th.muted }}>{c.total} orders</div>
+                <div style={{ flex: 1, fontWeight: 700, fontSize: 13, color: th.text }}>{c.name}</div>
+                <div style={{ fontSize: 12, color: subText, fontWeight: 600 }}>{c.total} orders</div>
                 <div style={{
                   fontSize: 11.5, fontWeight: 700,
                   color: c.successRate >= 76 ? '#16a34a' : c.successRate >= 51 ? '#f59e0b' : '#dc2626',
@@ -115,6 +116,8 @@ function RiskCard({ result, th }: { result: SpamResult; th: Theme }) {
 
 function LogRow({ log, th }: { log: SpamLog; th: Theme }) {
   const cfg = RISK_CONFIG[log.risk] ?? RISK_CONFIG.unknown;
+  const darkBg = th.bg === '#111827' || th.bg?.includes('1f2937');
+  const subText = darkBg ? th.textSub ?? '#cbd5e1' : '#374151';
   const ago = (() => {
     const diff = Date.now() - new Date(log.checkedAt).getTime();
     const m = Math.floor(diff / 60000);
@@ -127,18 +130,18 @@ function LogRow({ log, th }: { log: SpamLog; th: Theme }) {
 
   return (
     <div style={{
-      display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px',
+      display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
       borderBottom: `1px solid ${th.border}`,
     }}>
-      <span style={{ fontSize: 14 }}>{cfg.icon}</span>
+      <span style={{ fontSize: 16 }}>{cfg.icon}</span>
       <div style={{ flex: 1 }}>
-        <span style={{ fontWeight: 600, fontSize: 13, color: th.text, fontFamily: 'monospace' }}>{log.phone}</span>
-        <span style={{ marginLeft: 8, fontSize: 11.5, color: th.muted }}>{log.source}</span>
+        <span style={{ fontWeight: 700, fontSize: 13.5, color: th.text, fontFamily: 'monospace' }}>{log.phone}</span>
+        <span style={{ marginLeft: 8, fontSize: 11.5, color: subText, fontWeight: 500 }}>{log.source}</span>
       </div>
-      <div style={{ fontSize: 12, fontWeight: 700, color: cfg.color }}>
+      <div style={{ fontSize: 13, fontWeight: 800, color: cfg.color }}>
         {log.totalOrders > 0 ? `${log.successRate.toFixed(0)}%` : 'New'}
       </div>
-      <div style={{ fontSize: 11, color: th.muted }}>{ago}</div>
+      <div style={{ fontSize: 11.5, color: subText, fontWeight: 500 }}>{ago}</div>
     </div>
   );
 }
