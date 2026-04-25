@@ -262,16 +262,24 @@ export function ProductsPage({ th, pageId, onToast }: {
         body: JSON.stringify({ imageUrl, excludeCode: currentCode }),
       });
       const suggested = result?.suggested || {};
-      const applyFn = (prev: any) => ({
-        ...prev,
-        category: suggested.category || prev.category,
-        color: suggested.color || prev.color,
-        imageKeywords: suggested.imageKeywords || prev.imageKeywords,
-        tags: suggested.tags || prev.tags,
-        visionSearchable: typeof suggested.visionSearchable === 'boolean' ? suggested.visionSearchable : prev.visionSearchable,
-      });
-      if (target === 'new') { setNewP((p) => applyFn(p)); setUniquenessNew(result?.uniqueness || null); }
-      else { setEditData((d) => applyFn(d)); setUniquenessEdit(result?.uniqueness || null); }
+      const applyFn = (prev: any) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          category: (suggested.category || prev.category || '').trim(),
+          color: (suggested.color || prev.color || '').trim(),
+          imageKeywords: (suggested.imageKeywords || prev.imageKeywords || '').trim(),
+          tags: (suggested.tags || prev.tags || '').trim(),
+          visionSearchable: typeof suggested.visionSearchable === 'boolean' ? suggested.visionSearchable : !!prev.visionSearchable,
+        };
+      };
+      if (target === 'new') {
+        setNewP((p) => applyFn(p));
+        setUniquenessNew(result?.uniqueness || null);
+      } else {
+        setEditData((d) => applyFn(d));
+        setUniquenessEdit(result?.uniqueness || null);
+      }
       onToast(copy('AI analysis applied', 'AI analysis applied'), 'success');
     } catch (e: any) {
       const msg: string = e.message ?? '';
@@ -304,16 +312,24 @@ export function ProductsPage({ th, pageId, onToast }: {
         body: JSON.stringify({ imageUrls: urls, excludeCode: currentCode }),
       });
       const suggested = result?.suggested || {};
-      const applyFn = (prev: any) => ({
-        ...prev,
-        category: suggested.category || prev.category,
-        color: suggested.color || prev.color,
-        imageKeywords: suggested.imageKeywords || prev.imageKeywords,
-        tags: suggested.tags || prev.tags,
-        visionSearchable: typeof suggested.visionSearchable === 'boolean' ? suggested.visionSearchable : prev.visionSearchable,
-      });
-      if (target === 'new') { setNewP((p) => applyFn(p)); setUniquenessNew(result?.uniqueness || null); }
-      else { setEditData((d) => applyFn(d)); setUniquenessEdit(result?.uniqueness || null); }
+      const applyFn = (prev: any) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          category: (suggested.category || prev.category || '').trim(),
+          color: (suggested.color || prev.color || '').trim(),
+          imageKeywords: (suggested.imageKeywords || prev.imageKeywords || '').trim(),
+          tags: (suggested.tags || prev.tags || '').trim(),
+          visionSearchable: typeof suggested.visionSearchable === 'boolean' ? suggested.visionSearchable : !!prev.visionSearchable,
+        };
+      };
+      if (target === 'new') {
+        setNewP((p) => applyFn(p));
+        setUniquenessNew(result?.uniqueness || null);
+      } else {
+        setEditData((d) => applyFn(d));
+        setUniquenessEdit(result?.uniqueness || null);
+      }
       onToast(copy(`${urls.length}টা angle থেকে AI analysis সম্পন্ন ✓`, `AI analysis from ${urls.length} angles done ✓`), 'success');
     } catch (e: any) {
       const msg: string = e.message ?? '';
