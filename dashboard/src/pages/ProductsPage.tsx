@@ -18,6 +18,8 @@ type Product = {
   category: string | null; color: string | null;
   tags: string | null; imageKeywords: string | null;
   visionSearchable: boolean;
+  // V19: Detection mode
+  detectionMode: 'OCR' | 'AI_VISION';
 };
 
 type EditData = {
@@ -27,9 +29,11 @@ type EditData = {
   // V18: Image recognition metadata
   category?: string; color?: string; tags?: string; imageKeywords?: string;
   visionSearchable?: boolean;
+  // V19: Detection mode
+  detectionMode?: 'OCR' | 'AI_VISION';
 };
 
-const EMPTY = { code: '', name: '', price: 0, costPrice: 0, stockQty: 0, postCaption: '', videoUrl: '', catalogVisible: true, description: '', imageUrl: '', referenceImagesJson: '', productGroup: '', variantLabel: '', variantOptions: '', category: '', color: '', tags: '', imageKeywords: '', visionSearchable: false };
+const EMPTY = { code: '', name: '', price: 0, costPrice: 0, stockQty: 0, postCaption: '', videoUrl: '', catalogVisible: true, description: '', imageUrl: '', referenceImagesJson: '', productGroup: '', variantLabel: '', variantOptions: '', category: '', color: '', tags: '', imageKeywords: '', visionSearchable: false, detectionMode: 'AI_VISION' as 'OCR' | 'AI_VISION' };
 
 /** Convert DB JSON variantOptions → textarea text ("Size: S,M,L,XL\nColor: Red,Blue") */
 function variantOptionsToText(json: string | null): string {
@@ -78,6 +82,73 @@ function extractYouTubeId(url: string): string | null {
   return m?.[1] ?? null;
 }
 
+function UniquenessCard({ data, hidden, onHide, th, onApplyMode }: {
+  data: any; hidden: boolean; onHide: () => void; th: any;
+  onApplyMode: (mode: 'OCR' | 'AI_VISION') => void;
+}) {
+  if (!data || hidden) return null;
+  const pct: number = data.uniquenessPercent ?? 0;
+  const isGood = pct >= 70;
+  const isMid = pct >= 45 && pct < 70;
+  const color = isGood ? '#34d399' : isMid ? '#f59e0b' : '#f87171';
+  const bg = isGood ? 'rgba(16,185,129,0.07)' : isMid ? 'rgba(245,158,11,0.07)' : 'rgba(248,113,113,0.07)';
+  const border = isGood ? 'rgba(16,185,129,0.25)' : isMid ? 'rgba(245,158,11,0.25)' : 'rgba(248,113,113,0.25)';
+  const icon = isGood ? '✅' : isMid ? '⚠️' : '🔴';
+  const topSimilar: any[] = data.topSimilar ?? [];
+  return (
+    <div style={{ marginTop: 12, background: bg, border: `1px solid ${border}`, borderRadius: 12, padding: '12px 14px', position: 'relative' }}>
+      <button onClick={onHide} style={{ position: 'absolute', top: 8, right: 10, background: 'none', border: 'none', color: th.muted, cursor: 'pointer', fontSize: 16, lineHeight: 1 }} title="Hide">×</button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+        <div style={{ fontSize: 22, fontWeight: 900, color, minWidth: 54, textAlign: 'center', lineHeight: 1 }}>
+          {pct}%
+        </div>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 13, color }}>{icon} Uniqueness Score</div>
+          <div style={{ fontSize: 11, color: th.muted, marginTop: 2 }}>{data.reason}</div>
+        </div>
+      </div>
+      {/* Progress bar */}
+      <div style={{ height: 6, borderRadius: 3, background: 'rgba(255,255,255,0.1)', marginBottom: 10, overflow: 'hidden' }}>
+        <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: 3, transition: 'width 0.6s ease' }} />
+      </div>
+      {/* Similar products */}
+      {topSimilar.length > 0 && (
+        <div style={{ marginBottom: 10 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: th.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+            Similar Products Found ({data.totalProductsChecked} checked)
+          </div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {topSimilar.map((s: any) => (
+              <div key={s.code} style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'rgba(255,255,255,0.06)', borderRadius: 8, padding: '4px 8px', fontSize: 11 }}>
+                {s.imageUrl && <img src={s.imageUrl} alt="" style={{ width: 24, height: 24, borderRadius: 4, objectFit: 'cover' }} />}
+                <span style={{ color: th.text }}>{s.name || s.code}</span>
+                <span style={{ color, fontWeight: 700 }}>{s.similarity}%</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {/* Recommendation buttons */}
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button
+          type="button"
+          onClick={() => onApplyMode(data.recommendation)}
+          style={{ flex: 1, padding: '7px 10px', borderRadius: 8, border: `1.5px solid ${color}`, background: `${color}18`, color, fontWeight: 700, fontSize: 11, cursor: 'pointer' }}
+        >
+          {data.recommendation === 'AI_VISION' ? '🤖 AI Vision Mode Apply করুন' : '📷 OCR Mode Apply করুন'} (Recommended)
+        </button>
+        <button
+          type="button"
+          onClick={() => onApplyMode(data.recommendation === 'AI_VISION' ? 'OCR' : 'AI_VISION')}
+          style={{ padding: '7px 10px', borderRadius: 8, border: `1px solid ${th.border}`, background: 'transparent', color: th.muted, fontSize: 11, cursor: 'pointer' }}
+        >
+          {data.recommendation === 'AI_VISION' ? 'OCR দিয়ে চালাবো' : 'AI Vision দিয়ে চালাবো'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function ProductsPage({ th, pageId, onToast }: {
   th: Theme; pageId: number; onToast: (m: string, t?: any) => void;
 }) {
@@ -100,6 +171,10 @@ export function ProductsPage({ th, pageId, onToast }: {
   const [uploadingEditImage, setUploadingEditImage] = useState(false);
   const [uploadingNewRefs, setUploadingNewRefs] = useState(false);
   const [uploadingEditRefs, setUploadingEditRefs] = useState(false);
+  const [uniquenessNew, setUniquenessNew] = useState<any | null>(null);
+  const [uniquenessEdit, setUniquenessEdit] = useState<any | null>(null);
+  const [uniquenessNewHidden, setUniquenessNewHidden] = useState(false);
+  const [uniquenessEditHidden, setUniquenessEditHidden] = useState(false);
   const newImageRef = useRef<HTMLInputElement>(null);
   const newRefsRef = useRef<HTMLInputElement>(null);
   const editImageRef = useRef<HTMLInputElement>(null);
@@ -117,8 +192,10 @@ export function ProductsPage({ th, pageId, onToast }: {
 
   const openEdit = (p: Product) => {
     setEditId(p.id);
-    setEditData({ name: p.name ?? '', price: p.price, costPrice: p.costPrice, stockQty: p.stockQty, postCaption: p.postCaption ?? '', videoUrl: p.videoUrl ?? '', catalogVisible: p.catalogVisible ?? true, description: p.description ?? '', imageUrl: p.imageUrl ?? '', referenceImagesJson: referenceImagesToText(p.referenceImagesJson), productGroup: p.productGroup ?? '', variantLabel: p.variantLabel ?? '', variantOptions: variantOptionsToText(p.variantOptions), category: p.category ?? '', color: p.color ?? '', tags: p.tags ?? '', imageKeywords: p.imageKeywords ?? '', visionSearchable: p.visionSearchable ?? false });
+    setEditData({ name: p.name ?? '', price: p.price, costPrice: p.costPrice, stockQty: p.stockQty, postCaption: p.postCaption ?? '', videoUrl: p.videoUrl ?? '', catalogVisible: p.catalogVisible ?? true, description: p.description ?? '', imageUrl: p.imageUrl ?? '', referenceImagesJson: referenceImagesToText(p.referenceImagesJson), productGroup: p.productGroup ?? '', variantLabel: p.variantLabel ?? '', variantOptions: variantOptionsToText(p.variantOptions), category: p.category ?? '', color: p.color ?? '', tags: p.tags ?? '', imageKeywords: p.imageKeywords ?? '', visionSearchable: p.visionSearchable ?? false, detectionMode: p.detectionMode ?? 'AI_VISION' });
     setEditVideoGuide(null);
+    setUniquenessEdit(null);
+    setUniquenessEditHidden(false);
   };
 
   const saveEdit = async (p: Product) => {
@@ -176,42 +253,75 @@ export function ProductsPage({ th, pageId, onToast }: {
       onToast(copy('আগে image দিন', 'Add an image first'), 'error');
       return;
     }
-    if (target === 'new') setAnalyzingNew(true);
-    else setAnalyzingEdit(true);
+    if (target === 'new') { setAnalyzingNew(true); setUniquenessNewHidden(false); }
+    else { setAnalyzingEdit(true); setUniquenessEditHidden(false); }
     try {
+      const currentCode = target === 'edit' ? products.find(p => p.id === editId)?.code : undefined;
       const result = await request<any>(`${BASE}/products/analyze-image`, {
         method: 'POST',
-        body: JSON.stringify({ imageUrl }),
+        body: JSON.stringify({ imageUrl, excludeCode: currentCode }),
       });
       const suggested = result?.suggested || {};
-      if (target === 'new') {
-        setNewP((p) => ({
-          ...p,
-          category: suggested.category || p.category,
-          color: suggested.color || p.color,
-          imageKeywords: suggested.imageKeywords || p.imageKeywords,
-          tags: suggested.tags || p.tags,
-          visionSearchable:
-            typeof suggested.visionSearchable === 'boolean'
-              ? suggested.visionSearchable
-              : p.visionSearchable,
-        }));
-      } else {
-        setEditData((d) => ({
-          ...d,
-          category: suggested.category || d.category,
-          color: suggested.color || d.color,
-          imageKeywords: suggested.imageKeywords || d.imageKeywords,
-          tags: suggested.tags || d.tags,
-          visionSearchable:
-            typeof suggested.visionSearchable === 'boolean'
-              ? suggested.visionSearchable
-              : d.visionSearchable,
-        }));
-      }
+      const applyFn = (prev: any) => ({
+        ...prev,
+        category: suggested.category || prev.category,
+        color: suggested.color || prev.color,
+        imageKeywords: suggested.imageKeywords || prev.imageKeywords,
+        tags: suggested.tags || prev.tags,
+        visionSearchable: typeof suggested.visionSearchable === 'boolean' ? suggested.visionSearchable : prev.visionSearchable,
+      });
+      if (target === 'new') { setNewP((p) => applyFn(p)); setUniquenessNew(result?.uniqueness || null); }
+      else { setEditData((d) => applyFn(d)); setUniquenessEdit(result?.uniqueness || null); }
       onToast(copy('AI analysis applied', 'AI analysis applied'), 'success');
     } catch (e: any) {
-      onToast(e.message, 'error');
+      const msg: string = e.message ?? '';
+      if (msg.includes('ঝাপসা') || msg.includes('অস্পষ্ট') || msg.includes('পণ্যের ছবি নয়')) {
+        onToast('ছবিটা ঝাপসা — clear light-এ তুলে আবার try করুন', 'warning');
+      } else {
+        onToast(msg, 'error');
+      }
+    } finally {
+      if (target === 'new') setAnalyzingNew(false);
+      else setAnalyzingEdit(false);
+    }
+  };
+
+  const batchAnalyzeAll = async (referenceImagesJson: string | undefined, mainImageUrl: string | undefined, target: 'new' | 'edit') => {
+    const urls = [
+      ...(mainImageUrl ? [mainImageUrl] : []),
+      ...parseReferenceImages(referenceImagesJson ?? ''),
+    ].filter(Boolean).slice(0, 5);
+    if (urls.length < 2) {
+      onToast(copy('কমপক্ষে ২টা reference image দরকার', 'Need at least 2 reference images'), 'error');
+      return;
+    }
+    if (target === 'new') { setAnalyzingNew(true); setUniquenessNewHidden(false); }
+    else { setAnalyzingEdit(true); setUniquenessEditHidden(false); }
+    try {
+      const currentCode = target === 'edit' ? products.find(p => p.id === editId)?.code : undefined;
+      const result = await request<any>(`${BASE}/products/batch-analyze`, {
+        method: 'POST',
+        body: JSON.stringify({ imageUrls: urls, excludeCode: currentCode }),
+      });
+      const suggested = result?.suggested || {};
+      const applyFn = (prev: any) => ({
+        ...prev,
+        category: suggested.category || prev.category,
+        color: suggested.color || prev.color,
+        imageKeywords: suggested.imageKeywords || prev.imageKeywords,
+        tags: suggested.tags || prev.tags,
+        visionSearchable: typeof suggested.visionSearchable === 'boolean' ? suggested.visionSearchable : prev.visionSearchable,
+      });
+      if (target === 'new') { setNewP((p) => applyFn(p)); setUniquenessNew(result?.uniqueness || null); }
+      else { setEditData((d) => applyFn(d)); setUniquenessEdit(result?.uniqueness || null); }
+      onToast(copy(`${urls.length}টা angle থেকে AI analysis সম্পন্ন ✓`, `AI analysis from ${urls.length} angles done ✓`), 'success');
+    } catch (e: any) {
+      const msg: string = e.message ?? '';
+      if (msg.includes('ঝাপসা') || msg.includes('অস্পষ্ট') || msg.includes('পণ্যের ছবি নয়')) {
+        onToast('ছবিগুলো ঝাপসা — clear light-এ তুলে আবার try করুন', 'warning');
+      } else {
+        onToast(msg, 'error');
+      }
     } finally {
       if (target === 'new') setAnalyzingNew(false);
       else setAnalyzingEdit(false);
@@ -397,12 +507,25 @@ export function ProductsPage({ th, pageId, onToast }: {
               </div>
             </FieldWithInfo>
             {parseReferenceImages(newP.referenceImagesJson).length > 0 && (
-              <div style={{ marginTop: 10, display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(72px,1fr))', gap: 8 }}>
-                {parseReferenceImages(newP.referenceImagesJson).slice(0, 6).map((url, idx) => (
-                  <div key={url + idx} style={{ borderRadius: 12, overflow: 'hidden', border: `1px solid ${th.border}`, background: th.surface, aspectRatio: '1 / 1' }}>
-                    <img src={url} alt={`reference-${idx + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-                  </div>
-                ))}
+              <div style={{ marginTop: 10 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(72px,1fr))', gap: 8 }}>
+                  {parseReferenceImages(newP.referenceImagesJson).slice(0, 6).map((url, idx) => (
+                    <div key={url + idx} style={{ borderRadius: 12, overflow: 'hidden', border: `1px solid ${th.border}`, background: th.surface, aspectRatio: '1 / 1', position: 'relative' }}>
+                      <img src={url} alt={`ref-${idx + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                      <div style={{ position: 'absolute', bottom: 3, right: 4, fontSize: 9, background: 'rgba(0,0,0,.55)', color: '#fff', borderRadius: 4, padding: '1px 4px' }}>#{idx + 1}</div>
+                    </div>
+                  ))}
+                </div>
+                {(parseReferenceImages(newP.referenceImagesJson).length + (newP.imageUrl ? 1 : 0)) >= 2 && (
+                  <button
+                    type="button"
+                    style={{ ...th.btnGhost, marginTop: 8, width: '100%', justifyContent: 'center', background: 'rgba(16,185,129,0.08)', borderColor: 'rgba(16,185,129,0.3)', color: '#34d399', fontSize: 12, fontWeight: 700 }}
+                    onClick={() => batchAnalyzeAll(newP.referenceImagesJson, newP.imageUrl, 'new')}
+                    disabled={analyzingNew}
+                  >
+                    {analyzingNew ? '⏳ AI analyzing all angles...' : `🤖 Analyze All ${parseReferenceImages(newP.referenceImagesJson).length + (newP.imageUrl ? 1 : 0)} Angles Together`}
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -452,6 +575,33 @@ export function ProductsPage({ th, pageId, onToast }: {
               />
             </FieldWithInfo>
           </div>
+          {/* V19: Detection Mode */}
+          <div style={{ marginTop: 14, padding: '12px 14px', borderRadius: 10, background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.2)' }}>
+            <div style={{ fontSize: 11.5, fontWeight: 700, color: '#34d399', marginBottom: 10, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Image Detection Mode</div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              {(['OCR', 'AI_VISION'] as const).map(mode => (
+                <label key={mode} style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4, padding: '10px 12px', borderRadius: 10, border: `2px solid ${newP.detectionMode === mode ? '#34d399' : (th.border ?? '#333')}`, background: newP.detectionMode === mode ? 'rgba(16,185,129,0.1)' : 'transparent', cursor: 'pointer', userSelect: 'none', transition: 'all 0.15s' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <input type="radio" name="new-detectionMode" value={mode} checked={newP.detectionMode === mode}
+                      onChange={() => setNewP(p => ({ ...p, detectionMode: mode, visionSearchable: mode === 'AI_VISION' }))} style={{ accentColor: '#34d399' }} />
+                    <span style={{ fontWeight: 700, fontSize: 13, color: th.text }}>{mode === 'OCR' ? '📷 OCR Mode' : '🤖 AI Vision Mode'}</span>
+                  </div>
+                  <span style={{ fontSize: 11, color: th.muted ?? '#888', lineHeight: 1.5 }}>
+                    {mode === 'OCR'
+                      ? 'Customer image থেকে product code পড়বে। কোনো AI API call হবে না। খরচ: ৳0.85/image (50%)'
+                      : 'OpenAI Vision দিয়ে product detect করবে। খরচ: ৳1.70/image (100%)'}
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+          <UniquenessCard
+            data={uniquenessNew}
+            hidden={uniquenessNewHidden}
+            onHide={() => setUniquenessNewHidden(true)}
+            th={th}
+            onApplyMode={(mode) => setNewP(p => ({ ...p, detectionMode: mode, visionSearchable: mode === 'AI_VISION' }))}
+          />
           {/* V18: Image recognition metadata */}
           <div style={{ marginTop: 14, padding: '12px 14px', borderRadius: 10, background: `${th.accent}0d`, border: `1px solid ${th.accent}22` }}>
             <div style={{ fontSize: 11.5, fontWeight: 700, color: th.accent, marginBottom: 10, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
@@ -658,12 +808,25 @@ export function ProductsPage({ th, pageId, onToast }: {
                           }}
                         />
                         {(editData.referenceImagesJson ?? '').trim() && (
-                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(56px,1fr))', gap: 6 }}>
-                            {parseReferenceImages(editData.referenceImagesJson).slice(0, 6).map((url, idx) => (
-                              <div key={url + idx} style={{ borderRadius: 8, overflow: 'hidden', border: `1px solid ${th.border}`, aspectRatio: '1 / 1', background: th.surface }}>
-                                <img src={url} alt={`edit-reference-${idx + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-                              </div>
-                            ))}
+                          <div>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(56px,1fr))', gap: 6 }}>
+                              {parseReferenceImages(editData.referenceImagesJson).slice(0, 6).map((url, idx) => (
+                                <div key={url + idx} style={{ borderRadius: 8, overflow: 'hidden', border: `1px solid ${th.border}`, aspectRatio: '1 / 1', background: th.surface, position: 'relative' }}>
+                                  <img src={url} alt={`edit-ref-${idx + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                                  <div style={{ position: 'absolute', bottom: 2, right: 3, fontSize: 8, background: 'rgba(0,0,0,.55)', color: '#fff', borderRadius: 3, padding: '1px 3px' }}>#{idx + 1}</div>
+                                </div>
+                              ))}
+                            </div>
+                            {(parseReferenceImages(editData.referenceImagesJson).length + (editData.imageUrl ? 1 : 0)) >= 2 && (
+                              <button
+                                type="button"
+                                style={{ ...th.btnSmGhost, marginTop: 6, width: '100%', justifyContent: 'center', background: 'rgba(16,185,129,0.08)', borderColor: 'rgba(16,185,129,0.3)', color: '#34d399', fontSize: 11, fontWeight: 700 }}
+                                onClick={() => batchAnalyzeAll(editData.referenceImagesJson, editData.imageUrl, 'edit')}
+                                disabled={analyzingEdit}
+                              >
+                                {analyzingEdit ? '⏳ Analyzing...' : `🤖 Analyze All ${parseReferenceImages(editData.referenceImagesJson).length + (editData.imageUrl ? 1 : 0)} Angles Together`}
+                              </button>
+                            )}
                           </div>
                         )}
                         {/* Video URL */}
@@ -705,6 +868,31 @@ export function ProductsPage({ th, pageId, onToast }: {
                             onChange={e => setEditData(d => ({ ...d, variantOptions: e.target.value }))}
                           />
                         </div>
+                        {/* V19: Detection Mode */}
+                        <div style={{ padding: '8px 10px', borderRadius: 8, background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.2)' }}>
+                          <div style={{ fontSize: 10, fontWeight: 700, color: '#34d399', marginBottom: 8, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Image Detection Mode</div>
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            {(['OCR', 'AI_VISION'] as const).map(mode => (
+                              <label key={mode} style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4, padding: '8px 10px', borderRadius: 8, border: `2px solid ${editData.detectionMode === mode ? '#34d399' : (th.border ?? '#333')}`, background: editData.detectionMode === mode ? 'rgba(16,185,129,0.1)' : 'transparent', cursor: 'pointer', userSelect: 'none', transition: 'all 0.15s' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                  <input type="radio" name={`detectionMode-${editId}`} value={mode} checked={editData.detectionMode === mode}
+                                    onChange={() => setEditData(d => ({ ...d, detectionMode: mode, visionSearchable: mode === 'AI_VISION' }))} style={{ accentColor: '#34d399' }} />
+                                  <span style={{ fontWeight: 700, fontSize: 12, color: th.text }}>{mode === 'OCR' ? '📷 OCR Mode' : '🤖 AI Vision'}</span>
+                                </div>
+                                <span style={{ fontSize: 10, color: th.muted ?? '#888', lineHeight: 1.4 }}>
+                                  {mode === 'OCR' ? `Product code পড়বে • ৳${(1.70 * 0.5).toFixed(2)}/image` : `AI দিয়ে detect করবে • ৳1.70/image`}
+                                </span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                        <UniquenessCard
+                          data={uniquenessEdit}
+                          hidden={uniquenessEditHidden}
+                          onHide={() => setUniquenessEditHidden(true)}
+                          th={th}
+                          onApplyMode={(mode) => setEditData(d => ({ ...d, detectionMode: mode, visionSearchable: mode === 'AI_VISION' }))}
+                        />
                         {/* V18: Image recognition metadata */}
                         <div style={{ padding: '8px 10px', borderRadius: 8, background: `${th.accent}0d`, border: `1px solid ${th.accent}22` }}>
                           <div style={{ fontSize: 10, fontWeight: 700, color: th.accent, marginBottom: 8, letterSpacing: '0.05em', textTransform: 'uppercase' }}>AI Tags</div>

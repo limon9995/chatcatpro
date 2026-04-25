@@ -182,6 +182,18 @@ export class AdminController {
       costPerTextMsgBdt: b?.costPerTextMsgBdt !== undefined ? Number(b.costPerTextMsgBdt) : undefined,
       costPerVoiceMsgBdt: b?.costPerVoiceMsgBdt !== undefined ? Number(b.costPerVoiceMsgBdt) : undefined,
       costPerImageBdt: b?.costPerImageBdt !== undefined ? Number(b.costPerImageBdt) : undefined,
+      costPerImageLocalBdt: b?.costPerImageLocalBdt !== undefined ? Number(b.costPerImageLocalBdt) : undefined,
+      costPerAnalyzeBdt: b?.costPerAnalyzeBdt !== undefined ? Number(b.costPerAnalyzeBdt) : undefined,
+    });
+  }
+
+  @Post('wallet/pricing/apply-all')
+  applyPricingToAll(@Body() b: any) {
+    return this.svc.applyPricingToAll({
+      costPerTextMsgBdt: b?.costPerTextMsgBdt !== undefined ? Number(b.costPerTextMsgBdt) : undefined,
+      costPerVoiceMsgBdt: b?.costPerVoiceMsgBdt !== undefined ? Number(b.costPerVoiceMsgBdt) : undefined,
+      costPerImageBdt: b?.costPerImageBdt !== undefined ? Number(b.costPerImageBdt) : undefined,
+      costPerImageLocalBdt: b?.costPerImageLocalBdt !== undefined ? Number(b.costPerImageLocalBdt) : undefined,
       costPerAnalyzeBdt: b?.costPerAnalyzeBdt !== undefined ? Number(b.costPerAnalyzeBdt) : undefined,
     });
   }

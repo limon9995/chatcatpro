@@ -25,6 +25,7 @@ import { CourierService } from '../courier/courier.service';
 import { CourierAccountingService } from '../courier/courier-accounting.service';
 import { FollowUpService } from '../followup/followup.service';
 import { BroadcastService } from '../broadcast/broadcast.service';
+import { SpamCheckerService } from '../spam-checker/spam-checker.service';
 import { SkipThrottle } from '@nestjs/throttler';
 
 @SkipThrottle({ global: true, auth: true })
@@ -42,6 +43,7 @@ export class ClientDashboardController {
     private readonly courierAccounting: CourierAccountingService,
     private readonly followUp: FollowUpService,
     private readonly broadcast: BroadcastService,
+    private readonly spamChecker: SpamCheckerService,
   ) {}
 
   private pid(req: any, pageId: string): number {
@@ -258,6 +260,14 @@ export class ClientDashboardController {
     @Req() r: any,
   ) {
     return this.svc.analyzeProductImage(this.pid(r, p), b || {});
+  }
+  @Post(':pageId/products/batch-analyze')
+  batchAnalyzeReferenceImages(
+    @Param('pageId') p: string,
+    @Body() b: any,
+    @Req() r: any,
+  ) {
+    return this.svc.batchAnalyzeReferenceImages(this.pid(r, p), b || {});
   }
   @Post(':pageId/products/video-guide')
   getProductVideoGuide(
@@ -1066,5 +1076,25 @@ export class ClientDashboardController {
   @Get(':pageId/wallet/recharge-requests')
   getRechargeRequests(@Param('pageId') p: string, @Req() r: any) {
     return this.svc.getRechargeRequests(this.pid(r, p));
+  }
+
+  // ── Fraud Checker ─────────────────────────────────────────────────────────
+  @Post(':pageId/fraud-check')
+  fraudCheck(
+    @Param('pageId') p: string,
+    @Req() r: any,
+    @Body() b: any,
+  ) {
+    const pageId = this.pid(r, p);
+    return this.spamChecker.manualCheck(b?.phone ?? '', pageId);
+  }
+
+  @Get(':pageId/fraud-check/logs')
+  fraudCheckLogs(
+    @Param('pageId') p: string,
+    @Req() r: any,
+    @Query('limit') limit?: string,
+  ) {
+    return this.spamChecker.getRecentLogs(this.pid(r, p), limit ? Number(limit) : 20);
   }
 }

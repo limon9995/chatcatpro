@@ -156,10 +156,11 @@ model Page {
   walletBalanceBdt Float @default(0.0) // Core currency balance for usage
 
   // -- PRICING CONFIG --
-  costPerTextMsgBdt  Float @default(0.05)
-  costPerVoiceMsgBdt Float @default(0.40) // For processing audio voice notes
-  costPerImageBdt    Float @default(1.70) // Customer sending Image
-  costPerAnalyzeBdt  Float @default(1.70) // Admin uploading product
+  costPerTextMsgBdt   Float @default(0.05)
+  costPerVoiceMsgBdt  Float @default(0.50)  // For processing audio voice notes
+  costPerImageBdt     Float @default(1.70)  // Customer image — OpenAI Vision API path
+  costPerImageLocalBdt Float @default(1.20) // Customer image — local CLIP path (no API)
+  costPerAnalyzeBdt   Float @default(1.70)  // Admin uploading product
 
   // -- BASE SUBSCRIPTION --
   subscriptionStatus String    @default("ACTIVE") // ACTIVE, SUSPENDED
@@ -193,6 +194,9 @@ model Page {
   // Wallet
   walletTransactions      WalletTransaction[]
   walletRechargeRequests  WalletRechargeRequest[]
+
+  // Spam checker
+  spamCheckLogs SpamCheckLog[]
 
   @@index([masterPageId])
 }
@@ -228,6 +232,9 @@ model Product {
   imageKeywords    String? // space-separated keywords, e.g. "floral printed maxi"
   aiDescription    String? // optional AI-generated description for matching
   visionSearchable Boolean @default(false) // if true, this product is matched via OpenAI vision (no code needed)
+
+  // V19: Detection mode — OCR (product code, 50% cost) or AI_VISION (OpenAI Vision, full cost)
+  detectionMode    String  @default("AI_VISION") // "OCR" | "AI_VISION"
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -271,6 +278,15 @@ model Order {
   confirmedAt DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+
+  // Spam/Fraud check result
+  spamRisk        String   @default("unknown")
+  spamScore       Float?
+  spamTotalOrders Int?
+  spamDelivered   Int?
+  spamCancelled   Int?
+  spamSource      String?
+  spamCheckedAt   DateTime?
 
   items        OrderItem[]
   callAttempts CallAttempt[]
@@ -669,4 +685,22 @@ model WalletRechargeRequest {
 
   @@index([pageId])
   @@index([status])
+}
+
+model SpamCheckLog {
+  id          Int      @id @default(autoincrement())
+  pageId      Int
+  page        Page     @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  phone       String
+  risk        String   // safe|low|medium|high|new|unknown
+  score       Float    @default(0)
+  totalOrders Int      @default(0)
+  delivered   Int      @default(0)
+  cancelled   Int      @default(0)
+  successRate Float    @default(0)
+  source      String   @default("internal")
+  checkedAt   DateTime @default(now())
+
+  @@index([pageId, phone])
+  @@index([pageId])
 }

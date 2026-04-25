@@ -486,13 +486,32 @@ export class ClientDashboardService {
 
   async analyzeProductImage(pageId: number, body: any) {
     const imageUrl = String(body?.imageUrl || '').trim();
+    const excludeCode = body?.excludeCode ? String(body.excludeCode).trim() : undefined;
     if (!imageUrl) throw new BadRequestException('Image URL required');
-    const result = await this.visionOps.analyzeProductImage(pageId, imageUrl);
+    const result = await this.visionOps.analyzeProductImage(pageId, imageUrl, excludeCode);
     await this.visionOps.logVisionAttempt({
       pageId,
       type: 'product_analyze',
       imageUrl,
       note: 'Admin analyzed product image from dashboard',
+      attrs: result.attrs,
+      confidence: result.attrs.confidence,
+    });
+    return result;
+  }
+
+  async batchAnalyzeReferenceImages(pageId: number, body: any) {
+    const imageUrls: string[] = Array.isArray(body?.imageUrls)
+      ? body.imageUrls.map((u: any) => String(u).trim()).filter(Boolean)
+      : [];
+    const excludeCode = body?.excludeCode ? String(body.excludeCode).trim() : undefined;
+    if (!imageUrls.length) throw new BadRequestException('imageUrls array required');
+    const result = await this.visionOps.batchAnalyzeReferenceImages(pageId, imageUrls, excludeCode);
+    await this.visionOps.logVisionAttempt({
+      pageId,
+      type: 'product_analyze',
+      imageUrl: imageUrls[0],
+      note: `Multi-angle batch analysis: ${imageUrls.length} images`,
       attrs: result.attrs,
       confidence: result.attrs.confidence,
     });

@@ -4,18 +4,6 @@ import {
   VisionAttributes,
 } from '../vision-analysis.interface';
 
-/**
- * OpenAI Vision Provider — uses GPT-4o vision to analyze product images.
- *
- * SETUP:
- *   1. Set VISION_PROVIDER=openai in .env
- *   2. Set OPENAI_API_KEY=sk-... in .env
- *   3. Optionally set VISION_MODEL=gpt-4o (default)
- *
- * The prompt is tuned for Bangladeshi fashion/e-commerce products.
- * You can swap the provider by implementing VisionAnalysisProvider with
- * any other API (Gemini, Claude, etc.) and updating VisionAnalysisModule.
- */
 @Injectable()
 export class OpenAIVisionProvider implements VisionAnalysisProvider {
   private readonly logger = new Logger(OpenAIVisionProvider.name);
@@ -27,14 +15,13 @@ export class OpenAIVisionProvider implements VisionAnalysisProvider {
     this.model = process.env.VISION_MODEL ?? 'gpt-4o';
   }
 
-  async analyze(imageUrl: string): Promise<VisionAttributes> {
-    if (!this.apiKey) {
-      this.logger.warn('[OpenAIVision] OPENAI_API_KEY not set — returning zero confidence');
-      return this.emptyResult('OPENAI_API_KEY not configured');
-    }
-
-    const prompt = `You are an expert fashion product analyzer for a Bangladeshi e-commerce store.
-Analyze this product image and respond ONLY with a valid JSON object (no markdown, no explanation).
+  private buildPrompt(multi: boolean): string {
+    return `You are an expert fashion product analyzer for a Bangladeshi e-commerce store.
+${multi
+  ? 'You are given multiple photos of the SAME product from different angles. Analyze ALL images together and provide a comprehensive description that captures every visible detail.'
+  : 'Analyze this product image.'
+}
+Respond ONLY with a valid JSON object (no markdown, no explanation).
 
 Required JSON format:
 {
@@ -44,62 +31,104 @@ Required JSON format:
   "sleeveType": "<one of: full, half, three_quarter, sleeveless, null if not visible>",
   "gender": "<one of: women, men, unisex, null if uncertain>",
   "confidence": <number 0.0 to 1.0 — your overall certainty>,
-  "rawDescription": "<one sentence natural description in English>"
+  "rawDescription": "<${multi
+    ? 'comprehensive 2-3 sentence description covering all visible angles, fabric texture, design details, embellishments, and distinctive visual features that would help identify this product in customer photos'
+    : 'one sentence natural description'
+  } in English>"
 }
 
 Rules:
-- If the image is blurry, unclear, or not a clothing/fashion product, set confidence <= 0.2
+- If images are blurry or not fashion products, set confidence <= 0.2
 - Do NOT guess gender unless clearly evident from the product style
 - Be honest about uncertainty — low confidence is better than wrong answer
 - category "non_clothing" means the image is not a clothing product`;
+  }
 
+  private parseResponse(content: string): VisionAttributes {
+    const parsed = JSON.parse(content) as Partial<VisionAttributes>;
+    return {
+      category: parsed.category ?? null,
+      color: parsed.color ?? null,
+      pattern: parsed.pattern ?? null,
+      sleeveType: parsed.sleeveType ?? null,
+      gender: parsed.gender ?? null,
+      confidence: typeof parsed.confidence === 'number'
+        ? Math.min(1, Math.max(0, parsed.confidence))
+        : 0,
+      rawDescription: parsed.rawDescription ?? content,
+    };
+  }
+
+  private async callAPI(imageUrls: string[]): Promise<VisionAttributes> {
+    const isMulti = imageUrls.length > 1;
+    const imageContent = imageUrls.map((url) => ({
+      type: 'image_url' as const,
+      image_url: { url, detail: 'low' as const },
+    }));
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${this.apiKey}`,
+      },
+      body: JSON.stringify({
+        model: this.model,
+        max_tokens: isMulti ? 500 : 300,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: this.buildPrompt(isMulti) },
+              ...imageContent,
+            ],
+          },
+        ],
+      }),
+      signal: AbortSignal.timeout(30_000),
+    });
+
+    if (!response.ok) {
+      const err = await response.text();
+      this.logger.error(`[OpenAIVision] API error ${response.status}: ${err.slice(0, 200)}`);
+      return this.emptyResult(`API error ${response.status}`);
+    }
+
+    const data = await response.json() as any;
+    const content: string = data?.choices?.[0]?.message?.content ?? '';
+    this.logger.log(`[OpenAIVision] Response (${imageUrls.length} imgs): ${content.slice(0, 300)}`);
+    return this.parseResponse(content);
+  }
+
+  /** Analyze a single image */
+  async analyze(imageUrl: string): Promise<VisionAttributes> {
+    if (!this.apiKey) {
+      this.logger.warn('[OpenAIVision] OPENAI_API_KEY not set — returning zero confidence');
+      return this.emptyResult('OPENAI_API_KEY not configured');
+    }
     try {
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${this.apiKey}`,
-        },
-        body: JSON.stringify({
-          model: this.model,
-          max_tokens: 300,
-          messages: [
-            {
-              role: 'user',
-              content: [
-                { type: 'text', text: prompt },
-                { type: 'image_url', image_url: { url: imageUrl, detail: 'low' } },
-              ],
-            },
-          ],
-        }),
-        signal: AbortSignal.timeout(20_000), // 20 second timeout
-      });
-
-      if (!response.ok) {
-        const err = await response.text();
-        this.logger.error(`[OpenAIVision] API error ${response.status}: ${err.slice(0, 200)}`);
-        return this.emptyResult(`API error ${response.status}`);
-      }
-
-      const data = await response.json() as any;
-      const content: string = data?.choices?.[0]?.message?.content ?? '';
-      this.logger.log(`[OpenAIVision] Raw response: ${content.slice(0, 300)}`);
-
-      const parsed = JSON.parse(content) as Partial<VisionAttributes>;
-      return {
-        category: parsed.category ?? null,
-        color: parsed.color ?? null,
-        pattern: parsed.pattern ?? null,
-        sleeveType: parsed.sleeveType ?? null,
-        gender: parsed.gender ?? null,
-        confidence: typeof parsed.confidence === 'number'
-          ? Math.min(1, Math.max(0, parsed.confidence))
-          : 0,
-        rawDescription: parsed.rawDescription ?? content,
-      };
+      return await this.callAPI([imageUrl]);
     } catch (err: any) {
-      this.logger.error(`[OpenAIVision] Failed: ${err?.message ?? err}`);
+      this.logger.error(`[OpenAIVision] analyze failed: ${err?.message ?? err}`);
+      return this.emptyResult(String(err?.message ?? 'unknown error'));
+    }
+  }
+
+  /** Analyze 2-5 angles of the SAME product in a single API call for richer description */
+  async analyzeMultiple(imageUrls: string[]): Promise<VisionAttributes> {
+    if (!this.apiKey) {
+      this.logger.warn('[OpenAIVision] OPENAI_API_KEY not set — returning zero confidence');
+      return this.emptyResult('OPENAI_API_KEY not configured');
+    }
+    if (!imageUrls.length) return this.emptyResult('No images provided');
+    if (imageUrls.length === 1) return this.analyze(imageUrls[0]);
+
+    const urls = imageUrls.slice(0, 5); // cap at 5
+    this.logger.log(`[OpenAIVision] Multi-angle: ${urls.length} images`);
+    try {
+      return await this.callAPI(urls);
+    } catch (err: any) {
+      this.logger.error(`[OpenAIVision] analyzeMultiple failed: ${err?.message ?? err}`);
       return this.emptyResult(String(err?.message ?? 'unknown error'));
     }
   }

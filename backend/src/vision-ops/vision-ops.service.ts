@@ -4,6 +4,7 @@ import { promises as fs } from 'fs';
 import { extname, join } from 'path';
 import { randomUUID } from 'crypto';
 import { VisionAnalysisService } from '../vision-analysis/vision-analysis.service';
+import { ProductMatchService } from '../product-match/product-match.service';
 import type { VisionAttributes } from '../vision-analysis/vision-analysis.interface';
 import type { ProductMatchResult } from '../product-match/product-match.service';
 
@@ -59,6 +60,7 @@ export class VisionOpsService {
   constructor(
     private readonly visionAnalysis: VisionAnalysisService,
     private readonly walletService: WalletService,
+    private readonly productMatch: ProductMatchService,
   ) {}
 
   private eventsFile(pageId: number) {
@@ -316,19 +318,7 @@ export class VisionOpsService {
     };
   }
 
-  async analyzeProductImage(pageId: number, imageUrl: string) {
-    if (!(await this.walletService.canProcessAi(pageId))) {
-      throw new HttpException(
-        'Insufficient wallet balance to analyze image',
-        HttpStatus.PAYMENT_REQUIRED,
-      );
-    }
-
-    const attrs = await this.visionAnalysis.analyze(imageUrl);
-
-    // Deduct admin vision usage cost
-    await this.walletService.deductUsage(pageId, 'ADMIN_VISION');
-
+  private buildSuggested(attrs: any) {
     const tokens = [
       attrs.color,
       attrs.pattern && attrs.pattern !== 'plain' ? attrs.pattern : null,
@@ -337,24 +327,66 @@ export class VisionOpsService {
       attrs.gender,
     ]
       .filter(Boolean)
-      .map((value) => String(value).trim().toLowerCase());
+      .map((value: any) => String(value).trim().toLowerCase());
     const uniqTokens = tokens.filter(
-      (value, index, all) => all.indexOf(value) === index,
+      (value: string, index: number, all: string[]) => all.indexOf(value) === index,
     );
-
     return {
-      attrs,
-      suggested: {
-        category: attrs.category || '',
-        color: attrs.color || '',
-        imageKeywords: uniqTokens.join(' '),
-        aiDescription: attrs.rawDescription || '',
-        tags: JSON.stringify(
-          uniqTokens.filter((token) => token && token !== 'null'),
-        ),
-        visionSearchable: attrs.confidence >= 0.35 && !!attrs.category,
-      },
+      category: attrs.category || '',
+      color: attrs.color || '',
+      imageKeywords: uniqTokens.join(' '),
+      aiDescription: attrs.rawDescription || '',
+      tags: JSON.stringify(uniqTokens.filter((t: string) => t && t !== 'null')),
+      visionSearchable: attrs.confidence >= 0.35 && !!attrs.category,
     };
+  }
+
+  async analyzeProductImage(pageId: number, imageUrl: string, excludeCode?: string) {
+    if (!(await this.walletService.canProcessAi(pageId))) {
+      throw new HttpException('Insufficient wallet balance to analyze image', HttpStatus.PAYMENT_REQUIRED);
+    }
+
+    const attrs = await this.visionAnalysis.analyze(imageUrl);
+
+    if (attrs.confidence < 0.30) {
+      throw new HttpException(
+        'ছবিটা ঝাপসা বা পণ্যের ছবি নয়। Clear light-এ তুলে আবার upload করুন।',
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
+
+    await this.walletService.deductUsage(pageId, 'ADMIN_VISION');
+
+    const uniqueness = await this.productMatch.checkUniqueness(pageId, attrs, excludeCode);
+    await this.walletService.deductUsage(pageId, 'IMAGE_UNIQUENESS');
+
+    return { attrs, suggested: this.buildSuggested(attrs), uniqueness };
+  }
+
+  /** Analyze 2-5 reference images of the same product in one AI call for richer description */
+  async batchAnalyzeReferenceImages(pageId: number, imageUrls: string[], excludeCode?: string) {
+    if (!imageUrls.length) throw new HttpException('No image URLs provided', HttpStatus.BAD_REQUEST);
+
+    if (!(await this.walletService.canProcessAi(pageId))) {
+      throw new HttpException('Insufficient wallet balance', HttpStatus.PAYMENT_REQUIRED);
+    }
+
+    const urls = imageUrls.slice(0, 5);
+    const attrs = await this.visionAnalysis.analyzeMultiple(urls);
+
+    if (attrs.confidence < 0.30) {
+      throw new HttpException(
+        'ছবিগুলো ঝাপসা বা পণ্যের ছবি নয়। Clear light-এ তুলে আবার upload করুন।',
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
+    }
+
+    await this.walletService.deductUsage(pageId, 'ADMIN_VISION');
+
+    const uniqueness = await this.productMatch.checkUniqueness(pageId, attrs, excludeCode);
+    await this.walletService.deductUsage(pageId, 'IMAGE_UNIQUENESS');
+
+    return { attrs, imageCount: urls.length, suggested: this.buildSuggested(attrs), uniqueness };
   }
 
   async buildVideoCaptureGuide(videoUrl: string, existingImages = 0) {

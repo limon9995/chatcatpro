@@ -13,6 +13,9 @@ interface Order {
   paymentStatus: string; transactionId: string | null; paymentScreenshotUrl: string | null;
   items: OrderItem[];
   courierShipment?: { status: string; courierName: string | null } | null;
+  spamRisk?: string | null; spamScore?: number | null;
+  spamTotalOrders?: number | null; spamDelivered?: number | null;
+  spamCancelled?: number | null; spamSource?: string | null;
 }
 
 export interface OrdersPagePreset {
@@ -226,6 +229,7 @@ export function OrdersPage({ th, pageId, onToast, preset }: {
   const [source, setSource]           = useState('ALL');
   const [paymentFilter, setPaymentFilter] = useState('ALL');
   const [callFilter, setCallFilter]   = useState('ALL');
+  const [spamFilter, setSpamFilter]   = useState('ALL');
   const [search, setSearch]           = useState('');
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [expanded, setExpanded] = useState<number | null>(null);
@@ -465,6 +469,7 @@ export function OrdersPage({ th, pageId, onToast, preset }: {
 
   const filtered = orders.filter(o => {
     if (callFilter !== 'ALL' && (o.callStatus || 'NONE') !== callFilter) return false;
+    if (spamFilter !== 'ALL' && (o.spamRisk || 'unknown') !== spamFilter) return false;
     if (!search) return true;
     const s = search.toLowerCase();
     return (o.customerName || '').toLowerCase().includes(s) ||
@@ -829,6 +834,34 @@ export function OrdersPage({ th, pageId, onToast, preset }: {
         })}
       </div>}
 
+      {/* Spam / Fraud Risk filter */}
+      {!isPresetView && <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+        <span style={{ fontSize: 11, color: th.muted, fontWeight: 700, marginRight: 2 }}>🛡️ Risk:</span>
+        {[
+          { key: 'ALL', label: 'সব', color: th.muted },
+          { key: 'high', label: '🔴 High', color: '#dc2626' },
+          { key: 'medium', label: '🟡 Medium', color: '#b45309' },
+          { key: 'low', label: '🟢 Low', color: '#16a34a' },
+          { key: 'safe', label: '✅ Safe', color: '#15803d' },
+          { key: 'new', label: '🆕 New', color: '#6366f1' },
+        ].map(f => {
+          const isActive = spamFilter === f.key;
+          const count = f.key === 'ALL' ? undefined : orders.filter(o => (o.spamRisk || 'unknown') === f.key).length;
+          return (
+            <button key={f.key} onClick={() => setSpamFilter(f.key)} style={{
+              padding: '5px 10px', borderRadius: 20, border: `1.5px solid ${isActive ? f.color : th.border}`,
+              background: isActive ? f.color + '18' : 'transparent',
+              color: isActive ? f.color : th.muted,
+              fontWeight: 700, fontSize: 11, cursor: 'pointer', transition: 'all .12s',
+              display: 'inline-flex', alignItems: 'center', gap: 5,
+            }}>
+              {f.label}
+              {count !== undefined && count > 0 && <span style={{ background: isActive ? f.color : th.border, color: isActive ? '#fff' : th.muted, fontSize: 10, borderRadius: 10, padding: '1px 5px' }}>{count}</span>}
+            </button>
+          );
+        })}
+      </div>}
+
       {!isPresetView && notAnsweredCount > 0 && (
         <div style={{
           ...th.card,
@@ -965,6 +998,28 @@ export function OrdersPage({ th, pageId, onToast, preset }: {
                         <div style={{ fontWeight: 600, fontSize: 13.5 }}>{o.customerName || '—'}</div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 2 }}>
                           <span style={{ fontSize: 12, color: th.muted }}>{o.phone || '—'}</span>
+                          {o.spamRisk && o.spamRisk !== 'unknown' && (() => {
+                            const riskMap: Record<string, { color: string; bg: string; icon: string }> = {
+                              high:   { color: '#dc2626', bg: '#dc262618', icon: '🔴' },
+                              medium: { color: '#b45309', bg: '#b4530918', icon: '🟡' },
+                              low:    { color: '#16a34a', bg: '#16a34a18', icon: '🟢' },
+                              safe:   { color: '#15803d', bg: '#15803d18', icon: '✅' },
+                              new:    { color: '#6366f1', bg: '#6366f118', icon: '🆕' },
+                            };
+                            const r = riskMap[o.spamRisk] ?? { color: th.muted, bg: 'transparent', icon: '❓' };
+                            const tip = o.spamTotalOrders
+                              ? `${o.spamRisk.toUpperCase()} · ${o.spamTotalOrders} orders · ${Math.round(((o.spamDelivered ?? 0) / o.spamTotalOrders) * 100)}% delivered`
+                              : o.spamRisk.toUpperCase();
+                            return (
+                              <span title={tip} style={{
+                                fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 6,
+                                background: r.bg, color: r.color, border: `1px solid ${r.color}40`,
+                                cursor: 'default', whiteSpace: 'nowrap',
+                              }}>
+                                {r.icon} {o.spamTotalOrders != null ? `${Math.round(((o.spamDelivered ?? 0) / Math.max(o.spamTotalOrders, 1)) * 100)}%` : o.spamRisk}
+                              </span>
+                            );
+                          })()}
                           {o.phone && (
                             <>
                               <button

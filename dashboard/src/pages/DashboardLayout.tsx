@@ -24,6 +24,7 @@ const BroadcastPage   = lazy(() => import('./BroadcastPage').then(m => ({ defaul
 const FollowUpPage    = lazy(() => import('./FollowUpPage').then(m => ({ default: m.FollowUpPage })));
 const CatalogPage     = lazy(() => import('./CatalogPage').then(m => ({ default: m.CatalogPage })));
 const WalletPage      = lazy(() => import('./WalletPage'));
+const FraudCheckerPage = lazy(() => import('./FraudCheckerPage'));
 
 // ── Error boundary for individual pages ───────────────────────────────────────
 class PageErrorBoundary extends Component<{ children: any; name: string }, { error: any }> {
@@ -43,7 +44,7 @@ class PageErrorBoundary extends Component<{ children: any; name: string }, { err
 type NavKey = 'OVERVIEW' | 'ORDERS' | 'PRODUCTS' | 'ACCOUNTING' | 'ANALYTICS' |
   'BOT_KNOWLEDGE' | 'PRINT' | 'MEMO_TEMPLATE' |
   'CRM' | 'COURIER' | 'BROADCAST' | 'FOLLOWUP' | 'CATALOG' | 'AGENT_TASKS' |
-  'PAGE' | 'NEGOTIATION' | 'CALL' | 'VOICE' | 'WALLET';
+  'PAGE' | 'NEGOTIATION' | 'CALL' | 'VOICE' | 'WALLET' | 'FRAUD_CHECKER';
 
 interface NavItem {
   key:   NavKey;
@@ -65,6 +66,7 @@ const NAV: NavItem[] = [
   { key: 'CRM',            bn: 'কাস্টমার',           en: 'Customers',       icon: '⊙', group: 'manage' },
   { key: 'CATALOG',        bn: 'ক্যাটালগ',           en: 'Catalog',         icon: '⊘', group: 'manage' },
   { key: 'COURIER',        bn: 'কুরিয়ার',            en: 'Courier',         icon: '⊕', group: 'tools' },
+  { key: 'FRAUD_CHECKER',  bn: 'ফ্রড চেকার',         en: 'Fraud Checker',   icon: '🛡️', group: 'tools' },
   { key: 'BROADCAST',      bn: 'ব্রডকাস্ট',          en: 'Broadcast',       icon: '⊗', group: 'tools' },
   { key: 'FOLLOWUP',       bn: 'ফলো-আপ',            en: 'Follow-up',       icon: '⊖', group: 'tools' },
   { key: 'MEMO_TEMPLATE',  bn: 'মেমো টেমপ্লেট',      en: 'Memo Template',   icon: '⊝', group: 'tools' },
@@ -497,6 +499,13 @@ export function DashboardLayout({
         <PageErrorBoundary name="WalletPage">
           <Suspense fallback={pageFallback}>
             <WalletPage th={th} pageId={pageId} onToast={showToast} />
+          </Suspense>
+        </PageErrorBoundary>
+      );
+      case 'FRAUD_CHECKER': return (
+        <PageErrorBoundary name="FraudCheckerPage">
+          <Suspense fallback={pageFallback}>
+            <FraudCheckerPage th={th} pageId={pageId} />
           </Suspense>
         </PageErrorBoundary>
       );

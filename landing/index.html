@@ -697,9 +697,6 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
           <li>Full Accounting + Product Catalog</li>
           <li>Memo / Invoice generation</li>
         </ul>
-        <div style="font-size:12px;color:var(--muted);margin-top:4px;line-height:1.6">
-          ✦ Server-এ আপনার page-এর slot ধরে রাখার charge। ১০ জন client হলেই VPS cost cover।
-        </div>
       </div>
 
       <!-- Step 2: Wallet -->
@@ -726,24 +723,37 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
               <div style="font-size:11px;color:var(--muted)">Whisper AI — audio থেকে text</div>
             </div>
             <div style="text-align:right;flex-shrink:0">
-              <div style="font-size:16px;font-weight:900;color:var(--green)">৳০.৪০</div>
+              <div style="font-size:16px;font-weight:900;color:var(--green)">৳০.৫০</div>
               <div style="font-size:10px;color:var(--muted)">per voice note</div>
             </div>
           </div>
-          <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-radius:10px;background:rgba(255,255,255,.04);border:1px solid var(--border)">
-            <div>
+          <!-- Image — two tier pricing -->
+          <div style="border-radius:10px;border:1px solid rgba(91,76,245,.25);overflow:hidden">
+            <div style="padding:8px 14px 6px;background:rgba(91,76,245,.08)">
               <div style="font-size:13px;font-weight:600">🖼️ Customer Image Drop</div>
-              <div style="font-size:11px;color:var(--muted)">GPT-4o Vision — product match</div>
+              <div style="font-size:11px;color:var(--muted)">Local AI বা Vision API — product match</div>
             </div>
-            <div style="text-align:right;flex-shrink:0">
-              <div style="font-size:16px;font-weight:900;color:var(--green)">৳১.৭০</div>
-              <div style="font-size:10px;color:var(--muted)">per image</div>
+            <div style="display:flex;border-top:1px solid rgba(91,76,245,.15)">
+              <div style="flex:1;padding:8px 14px;display:flex;justify-content:space-between;align-items:center;border-right:1px solid rgba(91,76,245,.12)">
+                <div>
+                  <div style="font-size:11px;font-weight:600;color:#a5b4fc">Local AI</div>
+                  <div style="font-size:10px;color:var(--muted)">~৮০% ক্ষেত্রে</div>
+                </div>
+                <div style="font-size:15px;font-weight:900;color:var(--green)">৳১.২০</div>
+              </div>
+              <div style="flex:1;padding:8px 14px;display:flex;justify-content:space-between;align-items:center">
+                <div>
+                  <div style="font-size:11px;font-weight:600;color:#fbbf24">API Fallback</div>
+                  <div style="font-size:10px;color:var(--muted)">ঝাপসা ছবি</div>
+                </div>
+                <div style="font-size:15px;font-weight:900;color:#f59e0b">৳১.৭০</div>
+              </div>
             </div>
           </div>
           <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-radius:10px;background:rgba(255,255,255,.04);border:1px solid var(--border)">
             <div>
               <div style="font-size:13px;font-weight:600">📦 Product Auto-Analyze</div>
-              <div style="font-size:11px;color:var(--muted)">GPT-4o Vision — product upload এ tag</div>
+              <div style="font-size:11px;color:var(--muted)">Admin product upload — AI tag generation</div>
             </div>
             <div style="text-align:right;flex-shrink:0">
               <div style="font-size:16px;font-weight:900;color:var(--green)">৳১.৭০</div>
@@ -761,32 +771,28 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
 
     <!-- ── Real cost example ── -->
     <div style="background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.2);border-radius:16px;padding:22px 28px;margin-bottom:28px;text-align:left">
-      <div style="font-weight:800;font-size:14px;color:#34d399;margin-bottom:12px">📊 Real Example — মাসে ৫০০ customer message হলে কত লাগবে?</div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px">
+      <div style="font-weight:800;font-size:14px;color:#34d399;margin-bottom:4px">📊 Real Example — মাসে ৫০০ customer হলে কত লাগবে?</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:14px">ধরুন প্রতি customer গড়ে ১–২টা photo পাঠায় এবং ৫–৬টা text message করে</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px">
         <div style="background:rgba(255,255,255,.04);border-radius:10px;padding:12px 14px">
           <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Platform Fee</div>
           <div style="font-weight:800;font-size:16px">৳৫০০</div>
           <div style="font-size:11px;color:var(--muted)">fixed/মাস</div>
         </div>
         <div style="background:rgba(255,255,255,.04);border-radius:10px;padding:12px 14px">
-          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">500 Text Messages</div>
-          <div style="font-weight:800;font-size:16px">৳২৫</div>
-          <div style="font-size:11px;color:var(--muted)">500 × ৳০.০৫</div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">~২,৭৫০ Text AI Reply</div>
+          <div style="font-weight:800;font-size:16px">৳১৩৮</div>
+          <div style="font-size:11px;color:var(--muted)">৫০০ × ৫.৫ msg × ৳০.০৫</div>
         </div>
         <div style="background:rgba(255,255,255,.04);border-radius:10px;padding:12px 14px">
-          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">20 Voice Notes</div>
-          <div style="font-weight:800;font-size:16px">৳৮</div>
-          <div style="font-size:11px;color:var(--muted)">20 × ৳০.৪০</div>
-        </div>
-        <div style="background:rgba(255,255,255,.04);border-radius:10px;padding:12px 14px">
-          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">30 Customer Images</div>
-          <div style="font-weight:800;font-size:16px">৳৫১</div>
-          <div style="font-size:11px;color:var(--muted)">30 × ৳১.৭০</div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">~৭৫০ Customer Photo</div>
+          <div style="font-weight:800;font-size:16px">৳৯৭৫</div>
+          <div style="font-size:11px;color:var(--muted)">৮০% Local ৳১.২০ + ২০% API ৳১.৭০</div>
         </div>
         <div style="background:linear-gradient(135deg,rgba(91,76,245,.15),rgba(139,92,246,.1));border:1px solid rgba(91,76,245,.3);border-radius:10px;padding:12px 14px">
           <div style="font-size:11px;color:#a5b4fc;margin-bottom:4px">মোট খরচ/মাস</div>
-          <div style="font-weight:900;font-size:20px">৳৫৮৪</div>
-          <div style="font-size:11px;color:#a5b4fc">আনুমানিক</div>
+          <div style="font-weight:900;font-size:20px">৳১,৬১৩</div>
+          <div style="font-size:11px;color:#a5b4fc">৫০০ + ১৩৮ + ৯৭৫</div>
         </div>
       </div>
     </div>

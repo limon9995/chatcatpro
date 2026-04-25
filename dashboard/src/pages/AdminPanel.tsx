@@ -3,7 +3,7 @@ import { CardHeader, EmptyState, FieldWithInfo, InfoButton, Spinner } from '../c
 import type { Theme } from '../components/ui';
 import { API_BASE, useApi } from '../hooks/useApi';
 
-type AdminTab = 'overview' | 'clients' | 'global-questions' | 'global-replies' | 'learning-log' | 'courier-tutorials' | 'billing' | 'call-servers' | 'wallet';
+type AdminTab = 'overview' | 'clients' | 'global-questions' | 'global-replies' | 'learning-log' | 'courier-tutorials' | 'billing' | 'call-servers' | 'wallet' | 'pricing';
 
 interface TutorialsConfig {
   courier?: { pathao?: string; steadfast?: string; redx?: string; paperfly?: string };
@@ -56,6 +56,7 @@ const ADMIN_TABS: { key: AdminTab; label: string; icon: string; help: string }[]
   { key: 'call-servers',      label: 'Call Servers',      icon: '📞', help: 'Calling feature চালু/বন্ধ করুন এবং call servers manage করুন।' },
   { key: 'billing',           label: 'Billing',           icon: '💳', help: 'Subscriptions, payments, plan management।' },
   { key: 'wallet',            label: 'Wallet',            icon: '💰', help: 'সব client এর wallet balance দেখুন, recharge approve করুন।' },
+  { key: 'pricing',           label: 'Pricing',           icon: '🏷️', help: 'Global usage cost rates edit করুন এবং সব client এ একসাথে apply করুন।' },
 ];
 
 const REPLY_KEY_HELP: Record<string, string> = {
@@ -79,7 +80,7 @@ export function AdminPanel({ th, onToast, onLogout }: {
   const { request } = useApi();
   const [tab, setTab] = useState<AdminTab>(() => {
     const saved = localStorage.getItem('admin_tab') as AdminTab | null;
-    const valid: AdminTab[] = ['overview','clients','global-questions','global-replies','learning-log','courier-tutorials','billing','call-servers','wallet'];
+    const valid: AdminTab[] = ['overview','clients','global-questions','global-replies','learning-log','courier-tutorials','billing','call-servers','wallet','pricing'];
     return saved && valid.includes(saved) ? saved : 'overview';
   });
   const [overview, setOverview] = useState<any>(null);
@@ -114,6 +115,11 @@ export function AdminPanel({ th, onToast, onLogout }: {
   const [walletReqFilter, setWalletReqFilter] = useState<'all' | 'pending'>('pending');
   const [walletDirectForm, setWalletDirectForm] = useState({ pageId: '', amountBdt: '', transactionId: '', note: '' });
   const [walletDirectSaving, setWalletDirectSaving] = useState(false);
+
+  // Pricing tab state
+  const DEFAULT_PRICING = { costPerTextMsgBdt: 0.05, costPerVoiceMsgBdt: 0.50, costPerImageBdt: 1.70, costPerImageLocalBdt: 1.20, costPerAnalyzeBdt: 1.70 };
+  const [pricingForm, setPricingForm] = useState(DEFAULT_PRICING);
+  const [pricingSaving, setPricingSaving] = useState(false);
 
   // Create client form state
   const [showCreateClient, setShowCreateClient] = useState(false);
@@ -251,6 +257,18 @@ export function AdminPanel({ th, onToast, onLogout }: {
       loadWallet();
     } catch (e: any) { onToast(e.message, 'error'); }
     finally { setWalletDirectSaving(false); }
+  };
+
+  const applyPricingToAll = async () => {
+    setPricingSaving(true);
+    try {
+      const r = await request<any>(`${BASE}/wallet/pricing/apply-all`, {
+        method: 'POST',
+        body: JSON.stringify(pricingForm),
+      });
+      onToast(`✅ ${r.updated} client এ pricing update হয়েছে`, 'success');
+    } catch (e: any) { onToast(e.message, 'error'); }
+    finally { setPricingSaving(false); }
   };
 
   const confirmPayment = async (paymentId: string, planName?: string) => {
@@ -1285,6 +1303,15 @@ export function AdminPanel({ th, onToast, onLogout }: {
             onDirectRecharge={directRecharge}
           />
         )}
+        {tab === 'pricing' && (
+          <AdminPricingTab
+            th={th}
+            form={pricingForm}
+            setForm={setPricingForm}
+            saving={pricingSaving}
+            onApplyAll={applyPricingToAll}
+          />
+        )}
       </div>
     </div>
   );
@@ -2157,6 +2184,84 @@ function AdminWalletTab({ th, loading, pages, requests, reqFilter, setReqFilter,
                   {p.subscriptionStatus}
                 </span>
               </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Admin Pricing Tab ─────────────────────────────────────────────────────────
+type PricingForm = { costPerTextMsgBdt: number; costPerVoiceMsgBdt: number; costPerImageBdt: number; costPerImageLocalBdt: number; costPerAnalyzeBdt: number };
+
+const PRICING_FIELDS: { key: keyof PricingForm; label: string; help: string }[] = [
+  { key: 'costPerTextMsgBdt',    label: 'Text Message (৳)',       help: 'প্রতিটি AI text message reply এর charge' },
+  { key: 'costPerVoiceMsgBdt',   label: 'Voice Message (৳)',      help: 'প্রতিটি voice note STT processing এর charge' },
+  { key: 'costPerImageBdt',      label: 'Image — API (৳)',        help: 'OpenAI Vision API ব্যবহার হলে প্রতিটি customer image এর charge' },
+  { key: 'costPerImageLocalBdt', label: 'Image — Local CLIP (৳)', help: 'Local CLIP model ব্যবহার হলে প্রতিটি customer image এর charge' },
+  { key: 'costPerAnalyzeBdt',    label: 'Admin Analyze (৳)',      help: 'Admin product photo analyze এর charge' },
+];
+
+function AdminPricingTab({ th, form, setForm, saving, onApplyAll }: {
+  th: Theme;
+  form: PricingForm;
+  setForm: (v: PricingForm | ((p: PricingForm) => PricingForm)) => void;
+  saving: boolean;
+  onApplyAll: () => void;
+}) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 520 }}>
+      <div style={{ ...th.card }}>
+        <CardHeader th={th} title="Global Usage Pricing" sub="এই rates সব client এ একসাথে apply করা যাবে" />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 16 }}>
+          {PRICING_FIELDS.map(({ key, label, help }) => (
+            <div key={key} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <label style={{ fontSize: 13, fontWeight: 600, color: th.text }}>{label}</label>
+                <InfoButton text={help} th={th} />
+              </div>
+              <input
+                type="number"
+                min={0}
+                step={0.01}
+                style={{ ...th.input, width: '100%' }}
+                value={form[key]}
+                onChange={e => setForm((p: PricingForm) => ({ ...p, [key]: parseFloat(e.target.value) || 0 }))}
+              />
+            </div>
+          ))}
+        </div>
+
+        <div style={{ marginTop: 20, padding: '12px 14px', background: th.accentSoft, borderRadius: 8, fontSize: 12.5, color: th.muted, lineHeight: 1.6 }}>
+          <strong style={{ color: th.accent }}>কীভাবে কাজ করে:</strong><br />
+          এই form এ price দিয়ে "সবার জন্য Apply করুন" চাপলে সব active client এর pricing একসাথে update হবে।
+          Individual client এর জন্য Wallet tab থেকে আলাদাভাবে set করা যাবে।
+        </div>
+
+        <button
+          style={{ ...th.btnPrimary, width: '100%', marginTop: 16, padding: '10px 0', fontSize: 14, fontWeight: 700 }}
+          disabled={saving}
+          onClick={onApplyAll}
+        >
+          {saving ? <Spinner size={14} /> : 'সবার জন্য Apply করুন'}
+        </button>
+      </div>
+
+      <div style={{ ...th.card }}>
+        <CardHeader th={th} title="Default Rates (Reference)" sub="System default values" />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 12 }}>
+          {[
+            { label: 'Text Message', value: '৳0.05' },
+            { label: 'Voice Message', value: '৳0.50' },
+            { label: 'Image — API (OpenAI)', value: '৳1.70' },
+            { label: 'Image — Local CLIP', value: '৳1.20' },
+            { label: 'Admin Analyze', value: '৳1.70' },
+            { label: 'Uniqueness Check', value: '৳0.02 (fixed)' },
+          ].map(({ label, value }) => (
+            <div key={label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, padding: '4px 0', borderBottom: `1px solid ${th.border}` }}>
+              <span style={{ color: th.muted }}>{label}</span>
+              <span style={{ color: th.text, fontWeight: 600 }}>{value}</span>
             </div>
           ))}
         </div>

@@ -323,4 +323,81 @@ export class ProductMatchService {
     }
     return keywords.length > 0 ? hits / keywords.length : 0;
   }
+
+  /**
+   * Check how unique a new product is compared to the existing catalog.
+   * Returns uniqueness % (0–100), top similar products, and a recommendation.
+   * Excludes `excludeCode` (the product being edited, to avoid self-match).
+   */
+  async checkUniqueness(
+    pageId: number,
+    attrs: VisionAttributes,
+    excludeCode?: string,
+  ): Promise<{
+    uniquenessPercent: number;
+    topSimilar: { code: string; name: string | null; similarity: number; imageUrl: string | null }[];
+    recommendation: 'AI_VISION' | 'OCR';
+    reason: string;
+    totalProductsChecked: number;
+  }> {
+    const allProducts = (await this.prisma.product.findMany({
+      where: { pageId, isActive: true },
+      select: {
+        id: true, code: true, name: true, price: true, imageUrl: true,
+        description: true, category: true, color: true, tags: true,
+        imageKeywords: true, aiDescription: true, stockQty: true,
+        visionSearchable: true,
+      },
+    })) as unknown as RawProduct[];
+
+    const candidates = allProducts.filter((p) => p.code !== excludeCode);
+
+    if (!candidates.length) {
+      return {
+        uniquenessPercent: 100,
+        topSimilar: [],
+        recommendation: 'AI_VISION',
+        reason: 'Store-এ আর কোনো product নেই — AI Detection ভালো কাজ করবে।',
+        totalProductsChecked: 0,
+      };
+    }
+
+    const scored = candidates
+      .map((p) => ({ ...this.scoreProduct(p, attrs), product: p }))
+      .sort((a, b) => b.matchScore - a.matchScore);
+
+    const topScore = scored[0]?.matchScore ?? 0;
+    // Uniqueness = inverse of top similarity, scaled 0–100
+    const uniquenessPercent = Math.round(Math.max(0, (1 - topScore) * 100));
+
+    const topSimilar = scored
+      .filter((s) => s.matchScore > 0.25)
+      .slice(0, 4)
+      .map((s) => ({
+        code: s.productCode,
+        name: s.productName,
+        similarity: Math.round(s.matchScore * 100),
+        imageUrl: s.imageUrl,
+      }));
+
+    let recommendation: 'AI_VISION' | 'OCR';
+    let reason: string;
+
+    if (uniquenessPercent >= 70) {
+      recommendation = 'AI_VISION';
+      reason = `এই product টা ${uniquenessPercent}% unique — AI Detection ভালোভাবে চিনতে পারবে।`;
+    } else if (uniquenessPercent >= 45) {
+      recommendation = 'AI_VISION';
+      reason = `${uniquenessPercent}% unique — AI চিনতে পারবে, তবে similar product থাকায় মাঝে মাঝে ভুল হতে পারে। Product code যোগ করলে accuracy বাড়বে।`;
+    } else {
+      recommendation = 'OCR';
+      reason = `মাত্র ${uniquenessPercent}% unique — store-এ অনেক similar product আছে। OCR mode use করলে product code দিয়ে নিখুঁতভাবে চেনা যাবে।`;
+    }
+
+    this.logger.log(
+      `[Uniqueness] pageId=${pageId} checked=${candidates.length} topScore=${topScore.toFixed(2)} unique=${uniquenessPercent}% → ${recommendation}`,
+    );
+
+    return { uniquenessPercent, topSimilar, recommendation, reason, totalProductsChecked: candidates.length };
+  }
 }

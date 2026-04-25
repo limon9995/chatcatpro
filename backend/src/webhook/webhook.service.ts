@@ -28,6 +28,15 @@ import { WhisperService } from '../whisper/whisper.service';
 export class WebhookService {
   private readonly logger = new Logger(WebhookService.name);
 
+  // Per-psid image buffer: collects photos sent in quick succession into one batch
+  private readonly imageBuffer = new Map<string, {
+    page: any;
+    urls: string[];
+    caption?: string;
+    timer: ReturnType<typeof setTimeout>;
+  }>();
+  private readonly IMAGE_BUFFER_MS = 4_000; // 4-second window
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly messenger: MessengerService,
@@ -179,22 +188,19 @@ export class WebhookService {
       }
 
       if (!page.infoModeOn) return;
-      const processingMsg = await this.botKnowledge.resolveSystemReply(
-        pageId,
-        'ocr_processing',
-      );
-      await this.messenger
-        .sendText(token, psid, processingMsg)
-        .catch((e) =>
-          this.logger.error(
-            `[Webhook] sendText(ocr_processing) failed psid=${psid}: ${e}`,
-          ),
-        );
+
+      // Send "processing" only on the first photo of this burst
+      const bufKey = `${page.id}:${psid}`;
+      if (!this.imageBuffer.has(bufKey)) {
+        const processingMsg = await this.botKnowledge.resolveSystemReply(pageId, 'ocr_processing');
+        await this.messenger
+          .sendText(token, psid, processingMsg)
+          .catch((e) => this.logger.error(`[Webhook] sendText(ocr_processing) failed psid=${psid}: ${e}`));
+      }
+
       // V8: pass caption text alongside image URL for combined detection
       const caption = (message.text || '').trim() || undefined;
-      this.ocrQueue.add(() =>
-        this.handleImageAttachment(page, psid, img.payload.url, caption),
-      );
+      this.bufferCustomerImage(page, psid, img.payload.url, caption);
       return;
     }
 
@@ -1310,6 +1316,100 @@ export class WebhookService {
     return null;
   }
 
+  // ── V19: Image buffer — groups photos sent in quick succession ────────────
+
+  private bufferCustomerImage(page: any, psid: string, imageUrl: string, caption?: string): void {
+    const key = `${page.id}:${psid}`;
+    const existing = this.imageBuffer.get(key);
+
+    const flush = () => {
+      const entry = this.imageBuffer.get(key);
+      if (!entry) return;
+      this.imageBuffer.delete(key);
+      if (entry.urls.length === 1) {
+        this.ocrQueue.add(() => this.handleImageAttachment(entry.page, psid, entry.urls[0], entry.caption));
+      } else {
+        this.logger.log(`[ImageBuffer] Flushing ${entry.urls.length} images for psid=${psid} page=${page.pageId}`);
+        this.ocrQueue.add(() => this.handleBatchImages(entry.page, psid, entry.urls, entry.caption));
+      }
+    };
+
+    if (existing) {
+      clearTimeout(existing.timer);
+      existing.urls.push(imageUrl);
+      if (caption && !existing.caption) existing.caption = caption;
+      existing.timer = setTimeout(flush, this.IMAGE_BUFFER_MS);
+    } else {
+      this.imageBuffer.set(key, {
+        page,
+        urls: [imageUrl],
+        caption,
+        timer: setTimeout(flush, this.IMAGE_BUFFER_MS),
+      });
+    }
+  }
+
+  /** Handles 2+ images sent together: tries OCR on each, then falls back to batch Vision */
+  private async handleBatchImages(page: any, psid: string, imageUrls: string[], customerText?: string): Promise<void> {
+    const pageId = page.id as number;
+    const token = page.pageToken as string;
+
+    await this.ctx.clearPendingVisionMatches(pageId, psid);
+    this.logger.log(`[BatchImages] Processing ${imageUrls.length} images — page=${page.pageId} psid=${psid}`);
+
+    try {
+      const pageProducts = await this.prisma.product.findMany({
+        where: { pageId, isActive: true },
+        select: { code: true, postCaption: true, visionSearchable: true, detectionMode: true },
+      });
+
+      const hasOcrProducts = pageProducts.some((p) => p.detectionMode === 'OCR' || !p.visionSearchable);
+      const customPrefix = (page.productCodePrefix as string | undefined) || 'DF';
+
+      // Try OCR on each image sequentially — stop on first match
+      if (hasOcrProducts) {
+        for (const url of imageUrls) {
+          const ocrResult = await this.ocr.extractFull(url, customerText, pageProducts, customPrefix);
+          const highMedium = ocrResult.verifiedCodes
+            .filter((v) => v.confidence === 'HIGH' || v.confidence === 'MEDIUM')
+            .map((v) => v.code);
+          const lowOnly = ocrResult.verifiedCodes.filter((v) => v.confidence === 'LOW').map((v) => v.code);
+          const codes = highMedium.length > 0 ? highMedium : lowOnly;
+
+          if (codes.length > 0) {
+            this.logger.log(`[BatchImages] OCR matched codes [${codes.join(',')}] from url=${url}`);
+            await this.walletService.deductUsage(pageId, 'IMAGE_OCR');
+            if (codes.length === 1) {
+              await this.ctx.setLastPresentedProducts(pageId, psid, [{ code: codes[0], price: 0 }]);
+              await this.productHandler.sendProductInfo(page, psid, codes[0]);
+            } else {
+              const newDraft = this.draftHandler.emptyDraft();
+              newDraft.pendingMultiPreview = codes;
+              await this.ctx.saveDraft(pageId, psid, newDraft);
+              await this.productHandler.sendMultiProductPreview(page, psid, codes);
+            }
+            return;
+          }
+        }
+      }
+
+      // No OCR codes in any image — use batch Vision (one AI call for all angles)
+      if (!page.imageRecognitionOn) {
+        const reply = await this.botKnowledge.resolveSystemReply(pageId, 'ocr_fail');
+        await this.safeSend(token, psid, reply);
+        return;
+      }
+
+      this.logger.log(`[BatchImages] OCR found nothing — falling back to batch Vision with ${imageUrls.length} angles`);
+      await this.visionProductRecognition(page, psid, imageUrls[0], imageUrls);
+
+    } catch (err: any) {
+      this.logger.error(`[BatchImages] Uncaught error page=${page.pageId} psid=${psid}: ${err?.message ?? err}`);
+      const reply = await this.botKnowledge.resolveSystemReply(pageId, 'ocr_fail').catch(() => 'Sorry, something went wrong.');
+      await this.safeSend(token, psid, reply);
+    }
+  }
+
   /** OCR image processing — runs inside the global OCR queue */
   private async handleImageAttachment(
     page: any,
@@ -1327,17 +1427,17 @@ export class WebhookService {
     );
 
     try {
-      // Load all active products — check if any use product codes (non-visionSearchable)
+      // Load all active products with detectionMode
       const pageProducts = await this.prisma.product.findMany({
         where: { pageId, isActive: true },
-        select: { code: true, postCaption: true, visionSearchable: true },
+        select: { code: true, postCaption: true, visionSearchable: true, detectionMode: true },
       });
 
-      // If ALL active products are vision-searchable (none use product codes),
+      // If ALL active products are AI_VISION mode (none use OCR/product codes),
       // skip OCR entirely and go straight to vision for faster response
-      const hasCodeProducts = pageProducts.some((p) => !p.visionSearchable);
-      if (!hasCodeProducts && page.imageRecognitionOn) {
-        this.logger.log(`[OCR] All products are vision-searchable — skipping OCR, going straight to vision`);
+      const hasOcrProducts = pageProducts.some((p) => p.detectionMode === 'OCR' || !p.visionSearchable);
+      if (!hasOcrProducts && page.imageRecognitionOn) {
+        this.logger.log(`[OCR] All products are AI_VISION mode — skipping OCR, going straight to vision`);
         await this.visionProductRecognition(page, psid, imageUrl);
         return;
       }
@@ -1407,12 +1507,16 @@ export class WebhookService {
         this.logger.log(
           `[OCR] Single code: ${codes[0]} confidence=${vc?.confidence}`,
         );
+        // Deduct IMAGE_OCR cost (50%) — OCR matched, no Vision API call needed
+        await this.walletService.deductUsage(pageId, 'IMAGE_OCR');
         await this.productHandler.sendProductInfo(page, psid, codes[0]);
         return;
       }
 
       // Multiple codes → multi-preview
       this.logger.log(`[OCR] Multiple codes: [${codes.join(',')}]`);
+      // Deduct IMAGE_OCR cost (50%) for OCR match
+      await this.walletService.deductUsage(pageId, 'IMAGE_OCR');
       const newDraft = this.draftHandler.emptyDraft();
       newDraft.pendingMultiPreview = codes;
       await this.ctx.saveDraft(pageId, psid, newDraft);
@@ -1439,6 +1543,7 @@ export class WebhookService {
     page: any,
     psid: string,
     imageUrl: string,
+    allImageUrls?: string[], // V19: batch mode — multiple angles in one AI call
   ): Promise<void> {
     const pageId = page.id as number;
     const token = page.pageToken as string;
@@ -1451,26 +1556,28 @@ export class WebhookService {
       ? page.imageMediumConfidence
       : 0.45;
 
+    const isBatch = allImageUrls && allImageUrls.length > 1;
     this.logger.log(
       `[VisionRecog] Starting for page=${page.pageId} psid=${psid} ` +
-        `thresholds: high=${highThreshold} med=${medThreshold}`,
+        `angles=${isBatch ? allImageUrls!.length : 1} thresholds: high=${highThreshold} med=${medThreshold}`,
     );
 
     try {
       // Step 0: Check wallet balance
       if (!(await this.walletService.canProcessAi(pageId))) {
         this.logger.warn(`[VisionRecog] pageId=${pageId} suspended or insufficient balance`);
-        // Just send standard fallback
         const reply = await this.botKnowledge.resolveSystemReply(pageId, 'ocr_fail');
         await this.safeSend(token, psid, reply);
         return;
       }
 
-      // Step 1: Analyze image with vision provider
-      const attrs = await this.visionAnalysis.analyze(imageUrl);
-      
-      // Deduct balance for customer image analysis
-      await this.walletService.deductUsage(pageId, 'IMAGE');
+      // Step 1: Analyze image(s) — batch if multiple angles, single otherwise
+      const attrs = isBatch
+        ? await this.visionAnalysis.analyzeMultiple(allImageUrls!)
+        : await this.visionAnalysis.analyze(imageUrl);
+
+      // Deduct balance — cheaper rate when local CLIP handled it, full rate when OpenAI was used
+      await this.walletService.deductUsage(pageId, attrs.usedApi ? 'IMAGE' : 'IMAGE_LOCAL');
 
       this.logger.log(
         `[VisionRecog] Attributes — cat=${attrs.category} color=${attrs.color} ` +

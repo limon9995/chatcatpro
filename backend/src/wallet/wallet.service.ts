@@ -32,7 +32,7 @@ export class WalletService {
   /**
    * Deducts a specific amount from the page's wallet based on the usage type.
    */
-  async deductUsage(pageId: number, type: 'TEXT' | 'VOICE' | 'IMAGE' | 'ADMIN_VISION'): Promise<boolean> {
+  async deductUsage(pageId: number, type: 'TEXT' | 'VOICE' | 'IMAGE' | 'IMAGE_LOCAL' | 'IMAGE_OCR' | 'ADMIN_VISION' | 'IMAGE_UNIQUENESS'): Promise<boolean> {
     try {
       const page = await this.prisma.page.findUnique({ where: { id: pageId } });
       if (!page) return false;
@@ -51,11 +51,24 @@ export class WalletService {
           break;
         case 'IMAGE':
           amountToDeduct = page.costPerImageBdt;
-          description = 'AI Customer Image Processed';
+          description = 'AI Customer Image (Vision API) Processed';
+          break;
+        case 'IMAGE_LOCAL':
+          amountToDeduct = (page as any).costPerImageLocalBdt ?? 1.20;
+          description = 'AI Customer Image (Local CLIP) Processed';
+          break;
+        case 'IMAGE_OCR':
+          // OCR mode — 50% of full image cost, no Vision API call
+          amountToDeduct = page.costPerImageBdt * 0.5;
+          description = 'Customer Image (OCR mode) Processed';
           break;
         case 'ADMIN_VISION':
           amountToDeduct = page.costPerAnalyzeBdt;
           description = 'Admin Product Vision Analyze';
+          break;
+        case 'IMAGE_UNIQUENESS':
+          amountToDeduct = 0.02;
+          description = 'Product Uniqueness Check (local)';
           break;
       }
 

@@ -634,6 +634,7 @@ export class AdminService {
     costPerTextMsgBdt?: number;
     costPerVoiceMsgBdt?: number;
     costPerImageBdt?: number;
+    costPerImageLocalBdt?: number;
     costPerAnalyzeBdt?: number;
   }) {
     const page = await this.prisma.page.findUnique({ where: { id: pageId }, select: { id: true } });
@@ -642,9 +643,28 @@ export class AdminService {
     if (pricing.costPerTextMsgBdt !== undefined) data.costPerTextMsgBdt = pricing.costPerTextMsgBdt;
     if (pricing.costPerVoiceMsgBdt !== undefined) data.costPerVoiceMsgBdt = pricing.costPerVoiceMsgBdt;
     if (pricing.costPerImageBdt !== undefined) data.costPerImageBdt = pricing.costPerImageBdt;
+    if (pricing.costPerImageLocalBdt !== undefined) data.costPerImageLocalBdt = pricing.costPerImageLocalBdt;
     if (pricing.costPerAnalyzeBdt !== undefined) data.costPerAnalyzeBdt = pricing.costPerAnalyzeBdt;
     await this.prisma.page.update({ where: { id: pageId }, data });
     return { success: true };
+  }
+
+  async applyPricingToAll(pricing: {
+    costPerTextMsgBdt?: number;
+    costPerVoiceMsgBdt?: number;
+    costPerImageBdt?: number;
+    costPerImageLocalBdt?: number;
+    costPerAnalyzeBdt?: number;
+  }) {
+    const data: any = {};
+    if (pricing.costPerTextMsgBdt !== undefined) data.costPerTextMsgBdt = pricing.costPerTextMsgBdt;
+    if (pricing.costPerVoiceMsgBdt !== undefined) data.costPerVoiceMsgBdt = pricing.costPerVoiceMsgBdt;
+    if (pricing.costPerImageBdt !== undefined) data.costPerImageBdt = pricing.costPerImageBdt;
+    if (pricing.costPerImageLocalBdt !== undefined) data.costPerImageLocalBdt = pricing.costPerImageLocalBdt;
+    if (pricing.costPerAnalyzeBdt !== undefined) data.costPerAnalyzeBdt = pricing.costPerAnalyzeBdt;
+    if (!Object.keys(data).length) return { success: false, updated: 0 };
+    const result = await this.prisma.page.updateMany({ data });
+    return { success: true, updated: result.count };
   }
 
   async getAllPagesWallet() {

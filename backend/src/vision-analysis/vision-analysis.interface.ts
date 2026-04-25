@@ -22,6 +22,8 @@ export interface VisionAttributes {
   confidence: number;
   /** Raw text description from the AI for logging / fallback display */
   rawDescription: string;
+  /** True when an external API (OpenAI) was used; false when handled locally */
+  usedApi?: boolean;
 }
 
 export interface VisionAnalysisProvider {

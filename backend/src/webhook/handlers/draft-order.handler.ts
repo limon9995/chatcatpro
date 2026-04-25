@@ -13,6 +13,7 @@ import { BotKnowledgeService } from '../../bot-knowledge/bot-knowledge.service';
 import { CrmService } from '../../crm/crm.service';
 import { FollowUpService } from '../../followup/followup.service';
 import { BillingService } from '../../billing/billing.service';
+import { SpamCheckerService } from '../../spam-checker/spam-checker.service';
 
 @Injectable()
 export class DraftOrderHandler {
@@ -29,6 +30,7 @@ export class DraftOrderHandler {
     private readonly crm: CrmService,
     private readonly followUpSvc: FollowUpService,
     private readonly billing: BillingService,
+    private readonly spamChecker: SpamCheckerService,
   ) {}
 
   emptyDraft(): DraftSession {
@@ -305,6 +307,10 @@ export class DraftOrderHandler {
         const ph = this.extractPhone(workingText);
         if (!ph) return 'ফোন নাম্বারটা আবার দিন 💖 (01XXXXXXXXX)';
         draft.phone = ph;
+        // Async spam check — runs while customer continues to address step
+        this.spamChecker.checkPhone(ph, pageId)
+          .then(r => { (draft as any).spamResult = r; })
+          .catch(() => {});
       } else if (step === 'address') {
         if (!this.isAddressLike(workingText))
           return 'পুরো ঠিকানাটা দিন 💖 (বাসা/রোড/এলাকা/জেলা)';
@@ -448,6 +454,8 @@ export class DraftOrderHandler {
       }
     }
 
+    const spamResult = (draft as any).spamResult as import('../../spam-checker/spam-checker.service').SpamResult | undefined;
+
     const order = await this.prisma.order.create({
       data: {
         pageIdRef: pageId,
@@ -463,6 +471,13 @@ export class DraftOrderHandler {
         paymentStatus,
         transactionId: draft.paymentProof ?? null,
         paymentScreenshotUrl: draft.paymentScreenshotUrl ?? null,
+        spamRisk: spamResult?.risk ?? 'unknown',
+        spamScore: spamResult?.score ?? null,
+        spamTotalOrders: spamResult?.totalOrders ?? null,
+        spamDelivered: spamResult?.delivered ?? null,
+        spamCancelled: spamResult?.cancelled ?? null,
+        spamSource: spamResult?.source ?? null,
+        spamCheckedAt: spamResult ? new Date() : null,
         items: {
           create: draft.items.map((i) => ({
             productCode: i.productCode,
