@@ -150,9 +150,11 @@ export function getTheme(dark: boolean) {
     btn,
     btnPrimary: {
       ...btn,
-      background: accent, color: '#fff', border: 'none',
-      boxShadow: `0 1px 4px ${accent}55, 0 0 0 0px ${accent}22`,
+      background: dark ? 'linear-gradient(135deg, #4f46e5, #7e22ce)' : 'linear-gradient(135deg, #4f46e5, #6366f1)',
+      color: '#fff', border: 'none',
+      boxShadow: dark ? '0 4px 15px rgba(0,0,0,0.4)' : `0 4px 12px ${accent}44`,
       fontWeight: 700,
+      transition: 'all .25s cubic-bezier(0.4, 0, 0.2, 1)',
     } as React.CSSProperties,
     btnGhost: {
       ...btn,
@@ -526,16 +528,19 @@ export function SaveBtn({ onClick, loading, label = 'Save Changes' }: {
     <button
       onClick={onClick} disabled={loading}
       style={{
-        padding: '9px 20px', borderRadius: 8, border: 'none',
-        background: '#4f46e5', color: '#fff', fontWeight: 700,
-        fontSize: 13.5, cursor: 'pointer', fontFamily: 'inherit',
-        display: 'inline-flex', alignItems: 'center', gap: 7,
-        boxShadow: '0 1px 4px rgba(79,70,229,0.4)',
-        opacity: loading ? 0.7 : 1, transition: 'opacity .15s',
+        padding: '10px 22px', borderRadius: 10, border: 'none',
+        background: loading ? '#9ca3af' : 'linear-gradient(135deg, #4f46e5, #7e22ce)',
+        color: '#fff', fontWeight: 800,
+        fontSize: 14, cursor: loading ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
+        display: 'inline-flex', alignItems: 'center', gap: 8,
+        boxShadow: loading ? 'none' : '0 4px 12px rgba(79,70,229,0.3)',
+        transition: 'all .2s cubic-bezier(0.4, 0, 0.2, 1)',
         letterSpacing: '-0.01em',
       }}
+      onMouseOver={e => !loading && (e.currentTarget.style.transform = 'translateY(-1px)')}
+      onMouseOut={e => !loading && (e.currentTarget.style.transform = 'translateY(0)')}
     >
-      {loading ? <Spinner size={13} color="#fff"/> : null}
+      {loading ? <Spinner size={14} color="#fff"/> : null}
       {label}
     </button>
   );

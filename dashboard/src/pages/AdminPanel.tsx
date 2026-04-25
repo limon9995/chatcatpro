@@ -612,8 +612,15 @@ export function AdminPanel({ th, onToast, onLogout }: {
               </div>
             </div>
             <div style={{ display:'flex', gap:8 }}>
-              <button style={th.btnPrimary} onClick={createClient} disabled={creating}>
-                {creating ? <><Spinner size={13} color="#fff"/> Creating…</> : '✓ Create Account'}
+              <button
+                style={{
+                  ...th.btnPrimary,
+                  background: creating ? th.muted : 'linear-gradient(135deg, #4f46e5, #8b5cf6)',
+                  padding: '10px 20px', borderRadius: 10, border: 'none', color: '#fff', fontWeight: 800
+                }}
+                onClick={createClient} disabled={creating}
+              >
+                {creating ? <Spinner size={14} color="#fff" /> : '✓ Create Account'}
               </button>
               <button style={th.btnGhost} onClick={() => { setShowCreateClient(false); setNewClient({ identifier:'', name:'', password:'', pageIds:'' }); }}>
                 Cancel
@@ -2063,9 +2070,22 @@ function AdminWalletTab({ th, loading, pages, requests, reqFilter, setReqFilter,
   return (
     <div>
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 16, flexWrap: 'wrap' }}>
-        <h3 style={{ margin: 0, flex: 1, fontSize: 16 }}>💰 Wallet Management</h3>
-        <button style={th.btnGhost} onClick={onRefresh}>↻ Refresh</button>
-        <button style={{ ...th.btnPrimary, fontSize: 13 }} onClick={() => setShowDirect(v => !v)}>
+        <h3 style={{ margin: 0, flex: 1, fontSize: 16, fontWeight: 800, letterSpacing: '-0.3px' }}>💰 Wallet Management</h3>
+        <button style={{ ...th.btnGhost, borderRadius: 10, padding: '8px 16px' }} onClick={onRefresh}>↻ Refresh</button>
+        <button
+          style={{
+            ...th.btnPrimary,
+            fontSize: 13.5,
+            fontWeight: 800,
+            padding: '9px 18px',
+            borderRadius: 11,
+            background: showDirect ? th.muted : 'linear-gradient(135deg, #4f46e5, #7e22ce)',
+            boxShadow: '0 4px 12px rgba(79, 70, 229, 0.25)',
+            border: 'none',
+            transition: 'all 0.2s'
+          }}
+          onClick={() => setShowDirect(v => !v)}
+        >
           {showDirect ? '✕ Close' : '➕ Manual Recharge'}
         </button>
       </div>
@@ -2109,14 +2129,16 @@ function AdminWalletTab({ th, loading, pages, requests, reqFilter, setReqFilter,
           <button
             style={{
               marginTop: 16, width: '100%', padding: '13px 0',
-              background: directSaving ? th.muted : 'linear-gradient(90deg,#6366f1,#22d3ee)',
-              color: '#fff', border: 'none', borderRadius: 10, fontWeight: 800,
+              background: directSaving ? th.muted : 'linear-gradient(135deg, #4f46e5, #7e22ce)',
+              color: '#fff', border: 'none', borderRadius: 12, fontWeight: 800,
               fontSize: 15, cursor: directSaving ? 'not-allowed' : 'pointer',
-              letterSpacing: '0.03em', boxShadow: directSaving ? 'none' : '0 4px 18px rgba(99,102,241,0.35)',
-              transition: 'opacity 0.2s', opacity: directSaving ? 0.6 : 1,
+              letterSpacing: '0.01em', boxShadow: directSaving ? 'none' : '0 6px 18px rgba(79,70,229,0.3)',
+              transition: 'all 0.2s', opacity: directSaving ? 0.7 : 1,
             }}
+            onMouseOver={e => !directSaving && (e.currentTarget.style.transform = 'translateY(-1px)')}
+            onMouseOut={e => !directSaving && (e.currentTarget.style.transform = 'translateY(0)')}
             disabled={directSaving} onClick={onDirectRecharge}>
-            {directSaving ? '⏳ Adding...' : '💰 Balance Add করুন'}
+            {directSaving ? <Spinner size={16} color="#fff" /> : <span>💰 Balance Add করুন</span>}
           </button>
         </div>
       )}
@@ -2176,9 +2198,9 @@ function AdminWalletTab({ th, loading, pages, requests, reqFilter, setReqFilter,
                     </span>
                     {r.status === 'pending' && (
                       <div style={{ display: 'flex', gap: 6 }}>
-                        <button style={{ ...th.btnPrimary, fontSize: 12, padding: '5px 12px', background: '#16a34a' }}
+                        <button style={{ ...th.btnSmSuccess, padding: '6px 14px', borderRadius: 8, fontWeight: 700, background: 'linear-gradient(135deg, #10b981, #059669)', border: 'none', color: '#fff' }}
                           onClick={() => onApprove(r.id)}>✅ Approve</button>
-                        <button style={{ ...th.btnGhost, fontSize: 12, padding: '5px 12px', color: '#ef4444' }}
+                        <button style={{ ...th.btnSmGhost, padding: '6px 14px', borderRadius: 8, fontWeight: 700, color: '#ef4444', borderColor: '#ef4444' }}
                           onClick={() => onReject(r.id)}>❌ Reject</button>
                       </div>
                     )}
@@ -2283,11 +2305,31 @@ function AdminPricingTab({ th, form, setForm, saving, onApplyAll }: {
         </div>
 
         <button
-          style={{ ...th.btnPrimary, width: '100%', marginTop: 16, padding: '10px 0', fontSize: 14, fontWeight: 700 }}
+          style={{
+            ...th.btnPrimary,
+            width: '100%',
+            marginTop: 18,
+            padding: '13px 0',
+            fontSize: 15,
+            fontWeight: 800,
+            background: saving ? th.muted : 'linear-gradient(135deg, #4f46e5, #8b5cf6)',
+            boxShadow: saving ? 'none' : '0 6px 20px rgba(79, 70, 229, 0.35)',
+            border: 'none',
+            borderRadius: 12,
+            transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+            cursor: saving ? 'not-allowed' : 'pointer',
+            letterSpacing: '-0.01em',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8
+          }}
           disabled={saving}
           onClick={onApplyAll}
+          onMouseOver={e => !saving && (e.currentTarget.style.transform = 'translateY(-2px)')}
+          onMouseOut={e => !saving && (e.currentTarget.style.transform = 'translateY(0)')}
         >
-          {saving ? <Spinner size={14} /> : 'সবার জন্য Apply করুন'}
+          {saving ? <Spinner size={16} color="#fff" /> : <span>✨ সবার জন্য Apply করুন</span>}
         </button>
       </div>
 
