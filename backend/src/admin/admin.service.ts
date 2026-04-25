@@ -735,4 +735,55 @@ export class AdminService {
 
     return { success: true };
   }
+
+  // ── Subscription management ────────────────────────────────────────────────
+
+  async getAllPageSubscriptions() {
+    return this.prisma.page.findMany({
+      select: {
+        id: true,
+        pageId: true,
+        pageName: true,
+        isActive: true,
+        subscriptionStatus: true,
+        nextBillingDate: true,
+        owner: { select: { id: true, username: true, name: true } },
+      },
+      orderBy: { nextBillingDate: 'asc' },
+    });
+  }
+
+  async updatePageSubscription(pageId: number, data: {
+    subscriptionStatus?: string;
+    nextBillingDate?: Date | null;
+    daysToAdd?: number;
+  }) {
+    const page = await this.prisma.page.findUnique({ where: { id: pageId }, select: { id: true, nextBillingDate: true, subscriptionStatus: true } });
+    if (!page) throw new NotFoundException('Page not found');
+
+    const updateData: any = {};
+
+    if (data.subscriptionStatus !== undefined) {
+      updateData.subscriptionStatus = data.subscriptionStatus;
+    }
+
+    if (data.daysToAdd !== undefined && data.daysToAdd > 0) {
+      // Extend from today or from existing nextBillingDate (whichever is later)
+      const base = page.nextBillingDate && page.nextBillingDate > new Date()
+        ? page.nextBillingDate
+        : new Date();
+      const newExpiry = new Date(base);
+      newExpiry.setDate(newExpiry.getDate() + data.daysToAdd);
+      updateData.nextBillingDate = newExpiry;
+      updateData.subscriptionStatus = 'ACTIVE'; // auto-activate on extend
+    } else if (data.nextBillingDate !== undefined) {
+      updateData.nextBillingDate = data.nextBillingDate;
+      if (data.nextBillingDate && data.nextBillingDate > new Date()) {
+        updateData.subscriptionStatus = 'ACTIVE';
+      }
+    }
+
+    await this.prisma.page.update({ where: { id: pageId }, data: updateData });
+    return { success: true, pageId };
+  }
 }

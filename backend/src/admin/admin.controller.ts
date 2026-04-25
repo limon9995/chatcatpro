@@ -224,4 +224,23 @@ export class AdminController {
   ) {
     return this.svc.rejectRechargeRequest(id, b?.reason);
   }
+
+  // ── Subscription management ───────────────────────────────────────────────
+
+  @Get('subscriptions')
+  getAllSubscriptions() {
+    return this.svc.getAllPageSubscriptions();
+  }
+
+  @Patch('subscriptions/:pageId')
+  updateSubscription(
+    @Param('pageId', ParseIntPipe) pageId: number,
+    @Body() b: any,
+  ) {
+    return this.svc.updatePageSubscription(pageId, {
+      subscriptionStatus: b?.subscriptionStatus,
+      nextBillingDate: b?.nextBillingDate ? new Date(b.nextBillingDate) : b?.nextBillingDate,
+      daysToAdd: b?.daysToAdd !== undefined ? Number(b.daysToAdd) : undefined,
+    });
+  }
 }

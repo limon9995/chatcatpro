@@ -84,6 +84,17 @@ export class WebhookService {
         continue;
       }
 
+      // ── Subscription gate ────────────────────────────────────────────────
+      if (page.subscriptionStatus === 'SUSPENDED') {
+        this.logger.log(`[Webhook] Page ${page.pageId} subscription SUSPENDED — skipping`);
+        continue;
+      }
+      if (page.nextBillingDate && new Date(page.nextBillingDate) < new Date()) {
+        this.logger.log(`[Webhook] Page ${page.pageId} subscription expired (${page.nextBillingDate}) — suspending`);
+        await this.prisma.page.update({ where: { id: page.id }, data: { subscriptionStatus: 'SUSPENDED' } });
+        continue;
+      }
+
       // Linked page: inherit settings from master, keep own credentials + id
       let resolvedPage = page;
       if (page.masterPageId) {

@@ -159,6 +159,7 @@ export function DashboardLayout({
   const [accountingPreset, setAccountingPreset] = useState<AccountingPagePreset | null>(null);
   const [toasts, setToasts]         = useState<ToastItem[]>([]);
   const [billingStatus, setBillingStatus] = useState<any>(null);
+  const [pageSubStatus, setPageSubStatus] = useState<any>(null);
   const [billingOpen, setBillingOpen] = useState(false);
   const [billingLoading, setBillingLoading] = useState(false);
   const [billingContact, setBillingContact] = useState<BillingAdminContact | null>(null);
@@ -228,6 +229,19 @@ export function DashboardLayout({
   useEffect(() => {
     request(`${API_BASE}/billing/status`).then(setBillingStatus).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!activePage?.id) return;
+    request<any>(`${API_BASE}/client-dashboard/${activePage.id}/wallet`).then(wallet => {
+      if (!wallet) return;
+      const now = new Date();
+      const expiry = wallet.nextBillingDate ? new Date(wallet.nextBillingDate) : null;
+      const suspended = wallet.subscriptionStatus === 'SUSPENDED';
+      const expired = expiry ? expiry < now : false;
+      const daysLeft = expiry && !expired ? Math.ceil((expiry.getTime() - now.getTime()) / 86400000) : 0;
+      setPageSubStatus({ suspended, expired, daysLeft, expiry: wallet.nextBillingDate, status: wallet.subscriptionStatus });
+    }).catch(() => {});
+  }, [activePage?.id]);
 
   const loadBillingModalData = useCallback(async () => {
     setBillingLoading(true);
@@ -613,36 +627,18 @@ export function DashboardLayout({
         </div>
       </header>
 
-      {/* ── Trial / Billing Banner ───────────────────────────────────────── */}
-      {billingStatus && (() => {
-        const { status, daysLeft, canTakeOrders } = billingStatus;
-        if (status === 'trial' && daysLeft <= 3) return (
-          <div style={{ background: '#f59e0b', color: '#1c1917', fontSize: 13, fontWeight: 600, padding: '8px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-            <span>⏳ Trial আর মাত্র {daysLeft} দিন বাকি — admin এর সাথে কথা বলে plan update করুন</span>
-            <button onClick={() => void openBillingModal()} style={{ background: '#1c1917', color: '#fef3c7', border: 'none', borderRadius: 6, padding: '4px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Contact Admin</button>
-          </div>
-        );
-        if (status === 'active' && daysLeft <= 2) return (
-          <div style={{ background: '#facc15', color: '#422006', fontSize: 13, fontWeight: 700, padding: '8px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-            <span>⏰ Subscription আর মাত্র {daysLeft} দিন active থাকবে — admin কে এখনই জানান</span>
-            <button onClick={() => void openBillingModal()} style={{ background: '#422006', color: '#fef3c7', border: 'none', borderRadius: 6, padding: '4px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Contact Admin</button>
-          </div>
-        );
-        if (status === 'trial') return (
-          <div style={{ background: dark ? '#1e3a5f' : '#dbeafe', color: dark ? '#93c5fd' : '#1e40af', fontSize: 13, fontWeight: 500, padding: '7px 20px' }}>
-            🎉 Trial চলছে — {daysLeft} দিন বাকি
-          </div>
-        );
-        if (status === 'expired' || !canTakeOrders) return (
+      {/* ── Server Subscription Banner (per-page, admin-controlled) ─────── */}
+      {pageSubStatus && (() => {
+        if (pageSubStatus.suspended || pageSubStatus.expired) return (
           <div style={{ background: '#ef4444', color: '#fff', fontSize: 13, fontWeight: 600, padding: '8px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
             <span>❌ Subscription মেয়াদ শেষ — admin update না করা পর্যন্ত নতুন অর্ডার নেওয়া বন্ধ আছে</span>
             <button onClick={() => void openBillingModal()} style={{ background: '#fff', color: '#ef4444', border: 'none', borderRadius: 6, padding: '4px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Contact Admin</button>
           </div>
         );
-        if (status === 'grace') return (
-          <div style={{ background: '#f97316', color: '#fff', fontSize: 13, fontWeight: 600, padding: '8px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-            <span>⚠️ Grace period চলছে — access চালু রাখতে admin এর সাথে কথা বলুন</span>
-            <button onClick={() => void openBillingModal()} style={{ background: '#fff', color: '#f97316', border: 'none', borderRadius: 6, padding: '4px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Contact Admin</button>
+        if (pageSubStatus.daysLeft <= 2 && pageSubStatus.daysLeft > 0) return (
+          <div style={{ background: '#dc2626', color: '#fff', fontSize: 13, fontWeight: 700, padding: '8px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <span>⚠️ Server subscription আর মাত্র {pageSubStatus.daysLeft} দিন বাকি — WhatsApp এ payment করুন</span>
+            <button onClick={() => void openBillingModal()} style={{ background: '#fff', color: '#dc2626', border: 'none', borderRadius: 6, padding: '4px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Contact Admin</button>
           </div>
         );
         return null;

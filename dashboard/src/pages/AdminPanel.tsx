@@ -3,7 +3,7 @@ import { CardHeader, EmptyState, FieldWithInfo, InfoButton, Spinner } from '../c
 import type { Theme } from '../components/ui';
 import { API_BASE, useApi } from '../hooks/useApi';
 
-type AdminTab = 'overview' | 'clients' | 'global-questions' | 'global-replies' | 'learning-log' | 'courier-tutorials' | 'billing' | 'call-servers' | 'wallet' | 'pricing';
+type AdminTab = 'overview' | 'clients' | 'global-questions' | 'global-replies' | 'learning-log' | 'courier-tutorials' | 'billing' | 'call-servers' | 'wallet' | 'pricing' | 'subscriptions';
 
 interface TutorialsConfig {
   courier?: { pathao?: string; steadfast?: string; redx?: string; paperfly?: string };
@@ -57,6 +57,7 @@ const ADMIN_TABS: { key: AdminTab; label: string; icon: string; help: string }[]
   { key: 'billing',           label: 'Billing',           icon: '💳', help: 'Subscriptions, payments, plan management।' },
   { key: 'wallet',            label: 'Wallet',            icon: '💰', help: 'সব client এর wallet balance দেখুন, recharge approve করুন।' },
   { key: 'pricing',           label: 'Pricing',           icon: '🏷️', help: 'Global usage cost rates edit করুন এবং সব client এ একসাথে apply করুন।' },
+  { key: 'subscriptions',     label: 'Subscriptions',     icon: '📅', help: 'প্রতিটি page এর server subscription expiry set করুন। Expired হলে bot বন্ধ হয়ে যায়।' },
 ];
 
 const REPLY_KEY_HELP: Record<string, string> = {
@@ -80,7 +81,7 @@ export function AdminPanel({ th, onToast, onLogout }: {
   const { request } = useApi();
   const [tab, setTab] = useState<AdminTab>(() => {
     const saved = localStorage.getItem('admin_tab') as AdminTab | null;
-    const valid: AdminTab[] = ['overview','clients','global-questions','global-replies','learning-log','courier-tutorials','billing','call-servers','wallet','pricing'];
+    const valid: AdminTab[] = ['overview','clients','global-questions','global-replies','learning-log','courier-tutorials','billing','call-servers','wallet','pricing','subscriptions'];
     return saved && valid.includes(saved) ? saved : 'overview';
   });
   const [overview, setOverview] = useState<any>(null);
@@ -120,6 +121,10 @@ export function AdminPanel({ th, onToast, onLogout }: {
   const DEFAULT_PRICING = { costPerTextMsgBdt: 0.05, costPerVoiceMsgBdt: 0.50, costPerImageBdt: 1.70, costPerImageLocalBdt: 1.20, costPerAnalyzeBdt: 1.70 };
   const [pricingForm, setPricingForm] = useState(DEFAULT_PRICING);
   const [pricingSaving, setPricingSaving] = useState(false);
+
+  // Subscriptions tab state
+  const [subPages, setSubPages] = useState<any[]>([]);
+  const [subLoading, setSubLoading] = useState(false);
 
   // Create client form state
   const [showCreateClient, setShowCreateClient] = useState(false);
@@ -202,6 +207,13 @@ export function AdminPanel({ th, onToast, onLogout }: {
     } catch (e: any) { onToast(e.message, 'error'); }
     finally { setBillingLoading(false); }
   }, [BASE, billingSubFilter]);
+
+  const loadSubscriptions = useCallback(async () => {
+    setSubLoading(true);
+    try { setSubPages(await request<any[]>(`${BASE}/subscriptions`) || []); }
+    catch (e: any) { onToast(e.message, 'error'); }
+    finally { setSubLoading(false); }
+  }, [BASE]);
 
   const loadWallet = useCallback(async () => {
     setWalletLoading(true);
@@ -346,6 +358,7 @@ export function AdminPanel({ th, onToast, onLogout }: {
     if (tab === 'call-servers')                                    loadGlobalCfgCall();
     if (tab === 'billing')                                         loadBilling();
     if (tab === 'wallet')                                          loadWallet();
+    if (tab === 'subscriptions') loadSubscriptions();
   }, [tab]);
 
   const loadPageCfg = async (page: ClientPage) => {
@@ -1312,6 +1325,18 @@ export function AdminPanel({ th, onToast, onLogout }: {
             onApplyAll={applyPricingToAll}
           />
         )}
+        {tab === 'subscriptions' && (
+          <AdminSubscriptionsTab
+            th={th}
+            loading={subLoading}
+            pages={subPages}
+            onRefresh={loadSubscriptions}
+            BASE={BASE}
+            request={request}
+            onToast={onToast}
+            onReload={loadSubscriptions}
+          />
+        )}
       </div>
     </div>
   );
@@ -2265,6 +2290,188 @@ function AdminPricingTab({ th, form, setForm, saving, onApplyAll }: {
             </div>
           ))}
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Admin Subscriptions Tab ───────────────────────────────────────────────────
+function AdminSubscriptionsTab({ th, loading, pages, onRefresh, BASE, request, onToast, onReload }: {
+  th: Theme; loading: boolean; pages: any[];
+  onRefresh: () => void; BASE: string;
+  request: (url: string, opts?: any) => Promise<any>;
+  onToast: (m: string, t?: any) => void;
+  onReload: () => void;
+}) {
+  const [search, setSearch] = useState('');
+  const [saving, setSaving] = useState<number | null>(null);
+  const [forms, setForms] = useState<Record<number, { days: string; date: string }>>({});
+
+  const now = new Date();
+
+  const filtered = pages.filter(p =>
+    !search || p.pageName?.toLowerCase().includes(search.toLowerCase()) ||
+    p.owner?.username?.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const getForm = (id: number) => forms[id] || { days: '30', date: '' };
+  const setForm = (id: number, f: any) => setForms(prev => ({ ...prev, [id]: f }));
+
+  const handleExtend = async (pageId: number) => {
+    const f = getForm(pageId);
+    const days = parseInt(f.days);
+    if (!days || days <= 0) { onToast('দিনের সংখ্যা দিন', 'error'); return; }
+    setSaving(pageId);
+    try {
+      await request(`${BASE}/subscriptions/${pageId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ daysToAdd: days }),
+      });
+      onToast(`✅ ${days} দিন বাড়ানো হয়েছে`, 'success');
+      onReload();
+    } catch (e: any) { onToast(e.message, 'error'); }
+    finally { setSaving(null); }
+  };
+
+  const handleSetDate = async (pageId: number) => {
+    const f = getForm(pageId);
+    if (!f.date) { onToast('তারিখ দিন', 'error'); return; }
+    setSaving(pageId);
+    try {
+      await request(`${BASE}/subscriptions/${pageId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ nextBillingDate: new Date(f.date).toISOString() }),
+      });
+      onToast('✅ Expiry date সেট হয়েছে', 'success');
+      onReload();
+    } catch (e: any) { onToast(e.message, 'error'); }
+    finally { setSaving(null); }
+  };
+
+  const handleToggleStatus = async (pageId: number, currentStatus: string) => {
+    const newStatus = currentStatus === 'ACTIVE' ? 'SUSPENDED' : 'ACTIVE';
+    setSaving(pageId);
+    try {
+      await request(`${BASE}/subscriptions/${pageId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ subscriptionStatus: newStatus }),
+      });
+      onToast(`✅ Status → ${newStatus}`, 'success');
+      onReload();
+    } catch (e: any) { onToast(e.message, 'error'); }
+    finally { setSaving(null); }
+  };
+
+  const getDaysLeft = (nextBillingDate: string | null) => {
+    if (!nextBillingDate) return null;
+    const expiry = new Date(nextBillingDate);
+    const diff = Math.ceil((expiry.getTime() - now.getTime()) / 86400000);
+    return diff;
+  };
+
+  if (loading) return <div style={{ padding: 40, textAlign: 'center' }}><Spinner /></div>;
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 16, flexWrap: 'wrap' }}>
+        <h3 style={{ margin: 0, flex: 1, fontSize: 16 }}>📅 Server Subscription Management</h3>
+        <button style={th.btnGhost} onClick={onRefresh}>↻ Refresh</button>
+      </div>
+      <div style={{ fontSize: 13, color: th.muted, marginBottom: 16, padding: '10px 14px', borderRadius: 10, background: th.surface }}>
+        💡 প্রতিটি page এর server fee মেয়াদ এখান থেকে set করুন। মেয়াদ শেষ হলে bot automatically বন্ধ হয়ে যায়।
+      </div>
+      <input
+        style={{ ...th.input, width: '100%', boxSizing: 'border-box', marginBottom: 12 }}
+        placeholder="Search page / username..."
+        value={search} onChange={e => setSearch(e.target.value)} />
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {filtered.map((p: any) => {
+          const daysLeft = getDaysLeft(p.nextBillingDate);
+          const expired = p.nextBillingDate && new Date(p.nextBillingDate) < now;
+          const isSuspended = p.subscriptionStatus === 'SUSPENDED';
+          const f = getForm(p.id);
+          const isSaving = saving === p.id;
+          const expiryStr = p.nextBillingDate ? new Date(p.nextBillingDate).toLocaleDateString('bn-BD', { day: 'numeric', month: 'long', year: 'numeric' }) : 'সেট করা নেই';
+
+          return (
+            <div key={p.id} style={{
+              borderRadius: 12, border: `1px solid ${expired || isSuspended ? '#ef444440' : th.border}`,
+              background: expired || isSuspended ? 'rgba(239,68,68,0.06)' : (th.card as any).background,
+              padding: '14px 16px',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+                <div style={{ flex: 1, minWidth: 160 }}>
+                  <div style={{ fontWeight: 700, fontSize: 14 }}>{p.pageName || p.pageId}</div>
+                  {p.owner && <div style={{ fontSize: 11, color: th.muted }}>@{p.owner.username} · {p.owner.name}</div>}
+                  <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <span style={{
+                      fontSize: 11, padding: '2px 9px', borderRadius: 99, fontWeight: 700,
+                      background: isSuspended ? '#ef444422' : expired ? '#f9731622' : '#22c55e22',
+                      color: isSuspended ? '#ef4444' : expired ? '#f97316' : '#16a34a',
+                    }}>
+                      {isSuspended ? '🔴 SUSPENDED' : expired ? '🟠 EXPIRED' : '🟢 ACTIVE'}
+                    </span>
+                    <span style={{ fontSize: 12, color: th.muted }}>
+                      মেয়াদ: <strong style={{ color: expired ? '#ef4444' : th.text }}>{expiryStr}</strong>
+                    </span>
+                    {daysLeft !== null && !expired && (
+                      <span style={{ fontSize: 12, color: daysLeft <= 2 ? '#ef4444' : daysLeft <= 7 ? '#f59e0b' : '#22c55e', fontWeight: 700 }}>
+                        ({daysLeft} দিন বাকি)
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                  {/* Quick extend */}
+                  <input
+                    type="number" min={1} max={365}
+                    style={{ ...th.input, width: 60, padding: '5px 8px', fontSize: 13, textAlign: 'center' }}
+                    value={f.days}
+                    onChange={e => setForm(p.id, { ...f, days: e.target.value })}
+                    title="দিনের সংখ্যা"
+                  />
+                  <button
+                    style={{ ...th.btnSmAccent, padding: '5px 12px', fontSize: 12 }}
+                    disabled={isSaving}
+                    onClick={() => handleExtend(p.id)}
+                    title="এই পেজের expiry এক্সটেন্ড করুন"
+                  >
+                    {isSaving ? <Spinner size={12} /> : `+${f.days}d`}
+                  </button>
+
+                  {/* Set date */}
+                  <input
+                    type="date"
+                    style={{ ...th.input, padding: '5px 8px', fontSize: 12 }}
+                    value={f.date}
+                    onChange={e => setForm(p.id, { ...f, date: e.target.value })}
+                  />
+                  <button
+                    style={{ ...th.btnSmSuccess || th.btnSmAccent, padding: '5px 10px', fontSize: 12, background: '#16a34a', color: '#fff', border: 'none', borderRadius: 7, cursor: 'pointer' }}
+                    disabled={isSaving || !f.date}
+                    onClick={() => handleSetDate(p.id)}
+                  >
+                    Set
+                  </button>
+
+                  {/* Suspend/Activate toggle */}
+                  <button
+                    style={{
+                      padding: '5px 12px', fontSize: 12, borderRadius: 7, border: 'none', cursor: 'pointer', fontWeight: 700,
+                      background: isSuspended ? '#16a34a' : '#ef4444', color: '#fff',
+                    }}
+                    disabled={isSaving}
+                    onClick={() => handleToggleStatus(p.id, p.subscriptionStatus)}
+                  >
+                    {isSuspended ? '▶ Activate' : '⏸ Suspend'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
