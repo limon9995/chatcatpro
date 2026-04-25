@@ -54,17 +54,42 @@ function ScreenFallback({ dark }: { dark: boolean }) {
         color: dark ? '#ededf0' : '#0d0d10',
       }}
     >
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: 28, marginBottom: 8, opacity: 0.4 }}>⬡</div>
+      <div style={{ textAlign: 'center' }}>
+        <div style={{ fontSize: 28, marginBottom: 8, opacity: 0.4 }}>⬡</div>
         <div style={{ fontSize: 12, opacity: 0.35 }}>{copy('লোড হচ্ছে...', 'Loading...')}</div>
       </div>
     </div>
   );
 }
 
-export default function App() {
+// Global Error Boundary to prevent white screen
+import { Component, ReactNode, ErrorInfo } from 'react';
+class ErrorBoundary extends Component<{ children: ReactNode; dark: boolean }, { hasError: boolean }> {
+  constructor(props: any) { super(props); this.state = { hasError: false }; }
+  static getDerivedStateFromError() { return { hasError: true }; }
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) { console.error('App Crash:', error, errorInfo); }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ minHeight: '100vh', background: this.props.dark ? '#06060a' : '#f7f7f8', display: 'flex', alignItems: 'center', justifyContent: 'center', color: this.props.dark ? '#fff' : '#000', padding: 20, textAlign: 'center' }}>
+          <div>
+            <h2>Oops! Something went wrong.</h2>
+            <p>Please try refreshing the page.</p>
+            <button onClick={() => window.location.reload()} style={{ marginTop: 10, padding: '10px 20px', borderRadius: 8, border: 'none', background: '#6366f1', color: '#fff', cursor: 'pointer' }}>Reload Chatcat</button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+export function AppContent() {
   const { copy } = useLanguage();
-  const [dark, setDark] = useState(() => localStorage.getItem('dfbot_dark') !== '0');
+  const [dark, setDark] = useState(() => {
+    try { return localStorage.getItem('dfbot_dark') !== '0'; }
+    catch { return true; }
+  });
   const th = getTheme(dark);
   const { user, ready, login, logout, changePassword } = useAuth();
   const { request } = useApi();
@@ -85,7 +110,7 @@ export default function App() {
   const [myPages, setMyPages] = useState<MyPage[]>([]);
 
   useEffect(() => {
-    localStorage.setItem('dfbot_dark', dark ? '1' : '0');
+    try { localStorage.setItem('dfbot_dark', dark ? '1' : '0'); } catch {}
     document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
     document.body.style.background = dark ? '#0a0a0f' : '#f7f7f8';
     document.body.style.color = dark ? '#ededf0' : '#0d0d10';
@@ -317,4 +342,16 @@ export default function App() {
   }
 
   return <ScreenFallback dark={dark} />;
+}
+
+export default function App() {
+  const [dark] = useState(() => {
+    try { return localStorage.getItem('dfbot_dark') !== '0'; }
+    catch { return true; }
+  });
+  return (
+    <ErrorBoundary dark={dark}>
+      <AppContent />
+    </ErrorBoundary>
+  );
 }

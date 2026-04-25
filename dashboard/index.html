@@ -35,8 +35,24 @@
       })();
     </script>
   </head>
-  <body>
-    <div id="root"></div>
+  <body style="margin:0; background:#06060a;">
+    <div id="root">
+      <div id="initial-loading" style="height:100vh; display:flex; align-items:center; justify-content:center; color:#fff; font-family:system-ui; flex-direction:column; gap:10px;">
+        <div style="font-size:32px; opacity:0.2;">⬡</div>
+        <div style="font-size:12px; opacity:0.3;">লোড হচ্ছে...</div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      // Remove loading indicator once React mounts
+      const observer = new MutationObserver((mutations) => {
+        const loading = document.getElementById('initial-loading');
+        if (loading && document.getElementById('root').children.length > 1) {
+          loading.remove();
+          observer.disconnect();
+        }
+      });
+      observer.observe(document.getElementById('root'), { childList: true });
+    </script>
   </body>
 </html>
