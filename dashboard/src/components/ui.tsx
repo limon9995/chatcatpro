@@ -110,14 +110,14 @@ export function getTheme(dark: boolean) {
     } as React.CSSProperties,
 
     sidebar: {
-      background: dark ? 'rgba(11,14,24,0.86)' : 'rgba(255,255,255,0.74)',
+      background: dark ? 'rgba(9,11,20,0.92)' : 'rgba(255,255,255,0.82)',
       borderRight: `1px solid ${border}`,
-      padding: '16px 12px',
+      padding: '12px 10px',
       display: 'flex', flexDirection: 'column' as const, gap: 1,
       position: 'sticky' as const, top: 64,
       height: 'calc(100vh - 64px)', overflowY: 'auto' as const,
-      backdropFilter: 'blur(18px)',
-      WebkitBackdropFilter: 'blur(18px)',
+      backdropFilter: 'blur(20px)',
+      WebkitBackdropFilter: 'blur(20px)',
     } as React.CSSProperties,
 
     main: {
@@ -182,23 +182,19 @@ export function getTheme(dark: boolean) {
     // Navigation
     navBtn: {
       width: '100%', textAlign: 'left' as const,
-      padding: '10px 12px', borderRadius: 14, border: 'none',
+      padding: '7px 10px', borderRadius: 9, border: 'none',
       background: 'transparent', color: textSub,
-      cursor: 'pointer', fontWeight: 500, fontSize: 13.5,
-      transition: 'all .14s ease', fontFamily: 'inherit',
-      display: 'flex', alignItems: 'center', gap: 10,
-      letterSpacing: '-0.01em',
+      cursor: 'pointer', fontWeight: 500, fontSize: 13,
+      transition: 'background .12s, color .12s', fontFamily: 'inherit',
+      display: 'flex', alignItems: 'center', gap: 9,
+      letterSpacing: '-0.015em',
     } as React.CSSProperties,
     navBtnActive: {
       background: dark
-        ? 'linear-gradient(135deg, rgba(79,70,229,0.26), rgba(99,102,241,0.12))'
-        : 'linear-gradient(135deg, rgba(79,70,229,0.12), rgba(99,102,241,0.06))',
-      color: accentText, fontWeight: 700,
-      borderLeft: `3px solid ${accent}`,
-      paddingLeft: 9,
-      boxShadow: dark
-        ? `inset 0 0 0 1px rgba(129,140,248,0.18), 0 2px 12px rgba(79,70,229,0.18)`
-        : `inset 0 0 0 1px rgba(79,70,229,0.12), 0 2px 10px rgba(79,70,229,0.10)`,
+        ? 'rgba(99,102,241,0.16)'
+        : 'rgba(99,102,241,0.10)',
+      color: dark ? '#a5b4fc' : '#4338ca',
+      fontWeight: 600,
     } as React.CSSProperties,
 
     // Toggle

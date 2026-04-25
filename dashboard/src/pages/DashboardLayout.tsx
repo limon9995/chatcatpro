@@ -66,26 +66,26 @@ interface NavItem {
 }
 
 const NAV: NavItem[] = [
-  { key: 'OVERVIEW',       bn: 'ওভারভিউ',            en: 'Overview',        icon: '◈', group: 'main' },
-  { key: 'AGENT_TASKS',    bn: 'এজেন্ট টাস্ক',       en: 'Agent Tasks',     icon: '◎', group: 'main' },
-  { key: 'ORDERS',         bn: 'অর্ডার',             en: 'Orders',          icon: '⊡', group: 'main' },
-  { key: 'PRODUCTS',       bn: 'প্রোডাক্ট',          en: 'Products',        icon: '⊞', group: 'main' },
-  { key: 'ACCOUNTING',     bn: 'হিসাব',              en: 'Accounting',      icon: '⊟', group: 'main' },
-  { key: 'ANALYTICS',      bn: 'অ্যানালিটিক্স',      en: 'Analytics',       icon: '◷', group: 'main' },
-  { key: 'BOT_KNOWLEDGE',  bn: 'বট নলেজ',           en: 'Bot Knowledge',   icon: '⊛', group: 'manage' },
-  { key: 'CRM',            bn: 'কাস্টমার',           en: 'Customers',       icon: '⊙', group: 'manage' },
-  { key: 'CATALOG',        bn: 'ক্যাটালগ',           en: 'Catalog',         icon: '⊘', group: 'manage' },
-  { key: 'COURIER',        bn: 'কুরিয়ার',            en: 'Courier',         icon: '⊕', group: 'tools' },
-  { key: 'FRAUD_CHECKER',  bn: 'ফ্রড চেকার',         en: 'Fraud Checker',   icon: '🛡️', group: 'tools' },
-  { key: 'BROADCAST',      bn: 'ব্রডকাস্ট',          en: 'Broadcast',       icon: '⊗', group: 'tools' },
-  { key: 'FOLLOWUP',       bn: 'ফলো-আপ',            en: 'Follow-up',       icon: '⊖', group: 'tools' },
-  { key: 'MEMO_TEMPLATE',  bn: 'মেমো টেমপ্লেট',      en: 'Memo Template',   icon: '⊝', group: 'tools' },
-  { key: 'PRINT',          bn: 'প্রিন্ট / ইনভয়েস',   en: 'Print / Invoice', icon: '⊜', group: 'tools' },
+  { key: 'OVERVIEW',       bn: 'ওভারভিউ',            en: 'Overview',        icon: '⊹', group: 'main' },
+  { key: 'AGENT_TASKS',    bn: 'এজেন্ট টাস্ক',       en: 'Agent Tasks',     icon: '✦', group: 'main' },
+  { key: 'ORDERS',         bn: 'অর্ডার',             en: 'Orders',          icon: '📦', group: 'main' },
+  { key: 'PRODUCTS',       bn: 'প্রোডাক্ট',          en: 'Products',        icon: '🏷', group: 'main' },
+  { key: 'ACCOUNTING',     bn: 'হিসাব',              en: 'Accounting',      icon: '💼', group: 'main' },
+  { key: 'ANALYTICS',      bn: 'অ্যানালিটিক্স',      en: 'Analytics',       icon: '📊', group: 'main' },
+  { key: 'BOT_KNOWLEDGE',  bn: 'বট নলেজ',           en: 'Bot Knowledge',   icon: '🧠', group: 'manage' },
+  { key: 'CRM',            bn: 'কাস্টমার',           en: 'Customers',       icon: '👥', group: 'manage' },
+  { key: 'CATALOG',        bn: 'ক্যাটালগ',           en: 'Catalog',         icon: '📋', group: 'manage' },
+  { key: 'COURIER',        bn: 'কুরিয়ার',            en: 'Courier',         icon: '🚚', group: 'tools' },
+  { key: 'FRAUD_CHECKER',  bn: 'ফ্রড চেকার',         en: 'Fraud Checker',   icon: '🛡', group: 'tools' },
+  { key: 'BROADCAST',      bn: 'ব্রডকাস্ট',          en: 'Broadcast',       icon: '📣', group: 'tools' },
+  { key: 'FOLLOWUP',       bn: 'ফলো-আপ',            en: 'Follow-up',       icon: '🔔', group: 'tools' },
+  { key: 'MEMO_TEMPLATE',  bn: 'মেমো টেমপ্লেট',      en: 'Memo Template',   icon: '📄', group: 'tools' },
+  { key: 'PRINT',          bn: 'প্রিন্ট / ইনভয়েস',   en: 'Print / Invoice', icon: '🖨', group: 'tools' },
   { key: 'WALLET',         bn: 'ওয়ালেট',            en: 'Wallet',          icon: '💰', group: 'settings' },
-  { key: 'PAGE',           bn: 'পেজ সেটিংস',        en: 'Page Settings',   icon: '⊞', group: 'settings' },
-  { key: 'NEGOTIATION',    bn: 'নেগোশিয়েশন',        en: 'Negotiation',     icon: '⊟', group: 'settings' },
-  { key: 'CALL',           bn: 'কল কনফার্ম',        en: 'Call Confirm',    icon: '⊡', group: 'settings' },
-  { key: 'VOICE',          bn: 'ভয়েস ও TTS',        en: 'Voice & TTS',     icon: '⊢', group: 'settings' },
+  { key: 'PAGE',           bn: 'পেজ সেটিংস',        en: 'Page Settings',   icon: '⚙', group: 'settings' },
+  { key: 'NEGOTIATION',    bn: 'নেগোশিয়েশন',        en: 'Negotiation',     icon: '🤝', group: 'settings' },
+  { key: 'CALL',           bn: 'কল কনফার্ম',        en: 'Call Confirm',    icon: '📞', group: 'settings' },
+  { key: 'VOICE',          bn: 'ভয়েস ও TTS',        en: 'Voice & TTS',     icon: '🎙', group: 'settings' },
 ];
 
 const GROUPS = [
@@ -687,7 +687,7 @@ export function DashboardLayout({
           )}
 
           {navGroups.map(g => (
-            <div key={g.key} style={{ marginBottom: 10 }}>
+            <div key={g.key} style={{ marginBottom: 4 }}>
               {(() => {
                 const label = language === 'en' ? g.en : g.bn;
                 const isOpen = openGroups[g.key];
@@ -704,26 +704,22 @@ export function DashboardLayout({
                         background: 'transparent',
                         border: 'none',
                         color: th.muted,
-                        padding: '12px 12px 8px',
+                        padding: '10px 10px 5px',
                         cursor: 'pointer',
                         fontSize: 10,
                         fontWeight: 700,
-                        letterSpacing: '0.07em',
+                        letterSpacing: '0.09em',
                         textTransform: 'uppercase',
+                        opacity: 0.6,
                       }}
                     >
                       <span>{label}</span>
-                      <span
-                        style={{
-                          fontSize: 11,
-                          opacity: 0.9,
-                          transform: isOpen ? 'rotate(0deg)' : 'rotate(-90deg)',
-                          transition: 'transform 0.18s ease',
-                          display: 'inline-block',
-                        }}
-                      >
-                        ▼
-                      </span>
+                      <span style={{
+                        fontSize: 9, opacity: 0.7,
+                        transform: isOpen ? 'rotate(0deg)' : 'rotate(-90deg)',
+                        transition: 'transform 0.18s ease',
+                        display: 'inline-block',
+                      }}>▾</span>
                     </button>
                   );
                 }
@@ -736,19 +732,27 @@ export function DashboardLayout({
                     key={item.key}
                     onClick={() => openNavItem(item.key)}
                     className={`nav-lift${isActive ? ' nav-active-glow' : ''}`}
-                    style={{ ...th.navBtn, ...(isActive ? th.navBtnActive : {}), marginBottom: 1 }}
+                    style={{ ...th.navBtn, ...(isActive ? th.navBtnActive : {}), marginBottom: 2 }}
                   >
-                    <span style={{ fontSize: 13, opacity: isActive ? 1 : 0.7, width: 16, textAlign: 'center', transition: 'opacity .13s' }}>{item.icon}</span>
-                    <span style={{ flex: 1 }}>{language === 'en' ? item.en : item.bn}</span>
+                    <span style={{
+                      width: 26, height: 26, borderRadius: 7, flexShrink: 0,
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 13, lineHeight: 1,
+                      background: isActive
+                        ? 'rgba(99,102,241,0.22)'
+                        : 'rgba(255,255,255,0.05)',
+                      transition: 'background .12s',
+                    }}>{item.icon}</span>
+                    <span style={{ flex: 1, fontSize: 13 }}>{language === 'en' ? item.en : item.bn}</span>
                     {item.badge && (
                       <span style={{
-                        fontSize: 9, fontWeight: 800, padding: '1px 5px',
-                        borderRadius: 4, background: th.accentSoft,
+                        fontSize: 9, fontWeight: 800, padding: '2px 6px',
+                        borderRadius: 5, background: th.accentSoft,
                         color: th.accentText, letterSpacing: '0.05em',
                       }}>{item.badge}</span>
                     )}
                     {isActive && (
-                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: th.accent, flexShrink: 0, boxShadow: `0 0 6px ${th.accent}` }} />
+                      <span style={{ width: 5, height: 16, borderRadius: 3, background: th.accent, flexShrink: 0, boxShadow: `0 0 8px ${th.accent}99` }} />
                     )}
                   </button>
                 );
