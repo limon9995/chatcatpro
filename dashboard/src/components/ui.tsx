@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState, lazy } from 'react';
 import { useLanguage } from '../i18n';
 
 // ── Design Tokens ─────────────────────────────────────────────────────────────
@@ -539,4 +539,30 @@ export function SaveBtn({ onClick, loading, label = 'Save Changes' }: {
       {label}
     </button>
   );
+}
+// ── safeLazy ──────────────────────────────────────────────────────────────────
+/**
+ * A wrapper for React.lazy that catches ChunkLoadErrors (which happen after a new deploy)
+ * and reloads the page to get the latest assets.
+ */
+export function safeLazy<T extends React.ComponentType<any>>(
+  importFn: () => Promise<{ default: T }>
+) {
+  return lazy(async () => {
+    try {
+      return await importFn();
+    } catch (err: any) {
+      const isChunkError =
+        err.name === 'ChunkLoadError' ||
+        /error loading dynamically imported module/i.test(err.message) ||
+        /loading dynamically imported module/i.test(err.message);
+
+      if (isChunkError) {
+        console.warn('Dynamic import failed, reloading page...', err);
+        window.location.reload();
+        return { default: (() => null) as unknown as T }; // Prevent error boundary trigger before reload
+      }
+      throw err;
+    }
+  });
 }

@@ -1,7 +1,7 @@
-import { Suspense, lazy, useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useAuth } from './hooks/useAuth';
 import { API_BASE, useApi } from './hooks/useApi';
-import { getTheme, useToast } from './components/ui';
+import { getTheme, useToast, safeLazy } from './components/ui';
 import { useLanguage } from './i18n';
 import { LoginPage } from './pages/LoginPage';
 import { SignupPageComponent } from './pages/SignupPage';
@@ -9,11 +9,11 @@ import { ChangePasswordPage } from './pages/ChangePasswordPage';
 import { ConnectPageScreen } from './pages/ConnectPageScreen';
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { LandingPage } from './pages/LandingPage';
-const DashboardLayout = lazy(async () => {
+const DashboardLayout = safeLazy(async () => {
   const mod = await import('./pages/DashboardLayout');
   return { default: mod.DashboardLayout };
 });
-const AdminPanel = lazy(async () => {
+const AdminPanel = safeLazy(async () => {
   const mod = await import('./pages/AdminPanel');
   return { default: mod.AdminPanel };
 });

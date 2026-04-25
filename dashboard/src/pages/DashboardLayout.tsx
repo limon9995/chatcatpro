@@ -1,35 +1,45 @@
-import { Component, Suspense, lazy, useState, useEffect, useRef, useCallback } from 'react';
+import { Component, Suspense, useState, useEffect, useRef, useCallback } from 'react';
 import type { OrdersPagePreset } from './OrdersPage';
 import type { PrintPagePreset } from './PrintPage';
 import type { FollowUpPagePreset } from './FollowUpPage';
 import type { AccountingPagePreset } from './AccountingPage';
-import { getTheme, LanguageSwitch, Spinner, Toast } from '../components/ui';
+import { getTheme, LanguageSwitch, Spinner, Toast, safeLazy } from '../components/ui';
 import { API_BASE, useApi } from '../hooks/useApi';
 import { useLanguage } from '../i18n';
 
 // ── Lazy page imports ──────────────────────────────────────────────────────────
-const OrdersPage      = lazy(() => import('./OrdersPage').then(m => ({ default: m.OrdersPage })));
-const ProductsPage    = lazy(() => import('./ProductsPage').then(m => ({ default: m.ProductsPage })));
-const SettingsPage    = lazy(() => import('./SettingsPage').then(m => ({ default: m.SettingsPage })));
-const AccountingPage  = lazy(() => import('./AccountingPage').then(m => ({ default: m.AccountingPage })));
-const AnalyticsPage   = lazy(() => import('./AnalyticsPage').then(m => ({ default: m.AnalyticsPage })));
-const MotivationPage  = lazy(() => import('./MotivationPage').then(m => ({ default: m.MotivationPage })));
-const AgentTasksPage  = lazy(() => import('./AgentTasksPage').then(m => ({ default: m.AgentTasksPage })));
-const BotKnowledgePage= lazy(() => import('./BotKnowledgePage').then(m => ({ default: m.BotKnowledgePage })));
-const PrintPage       = lazy(() => import('./PrintPage').then(m => ({ default: m.PrintPage })));
-const MemoTemplatePage= lazy(() => import('./MemoTemplatePage').then(m => ({ default: m.MemoTemplatePage })));
-const CrmPage         = lazy(() => import('./CrmPage').then(m => ({ default: m.CrmPage })));
-const CourierPage     = lazy(() => import('./CourierPage').then(m => ({ default: m.CourierPage })));
-const BroadcastPage   = lazy(() => import('./BroadcastPage').then(m => ({ default: m.BroadcastPage })));
-const FollowUpPage    = lazy(() => import('./FollowUpPage').then(m => ({ default: m.FollowUpPage })));
-const CatalogPage     = lazy(() => import('./CatalogPage').then(m => ({ default: m.CatalogPage })));
-const WalletPage      = lazy(() => import('./WalletPage'));
-const FraudCheckerPage = lazy(() => import('./FraudCheckerPage'));
+const OrdersPage      = safeLazy(() => import('./OrdersPage').then(m => ({ default: m.OrdersPage })));
+const ProductsPage    = safeLazy(() => import('./ProductsPage').then(m => ({ default: m.ProductsPage })));
+const SettingsPage    = safeLazy(() => import('./SettingsPage').then(m => ({ default: m.SettingsPage })));
+const AccountingPage  = safeLazy(() => import('./AccountingPage').then(m => ({ default: m.AccountingPage })));
+const AnalyticsPage   = safeLazy(() => import('./AnalyticsPage').then(m => ({ default: m.AnalyticsPage })));
+const MotivationPage  = safeLazy(() => import('./MotivationPage').then(m => ({ default: m.MotivationPage })));
+const AgentTasksPage  = safeLazy(() => import('./AgentTasksPage').then(m => ({ default: m.AgentTasksPage })));
+const BotKnowledgePage= safeLazy(() => import('./BotKnowledgePage').then(m => ({ default: m.BotKnowledgePage })));
+const PrintPage       = safeLazy(() => import('./PrintPage').then(m => ({ default: m.PrintPage })));
+const MemoTemplatePage= safeLazy(() => import('./MemoTemplatePage').then(m => ({ default: m.MemoTemplatePage })));
+const CrmPage         = safeLazy(() => import('./CrmPage').then(m => ({ default: m.CrmPage })));
+const CourierPage     = safeLazy(() => import('./CourierPage').then(m => ({ default: m.CourierPage })));
+const BroadcastPage   = safeLazy(() => import('./BroadcastPage').then(m => ({ default: m.BroadcastPage })));
+const FollowUpPage    = safeLazy(() => import('./FollowUpPage').then(m => ({ default: m.FollowUpPage })));
+const CatalogPage     = safeLazy(() => import('./CatalogPage').then(m => ({ default: m.CatalogPage })));
+const WalletPage      = safeLazy(() => import('./WalletPage') as any);
+const FraudCheckerPage = safeLazy(() => import('./FraudCheckerPage') as any);
 
 // ── Error boundary for individual pages ───────────────────────────────────────
 class PageErrorBoundary extends Component<{ children: any; name: string }, { error: any }> {
   constructor(props: any) { super(props); this.state = { error: null }; }
   static getDerivedStateFromError(e: any) { return { error: e }; }
+  componentDidCatch(error: any) {
+    const isChunkError =
+      error.name === 'ChunkLoadError' ||
+      /error loading dynamically imported module/i.test(error.message) ||
+      /loading dynamically imported module/i.test(error.message);
+    if (isChunkError) {
+      console.warn('Chunk error detected in boundary, reloading...', error);
+      window.location.reload();
+    }
+  }
   render() {
     if (this.state.error) return (
       <div style={{ padding: 32, color: '#ef4444', fontFamily: 'monospace', fontSize: 13 }}>
