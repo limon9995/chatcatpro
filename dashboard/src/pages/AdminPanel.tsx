@@ -2072,40 +2072,51 @@ function AdminWalletTab({ th, loading, pages, requests, reqFilter, setReqFilter,
 
       {/* ── Direct recharge form ─────────────────────────────────────── */}
       {showDirect && (
-        <div style={{ ...card, border: `1px solid ${th.accent}40` }}>
-          <div style={{ fontWeight: 700, marginBottom: 12 }}>➕ Manual Balance Add</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        <div style={{ ...card, border: `1px solid ${th.accent}55`, background: 'linear-gradient(135deg,rgba(99,102,241,0.07) 0%,rgba(34,211,238,0.04) 100%)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+            <span style={{ fontSize: 20 }}>💳</span>
+            <span style={{ fontWeight: 700, fontSize: 15 }}>Manual Balance Add</span>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div style={{ gridColumn: '1 / -1' }}>
-              <label style={{ fontSize: 11, color: th.muted, display: 'block', marginBottom: 3 }}>Client / Page সিলেক্ট করুন</label>
-              <select style={{ ...inp, cursor: 'pointer' }} value={directForm.pageId}
+              <label style={{ fontSize: 11, color: th.muted, display: 'block', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Client / Page</label>
+              <select style={{ ...inp, cursor: 'pointer', fontWeight: 600 }} value={directForm.pageId}
                 onChange={e => setDirectForm({ ...directForm, pageId: e.target.value })}>
                 <option value="">— Page বেছে নিন —</option>
                 {pages.map(p => (
                   <option key={p.id} value={p.id}>
-                    {p.pageName || '(no name)'} — @{p.owner?.username || '?'} &nbsp;[ID:{p.id}] &nbsp;৳{(p.walletBalanceBdt ?? 0).toFixed(2)}
+                    {p.pageName || '(no name)'}  @{p.owner?.username || '?'}  [ID:{p.id}]  ৳{(p.walletBalanceBdt ?? 0).toFixed(2)}
                   </option>
                 ))}
               </select>
             </div>
             <div>
-              <label style={{ fontSize: 11, color: th.muted, display: 'block', marginBottom: 3 }}>Amount (BDT)</label>
-              <input style={inp} type="number" placeholder="500" value={directForm.amountBdt}
+              <label style={{ fontSize: 11, color: th.muted, display: 'block', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Amount (BDT)</label>
+              <input style={{ ...inp, fontWeight: 700, fontSize: 16 }} type="number" placeholder="500" value={directForm.amountBdt}
                 onChange={e => setDirectForm({ ...directForm, amountBdt: e.target.value })} />
             </div>
             <div>
-              <label style={{ fontSize: 11, color: th.muted, display: 'block', marginBottom: 3 }}>Transaction ID</label>
+              <label style={{ fontSize: 11, color: th.muted, display: 'block', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Transaction ID</label>
               <input style={inp} placeholder="bKash/Nagad TrxID" value={directForm.transactionId}
                 onChange={e => setDirectForm({ ...directForm, transactionId: e.target.value })} />
             </div>
-            <div>
-              <label style={{ fontSize: 11, color: th.muted, display: 'block', marginBottom: 3 }}>Note (optional)</label>
-              <input style={inp} placeholder="Admin note" value={directForm.note}
+            <div style={{ gridColumn: '1 / -1' }}>
+              <label style={{ fontSize: 11, color: th.muted, display: 'block', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Note (optional)</label>
+              <input style={inp} placeholder="Admin note — কিসের payment, কোন date..." value={directForm.note}
                 onChange={e => setDirectForm({ ...directForm, note: e.target.value })} />
             </div>
           </div>
-          <button style={{ ...th.btnPrimary, marginTop: 12, width: '100%', padding: '9px 0' }}
+          <button
+            style={{
+              marginTop: 16, width: '100%', padding: '13px 0',
+              background: directSaving ? th.muted : 'linear-gradient(90deg,#6366f1,#22d3ee)',
+              color: '#fff', border: 'none', borderRadius: 10, fontWeight: 800,
+              fontSize: 15, cursor: directSaving ? 'not-allowed' : 'pointer',
+              letterSpacing: '0.03em', boxShadow: directSaving ? 'none' : '0 4px 18px rgba(99,102,241,0.35)',
+              transition: 'opacity 0.2s', opacity: directSaving ? 0.6 : 1,
+            }}
             disabled={directSaving} onClick={onDirectRecharge}>
-            {directSaving ? 'Adding...' : '💰 Balance Add করুন'}
+            {directSaving ? '⏳ Adding...' : '💰 Balance Add করুন'}
           </button>
         </div>
       )}
