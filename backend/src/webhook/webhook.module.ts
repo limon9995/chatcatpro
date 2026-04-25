@@ -11,17 +11,18 @@ import { ProductsModule } from '../products/products.module';
 import { CrmModule } from '../crm/crm.module';
 import { FollowUpModule } from '../followup/followup.module';
 import { BillingModule } from '../billing/billing.module';
-// V18: Image recognition modules
 import { VisionAnalysisModule } from '../vision-analysis/vision-analysis.module';
 import { ProductMatchModule } from '../product-match/product-match.module';
 import { FallbackAiModule } from '../fallback-ai/fallback-ai.module';
 import { VisionOpsModule } from '../vision-ops/vision-ops.module';
 import { SpamCheckerModule } from '../spam-checker/spam-checker.module';
+import { MessageQueueModule } from '../message-queue/message-queue.module';
 import { WebhookController } from './webhook.controller';
 import { WebhookService } from './webhook.service';
 import { DraftOrderHandler } from './handlers/draft-order.handler';
 import { ProductInfoHandler } from './handlers/product-info.handler';
 import { NegotiationHandler } from './handlers/negotiation.handler';
+import { MessageWorker, WEBHOOK_SERVICE_TOKEN } from '../message-queue/message.worker';
 
 @Module({
   imports: [
@@ -37,12 +38,12 @@ import { NegotiationHandler } from './handlers/negotiation.handler';
     CrmModule,
     FollowUpModule,
     BillingModule,
-    // V18
     VisionAnalysisModule,
     ProductMatchModule,
     FallbackAiModule,
     VisionOpsModule,
     SpamCheckerModule,
+    MessageQueueModule,
   ],
   controllers: [WebhookController],
   providers: [
@@ -50,6 +51,12 @@ import { NegotiationHandler } from './handlers/negotiation.handler';
     DraftOrderHandler,
     ProductInfoHandler,
     NegotiationHandler,
+    // Provide WebhookService under the worker token to break circular import
+    {
+      provide: WEBHOOK_SERVICE_TOKEN,
+      useExisting: WebhookService,
+    },
+    MessageWorker,
   ],
 })
 export class WebhookModule {}

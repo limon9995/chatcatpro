@@ -34,6 +34,7 @@ import { CatalogModule } from './catalog/catalog.module';
 import { BillingModule } from './billing/billing.module';
 import { WalletModule } from './wallet/wallet.module';
 import { WhisperModule } from './whisper/whisper.module';
+import { MessageQueueModule } from './message-queue/message-queue.module';
 
 @Module({
   imports: [
@@ -84,6 +85,7 @@ import { WhisperModule } from './whisper/whisper.module';
     BillingModule,
     WalletModule,
     WhisperModule,
+    MessageQueueModule,
   ],
   controllers: [AppController],
   providers: [

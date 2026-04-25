@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { MessengerService } from '../messenger/messenger.service';
+import { MessageQueueService } from '../message-queue/message-queue.service';
 import { BotKnowledgeService } from '../bot-knowledge/bot-knowledge.service';
 import { OcrService } from '../ocr/ocr.service';
 import { OcrQueueService } from '../ocr-queue/ocr-queue.service';
@@ -40,6 +41,7 @@ export class WebhookService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly messenger: MessengerService,
+    private readonly messageQueue: MessageQueueService,
     private readonly botKnowledge: BotKnowledgeService,
     private readonly ocr: OcrService,
     private readonly ocrQueue: OcrQueueService,
@@ -129,10 +131,10 @@ export class WebhookService {
         if (!psid || event.delivery || event.read) continue;
         if (!event.message) continue;
 
-        // Process async — do NOT await (webhook must return 200 fast)
-        this.processMessage(resolvedPage as any, psid, event.message).catch((err) =>
+        // Push to persistent queue — returns immediately, worker processes async
+        await this.messageQueue.add(resolvedPage, psid, event.message).catch((err) =>
           this.logger.error(
-            `[Webhook] page=${resolvedPage.pageId} psid=${psid} unhandled: ${err}`,
+            `[Webhook] page=${resolvedPage.pageId} psid=${psid} queue error: ${err}`,
           ),
         );
       }
@@ -141,7 +143,7 @@ export class WebhookService {
 
   // ── Message router ─────────────────────────────────────────────────────────
 
-  private async processMessage(
+  async processMessage(
     page: any,
     psid: string,
     message: any,
