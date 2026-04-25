@@ -158,6 +158,27 @@ export class AdminController {
 
   // ── Wallet Management ─────────────────────────────────────────────────────
 
+  @Get('wallet')
+  getAllPagesWallet() {
+    return this.svc.getAllPagesWallet();
+  }
+
+  @Get('wallet/requests')
+  getAllRechargeRequests(@Query('status') status?: string) {
+    return this.svc.getAllRechargeRequests(status);
+  }
+
+  @Post('wallet/pricing/apply-all')
+  applyPricingToAll(@Body() b: any) {
+    return this.svc.applyPricingToAll({
+      costPerTextMsgBdt: b?.costPerTextMsgBdt !== undefined ? Number(b.costPerTextMsgBdt) : undefined,
+      costPerVoiceMsgBdt: b?.costPerVoiceMsgBdt !== undefined ? Number(b.costPerVoiceMsgBdt) : undefined,
+      costPerImageBdt: b?.costPerImageBdt !== undefined ? Number(b.costPerImageBdt) : undefined,
+      costPerImageLocalBdt: b?.costPerImageLocalBdt !== undefined ? Number(b.costPerImageLocalBdt) : undefined,
+      costPerAnalyzeBdt: b?.costPerAnalyzeBdt !== undefined ? Number(b.costPerAnalyzeBdt) : undefined,
+    });
+  }
+
   @Get('wallet/:pageId')
   getPageWallet(@Param('pageId', ParseIntPipe) pageId: number) {
     return this.svc.getPageWallet(pageId);
@@ -185,27 +206,6 @@ export class AdminController {
       costPerImageLocalBdt: b?.costPerImageLocalBdt !== undefined ? Number(b.costPerImageLocalBdt) : undefined,
       costPerAnalyzeBdt: b?.costPerAnalyzeBdt !== undefined ? Number(b.costPerAnalyzeBdt) : undefined,
     });
-  }
-
-  @Post('wallet/pricing/apply-all')
-  applyPricingToAll(@Body() b: any) {
-    return this.svc.applyPricingToAll({
-      costPerTextMsgBdt: b?.costPerTextMsgBdt !== undefined ? Number(b.costPerTextMsgBdt) : undefined,
-      costPerVoiceMsgBdt: b?.costPerVoiceMsgBdt !== undefined ? Number(b.costPerVoiceMsgBdt) : undefined,
-      costPerImageBdt: b?.costPerImageBdt !== undefined ? Number(b.costPerImageBdt) : undefined,
-      costPerImageLocalBdt: b?.costPerImageLocalBdt !== undefined ? Number(b.costPerImageLocalBdt) : undefined,
-      costPerAnalyzeBdt: b?.costPerAnalyzeBdt !== undefined ? Number(b.costPerAnalyzeBdt) : undefined,
-    });
-  }
-
-  @Get('wallet')
-  getAllPagesWallet() {
-    return this.svc.getAllPagesWallet();
-  }
-
-  @Get('wallet/requests')
-  getAllRechargeRequests(@Query('status') status?: string) {
-    return this.svc.getAllRechargeRequests(status);
   }
 
   @Post('wallet/requests/:id/approve')
