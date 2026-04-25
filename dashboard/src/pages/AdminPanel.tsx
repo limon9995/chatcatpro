@@ -2080,11 +2080,11 @@ function AdminWalletTab({ th, loading, pages, requests, reqFilter, setReqFilter,
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div style={{ gridColumn: '1 / -1' }}>
               <label style={{ fontSize: 11, color: th.muted, display: 'block', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Client / Page</label>
-              <select style={{ ...inp, cursor: 'pointer', fontWeight: 600 }} value={directForm.pageId}
+              <select style={{ ...inp, cursor: 'pointer', fontWeight: 600, background: th.bg, color: th.text }} value={directForm.pageId}
                 onChange={e => setDirectForm({ ...directForm, pageId: e.target.value })}>
-                <option value="">— Page বেছে নিন —</option>
+                <option value="" style={{ background: th.bg, color: th.muted }}>— Page বেছে নিন —</option>
                 {pages.map(p => (
-                  <option key={p.id} value={p.id}>
+                  <option key={p.id} value={p.id} style={{ background: th.bg, color: th.text }}>
                     {p.pageName || '(no name)'}  @{p.owner?.username || '?'}  [ID:{p.id}]  ৳{(p.walletBalanceBdt ?? 0).toFixed(2)}
                   </option>
                 ))}
