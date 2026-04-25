@@ -477,8 +477,9 @@ export function Toast({ message, type, onClose }: {
     error:   { bg: '#fef2f2', border: '#fca5a5', color: '#dc2626', icon: '✕' },
     success: { bg: '#f0fdf4', border: '#86efac', color: '#16a34a', icon: '✓' },
     info:    { bg: '#eef2ff', border: '#a5b4fc', color: '#4f46e5', icon: 'ℹ' },
+    warning: { bg: '#fffbeb', border: '#fcd34d', color: '#b45309', icon: '⚠️' },
   };
-  const c = colors[type || 'success'];
+  const c = colors[type as keyof typeof colors] || colors.info;
   useEffect(() => {
     const t = setTimeout(onClose, 3200);
     return () => clearTimeout(t);
