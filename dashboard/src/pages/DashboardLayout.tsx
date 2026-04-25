@@ -316,9 +316,10 @@ export function DashboardLayout({
     await loadBillingModalData();
   }, [loadBillingModalData]);
 
-  const showToast = (msg: string, type?: any) => {
+  const showToast = (msg: any, type?: any) => {
+    const text = typeof msg === 'string' ? msg : (msg?.message || String(msg || 'Unknown Error'));
     const id = Date.now();
-    setToasts(t => [...t, { msg, type: type || 'success', id }]);
+    setToasts(t => [...t, { msg: text, type: type || 'success', id }]);
   };
 
   const openSearch = useCallback(() => {

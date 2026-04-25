@@ -64,18 +64,24 @@ function ScreenFallback({ dark }: { dark: boolean }) {
 
 // Global Error Boundary to prevent white screen
 import { Component, type ReactNode, type ErrorInfo } from 'react';
-class ErrorBoundary extends Component<{ children: ReactNode; dark: boolean }, { hasError: boolean }> {
-  constructor(props: any) { super(props); this.state = { hasError: false }; }
+class ErrorBoundary extends Component<{ children: ReactNode; dark: boolean }, { hasError: boolean; errorText?: string }> {
+  constructor(props: any) { super(props); this.state = { hasError: false, errorText: '' }; }
   static getDerivedStateFromError() { return { hasError: true }; }
-  componentDidCatch(error: Error, errorInfo: ErrorInfo) { console.error('App Crash:', error, errorInfo); }
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    this.setState({ errorText: error.message || String(error) });
+    console.error('App Crash:', error, errorInfo);
+  }
   render() {
     if (this.state.hasError) {
       return (
         <div style={{ minHeight: '100vh', background: this.props.dark ? '#06060a' : '#f7f7f8', display: 'flex', alignItems: 'center', justifyContent: 'center', color: this.props.dark ? '#fff' : '#000', padding: 20, textAlign: 'center' }}>
           <div>
-            <h2>Oops! Something went wrong.</h2>
+            <h2 style={{ marginBottom: 10 }}>Oops! Something went wrong.</h2>
+            <p style={{ color: '#ef4444', marginBottom: 20, fontSize: 13, fontFamily: 'monospace' }}>
+              Error: {this.state.errorText || 'Unknown Initialization Error'}
+            </p>
             <p>Please try refreshing the page.</p>
-            <button onClick={() => window.location.reload()} style={{ marginTop: 10, padding: '10px 20px', borderRadius: 8, border: 'none', background: '#6366f1', color: '#fff', cursor: 'pointer' }}>Reload Chatcat</button>
+            <button onClick={() => window.location.reload()} style={{ marginTop: 20, padding: '10px 24px', borderRadius: 8, border: 'none', background: '#6366f1', color: '#fff', cursor: 'pointer', fontWeight: 700 }}>Reload Chatcat</button>
           </div>
         </div>
       );
