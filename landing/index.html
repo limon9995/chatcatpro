@@ -11,11 +11,11 @@
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#05050d;--surface:#0c0c18;--surface2:#13131f;
-  --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.12);
-  --text:#f0f0f8;--muted:rgba(240,240,248,0.44);
-  --accent:#5b4cf5;--accent2:#8b5cf6;--accent3:#06b6d4;
-  --gold:#f59e0b;--green:#10b981;--radius:18px;
+  --bg:#080b14;--surface:#0f1422;--surface2:#161c2e;
+  --border:rgba(255,255,255,0.08);--border2:rgba(255,255,255,0.13);
+  --text:#f1f5f9;--muted:rgba(148,163,184,0.7);
+  --accent:#6366f1;--accent2:#818cf8;--accent3:#22d3ee;
+  --gold:#f59e0b;--green:#10b981;--amber:#f59e0b;--radius:18px;
 }
 html{scroll-behavior:smooth;scroll-padding-top:80px}
 body{font-family:'DM Sans','Noto Sans Bengali',system-ui,sans-serif;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;overflow-x:hidden}
@@ -24,7 +24,7 @@ body{font-family:'DM Sans','Noto Sans Bengali',system-ui,sans-serif;background:v
 ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:rgba(91,76,245,.3);border-radius:99px}
 
 /* ══ Nav ══ */
-nav{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:100;width:calc(100% - 48px);max-width:1100px;padding:0 20px;height:54px;display:flex;justify-content:space-between;align-items:center;background:rgba(5,5,13,0.72);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:1px solid var(--border2);border-radius:14px;box-shadow:0 4px 24px rgba(0,0,0,0.4),inset 0 1px 0 rgba(255,255,255,0.06)}
+nav{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:100;width:calc(100% - 48px);max-width:1100px;padding:0 20px;height:54px;display:flex;justify-content:space-between;align-items:center;background:rgba(8,11,20,0.76);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:1px solid var(--border2);border-radius:14px;box-shadow:0 4px 24px rgba(0,0,0,0.4),inset 0 1px 0 rgba(255,255,255,0.06)}
 .logo{display:flex;align-items:center;gap:10px}
 .logo-icon{width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:900;color:#fff;box-shadow:0 2px 12px rgba(91,76,245,.5)}
 .logo-text{font-size:16px;font-weight:800;letter-spacing:-0.03em}
@@ -41,9 +41,9 @@ nav{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:100;widt
 
 /* Mesh gradient background */
 .hero::before{content:'';position:absolute;inset:0;background:
-  radial-gradient(ellipse 80% 60% at 20% 10%,rgba(91,76,245,.22),transparent),
-  radial-gradient(ellipse 60% 50% at 80% 20%,rgba(139,92,246,.16),transparent),
-  radial-gradient(ellipse 50% 40% at 50% 80%,rgba(6,182,212,.10),transparent);pointer-events:none}
+  radial-gradient(ellipse 80% 60% at 20% 10%,rgba(99,102,241,.20),transparent),
+  radial-gradient(ellipse 60% 50% at 80% 20%,rgba(34,211,238,.12),transparent),
+  radial-gradient(ellipse 50% 40% at 50% 80%,rgba(99,102,241,.08),transparent);pointer-events:none}
 
 .orb{position:absolute;border-radius:50%;filter:blur(90px);pointer-events:none;will-change:transform}
 .orb-1{width:580px;height:580px;top:-120px;left:-120px;background:radial-gradient(circle,rgba(91,76,245,.28),transparent 65%);animation:orbFloat 9s ease-in-out infinite}
@@ -58,7 +58,7 @@ nav{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:100;widt
 @keyframes pulse{0%,100%{opacity:1;box-shadow:0 0 10px #4ade80}50%{opacity:.7;box-shadow:0 0 20px #4ade80,0 0 40px rgba(74,222,128,.3)}}
 
 .hero h1{font-size:clamp(38px,7.5vw,84px);font-weight:900;letter-spacing:-0.045em;line-height:1.0;margin-bottom:24px;animation:fadeUp .6s .1s ease both}
-.hero h1 .grad{background:linear-gradient(135deg,#818cf8 0%,#c084fc 40%,#fb923c 80%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.hero h1 .grad{background:linear-gradient(135deg,#6366f1 0%,#22d3ee 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
 .hero-sub{font-size:clamp(15px,2.2vw,19px);color:var(--muted);max-width:600px;line-height:1.75;margin-bottom:44px;animation:fadeUp .6s .2s ease both}
 .hero-btns{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;animation:fadeUp .6s .3s ease both}
 .btn-primary{padding:14px 30px;border-radius:11px;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-weight:700;font-size:15px;text-decoration:none;transition:all .22s;box-shadow:0 4px 24px rgba(91,76,245,.5);display:inline-flex;align-items:center;gap:9px}
@@ -274,6 +274,8 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
   .step{border-right:none;border-bottom:1px solid var(--border)}
   .step:last-child{border-bottom:none}
   .trusted{gap:6px}
+  #value .pricing-grid-2{grid-template-columns:1fr!important}
+  #value [style*="grid-template-columns:1fr 1fr"]{grid-template-columns:1fr!important}
 }
 </style>
 </head>
@@ -306,25 +308,26 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
 
   <div class="hero-badge fade-up">
     <div class="hero-badge-dot"></div>
-    Beta চলছে — সীমিত সংখ্যক client নেওয়া হচ্ছে
+    বাংলাদেশের Facebook sellers এর পছন্দের platform
   </div>
 
   <h1 class="fade-up delay-1">
-    Facebook Commerce<br/><span class="grad">Autopilot এ চলুক</span>
+    Facebook এ Business করেন?<br/><span class="grad">বটকে কাজে লাগান — আপনি ঘুমান</span>
   </h1>
 
   <p class="hero-sub fade-up delay-2">
-    Messenger দিয়ে automatic order নিন। Screenshot থেকে product detect করুন।
-    Courier থেকে accounting — সব এক dashboard এ।
+    Order নেওয়া, reply করা, courier booking — সব automatic।<br/>
+    Courier, Accounting, CRM, Analytics — সব <strong style="color:#22d3ee">FREE</strong>।<br/>
+    শুধু <strong style="color:#f1f5f9">৳৬৯৯/মাস</strong> + AI reply চার্জ।
   </p>
 
   <div class="hero-btns fade-up delay-3">
     <a id="hero-signup" href="#" class="btn-primary">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-      Dashboard এ যান
+      শুরু করুন →
     </a>
-    <a href="#features" class="btn-ghost">Features দেখুন →</a>
-    <a href="https://www.facebook.com/Chatcatpro" target="_blank" rel="noopener" class="btn-ghost">Free Demo নিন</a>
+    <a href="#pricing" class="btn-ghost">Pricing দেখুন ↓</a>
+    <a href="https://wa.me/8801720450797" target="_blank" rel="noopener" class="btn-ghost">💬 WhatsApp করুন</a>
   </div>
 
   <!-- Dashboard mockup with floating badges -->
@@ -431,6 +434,108 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
     <div class="stat-label">Courier Integrated</div>
   </div>
 </div>
+
+<!-- ══ FREE Features Highlight ══ -->
+<section style="padding:80px 5%;background:rgba(99,102,241,0.04);border-top:1px solid rgba(99,102,241,0.15);border-bottom:1px solid rgba(99,102,241,0.15)" id="value">
+  <div style="max-width:1000px;margin:0 auto">
+    <div style="text-align:center;margin-bottom:44px">
+      <div style="display:inline-block;background:rgba(34,211,238,0.1);border:1px solid rgba(34,211,238,0.3);border-radius:999px;padding:6px 20px;font-size:12.5px;font-weight:700;color:#22d3ee;margin-bottom:16px">💰 What's Included</div>
+      <h2 style="font-size:clamp(26px,4.5vw,44px);font-weight:900;letter-spacing:-0.04em;line-height:1.1;margin-bottom:12px">৳৬৯৯/মাসে যা যা পাচ্ছেন —<br/><span style="color:#22d3ee">সব included, সব FREE</span></h2>
+      <p style="font-size:16px;color:var(--muted);max-width:480px;margin:0 auto;line-height:1.7">Platform fee এর মধ্যেই সব major feature।<br/>শুধু AI reply ব্যবহার করলে সামান্য usage চার্জ।</p>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start">
+
+      <!-- Left: Feature checklist -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:32px 28px">
+        <div style="font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:20px">Platform Fee এ যা পাচ্ছেন</div>
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;align-items:flex-start;gap:12px">
+            <div style="width:22px;height:22px;border-radius:50%;background:rgba(16,185,129,0.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;font-size:12px">✅</div>
+            <div><div style="font-weight:700;font-size:14px">Smart Bot — ২৪/৭ customer reply</div><div style="font-size:12px;color:var(--muted);margin-top:2px">Customer message করলে bot product info দেয়, order নেয়</div></div>
+          </div>
+          <div style="display:flex;align-items:flex-start;gap:12px">
+            <div style="width:22px;height:22px;border-radius:50%;background:rgba(16,185,129,0.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;font-size:12px">✅</div>
+            <div><div style="font-weight:700;font-size:14px">Order Management — নিজেই note করে</div><div style="font-size:12px;color:var(--muted);margin-top:2px">Order list, status tracking, confirm — সব dashboard এ</div></div>
+          </div>
+          <div style="display:flex;align-items:flex-start;gap:12px">
+            <div style="width:22px;height:22px;border-radius:50%;background:rgba(16,185,129,0.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;font-size:12px">✅</div>
+            <div><div style="font-weight:700;font-size:14px">Courier Booking — Pathao, Steadfast, RedX</div><div style="font-size:12px;color:var(--muted);margin-top:2px">এক জায়গা থেকে bulk booking, tracking, status</div></div>
+          </div>
+          <div style="display:flex;align-items:flex-start;gap:12px">
+            <div style="width:22px;height:22px;border-radius:50%;background:rgba(16,185,129,0.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;font-size:12px">✅</div>
+            <div><div style="font-weight:700;font-size:14px">Accounting — হিসাব-নিকাশ automatic</div><div style="font-size:12px;color:var(--muted);margin-top:2px">Revenue, expenses, returns, profit — সব auto sync</div></div>
+          </div>
+          <div style="display:flex;align-items:flex-start;gap:12px">
+            <div style="width:22px;height:22px;border-radius:50%;background:rgba(16,185,129,0.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;font-size:12px">✅</div>
+            <div><div style="font-weight:700;font-size:14px">Customer CRM — পুরোনো customer track</div><div style="font-size:12px;color:var(--muted);margin-top:2px">Order history, tags, best buyers, analytics</div></div>
+          </div>
+          <div style="display:flex;align-items:flex-start;gap:12px">
+            <div style="width:22px;height:22px;border-radius:50%;background:rgba(16,185,129,0.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;font-size:12px">✅</div>
+            <div><div style="font-weight:700;font-size:14px">Analytics — কোন product বেশি বিকাচ্ছে</div><div style="font-size:12px;color:var(--muted);margin-top:2px">Week vs last week growth, best products ranking</div></div>
+          </div>
+          <div style="display:flex;align-items:flex-start;gap:12px">
+            <div style="width:22px;height:22px;border-radius:50%;background:rgba(16,185,129,0.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;font-size:12px">✅</div>
+            <div><div style="font-weight:700;font-size:14px">Broadcast — সবাইকে একসাথে message</div><div style="font-size:12px;color:var(--muted);margin-top:2px">নতুন collection launch? একটা click এই সবাই জানবে</div></div>
+          </div>
+          <div style="display:flex;align-items:flex-start;gap:12px">
+            <div style="width:22px;height:22px;border-radius:50%;background:rgba(16,185,129,0.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;font-size:12px">✅</div>
+            <div><div style="font-weight:700;font-size:14px">Product Catalog + OCR — ছবি দেখলেই price বলবে</div><div style="font-size:12px;color:var(--muted);margin-top:2px">Public catalog page, screenshot থেকে product detect</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: Cost breakdown + example -->
+      <div style="display:flex;flex-direction:column;gap:16px">
+
+        <!-- AI Usage (small extra charge) -->
+        <div style="background:var(--surface);border:1px solid rgba(34,211,238,0.2);border-radius:18px;padding:28px">
+          <div style="font-size:13px;font-weight:700;color:#22d3ee;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:16px">⚡ শুধু AI Reply এর ছোট charge</div>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-radius:10px;background:rgba(255,255,255,0.04);border:1px solid var(--border)">
+              <div style="font-size:13px;font-weight:600">💬 Text reply</div>
+              <div style="font-size:15px;font-weight:900;color:#10b981">৳০.০৫</div>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-radius:10px;background:rgba(255,255,255,0.04);border:1px solid var(--border)">
+              <div style="font-size:13px;font-weight:600">🎙️ Voice note (STT)</div>
+              <div style="font-size:15px;font-weight:900;color:#10b981">৳০.৫০</div>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-radius:10px;background:rgba(255,255,255,0.04);border:1px solid var(--border)">
+              <div style="font-size:13px;font-weight:600">🖼️ Customer image check</div>
+              <div style="font-size:15px;font-weight:900;color:#10b981">৳১.২০</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Real example -->
+        <div style="background:linear-gradient(135deg,rgba(16,185,129,0.10),rgba(34,211,238,0.06));border:1px solid rgba(16,185,129,0.25);border-radius:18px;padding:28px">
+          <div style="font-size:13px;font-weight:700;color:#34d399;margin-bottom:6px">📊 Real Example</div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:18px">মাসে ৫০০ text reply পাঠালে কত লাগবে?</div>
+          <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:18px">
+            <div style="display:flex;justify-content:space-between;font-size:13px">
+              <span style="color:var(--muted)">Platform Fee</span>
+              <span style="font-weight:700">৳৬৯৯</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:13px">
+              <span style="color:var(--muted)">৫০০ AI reply × ৳০.০৫</span>
+              <span style="font-weight:700">৳২৫</span>
+            </div>
+            <div style="height:1px;background:rgba(255,255,255,0.08);margin:4px 0"></div>
+            <div style="display:flex;justify-content:space-between">
+              <span style="font-weight:800;font-size:15px">মোট/মাস</span>
+              <span style="font-weight:900;font-size:20px;color:#34d399">৳৭২৪</span>
+            </div>
+          </div>
+          <div style="font-size:12px;color:var(--muted);line-height:1.7">Courier, Accounting, CRM, Analytics — এগুলোর জন্য কোনো আলাদা চার্জ নেই।</div>
+        </div>
+
+        <!-- CTA -->
+        <a id="value-signup" href="#" style="display:block;text-align:center;padding:15px;background:linear-gradient(135deg,var(--accent),var(--accent3));color:#fff;border-radius:12px;font-weight:800;font-size:15px;text-decoration:none;box-shadow:0 4px 20px rgba(99,102,241,0.4);transition:all .2s">মাত্র ৳৬৯৯/মাসে শুরু করুন →</a>
+      </div>
+
+    </div>
+  </div>
+</section>
 
 <!-- ══ Live 3D Demo ══ -->
 <section class="demo-sec" id="live-demo">
@@ -631,37 +736,37 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
     <h2 class="section-title">যারা ব্যবহার করছেন,<br>তারা কী বলেন</h2>
     <div class="testimonials-grid">
 
-      <div class="tcard">
-        <div class="tcard-stars">★★★★★</div>
-        <div class="tcard-text">"আগে রাত ২টা পর্যন্ত manually order নিতাম। এখন bot সব করে, আমি শুধু confirm করি। সত্যিই অবিশ্বাস্য।"</div>
-        <div class="tcard-author">
+      <div class="tcard" style="border-left:3px solid rgba(99,102,241,0.5)">
+        <div style="font-size:28px;color:rgba(99,102,241,0.4);margin-bottom:12px;line-height:1">"</div>
+        <div class="tcard-text" style="font-style:normal;font-size:15px;line-height:1.75">আগে প্রতিদিন রাত ২টা পর্যন্ত manually order নিতাম। এখন bot সব করে, আমি শুধু confirm করি।</div>
+        <div class="tcard-author" style="margin-top:18px">
           <div class="tcard-avatar">র</div>
           <div>
-            <div class="tcard-name">Rahim Enterprise</div>
+            <div class="tcard-name">রহিম এন্টারপ্রাইজ</div>
             <div class="tcard-sub">Fashion & Clothing, Dhaka</div>
           </div>
         </div>
       </div>
 
-      <div class="tcard">
-        <div class="tcard-stars">★★★★★</div>
-        <div class="tcard-text">"OCR feature টা আমার business বদলে দিয়েছে। Customer screenshot পাঠালে product automatically detect হয়ে যায়।"</div>
-        <div class="tcard-author">
-          <div class="tcard-avatar">ক</div>
+      <div class="tcard" style="border-left:3px solid rgba(34,211,238,0.5)">
+        <div style="font-size:28px;color:rgba(34,211,238,0.4);margin-bottom:12px;line-height:1">"</div>
+        <div class="tcard-text" style="font-style:normal;font-size:15px;line-height:1.75">Customer ছবি পাঠায়, bot নিজেই product বের করে reply দেয়। আমাকে কিছু করতে হয় না।</div>
+        <div class="tcard-author" style="margin-top:18px">
+          <div class="tcard-avatar" style="background:linear-gradient(135deg,#0891b2,#06b6d4)">ক</div>
           <div>
-            <div class="tcard-name">Karim Fashion House</div>
+            <div class="tcard-name">করিম ফ্যাশন হাউস</div>
             <div class="tcard-sub">Online Boutique, Chittagong</div>
           </div>
         </div>
       </div>
 
-      <div class="tcard">
-        <div class="tcard-stars">★★★★★</div>
-        <div class="tcard-text">"Courier booking এখন একটু সময়ের ব্যাপার। আগে প্রতিটা courier site আলাদা আলাদা গিয়ে করতাম। এখন সব এখানে।"</div>
-        <div class="tcard-author">
-          <div class="tcard-avatar">ফ</div>
+      <div class="tcard" style="border-left:3px solid rgba(16,185,129,0.5)">
+        <div style="font-size:28px;color:rgba(16,185,129,0.4);margin-bottom:12px;line-height:1">"</div>
+        <div class="tcard-text" style="font-style:normal;font-size:15px;line-height:1.75">Courier booking, accounting, order list — সব এক জায়গায়। আলাদা আলাদা site এ যেতে হয় না।</div>
+        <div class="tcard-author" style="margin-top:18px">
+          <div class="tcard-avatar" style="background:linear-gradient(135deg,#059669,#10b981)">ফ</div>
           <div>
-            <div class="tcard-name">Fatema Collection</div>
+            <div class="tcard-name">ফাতেমা কালেকশন</div>
             <div class="tcard-sub">Cosmetics & Beauty, Rajshahi</div>
           </div>
         </div>
@@ -685,7 +790,7 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
       <div class="pricing-card featured" style="padding:32px">
         <div style="position:absolute;top:-60px;right:-60px;width:220px;height:220px;background:radial-gradient(circle,rgba(91,76,245,.18),transparent 70%);pointer-events:none"></div>
         <div class="badge-popular">① Monthly Platform Fee</div>
-        <div class="pricing-price" style="margin-top:12px">৳৫০০<span style="font-size:17px;font-weight:500;color:var(--muted)">/মাস</span></div>
+        <div class="pricing-price" style="margin-top:12px">৳৬৯৯<span style="font-size:17px;font-weight:500;color:var(--muted)">/মাস</span></div>
         <div class="pricing-period">প্রতি Facebook Page এর জন্য</div>
         <ul class="pricing-features">
           <li>AI Bot Automation (GPT-4o-mini)</li>
@@ -771,28 +876,28 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
 
     <!-- ── Real cost example ── -->
     <div style="background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.2);border-radius:16px;padding:22px 28px;margin-bottom:28px;text-align:left">
-      <div style="font-weight:800;font-size:14px;color:#34d399;margin-bottom:4px">📊 Real Example — মাসে ৫০০ customer হলে কত লাগবে?</div>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:14px">ধরুন প্রতি customer গড়ে ১–২টা photo পাঠায় এবং ৫–৬টা text message করে</div>
+      <div style="font-weight:800;font-size:14px;color:#34d399;margin-bottom:4px">📊 Real Example — মাসে ৫০০ text reply হলে কত লাগবে?</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:14px">Courier, Accounting, CRM, Analytics — এগুলোর জন্য কোনো আলাদা চার্জ নেই</div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px">
         <div style="background:rgba(255,255,255,.04);border-radius:10px;padding:12px 14px">
           <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Platform Fee</div>
-          <div style="font-weight:800;font-size:16px">৳৫০০</div>
+          <div style="font-weight:800;font-size:16px">৳৬৯৯</div>
           <div style="font-size:11px;color:var(--muted)">fixed/মাস</div>
         </div>
         <div style="background:rgba(255,255,255,.04);border-radius:10px;padding:12px 14px">
-          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">~২,৭৫০ Text AI Reply</div>
-          <div style="font-weight:800;font-size:16px">৳১৩৮</div>
-          <div style="font-size:11px;color:var(--muted)">৫০০ × ৫.৫ msg × ৳০.০৫</div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">৫০০ AI text reply</div>
+          <div style="font-weight:800;font-size:16px">৳২৫</div>
+          <div style="font-size:11px;color:var(--muted)">৫০০ × ৳০.০৫</div>
         </div>
         <div style="background:rgba(255,255,255,.04);border-radius:10px;padding:12px 14px">
-          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">~৭৫০ Customer Photo</div>
-          <div style="font-weight:800;font-size:16px">৳৯৭৫</div>
-          <div style="font-size:11px;color:var(--muted)">৮০% Local ৳১.২০ + ২০% API ৳১.৭০</div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Courier + Accounting</div>
+          <div style="font-weight:800;font-size:16px">৳০</div>
+          <div style="font-size:11px;color:var(--muted)">সম্পূর্ণ FREE</div>
         </div>
-        <div style="background:linear-gradient(135deg,rgba(91,76,245,.15),rgba(139,92,246,.1));border:1px solid rgba(91,76,245,.3);border-radius:10px;padding:12px 14px">
+        <div style="background:linear-gradient(135deg,rgba(99,102,241,.15),rgba(34,211,238,.1));border:1px solid rgba(99,102,241,.3);border-radius:10px;padding:12px 14px">
           <div style="font-size:11px;color:#a5b4fc;margin-bottom:4px">মোট খরচ/মাস</div>
-          <div style="font-weight:900;font-size:20px">৳১,৬১৩</div>
-          <div style="font-size:11px;color:#a5b4fc">৫০০ + ১৩৮ + ৯৭৫</div>
+          <div style="font-weight:900;font-size:20px">৳৭২৪</div>
+          <div style="font-size:11px;color:#a5b4fc">৬৯৯ + ২৫ মাত্র!</div>
         </div>
       </div>
     </div>
@@ -802,7 +907,7 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
       <div style="font-size:28px">💬</div>
       <div style="flex:1;min-width:200px">
         <div style="font-weight:800;font-size:14.5px;color:var(--text);margin-bottom:4px">শুরু করতে WhatsApp করুন</div>
-        <div style="font-size:13px;color:var(--muted);line-height:1.6">৳৫০০ monthly fee + wallet recharge — bKash/Nagad-এ payment। ২৪ঘণ্টার মধ্যে activate।</div>
+        <div style="font-size:13px;color:var(--muted);line-height:1.6">৳৬৯৯ monthly fee + wallet recharge — bKash/Nagad-এ payment। ২৪ঘণ্টার মধ্যে activate।</div>
       </div>
       <div style="display:flex;flex-direction:column;gap:8px;flex-shrink:0">
         <a href="https://wa.me/8801720450797" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:7px;padding:11px 22px;background:var(--accent);color:#fff;border-radius:10px;font-weight:700;font-size:13.5px;text-decoration:none;white-space:nowrap;box-shadow:0 2px 12px rgba(91,76,245,.35);transition:all .15s">
@@ -818,15 +923,15 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
 
 <!-- ══ CTA ══ -->
 <div class="cta-section" id="contact">
-  <h2>আজকেই শুরু করুন</h2>
-  <p>Free demo নিন। Live দেখান কীভাবে আপনার business automation হবে।</p>
+  <h2>এখনই শুরু করুন</h2>
+  <p>প্রথম মাসে কোনো ঝামেলা নেই।<br/>কাজ না হলে cancel করুন — কোনো প্রশ্ন নেই।</p>
   <div style="display:flex;gap:14px;justify-content:center;flex-wrap:wrap;position:relative">
     <a id="cta-signup" href="#" class="btn-primary">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-      Sign Up করুন
+      ফ্রিতে শুরু করুন
     </a>
+    <a href="https://wa.me/8801720450797" target="_blank" rel="noopener" class="btn-ghost">💬 WhatsApp এ জিজ্ঞেস করুন</a>
     <a id="cta-login" href="#" class="btn-ghost">Login করুন</a>
-    <a href="https://www.facebook.com/Chatcatpro" target="_blank" rel="noopener" class="btn-ghost">Demo নিন →</a>
   </div>
   <p style="margin-top:20px;font-size:13.5px;opacity:.6;position:relative">যোগাযোগ: <a href="mailto:info@chatcat.pro" style="color:#a5b4fc;text-decoration:none;font-weight:600">info@chatcat.pro</a></p>
 </div>
@@ -887,7 +992,7 @@ const DASHBOARD_URL = (function() {
   var el = document.getElementById(id);
   if (el) { el.href = DASHBOARD_URL + '/?mode=login'; el.target = '_top'; }
 });
-['nav-signup','cta-signup','hero-signup'].forEach(function(id) {
+['nav-signup','cta-signup','hero-signup','value-signup'].forEach(function(id) {
   var el = document.getElementById(id);
   if (el) { el.href = DASHBOARD_URL + '/?mode=signup'; el.target = '_top'; }
 });
