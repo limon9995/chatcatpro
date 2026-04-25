@@ -9,10 +9,12 @@ export class OpenAIVisionProvider implements VisionAnalysisProvider {
   private readonly logger = new Logger(OpenAIVisionProvider.name);
   private readonly apiKey: string;
   private readonly model: string;
+  private readonly confidenceThreshold: number;
 
   constructor() {
     this.apiKey = process.env.OPENAI_API_KEY ?? '';
     this.model = process.env.VISION_MODEL ?? 'gpt-4o';
+    this.confidenceThreshold = Number(process.env.VISION_CONFIDENCE_THRESHOLD ?? 0.15);
   }
 
   private buildPrompt(multi: boolean): string {
@@ -38,7 +40,8 @@ Required JSON format:
 }
 
 Rules:
-- If images are blurry or not fashion products, set confidence <= 0.2
+- If images are extremely blurry or definitely not fashion products, set confidence <= 0.1
+- For full-body model shots, focus on the clothing details and maintain high confidence if product is clear
 - Do NOT guess gender unless clearly evident from the product style
 - Be honest about uncertainty — low confidence is better than wrong answer
 - category "non_clothing" means the image is not a clothing product`;

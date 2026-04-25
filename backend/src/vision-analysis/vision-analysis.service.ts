@@ -19,7 +19,7 @@ export class VisionAnalysisService {
     private readonly localProvider: LocalVisionProvider,
   ) {
     const raw = (process.env.VISION_PROVIDER ?? '').toLowerCase().trim();
-    this.confidenceThreshold = Number(process.env.VISION_CONFIDENCE_THRESHOLD ?? 0.35);
+    this.confidenceThreshold = Number(process.env.VISION_CONFIDENCE_THRESHOLD ?? 0.15);
 
     if (raw === 'openai') this.mode = 'openai';
     else if (raw === 'local') this.mode = 'local';
