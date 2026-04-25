@@ -70,7 +70,6 @@ export function LoginPage({ dark, setDark, onLogin, onSignup, onForgotPassword }
       position: 'relative', overflow: 'hidden',
     }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&family=Noto+Sans+Bengali:wght@400;500;600;700;800&display=swap');
         @keyframes fadeUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:none; } }
         @keyframes spin { to { transform:rotate(360deg); } }
         .lcard { animation: fadeUp .4s cubic-bezier(.22,1,.36,1) forwards; }

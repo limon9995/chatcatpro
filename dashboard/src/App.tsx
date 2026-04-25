@@ -33,9 +33,11 @@ function normalizePathname(pathname: string) {
 function replaceUrl(params: URLSearchParams) {
   const query = params.toString();
   const nextPath = normalizePathname(window.location.pathname);
-  const safePath = nextPath === '/' ? '/' : '/';
+  const safePath = nextPath; // Fixed: use current path for deep link support
   const next = query ? `${safePath}?${query}` : safePath;
-  window.history.replaceState({}, '', next);
+  if (next !== window.location.pathname + window.location.search) {
+    window.history.replaceState({}, '', next);
+  }
 }
 
 function ScreenFallback({ dark }: { dark: boolean }) {

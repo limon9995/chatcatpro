@@ -7,6 +7,19 @@
     <title>dashboard</title>
     <script>
       (function () {
+        // Auto-reload on script load failure (common during redeploys)
+        window.addEventListener('error', function (e) {
+          if (e.target && (e.target.tagName === 'SCRIPT' || e.target.tagName === 'LINK')) {
+            console.warn('Asset load failed, checking for updates...', e.target.src || e.target.href);
+            var lastReload = sessionStorage.getItem('last_asset_reload') || 0;
+            var now = Date.now();
+            if (now - lastReload > 10000) {
+              sessionStorage.setItem('last_asset_reload', now);
+              window.location.reload();
+            }
+          }
+        }, true);
+
         try {
           var path = String(window.location.pathname || '/');
           var normalized = path
