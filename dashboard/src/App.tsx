@@ -63,7 +63,7 @@ function ScreenFallback({ dark }: { dark: boolean }) {
 }
 
 // Global Error Boundary to prevent white screen
-import { Component, ReactNode, ErrorInfo } from 'react';
+import { Component, type ReactNode, type ErrorInfo } from 'react';
 class ErrorBoundary extends Component<{ children: ReactNode; dark: boolean }, { hasError: boolean }> {
   constructor(props: any) { super(props); this.state = { hasError: false }; }
   static getDerivedStateFromError() { return { hasError: true }; }
