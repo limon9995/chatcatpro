@@ -2075,10 +2075,17 @@ function AdminWalletTab({ th, loading, pages, requests, reqFilter, setReqFilter,
         <div style={{ ...card, border: `1px solid ${th.accent}40` }}>
           <div style={{ fontWeight: 700, marginBottom: 12 }}>➕ Manual Balance Add</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            <div>
-              <label style={{ fontSize: 11, color: th.muted, display: 'block', marginBottom: 3 }}>Page ID (DB id)</label>
-              <input style={inp} placeholder="যেমন: 3" value={directForm.pageId}
-                onChange={e => setDirectForm({ ...directForm, pageId: e.target.value })} />
+            <div style={{ gridColumn: '1 / -1' }}>
+              <label style={{ fontSize: 11, color: th.muted, display: 'block', marginBottom: 3 }}>Client / Page সিলেক্ট করুন</label>
+              <select style={{ ...inp, cursor: 'pointer' }} value={directForm.pageId}
+                onChange={e => setDirectForm({ ...directForm, pageId: e.target.value })}>
+                <option value="">— Page বেছে নিন —</option>
+                {pages.map(p => (
+                  <option key={p.id} value={p.id}>
+                    {p.pageName || '(no name)'} — @{p.owner?.username || '?'} &nbsp;[ID:{p.id}] &nbsp;৳{(p.walletBalanceBdt ?? 0).toFixed(2)}
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
               <label style={{ fontSize: 11, color: th.muted, display: 'block', marginBottom: 3 }}>Amount (BDT)</label>
