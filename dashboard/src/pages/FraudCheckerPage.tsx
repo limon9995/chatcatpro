@@ -40,7 +40,8 @@ function RiskCard({ result, th }: { result: SpamResult; th: Theme }) {
   const darkBg = th.bg === '#111827' || th.bg?.includes('1f2937');
   const cardBg = darkBg ? th.surface : cfg.bg;
   const borderColor = darkBg ? cfg.color + '60' : cfg.border;
-  const subText = darkBg ? th.textSub ?? '#cbd5e1' : '#374151';
+  const subText = darkBg ? '#94a3b8' : '#4b5563';
+  const strongText = darkBg ? '#e2e8f0' : '#111827';
 
   return (
     <div style={{
@@ -52,7 +53,7 @@ function RiskCard({ result, th }: { result: SpamResult; th: Theme }) {
         <div>
           <div style={{ fontWeight: 900, fontSize: 20, color: cfg.color, letterSpacing: 0.5 }}>{cfg.label}</div>
           <div style={{ fontSize: 12.5, color: subText, marginTop: 3, fontWeight: 500 }}>
-            Risk Score: <strong style={{ color: th.text }}>{result.score}/100</strong> · Source: <strong style={{ color: th.text }}>{result.source}</strong>
+            Risk Score: <strong style={{ color: strongText }}>{result.score}/100</strong> · Source: <strong style={{ color: strongText }}>{result.source}</strong>
           </div>
         </div>
       </div>
