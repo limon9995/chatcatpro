@@ -350,7 +350,7 @@ export class VisionOpsService {
 
     if (attrs.confidence < 0.05) {
       throw new HttpException(
-        `[DEBUG] conf=${attrs.confidence} | ${(attrs.rawDescription ?? '').slice(0, 120)}`,
+        'AI ছবিটা analyze করতে পারেনি। ছবিটা আবার upload করুন বা অন্য একটা ছবি try করুন।',
         HttpStatus.UNPROCESSABLE_ENTITY,
       );
     }

@@ -24,6 +24,7 @@ export class VisionAnalysisService {
     if (raw === 'openai') this.mode = 'openai';
     else if (raw === 'local') this.mode = 'local';
     else if (raw === 'local-with-fallback') this.mode = 'local-with-fallback';
+    else if (process.env.OPENAI_API_KEY) this.mode = 'openai'; // auto-detect when key is present
     else this.mode = 'mock';
 
     // Simple single-provider for non-fallback modes
