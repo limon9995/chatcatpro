@@ -48,7 +48,12 @@ export function useApi() {
     const token = localStorage.getItem('dfbot_token') || '';
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (token && !opts?.skipAuth) headers['Authorization'] = `Bearer ${token}`;
-    const res = await fetch(url, { headers, ...opts });
+    let res: Response;
+    try {
+      res = await fetch(url, { headers, ...opts });
+    } catch {
+      throw new Error('সার্ভারে সংযোগ করা যাচ্ছে না। ইন্টারনেট চেক করুন বা একটু পরে আবার চেষ্টা করুন।');
+    }
     if (!res.ok) {
       // 401 → token missing or expired → clear and force re-login
       if (res.status === 401 && !opts?.skipAuth) {

@@ -29,7 +29,7 @@ import { SpamCheckerService } from '../spam-checker/spam-checker.service';
 import { GlobalSettingsService } from '../common/global-settings.service';
 import { SkipThrottle } from '@nestjs/throttler';
 
-@SkipThrottle({ global: true, auth: true })
+@SkipThrottle({ global: true, auth: true, chat: true })
 @Controller('client-dashboard')
 @UseGuards(AuthGuard)
 export class ClientDashboardController {
