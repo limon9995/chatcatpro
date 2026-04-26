@@ -77,9 +77,16 @@ function parseReferenceImages(value: string | null | undefined): string[] {
     .filter((url, index, all) => all.indexOf(url) === index);
 }
 
-function extractYouTubeId(url: string): string | null {
-  const m = url?.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/);
-  return m?.[1] ?? null;
+function getVideoEmbedUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  const ytMatch = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/);
+  if (ytMatch?.[1]) {
+    return `https://www.youtube.com/embed/${ytMatch[1]}`;
+  }
+  if (url.includes('facebook.com') || url.includes('fb.watch')) {
+    return `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(url)}&show_text=false`;
+  }
+  return null;
 }
 
 function UniquenessCard({ data, hidden, onHide, th, onApplyMode }: {
@@ -404,7 +411,7 @@ export function ProductsPage({ th, pageId, onToast }: {
         <div style={{ ...th.card, border: `1.5px solid ${th.accent}44` }}>
           <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 16 }}>{copy('Add New Product', 'Add New Product')}</div>
           {(() => {
-            const newYtId = extractYouTubeId(newP.videoUrl);
+            const newVideoEmbedUrl = getVideoEmbedUrl(newP.videoUrl);
             return (
               <>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(160px,1fr))', gap: 12 }}>
@@ -546,10 +553,10 @@ export function ProductsPage({ th, pageId, onToast }: {
               </div>
             </div>
           )}
-          {newYtId && (
+          {newVideoEmbedUrl && (
             <div style={{ marginTop: 12, borderRadius: 12, overflow: 'hidden', aspectRatio: '16/9', background: '#000', border: `1px solid ${th.border}` }}>
               <iframe
-                src={`https://www.youtube.com/embed/${newYtId}`}
+                src={newVideoEmbedUrl}
                 style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
                 allowFullScreen
                 title="new-product-video-preview"
@@ -687,7 +694,7 @@ export function ProductsPage({ th, pageId, onToast }: {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 14 }}>
             {filtered.map(p => {
               const isEditing = editId === p.id;
-              const ytId = extractYouTubeId(editData.videoUrl ?? p.videoUrl ?? '');
+              const videoEmbedUrl = getVideoEmbedUrl(editData.videoUrl ?? p.videoUrl ?? '');
               const referenceCount = parseReferenceImages(p.referenceImagesJson).length;
 
               return (
@@ -843,9 +850,9 @@ export function ProductsPage({ th, pageId, onToast }: {
                           <button type="button" style={{ ...th.btnSmGhost, marginTop: 6 }} onClick={() => loadVideoGuide(editData.videoUrl || '', parseReferenceImages(editData.referenceImagesJson).length, 'edit')}>
                             Video Screenshot Plan
                           </button>
-                          {ytId && (
+                          {videoEmbedUrl && (
                             <div style={{ marginTop: 6, borderRadius: 8, overflow: 'hidden', aspectRatio: '16/9', background: '#000' }}>
-                              <iframe src={`https://www.youtube.com/embed/${ytId}`} style={{ width: '100%', height: '100%', border: 'none', display: 'block' }} allowFullScreen title="preview"/>
+                              <iframe src={videoEmbedUrl} style={{ width: '100%', height: '100%', border: 'none', display: 'block' }} allowFullScreen title="preview"/>
                             </div>
                           )}
                           {editVideoGuide && (

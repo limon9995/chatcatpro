@@ -368,28 +368,40 @@ export class CatalogController {
     const hasMedia = !!(ytId || isFB || primaryImage);
 
     let mediaBlock = '';
+    let videoBlock = '';
+    let imageBlock = '';
+
     if (ytId) {
-      mediaBlock = `<div class="media-frame video-box"><iframe src="https://www.youtube.com/embed/${esc(ytId)}?rel=0&modestbranding=1&color=white" frameborder="0" allowfullscreen allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture" loading="lazy"></iframe></div>`;
+      videoBlock = `<div class="media-frame video-box" id="main-video"><iframe src="https://www.youtube.com/embed/${esc(ytId)}?rel=0&modestbranding=1&color=white" frameborder="0" allowfullscreen allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture" loading="lazy"></iframe></div>`;
     } else if (isFB) {
       const fbUrl = encodeURIComponent(p.videoUrl);
-      mediaBlock = `<div class="media-frame video-box fb-box"><iframe src="https://www.facebook.com/plugins/video.php?href=${fbUrl}&width=500&show_text=false" frameborder="0" allowfullscreen scrolling="no" allow="autoplay;clipboard-write;encrypted-media;picture-in-picture;web-share" loading="lazy"></iframe></div>`;
-    } else if (primaryImage) {
-      mediaBlock = `<div class="media-frame img-frame"><img src="${esc(primaryImage)}" alt="${esc(p.name || p.code)}" loading="lazy" onerror="this.closest('.media-frame').outerHTML=noImgBlock"/></div>`;
-    } else {
-      mediaBlock = ``;
+      videoBlock = `<div class="media-frame video-box fb-box" id="main-video"><iframe src="https://www.facebook.com/plugins/video.php?href=${fbUrl}&width=500&show_text=false" frameborder="0" allowfullscreen scrolling="no" allow="autoplay;clipboard-write;encrypted-media;picture-in-picture;web-share" loading="lazy"></iframe></div>`;
     }
 
-    const galleryBlock =
-      galleryImages.length > 1
-        ? `<div class="gallery-strip">
-      ${galleryImages
-        .map(
-          (url: string, index: number) =>
-            `<button class="g-thumb ${index === 0 ? 'active' : ''}" type="button" onclick="setGalleryImage('${esc(url)}', this)"><img src="${esc(url)}" alt="${esc(p.name || p.code)} view ${index + 1}" loading="lazy"/></button>`,
-        )
-        .join('')}
-    </div>`
-        : '';
+    if (primaryImage) {
+      imageBlock = `<div class="media-frame img-frame" id="main-img" ${videoBlock ? 'style="display:none"' : ''}><img src="${esc(primaryImage)}" alt="${esc(p.name || p.code)}" loading="lazy" onerror="this.closest('.media-frame').outerHTML=noImgBlock"/></div>`;
+    }
+
+    mediaBlock = videoBlock + imageBlock;
+
+    let galleryBlock = '';
+    const hasMultiple = (videoBlock ? 1 : 0) + galleryImages.length > 1;
+    if (hasMultiple) {
+      let g = '<div class="gallery-strip">';
+      let firstActive = true;
+      if (videoBlock) {
+        g += `<button class="g-thumb active" type="button" onclick="setGalleryMode('video', this)"><div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#0f172a;color:#fff;font-size:24px;">🎬</div></button>`;
+        firstActive = false;
+      }
+      g += galleryImages
+        .map((url: string, index: number) => {
+          const isActive = firstActive && index === 0;
+          return `<button class="g-thumb ${isActive ? 'active' : ''}" type="button" onclick="setGalleryMode('image', this, '${esc(url)}')"><img src="${esc(url)}" alt="${esc(p.name || p.code)} view ${index + 1}" loading="lazy"/></button>`;
+        })
+        .join('');
+      g += '</div>';
+      galleryBlock = g;
+    }
 
     let variantHtml = '';
     if (p.variantOptions) {
@@ -792,12 +804,24 @@ ${
 
 <script>
 var noImgBlock = '<div class="no-img-card"><div class="no-img-orb no-img-orb-1"></div><div class="no-img-orb no-img-orb-2"></div><div class="no-img-icon">🛍️</div><div class="no-img-code"><div class="no-img-code-lbl">Product Code</div><div class="no-img-code-val">${esc(p.code)}</div></div><div class="no-img-hint">ছবি শীঘ্রই আসছে</div></div>';
-function setGalleryImage(url, button){
-  var frame = document.querySelector('.img-frame img');
-  if(!frame) return;
-  frame.src = url;
-  document.querySelectorAll('.g-thumb').forEach(function(item){ item.classList.remove('active'); });
-  if(button) button.classList.add('active');
+function setGalleryMode(mode, button, url) {
+  var videoFrame = document.getElementById('main-video');
+  var imgFrame = document.getElementById('main-img');
+  
+  if (mode === 'video') {
+    if(videoFrame) videoFrame.style.display = 'block';
+    if(imgFrame) imgFrame.style.display = 'none';
+  } else if (mode === 'image') {
+    if(videoFrame) videoFrame.style.display = 'none';
+    if(imgFrame) {
+      imgFrame.style.display = 'block';
+      var img = imgFrame.querySelector('img');
+      if(img && url) img.src = url;
+    }
+  }
+
+  document.querySelectorAll('.g-thumb').forEach(function(item) { item.classList.remove('active'); });
+  if (button) button.classList.add('active');
 }
 </script>
 ${poweredByBadge()}
