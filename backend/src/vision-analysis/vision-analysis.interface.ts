@@ -24,6 +24,8 @@ export interface VisionAttributes {
   rawDescription: string;
   /** True when an external API (OpenAI) was used; false when handled locally */
   usedApi?: boolean;
+  /** True when the result was served from the in-memory URL cache (same image analyzed before) */
+  fromCache?: boolean;
 }
 
 export interface VisionAnalysisProvider {

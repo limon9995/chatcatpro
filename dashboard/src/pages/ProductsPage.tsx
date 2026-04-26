@@ -287,7 +287,11 @@ export function ProductsPage({ th, pageId, onToast }: {
         setEditData((d) => applyFn(d));
         setUniquenessEdit(result?.uniqueness || null);
       }
-      onToast(copy('AI analysis applied', 'AI analysis applied'), 'success');
+      if (result?.fromCache) {
+        onToast(copy('এই ছবিটা আগেই analyze করা হয়েছে — same result ব্যবহার হচ্ছে (wallet charge হয়নি)', 'Same photo detected — cached result used (no charge)'), 'warning');
+      } else {
+        onToast(copy('AI analysis applied', 'AI analysis applied'), 'success');
+      }
     } catch (e: any) {
       onToast((e as any).message ?? copy('AI analysis ব্যর্থ হয়েছে', 'AI analysis failed'), 'error');
     } finally {
@@ -332,7 +336,11 @@ export function ProductsPage({ th, pageId, onToast }: {
         setEditData((d) => applyFn(d));
         setUniquenessEdit(result?.uniqueness || null);
       }
-      onToast(copy(`${urls.length}টা angle থেকে AI analysis সম্পন্ন ✓`, `AI analysis from ${urls.length} angles done ✓`), 'success');
+      if (result?.fromCache) {
+        onToast(copy('এই ছবিগুলো আগেই analyze করা হয়েছে — same result ব্যবহার হচ্ছে (wallet charge হয়নি)', 'Same photos detected — cached result used (no charge)'), 'warning');
+      } else {
+        onToast(copy(`${urls.length}টা angle থেকে AI analysis সম্পন্ন ✓`, `AI analysis from ${urls.length} angles done ✓`), 'success');
+      }
     } catch (e: any) {
       onToast((e as any).message ?? copy('AI analysis ব্যর্থ হয়েছে', 'AI analysis failed'), 'error');
     } finally {

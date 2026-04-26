@@ -1,4 +1,4 @@
-import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
+import { Injectable, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { WalletService } from '../wallet/wallet.service';
 import { promises as fs } from 'fs';
 import { extname, join } from 'path';
@@ -54,6 +54,7 @@ interface VisionReviewQueueItem {
 
 @Injectable()
 export class VisionOpsService {
+  private readonly logger = new Logger(VisionOpsService.name);
   private readonly baseDir = join(process.cwd(), 'storage', 'vision-ops');
   private readonly uploadsDir = join(process.cwd(), 'storage', 'products');
 
@@ -355,12 +356,22 @@ export class VisionOpsService {
       );
     }
 
-    await this.walletService.deductUsage(pageId, 'ADMIN_VISION');
+    // Skip billing for cached results (same image analyzed before)
+    if (attrs.fromCache) {
+      this.logger.log(`[VisionOps] Cache hit — skipping wallet deduction for pageId=${pageId}`);
+    } else if (attrs.usedApi) {
+      await this.walletService.deductUsage(pageId, 'ADMIN_VISION');
+    } else {
+      this.logger.log(`[VisionOps] Skipping ADMIN_VISION deduction (Local/Ollama used)`);
+    }
 
     const uniqueness = await this.productMatch.checkUniqueness(pageId, attrs, excludeCode);
-    await this.walletService.deductUsage(pageId, 'IMAGE_UNIQUENESS');
 
-    return { attrs, suggested: this.buildSuggested(attrs), uniqueness };
+    if (!attrs.fromCache && attrs.usedApi) {
+      await this.walletService.deductUsage(pageId, 'IMAGE_UNIQUENESS');
+    }
+
+    return { attrs, suggested: this.buildSuggested(attrs), uniqueness, fromCache: attrs.fromCache ?? false };
   }
 
   /** Analyze 2-5 reference images of the same product in one AI call for richer description */
@@ -381,12 +392,19 @@ export class VisionOpsService {
       );
     }
 
-    await this.walletService.deductUsage(pageId, 'ADMIN_VISION');
+    if (attrs.fromCache) {
+      this.logger.log(`[VisionOps] Batch cache hit — skipping wallet deduction for pageId=${pageId}`);
+    } else if (attrs.usedApi) {
+      await this.walletService.deductUsage(pageId, 'ADMIN_VISION');
+    }
 
     const uniqueness = await this.productMatch.checkUniqueness(pageId, attrs, excludeCode);
-    await this.walletService.deductUsage(pageId, 'IMAGE_UNIQUENESS');
 
-    return { attrs, imageCount: urls.length, suggested: this.buildSuggested(attrs), uniqueness };
+    if (!attrs.fromCache && attrs.usedApi) {
+      await this.walletService.deductUsage(pageId, 'IMAGE_UNIQUENESS');
+    }
+
+    return { attrs, imageCount: urls.length, suggested: this.buildSuggested(attrs), uniqueness, fromCache: attrs.fromCache ?? false };
   }
 
   async buildVideoCaptureGuide(videoUrl: string, existingImages = 0) {

@@ -14,6 +14,8 @@ export class VisionAnalysisService {
   private readonly mode: VisionMode;
   private readonly confidenceThreshold: number;
   private readonly provider: VisionAnalysisProvider;
+  /** In-memory cache: normalized image URL → VisionAttributes. Cleared on restart. */
+  private readonly urlCache = new Map<string, VisionAttributes>();
 
   constructor(
     private readonly mockProvider: MockVisionProvider,
@@ -44,49 +46,74 @@ export class VisionAnalysisService {
 
   /** Whether admin product analysis should skip the ADMIN_VISION wallet charge */
   get isLocalMode(): boolean {
-    return this.mode === 'local' || this.mode === 'local-with-fallback';
+    return (
+      this.mode === 'local' ||
+      this.mode === 'local-with-fallback' ||
+      this.mode === 'ollama' ||
+      this.mode === 'ollama-with-fallback'
+    );
   }
 
   private fallback(): VisionAttributes {
     return { category: null, color: null, pattern: null, sleeveType: null, gender: null, confidence: 0, rawDescription: 'Analysis failed' };
   }
 
+  private cacheKey(url: string): string {
+    return url.trim().replace(/[?&]t=\d+/g, ''); // strip cache-busting query params
+  }
+
   async analyze(imageUrl: string): Promise<VisionAttributes> {
+    const key = this.cacheKey(imageUrl);
+    const cached = this.urlCache.get(key);
+    if (cached) {
+      this.logger.log(`[VisionAnalysis] Cache HIT: ${key.slice(0, 80)}`);
+      return { ...cached, fromCache: true };
+    }
+
     this.logger.log(`[VisionAnalysis] analyze: ${imageUrl.slice(0, 80)}`);
     try {
+      let result: VisionAttributes;
+
       if (this.mode === 'local-with-fallback') {
         const local = await this.localProvider.analyze(imageUrl);
         if (local.confidence >= this.confidenceThreshold) {
           this.logger.log(`[VisionAnalysis] Local OK — cat=${local.category} conf=${local.confidence.toFixed(2)}`);
-          return { ...local, usedApi: false };
+          result = { ...local, usedApi: false };
+        } else {
+          this.logger.log(`[VisionAnalysis] Local conf=${local.confidence.toFixed(2)} < ${this.confidenceThreshold} → OpenAI fallback`);
+          result = { ...(await this.openaiProvider.analyze(imageUrl)), usedApi: true };
         }
-        this.logger.log(`[VisionAnalysis] Local conf=${local.confidence.toFixed(2)} < ${this.confidenceThreshold} → OpenAI fallback`);
-        const result = await this.openaiProvider.analyze(imageUrl);
-        return { ...result, usedApi: true };
-      }
-
-      if (this.mode === 'ollama-with-fallback') {
+      } else if (this.mode === 'ollama-with-fallback') {
         const { localAiEnabled } = await this.globalSettings.get();
         if (localAiEnabled) {
           try {
             const ollama = await this.ollamaProvider.analyze(imageUrl);
             if (ollama.confidence >= this.confidenceThreshold) {
               this.logger.log(`[VisionAnalysis] Ollama OK — cat=${ollama.category} conf=${ollama.confidence.toFixed(2)}`);
-              return { ...ollama, usedApi: false };
+              result = { ...ollama, usedApi: false };
+            } else {
+              this.logger.log(`[VisionAnalysis] Ollama conf=${ollama.confidence.toFixed(2)} → OpenAI fallback`);
+              result = { ...(await this.openaiProvider.analyze(imageUrl)), usedApi: true };
             }
-            this.logger.log(`[VisionAnalysis] Ollama conf=${ollama.confidence.toFixed(2)} → OpenAI fallback`);
           } catch (ollamaErr: any) {
             this.logger.warn(`[VisionAnalysis] Ollama unavailable (${ollamaErr?.message}) → OpenAI fallback`);
+            result = { ...(await this.openaiProvider.analyze(imageUrl)), usedApi: true };
           }
         } else {
           this.logger.log(`[VisionAnalysis] Laptop AI OFF (admin toggle) → OpenAI directly`);
+          result = { ...(await this.openaiProvider.analyze(imageUrl)), usedApi: true };
         }
-        const result = await this.openaiProvider.analyze(imageUrl);
-        return { ...result, usedApi: true };
+      } else {
+        result = { ...(await this.provider.analyze(imageUrl)), usedApi: this.mode === 'openai' };
       }
 
-      const result = await this.provider.analyze(imageUrl);
-      return { ...result, usedApi: this.mode === 'openai' };
+      // Store in cache only when confidence is meaningful (avoid caching failed analyses)
+      if (result.confidence >= 0.05) {
+        this.urlCache.set(key, result);
+        this.logger.log(`[VisionAnalysis] Cached result for: ${key.slice(0, 80)}`);
+      }
+
+      return result;
     } catch (err: any) {
       this.logger.error(`[VisionAnalysis] Failed: ${err?.message ?? err}`);
       return this.fallback();
@@ -94,45 +121,66 @@ export class VisionAnalysisService {
   }
 
   async analyzeMultiple(imageUrls: string[]): Promise<VisionAttributes> {
+    const multiKey = imageUrls.map((u) => this.cacheKey(u)).sort().join('|');
+    const cached = this.urlCache.get(multiKey);
+    if (cached) {
+      this.logger.log(`[VisionAnalysis] Cache HIT (multi): ${imageUrls.length} images`);
+      return { ...cached, fromCache: true };
+    }
+
     this.logger.log(`[VisionAnalysis] analyzeMultiple: ${imageUrls.length} images`);
     try {
+      let multiResult: VisionAttributes;
+
       if (this.mode === 'local-with-fallback') {
         const local = await this.localProvider.analyzeMultiple(imageUrls);
-        if (local.confidence >= this.confidenceThreshold) return { ...local, usedApi: false };
-        this.logger.log(`[VisionAnalysis] Multi local low conf → OpenAI fallback`);
-        let apiResult: VisionAttributes;
-        if (typeof (this.openaiProvider as any).analyzeMultiple === 'function') {
-          apiResult = await (this.openaiProvider as any).analyzeMultiple(imageUrls);
+        if (local.confidence >= this.confidenceThreshold) {
+          multiResult = { ...local, usedApi: false };
         } else {
-          apiResult = await this.openaiProvider.analyze(imageUrls[0]);
+          this.logger.log(`[VisionAnalysis] Multi local low conf → OpenAI fallback`);
+          let apiResult: VisionAttributes;
+          if (typeof (this.openaiProvider as any).analyzeMultiple === 'function') {
+            apiResult = await (this.openaiProvider as any).analyzeMultiple(imageUrls);
+          } else {
+            apiResult = await this.openaiProvider.analyze(imageUrls[0]);
+          }
+          multiResult = { ...apiResult, usedApi: true };
         }
-        return { ...apiResult, usedApi: true };
-      }
-
-      if (this.mode === 'ollama-with-fallback') {
+      } else if (this.mode === 'ollama-with-fallback') {
         const { localAiEnabled } = await this.globalSettings.get();
+        let gotResult = false;
         if (localAiEnabled) {
           try {
             const ollama = await this.ollamaProvider.analyze(imageUrls[0]);
-            if (ollama.confidence >= this.confidenceThreshold) return { ...ollama, usedApi: false };
+            if (ollama.confidence >= this.confidenceThreshold) {
+              multiResult = { ...ollama, usedApi: false };
+              gotResult = true;
+            }
           } catch { /* fall through to OpenAI */ }
         }
-        let apiResult: VisionAttributes;
-        if (typeof (this.openaiProvider as any).analyzeMultiple === 'function') {
-          apiResult = await (this.openaiProvider as any).analyzeMultiple(imageUrls);
-        } else {
-          apiResult = await this.openaiProvider.analyze(imageUrls[0]);
+        if (!gotResult) {
+          let apiResult: VisionAttributes;
+          if (typeof (this.openaiProvider as any).analyzeMultiple === 'function') {
+            apiResult = await (this.openaiProvider as any).analyzeMultiple(imageUrls);
+          } else {
+            apiResult = await this.openaiProvider.analyze(imageUrls[0]);
+          }
+          multiResult = { ...apiResult, usedApi: true };
         }
-        return { ...apiResult, usedApi: true };
+      } else {
+        let raw: VisionAttributes;
+        if ('analyzeMultiple' in this.provider && typeof (this.provider as any).analyzeMultiple === 'function') {
+          raw = await (this.provider as any).analyzeMultiple(imageUrls);
+        } else {
+          raw = await this.analyze(imageUrls[0]);
+        }
+        multiResult = { ...raw, usedApi: this.mode === 'openai' };
       }
 
-      let result: VisionAttributes;
-      if ('analyzeMultiple' in this.provider && typeof (this.provider as any).analyzeMultiple === 'function') {
-        result = await (this.provider as any).analyzeMultiple(imageUrls);
-      } else {
-        result = await this.analyze(imageUrls[0]);
+      if (multiResult!.confidence >= 0.05) {
+        this.urlCache.set(multiKey, multiResult!);
       }
-      return { ...result, usedApi: this.mode === 'openai' };
+      return multiResult!;
     } catch (err: any) {
       this.logger.error(`[VisionAnalysis] Multi-analyze failed: ${err?.message ?? err}`);
       return this.fallback();
