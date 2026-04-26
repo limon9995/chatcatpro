@@ -68,7 +68,7 @@ export class WalletService {
           break;
         case 'IMAGE_UNIQUENESS':
           amountToDeduct = 0.02;
-          description = 'Product Uniqueness Check (local)';
+          description = 'Product Uniqueness Check';
           break;
       }
 
