@@ -73,6 +73,11 @@ export class AiIntentService {
   private readonly MAX_FAILS = 5;
   private cooldownUntil = 0;
 
+  // Ollama-specific circuit breaker — if slow/unreachable, skip for 10 min
+  private ollamaFailCount = 0;
+  private readonly OLLAMA_MAX_FAILS = 3;
+  private ollamaCooldownUntil = 0;
+
   constructor(
     private readonly walletService: WalletService,
     private readonly globalSettings: GlobalSettingsService,
@@ -136,15 +141,28 @@ export class AiIntentService {
     label: string,
   ): Promise<{ response: Response; isOllama: boolean } | null> {
     const { localAiEnabled } = await this.globalSettings.get();
-    const tryOllama = localAiEnabled && !!this.ollamaBaseUrl;
+    const ollamaInCooldown = Date.now() < this.ollamaCooldownUntil;
+    const tryOllama = localAiEnabled && !!this.ollamaBaseUrl && !ollamaInCooldown;
+
+    if (localAiEnabled && ollamaInCooldown) {
+      this.logger.log(`[AiIntent] Ollama in cooldown — skipping to OpenAI`);
+    }
 
     if (tryOllama) {
       this.logger.log(`[AiIntent] ${label} — trying Ollama (${this.ollamaModel})`);
       const res = await this.attemptRequest(true, messages, maxTokens, temperature);
       if (res && res.ok) {
+        this.ollamaFailCount = 0; // reset on success
         return { response: res, isOllama: true };
       }
-      this.logger.warn(`[AiIntent] Ollama unavailable/failed (${res?.status ?? 'network'}) — falling back to OpenAI`);
+      this.ollamaFailCount++;
+      if (this.ollamaFailCount >= this.OLLAMA_MAX_FAILS) {
+        this.ollamaCooldownUntil = Date.now() + 10 * 60 * 1000; // 10 min cooldown
+        this.ollamaFailCount = 0;
+        this.logger.warn(`[AiIntent] Ollama failed ${this.OLLAMA_MAX_FAILS}x — cooldown 10min, using OpenAI`);
+      } else {
+        this.logger.warn(`[AiIntent] Ollama fail ${this.ollamaFailCount}/${this.OLLAMA_MAX_FAILS} — falling back to OpenAI`);
+      }
     }
 
     if (!this.apiKey) {
