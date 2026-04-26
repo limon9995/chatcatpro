@@ -116,7 +116,7 @@ export class AiIntentService {
         method: 'POST',
         headers,
         body: JSON.stringify({ model, max_tokens: maxTokens, temperature, response_format: { type: 'json_object' }, messages }),
-        signal: AbortSignal.timeout(isOllama ? 30_000 : 8_000),
+        signal: AbortSignal.timeout(isOllama ? 8_000 : 8_000),
       });
     } catch (err: any) {
       this.logger.warn(`[AiIntent] ${isOllama ? 'Ollama' : 'OpenAI'} network error: ${err?.message ?? err}`);
