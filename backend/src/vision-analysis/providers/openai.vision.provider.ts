@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import axios from 'axios';
 import {
   VisionAnalysisProvider,
   VisionAttributes,
@@ -73,11 +74,28 @@ Rules:
     };
   }
 
+  // Download the image and return a base64 data URL so OpenAI never needs
+  // to reach our server directly (avoids firewall / accessibility issues).
+  private async toBase64DataUrl(url: string): Promise<string> {
+    const response = await axios.get<ArrayBuffer>(url, {
+      responseType: 'arraybuffer',
+      timeout: 15_000,
+    });
+    const mimeRaw = String(response.headers['content-type'] ?? 'image/jpeg').split(';')[0].trim();
+    const mime = mimeRaw.startsWith('image/') ? mimeRaw : 'image/jpeg';
+    const b64 = Buffer.from(response.data).toString('base64');
+    return `data:${mime};base64,${b64}`;
+  }
+
   private async callAPI(imageUrls: string[]): Promise<VisionAttributes> {
     const isMulti = imageUrls.length > 1;
-    const imageContent = imageUrls.map((url) => ({
+
+    // Convert all URLs to base64 data URLs in parallel
+    const dataUrls = await Promise.all(imageUrls.map((u) => this.toBase64DataUrl(u)));
+
+    const imageContent = dataUrls.map((dataUrl) => ({
       type: 'image_url' as const,
-      image_url: { url, detail: 'auto' as const },
+      image_url: { url: dataUrl, detail: 'auto' as const },
     }));
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -137,7 +155,7 @@ Rules:
     if (!imageUrls.length) return this.emptyResult('No images provided');
     if (imageUrls.length === 1) return this.analyze(imageUrls[0]);
 
-    const urls = imageUrls.slice(0, 5); // cap at 5
+    const urls = imageUrls.slice(0, 5);
     this.logger.log(`[OpenAIVision] Multi-angle: ${urls.length} images`);
     try {
       return await this.callAPI(urls);
