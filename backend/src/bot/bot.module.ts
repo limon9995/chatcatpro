@@ -2,10 +2,9 @@ import { Module } from '@nestjs/common';
 import { BotIntentService } from './bot-intent.service';
 import { ReplyTemplateService } from './reply-template.service';
 import { AiIntentService } from './ai-intent.service';
-import { CommonModule } from '../common/common.module';
 
 @Module({
-  imports: [CommonModule],
+  imports: [],
   providers: [BotIntentService, ReplyTemplateService, AiIntentService],
   exports: [BotIntentService, ReplyTemplateService, AiIntentService],
 })

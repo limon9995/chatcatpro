@@ -1,6 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { WalletService } from '../wallet/wallet.service';
-import { GlobalSettingsService } from '../common/global-settings.service';
 
 /**
  * AiIntentService — PRIMARY intent detector using gpt-4o-mini
@@ -66,26 +65,14 @@ export class AiIntentService {
   private readonly logger = new Logger(AiIntentService.name);
   private readonly apiKey: string;
   private readonly model: string;
-  private readonly ollamaBaseUrl: string;
-  private readonly ollamaModel: string;
 
   private failCount = 0;
   private readonly MAX_FAILS = 5;
   private cooldownUntil = 0;
 
-  // Ollama-specific circuit breaker — if slow/unreachable, skip for 10 min
-  private ollamaFailCount = 0;
-  private readonly OLLAMA_MAX_FAILS = 3;
-  private ollamaCooldownUntil = 0;
-
-  constructor(
-    private readonly walletService: WalletService,
-    private readonly globalSettings: GlobalSettingsService,
-  ) {
+  constructor(private readonly walletService: WalletService) {
     this.apiKey = process.env.OPENAI_API_KEY ?? '';
     this.model = process.env.AI_INTENT_MODEL ?? 'gpt-4o-mini';
-    this.ollamaBaseUrl = (process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434').replace(/\/$/, '');
-    this.ollamaModel = process.env.OLLAMA_CHAT_MODEL ?? 'qwen2:1.5b';
 
     if (this.apiKey) {
       this.logger.log(`[AiIntent] Enabled — model=${this.model}`);
@@ -95,44 +82,30 @@ export class AiIntentService {
   }
 
   isAvailable(): boolean {
-    return (!!this.apiKey || !!this.ollamaBaseUrl) && Date.now() > this.cooldownUntil;
+    return !!this.apiKey && Date.now() > this.cooldownUntil;
   }
 
-  /**
-   * Try one provider. Returns the Response on success, null on network failure.
-   * Does NOT throw — caller decides what to do on null.
-   */
   private async attemptRequest(
-    isOllama: boolean,
     messages: { role: string; content: string }[],
     maxTokens: number,
     temperature: number,
   ): Promise<Response | null> {
-    const apiUrl = isOllama
-      ? `${this.ollamaBaseUrl}/v1/chat/completions`
-      : 'https://api.openai.com/v1/chat/completions';
-    const model = isOllama ? this.ollamaModel : this.model;
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (!isOllama) headers['Authorization'] = `Bearer ${this.apiKey}`;
-    else headers['ngrok-skip-browser-warning'] = 'true';
-
     try {
-      return await fetch(apiUrl, {
+      return await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
-        headers,
-        body: JSON.stringify({ model, max_tokens: maxTokens, temperature, response_format: { type: 'json_object' }, messages }),
-        signal: AbortSignal.timeout(isOllama ? 8_000 : 8_000),
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${this.apiKey}` },
+        body: JSON.stringify({ model: this.model, max_tokens: maxTokens, temperature, response_format: { type: 'json_object' }, messages }),
+        signal: AbortSignal.timeout(8_000),
       });
     } catch (err: any) {
-      this.logger.warn(`[AiIntent] ${isOllama ? 'Ollama' : 'OpenAI'} network error: ${err?.message ?? err}`);
+      this.logger.warn(`[AiIntent] OpenAI network error: ${err?.message ?? err}`);
       return null;
     }
   }
 
   /**
-   * Resolve which provider to use with three-tier fallback:
-   * Ollama (if localAiEnabled) → OpenAI → null (keyword fallback)
-   * Returns { response, isOllama } or null if all providers failed.
+   * Always uses OpenAI for text intent detection (real-time, 20s Facebook limit).
+   * Ollama is only used for image analysis (no time limit there).
    */
   private async resolveProvider(
     messages: { role: string; content: string }[],
@@ -140,38 +113,13 @@ export class AiIntentService {
     temperature: number,
     label: string,
   ): Promise<{ response: Response; isOllama: boolean } | null> {
-    const { localAiEnabled } = await this.globalSettings.get();
-    const ollamaInCooldown = Date.now() < this.ollamaCooldownUntil;
-    const tryOllama = localAiEnabled && !!this.ollamaBaseUrl && !ollamaInCooldown;
-
-    if (localAiEnabled && ollamaInCooldown) {
-      this.logger.log(`[AiIntent] Ollama in cooldown — skipping to OpenAI`);
-    }
-
-    if (tryOllama) {
-      this.logger.log(`[AiIntent] ${label} — trying Ollama (${this.ollamaModel})`);
-      const res = await this.attemptRequest(true, messages, maxTokens, temperature);
-      if (res && res.ok) {
-        this.ollamaFailCount = 0; // reset on success
-        return { response: res, isOllama: true };
-      }
-      this.ollamaFailCount++;
-      if (this.ollamaFailCount >= this.OLLAMA_MAX_FAILS) {
-        this.ollamaCooldownUntil = Date.now() + 10 * 60 * 1000; // 10 min cooldown
-        this.ollamaFailCount = 0;
-        this.logger.warn(`[AiIntent] Ollama failed ${this.OLLAMA_MAX_FAILS}x — cooldown 10min, using OpenAI`);
-      } else {
-        this.logger.warn(`[AiIntent] Ollama fail ${this.ollamaFailCount}/${this.OLLAMA_MAX_FAILS} — falling back to OpenAI`);
-      }
-    }
-
     if (!this.apiKey) {
       this.logger.warn(`[AiIntent] No OpenAI key — keyword fallback`);
       return null;
     }
 
     this.logger.log(`[AiIntent] ${label} — using OpenAI (${this.model})`);
-    const res = await this.attemptRequest(false, messages, maxTokens, temperature);
+    const res = await this.attemptRequest(messages, maxTokens, temperature);
     if (!res) { this.recordFailure(); return null; }
 
     if (res.status === 429 || res.status === 402) {
