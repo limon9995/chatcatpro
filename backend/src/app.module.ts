@@ -36,6 +36,7 @@ import { WalletModule } from './wallet/wallet.module';
 import { WhisperModule } from './whisper/whisper.module';
 import { MessageQueueModule } from './message-queue/message-queue.module';
 import { ChatModule } from './chat/chat.module';
+import { AiGenerateModule } from './ai-generate/ai-generate.module';
 
 @Module({
   imports: [
@@ -80,6 +81,7 @@ import { ChatModule } from './chat/chat.module';
     AuthModule,
     CallModule,
     ChatModule,
+    AiGenerateModule,
     ConversationContextModule,
     FacebookModule,
     AccountingModule,

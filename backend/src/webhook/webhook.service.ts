@@ -20,6 +20,7 @@ import { VisionAnalysisService } from '../vision-analysis/vision-analysis.servic
 import { ProductMatchService, ProductMatchResult } from '../product-match/product-match.service';
 import { FallbackAiService } from '../fallback-ai/fallback-ai.service';
 import { AiIntentService } from '../bot/ai-intent.service';
+import { BotContextService } from '../bot/bot-context.service';
 import { VisionOpsService } from '../vision-ops/vision-ops.service';
 import { BillingService } from '../billing/billing.service';
 import { WalletService } from '../wallet/wallet.service';
@@ -60,6 +61,7 @@ export class WebhookService {
     private readonly billing: BillingService,
     private readonly walletService: WalletService,
     private readonly whisper: WhisperService,
+    private readonly botContext: BotContextService,
   ) {}
 
   // ── Entry point ────────────────────────────────────────────────────────────
@@ -250,15 +252,17 @@ export class WebhookService {
       (draft?.pendingVisionMatches?.length ?? 0) > 0;
 
     // OpenAI decides first; keyword matcher takes over if AI is unavailable/unknown.
-    // Basic plan: AI disabled to keep costs low
     const aiAllowed = await this.isAiAllowedForPage(page.ownerId);
-    const aiResult = aiAllowed
+    const businessContext = aiAllowed
+      ? await this.botContext.buildBusinessContext(pageId)
+      : null;
+    const aiResult = aiAllowed && businessContext
       ? await this.aiIntent.detectIntent(
           pageId,
           text,
           awaitingConfirm,
           draft?.currentStep ?? null,
-          page.businessName ?? null,
+          businessContext,
         )
       : { intent: null, reply: null };
     const keywordIntent = this.botIntent.detectIntent(text, awaitingConfirm);

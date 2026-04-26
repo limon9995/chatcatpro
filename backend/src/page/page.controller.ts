@@ -4,6 +4,7 @@ import {
   Get,
   Param,
   Patch,
+  Post,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -85,9 +86,16 @@ export class PageController {
   async reconnect(@Param('id') id: string, @Body() body: any, @Req() req: any) {
     const pageId = this.pid(req, id);
     const rawToken = String(body.newPageToken || '').trim();
-    // Verify the new token against Facebook
     const verified = await this.facebookService.verifyPageToken(rawToken);
     const pageName = String(body.newPageName || verified.pageName || '').trim() || verified.pageName;
     return this.pageService.reconnectFbPage(pageId, verified.pageId, pageName, rawToken);
+  }
+
+  /** POST /page/:id/knowledge/scrape — scrape website URL and return extracted text preview */
+  @Post(':id/knowledge/scrape')
+  async scrapeKnowledge(@Param('id') id: string, @Body() body: any, @Req() req: any) {
+    this.pid(req, id); // access check
+    const url = String(body?.url ?? '').trim();
+    return this.pageService.scrapeWebsiteKnowledge(url);
   }
 }

@@ -10,7 +10,7 @@ const SYSTEM_PROMPT = `You are a helpful customer service assistant for Chatcat 
 
 You help customers understand:
 - What Chatcat does (automates Facebook Messenger orders, product detection via AI, courier booking, accounting)
-- Pricing: ৳৬৯৯/month platform fee + prepaid AI wallet (৳০.০৫/text, ৳০.৫০/voice, ৳১.২০-১.৭০/image)
+- Pricing: ৳৬৯৯/month platform fee + prepaid AI wallet (৳০.০৫/text, ৳০.৫০/voice, ৳০.৩০-০.৫০/image)
 - Features: bot automation, OCR, AI image recognition, Pathao/Steadfast/RedX/Paperfly courier integration, CRM, broadcast
 - How to get started: visit chatcat.pro and click "শুরু করুন"
 

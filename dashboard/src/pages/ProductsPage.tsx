@@ -182,6 +182,8 @@ export function ProductsPage({ th, pageId, onToast }: {
   const [uniquenessEdit, setUniquenessEdit] = useState<any | null>(null);
   const [uniquenessNewHidden, setUniquenessNewHidden] = useState(false);
   const [uniquenessEditHidden, setUniquenessEditHidden] = useState(false);
+  const [generatingDescNew, setGeneratingDescNew] = useState(false);
+  const [generatingDescEdit, setGeneratingDescEdit] = useState(false);
   const newImageRef = useRef<HTMLInputElement>(null);
   const newRefsRef = useRef<HTMLInputElement>(null);
   const editImageRef = useRef<HTMLInputElement>(null);
@@ -349,6 +351,36 @@ export function ProductsPage({ th, pageId, onToast }: {
     }
   };
 
+  const generateDescription = async (target: 'new' | 'edit') => {
+    const data = target === 'new' ? newP : editData;
+    const name = (data.name || '').trim();
+    if (!name) return onToast(copy('আগে product name দিন', 'Enter a product name first'), 'error');
+    if (target === 'new') setGeneratingDescNew(true);
+    else setGeneratingDescEdit(true);
+    try {
+      const result = await request<{ text: string | null }>(`${API_BASE}/ai-generate/product-description`, {
+        method: 'POST',
+        body: JSON.stringify({
+          pageId,
+          name,
+          category: (data.category || '').trim(),
+          color: (data.color || '').trim(),
+          keywords: (data.imageKeywords || '').trim(),
+        }),
+      });
+      if (result?.text) {
+        if (target === 'new') setNewP(p => ({ ...p, description: result.text! }));
+        else setEditData(d => ({ ...d, description: result.text! }));
+        onToast(copy('AI description তৈরি হয়েছে ✓', 'AI description generated ✓'), 'success');
+      }
+    } catch (e: any) {
+      onToast(e.message ?? copy('AI description ব্যর্থ হয়েছে', 'AI description failed'), 'error');
+    } finally {
+      if (target === 'new') setGeneratingDescNew(false);
+      else setGeneratingDescEdit(false);
+    }
+  };
+
   const loadVideoGuide = async (videoUrl: string, existingImages: number, target: 'new' | 'edit') => {
     if (!videoUrl.trim()) {
       onToast(copy('আগে video URL দিন', 'Add a video URL first'), 'error');
@@ -484,6 +516,21 @@ export function ProductsPage({ th, pageId, onToast }: {
                   onChange={e => setNewP(p => ({ ...p, videoUrl: e.target.value }))} />
                 <button type="button" style={th.btnGhost} onClick={() => loadVideoGuide(newP.videoUrl, parseReferenceImages(newP.referenceImagesJson).length, 'new')}>
                   {copy('Video Screenshot Plan', 'Video Screenshot Plan')}
+                </button>
+              </div>
+            </FieldWithInfo>
+          </div>
+          <div style={{ marginTop: 12 }}>
+            <FieldWithInfo th={th} label="Description" helpText={copy('Product সম্পর্কে ছোট বিবরণ — catalog ও bot reply-এ দেখাবে', 'Short description shown in catalog and bot replies')}>
+              <div style={{ display: 'grid', gap: 8 }}>
+                <textarea
+                  style={{ ...th.input, minHeight: 72, resize: 'vertical', fontSize: 12.5 }}
+                  placeholder={copy('এই product সম্পর্কে ২-৩ লাইন লিখুন...', 'Write 2-3 lines about this product...')}
+                  value={newP.description}
+                  onChange={e => setNewP(p => ({ ...p, description: e.target.value }))}
+                />
+                <button type="button" style={th.btnGhost} onClick={() => generateDescription('new')} disabled={generatingDescNew}>
+                  {generatingDescNew ? copy('AI লিখছে...', 'AI writing...') : copy('✨ AI লিখুন', '✨ AI Write')}
                 </button>
               </div>
             </FieldWithInfo>
@@ -888,6 +935,19 @@ export function ProductsPage({ th, pageId, onToast }: {
                             value={editData.variantOptions ?? ''}
                             onChange={e => setEditData(d => ({ ...d, variantOptions: e.target.value }))}
                           />
+                        </div>
+                        {/* Description + AI */}
+                        <div>
+                          <div style={{ fontSize: 11, color: th.muted, marginBottom: 4 }}>Description</div>
+                          <textarea
+                            style={{ ...th.input, fontSize: 12, minHeight: 64, resize: 'vertical' }}
+                            placeholder={copy('Product বিবরণ...', 'Product description...')}
+                            value={editData.description ?? ''}
+                            onChange={e => setEditData(d => ({ ...d, description: e.target.value }))}
+                          />
+                          <button type="button" style={{ ...th.btnSmGhost, marginTop: 6 }} onClick={() => generateDescription('edit')} disabled={generatingDescEdit}>
+                            {generatingDescEdit ? copy('AI লিখছে...', 'AI writing...') : copy('✨ AI লিখুন', '✨ AI Write')}
+                          </button>
                         </div>
                         {/* V19: Detection Mode */}
                         <div style={{ padding: '8px 10px', borderRadius: 8, background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.2)' }}>

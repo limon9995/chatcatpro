@@ -239,4 +239,33 @@ export class PageService {
     });
     return { success: true, page: updated };
   }
+
+  async scrapeWebsiteKnowledge(url: string): Promise<{ text: string }> {
+    if (!url || !url.startsWith('http')) return { text: '' };
+    try {
+      const res = await fetch(url, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; ChatcatBot/1.0)' },
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (!res.ok) return { text: '' };
+      const html = await res.text();
+
+      const text = html
+        .replace(/<script[\s\S]*?<\/script>/gi, '')
+        .replace(/<style[\s\S]*?<\/style>/gi, '')
+        .replace(/<(h[1-3]|p|li|td|th)[^>]*>([\s\S]*?)<\/\1>/gi, (_m: string, _tag: string, content: string) =>
+          content.replace(/<[^>]+>/g, ' ').trim() + '\n',
+        )
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ')
+        .replace(/\s{2,}/g, ' ')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim()
+        .slice(0, 3000);
+
+      return { text };
+    } catch {
+      return { text: '' };
+    }
+  }
 }

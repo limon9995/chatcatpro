@@ -1,12 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { WalletService } from '../wallet/wallet.service';
-
-/**
- * AiIntentService — PRIMARY intent detector using gpt-4o-mini
- *
- * Returns both intent AND a natural conversational reply.
- * On any API error (429, quota, timeout) → returns null → keyword fallback.
- */
+import { BusinessContext } from './bot-context.service';
 
 export interface AiIntentResult {
   intent: string | null;   // null = use keyword fallback
@@ -44,12 +38,19 @@ const VALID_INTENTS = new Set([
 ]);
 
 // Intents where AI reply replaces the hardcoded template
+// Now includes knowledge-based intents that require business-specific answers
 const AI_REPLY_INTENTS = new Set([
   'GREETING',
   'CANCEL',
   'SOFT_HESITATION',
   'NEGOTIATION',
   'UNKNOWN',
+  'SIZE_REQUEST',      // AI answers from knowledgeText
+  'DELIVERY_TIME',     // AI uses real deliveryTime from DB
+  'DELIVERY_FEE',      // AI uses real inside/outside fee from DB
+  'FABRIC_TYPE',       // AI answers from knowledgeText
+  'CATALOG_REQUEST',   // AI lists real products from DB
+  'PHOTO_REQUEST',     // AI explains photo process
 ]);
 
 const STEP_LABELS: Record<string, string> = {
@@ -103,22 +104,18 @@ export class AiIntentService {
     }
   }
 
-  /**
-   * Always uses OpenAI for text intent detection (real-time, 20s Facebook limit).
-   * Ollama is only used for image analysis (no time limit there).
-   */
   private async resolveProvider(
     messages: { role: string; content: string }[],
     maxTokens: number,
     temperature: number,
     label: string,
-  ): Promise<{ response: Response; isOllama: boolean } | null> {
+  ): Promise<{ response: Response } | null> {
     if (!this.apiKey) {
       this.logger.warn(`[AiIntent] No OpenAI key — keyword fallback`);
       return null;
     }
 
-    this.logger.log(`[AiIntent] ${label} — using OpenAI (${this.model})`);
+    this.logger.log(`[AiIntent] ${label} — OpenAI (${this.model})`);
     const res = await this.attemptRequest(messages, maxTokens, temperature);
     if (!res) { this.recordFailure(); return null; }
 
@@ -133,7 +130,7 @@ export class AiIntentService {
       return null;
     }
 
-    return { response: res, isOllama: false };
+    return { response: res };
   }
 
   async detectIntent(
@@ -141,7 +138,7 @@ export class AiIntentService {
     text: string,
     awaitingConfirm: boolean,
     draftStep: string | null,
-    businessName: string | null,
+    context: BusinessContext,
   ): Promise<AiIntentResult> {
     if (!this.isAvailable()) return { intent: null, reply: null };
     if (!(await this.walletService.canProcessAi(pageId))) {
@@ -150,11 +147,11 @@ export class AiIntentService {
     }
 
     const messages = [
-      { role: 'system', content: this.buildSystemPrompt(businessName, draftStep) },
+      { role: 'system', content: this.buildSystemPrompt(context, draftStep) },
       { role: 'user', content: this.buildUserMessage(text, awaitingConfirm, draftStep) },
     ];
 
-    const resolved = await this.resolveProvider(messages, 200, 0.4, 'detectIntent');
+    const resolved = await this.resolveProvider(messages, 300, 0.4, 'detectIntent');
     if (!resolved) return { intent: null, reply: null };
 
     try {
@@ -176,7 +173,7 @@ export class AiIntentService {
       this.failCount = 0;
       const reply = (parsed?.reply ?? '').trim() || null;
       await this.walletService.deductUsage(pageId, 'TEXT');
-      this.logger.log(`[AiIntent] [${resolved.isOllama ? 'Ollama' : 'OpenAI'}] intent=${intent} reply="${reply?.slice(0, 60) ?? 'none'}"`);
+      this.logger.log(`[AiIntent] [OpenAI] intent=${intent} reply="${reply?.slice(0, 60) ?? 'none'}"`);
       return { intent, reply };
     } catch (err: any) {
       this.logger.error(`[AiIntent] detectIntent parse error: ${err?.message ?? err}`);
@@ -223,7 +220,7 @@ export class AiIntentService {
 
       this.failCount = 0;
       await this.walletService.deductUsage(pageId, 'TEXT');
-      this.logger.log(`[AiIntent] [${resolved.isOllama ? 'Ollama' : 'OpenAI'}] draft action=${action}`);
+      this.logger.log(`[AiIntent] [OpenAI] draft action=${action}`);
       return {
         action: action as DraftStepReviewResult['action'],
         reply: (parsed?.reply ?? '').trim() || null,
@@ -236,21 +233,45 @@ export class AiIntentService {
     }
   }
 
-  /** Returns true if AI reply should replace the hardcoded template for this intent */
   shouldUseAiReply(intent: string): boolean {
     return AI_REPLY_INTENTS.has(intent);
   }
 
-  private buildSystemPrompt(businessName: string | null, draftStep: string | null): string {
-    const shop = businessName
-      ? `"${businessName}" নামের Bangladeshi e-commerce shop`
+  private buildSystemPrompt(context: BusinessContext, draftStep: string | null): string {
+    const shop = context.businessName
+      ? `"${context.businessName}" নামের Bangladeshi e-commerce shop`
       : 'একটি Bangladeshi fashion e-commerce shop';
 
     const stepCtx = draftStep
       ? `\nএখন bot customer-এর কাছ থেকে "${STEP_LABELS[draftStep] ?? draftStep}" চাইছে।`
       : '';
 
-    return `তুমি ${shop}-এর Facebook Messenger-এ কথা বলছ।${stepCtx}
+    // Build product catalog context (max 25 products)
+    const productLines = context.products.slice(0, 25).map(p =>
+      `- ${p.name}: ৳${p.price} | ${p.stockQty > 0 ? `${p.stockQty} পিস আছে` : 'Stock নেই'}`
+    ).join('\n');
+    const productCtx = context.products.length > 0
+      ? `\n\nProducts (${context.products.length} টি):\n${productLines}`
+      : '';
+
+    // Delivery and payment context
+    const deliveryCtx = `\n\nDelivery:
+- ঢাকার ভিতরে: ৳${context.deliveryInsideFee}
+- ঢাকার বাইরে: ৳${context.deliveryOutsideFee}
+- সময়: ${context.deliveryTime}`;
+
+    const paymentRules = context.paymentRules as any;
+    const paymentCtx = paymentRules ? `\n\nPayment:
+- COD: ${paymentRules.codEnabled !== false ? 'আছে' : 'নেই'}
+- Advance (inside Dhaka): ${paymentRules.insideDhakaAdvanceEnabled ? `৳${paymentRules.insideDhakaAdvanceAmount ?? 100}` : 'লাগবে না'}
+- Advance (outside Dhaka): ${paymentRules.outsideDhakaAdvanceEnabled ? `৳${paymentRules.outsideDhakaAdvanceAmount ?? 100}` : 'লাগবে না'}` : '';
+
+    const knowledgeCtx = context.knowledgeText
+      ? `\n\nBusiness Knowledge (FAQ/Policy):\n${context.knowledgeText}`
+      : '';
+
+    return `তুমি ${shop}-এর Facebook Messenger-এ কথা বলছ।${stepCtx}${deliveryCtx}${paymentCtx}${productCtx}${knowledgeCtx}
+
 Customer-এর message দেখে JSON return করো:
 { "intent": "<INTENT>", "reply": "<natural reply>" }
 
@@ -272,22 +293,28 @@ Valid intents:
 - UNKNOWN — অন্য সব
 
 নিয়ম:
-1. CANCEL চেনার উপায় — message-এ "na", "nibo na", "krbo na", "lagbe na", "chai na", "bad den", "cancel", "বাতিল", "দরকার নেই" থাকলে CANCEL। "Oder krbo na", "order korbo na", "nibo na" — এগুলো সব CANCEL, ORDER নয়।
+1. CANCEL চেনার উপায় — message-এ "na", "nibo na", "krbo na", "lagbe na", "chai na", "bad den", "cancel", "বাতিল", "দরকার নেই" থাকলে CANCEL।
 2. ORDER_INTENT শুধু তখন — customer clearly কিছু কিনতে চাইছে, "lagbe", "kinbo", "order korbo", "nibo" (না ছাড়া)।
 3. "Ok", "Okay", "Thik" একা — draft না থাকলে UNKNOWN। awaitingConfirm=true হলে CONFIRM।
 4. Name step-এ "hi"/"hello" → GREETING।
 5. Draft step চলাকালে off-topic → UNKNOWN।
 6. সন্দেহ হলে CANCEL বেছে নাও ORDER-এর চেয়ে — ভুল order শুরু করা বেশি ক্ষতিকর।
-7. "ki ki ache", "ki ki products ache", "apnader ki ki product ache", "konta konta ache", "product list", "catalog" — এগুলো সবসময় CATALOG_REQUEST, ORDER_INTENT নয়।
+7. "ki ki ache", "ki ki products ache" — এগুলো সবসময় CATALOG_REQUEST।
 
-reply field সবসময় দাও — natural, warm, conversational Bangla/Banglish:
-- GREETING → friendly greeting, draft চললে softly remind
-- CANCEL → warmly acknowledge, বলো বাতিল হয়েছে
-- SOFT_HESITATION → বুঝলাম, যখন সুবিধা জানাবেন
-- NEGOTIATION → sympathetic reply
-- UNKNOWN + draft চলছে → warmly redirect, "[step] দিলে order complete হবে"
-- UNKNOWN + কোনো draft নেই → helpful, friendly reply
-- অন্য সব intent → reply=null`;
+reply field:
+- GREETING → friendly greeting
+- CANCEL → warmly acknowledge
+- SOFT_HESITATION → বুঝলাম, যখন সুবিধা
+- NEGOTIATION → sympathetic, pricing policy অনুযায়ী
+- DELIVERY_FEE → উপরের delivery info থেকে সঠিক charge বলো
+- DELIVERY_TIME → উপরের delivery time বলো
+- SIZE_REQUEST → knowledgeText থেকে size info বলো, না থাকলে জিজ্ঞেস করো কোন product
+- CATALOG_REQUEST → উপরের product list থেকে ২-৩টা highlight করো, বলো আরও আছে
+- FABRIC_TYPE → knowledgeText থেকে fabric info বলো
+- PHOTO_REQUEST → বলো photo পাঠানো হবে/page-এ দেখুন
+- UNKNOWN + draft চলছে → warmly redirect
+- UNKNOWN + কোনো draft নেই → helpful reply
+- অন্য সব → reply=null`;
   }
 
   private buildUserMessage(
@@ -318,12 +345,12 @@ Customer message দেখে strict JSON return করো:
 { "action": "<ACTION>", "normalizedValue": "<value or null>", "reply": "<reply or null>" }
 
 Allowed ACTION:
-- CAPTURE: customer requested info-টাই দিয়েছে; normalizedValue-এ clean value দাও
-- RETRY: customer flow-তেই আছে কিন্তু expected answer দেয়নি/invalid দিয়েছে; reply-তে same step gently re-ask করো
+- CAPTURE: customer requested info-টাই দিয়েছে; normalizedValue-এ clean value দাও
+- RETRY: customer flow-তেই আছে কিন্তু expected answer দেয়নি/invalid দিয়েছে; reply-তে same step gently re-ask করো
 - EXIT_DRAFT: customer clearly off-topic / topic change / normal chat / unrelated question; reply-তে normal conversational উত্তর দাও, order flow continue করবে না
-- CONFIRM: confirm/yes দিয়েছে
-- CANCEL: cancel/not interested দিয়েছে
-- EDIT: change করতে চায়
+- CONFIRM: confirm/yes দিয়েছে
+- CANCEL: cancel/not interested দিয়েছে
+- EDIT: change করতে চায়
 
 Rules:
 1. step=name হলে শুধু মানুষের নাম হলে CAPTURE। greeting, প্রশ্ন, product query, address-like text, long sentence, phone number, negotiation text name না।
@@ -333,8 +360,8 @@ Rules:
 5. step=confirm_address হলে "হ্যাঁ/ঠিক আছে" টাইপ হলে CONFIRM, নতুন address হলে CAPTURE।
 6. step=advance_payment হলে valid transaction id / payment proof হলে CAPTURE। সমস্যা/agent/help চাইলে RETRY with helpful guidance, clear cancel হলে CANCEL।
 7. step=cf:... হলে only direct option/value হলে CAPTURE। unrelated হলে RETRY বা EXIT_DRAFT।
-8. User যদি order context ছেড়ে অন্য topic-এ চলে যায়, EXIT_DRAFT বেছে নাও।
-9. reply field RETRY বা EXIT_DRAFT হলে সবসময় দাও। CAPTURE/CONFIRM/CANCEL/EDIT হলে reply=null।
+8. User যদি order context ছেড়ে অন্য topic-এ চলে যায়, EXIT_DRAFT বেছে নাও।
+9. reply field RETRY বা EXIT_DRAFT হলে সবসময় দাও। CAPTURE/CONFIRM/CANCEL/EDIT হলে reply=null।
 10. normalizedValue-এ শুধু clean user value দাও; না থাকলে null।`;
   }
 

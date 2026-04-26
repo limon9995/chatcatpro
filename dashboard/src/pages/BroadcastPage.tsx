@@ -162,6 +162,7 @@ export function BroadcastPage({ th, pageId, onToast }: {
   const [showTemplates, setShowTemplates] = useState(false);
   const [activeCategory, setActiveCategory] = useState(CATEGORIES[0]);
   const [form, setForm] = useState({ title: '', message: '', targetType: 'all', targetValue: '' });
+  const [generatingDraft, setGeneratingDraft] = useState(false);
 
   const BASE = `${API_BASE}/client-dashboard/${pageId}`;
 
@@ -178,6 +179,27 @@ export function BroadcastPage({ th, pageId, onToast }: {
   }, [pageId]);
 
   useEffect(() => { load(); }, [load]);
+
+  const generateDraft = async () => {
+    if (!form.title.trim()) return onToast(copy('আগে Title দিন', 'Enter a title first'), 'error');
+    setGeneratingDraft(true);
+    try {
+      const result = await request<{ text: string | null }>(`${API_BASE}/ai-generate/broadcast`, {
+        method: 'POST',
+        body: JSON.stringify({ pageId, title: form.title, targetType: form.targetType }),
+      });
+      if (result?.text) {
+        setForm(f => ({ ...f, message: result.text! }));
+        onToast(copy('AI draft তৈরি হয়েছে ✓', 'AI draft generated ✓'), 'success');
+      } else {
+        onToast(copy('AI draft তৈরি করা সম্ভব হয়নি', 'Could not generate draft'), 'error');
+      }
+    } catch (e: any) {
+      onToast(e.message ?? copy('AI draft ব্যর্থ হয়েছে', 'AI draft failed'), 'error');
+    } finally {
+      setGeneratingDraft(false);
+    }
+  };
 
   // Template select করলে form এ বসে যাবে
   const applyTemplate = (t: typeof BROADCAST_TEMPLATES[0]) => {
@@ -334,11 +356,17 @@ export function BroadcastPage({ th, pageId, onToast }: {
             )}
 
             <FieldWithInfo th={th} label="Message" helpText={copy('Customer যা দেখবে। Emoji ব্যবহার করুন — message আকর্ষণীয় হয়।', 'This is what customers will see. Emojis can help make the message more engaging.')}>
-              <textarea style={{ ...th.input, height: 120, resize: 'vertical', lineHeight: 1.7 }}
-                placeholder={copy('নতুন কালেকশন এসেছে! 🎉\nদেখতে এখনই message করুন 💖', 'Our new collection is here! 🎉\nMessage us now to explore it 💖')}
-                value={form.message}
-                onChange={e => setForm(f => ({ ...f, message: e.target.value }))}
-              />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <textarea style={{ ...th.input, height: 120, resize: 'vertical', lineHeight: 1.7 }}
+                  placeholder={copy('নতুন কালেকশন এসেছে! 🎉\nদেখতে এখনই message করুন 💖', 'Our new collection is here! 🎉\nMessage us now to explore it 💖')}
+                  value={form.message}
+                  onChange={e => setForm(f => ({ ...f, message: e.target.value }))}
+                />
+                <button type="button" style={{ ...th.btnGhost, color: '#8b5cf6', borderColor: '#8b5cf644', alignSelf: 'flex-start' }}
+                  onClick={generateDraft} disabled={generatingDraft}>
+                  {generatingDraft ? copy('AI লিখছে...', 'AI writing...') : copy('✨ AI Draft করুন', '✨ AI Draft')}
+                </button>
+              </div>
             </FieldWithInfo>
 
             {/* Character count */}

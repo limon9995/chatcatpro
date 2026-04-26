@@ -38,6 +38,7 @@ interface Settings {
     voiceGeneratedAt: string | null;
   };
   modeAccess?: Record<string, boolean>;
+  knowledgeText: string;
 }
 
 const S0: Settings = {
@@ -48,6 +49,7 @@ const S0: Settings = {
   currencySymbol: '৳', codLabel: 'COD', productCodePrefix: 'DF',
   deliveryFeeInsideDhaka: 80, deliveryFeeOutsideDhaka: 120, deliveryTimeText: '',
   paymentMode: 'cod', advanceAmount: 0, advanceBkash: '', advanceNagad: '', advancePaymentMessage: '',
+  knowledgeText: '',
   automationOn: false, ocrOn: false,
   infoModeOn: true, orderModeOn: true, printModeOn: false,
   callConfirmModeOn: false, memoSaveModeOn: false, memoTemplateModeOn: false,
@@ -198,6 +200,9 @@ export function SettingsPage({ th, pageId, tab, onToast }: {
   const [showReconnectModal, setShowReconnectModal] = useState(false);
   const [reconnectToken, setReconnectToken] = useState('');
   const [reconnectBusy, setReconnectBusy] = useState(false);
+  const [scraping, setScraping] = useState(false);
+  const [scrapePreview, setScrapePreview] = useState<string | null>(null);
+  const [knowledgeSaving, setKnowledgeSaving] = useState(false);
   const [unlinkingId, setUnlinkingId] = useState<number | null>(null);
   const banglaVoiceUploadRef = useRef<HTMLInputElement>(null);
   const englishVoiceUploadRef = useRef<HTMLInputElement>(null);
@@ -243,6 +248,29 @@ export function SettingsPage({ th, pageId, tab, onToast }: {
       onToast('✓ Saved');
     } catch (e: any) { onToast(e.message, 'error'); }
     finally { setSaving(false); }
+  };
+
+  const scrapeWebsite = async () => {
+    if (!s.websiteUrl) { onToast('Website URL দিন আগে', 'error'); return; }
+    setScraping(true);
+    try {
+      const res = await request<{ text: string }>(`${API_BASE}/page/${pageId}/knowledge/scrape`, {
+        method: 'POST',
+        body: JSON.stringify({ url: s.websiteUrl }),
+      });
+      if (res.text) setScrapePreview(res.text);
+      else onToast('কোনো text পাওয়া যায়নি', 'error');
+    } catch (e: any) { onToast(e.message, 'error'); }
+    finally { setScraping(false); }
+  };
+
+  const saveKnowledge = async () => {
+    setKnowledgeSaving(true);
+    try {
+      await request(`${BASE}/settings`, { method: 'PATCH', body: JSON.stringify({ knowledgeText: s.knowledgeText }) });
+      onToast('✓ AI Knowledge saved');
+    } catch (e: any) { onToast(e.message, 'error'); }
+    finally { setKnowledgeSaving(false); }
   };
 
   const reconnectPage = async () => {
@@ -487,6 +515,55 @@ export function SettingsPage({ th, pageId, tab, onToast }: {
               </div>
             </div>
           </Grid>
+        </Section>
+
+        {/* AI Knowledge */}
+        <Section title="🤖 AI Business Knowledge" desc="এখানে লেখো — AI bot এই তথ্য দিয়ে customer-দের সঠিক reply দেবে">
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+              <Label text="FAQ / Product Info / Policies" hint="AI bot এই text পড়ে customer-এর প্রশ্নের উত্তর দেবে। Products, delivery, payment, return policy লেখো।"/>
+              <span style={{ fontSize: 11, color: s.knowledgeText.length > 2800 ? '#f87171' : th.muted }}>
+                {s.knowledgeText.length}/3000
+              </span>
+            </div>
+            <textarea
+              style={{ ...inp, minHeight: 140, resize: 'vertical', fontFamily: 'inherit', fontSize: 13 }}
+              value={s.knowledgeText}
+              maxLength={3000}
+              onChange={e => setS(p => ({ ...p, knowledgeText: e.target.value }))}
+              placeholder={`উদাহরণ:\nআমাদের products: সব ধরনের মেয়েদের পোশাক — saree, kameez, kurti। দাম: ৳৩৫০-৳২৫০০।\nDelivery: ঢাকার ভিতরে ৳৮০, বাইরে ৳১৩০। ২-৩ দিনে পাবেন।\nPayment: Cash on Delivery। Outside Dhaka-তে ৳১০০ advance।\nReturn: ৭ দিনের মধ্যে exchange। Cash refund নেই।\nFAQ: রং বদলানো যাবে কি? — হ্যাঁ, order-এর সময় বলুন।`}
+            />
+            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+              <button
+                style={{ ...th.btnGhost, fontSize: 12, opacity: scraping ? 0.6 : 1 }}
+                onClick={scrapeWebsite}
+                disabled={scraping || !s.websiteUrl}
+                title={s.websiteUrl ? 'Website থেকে text extract করবে' : 'আগে Website URL দিন'}
+              >
+                {scraping ? '⏳ Scraping...' : '🌐 Website থেকে Auto-fill'}
+              </button>
+              <button
+                style={{ ...th.btn, fontSize: 12, opacity: knowledgeSaving ? 0.6 : 1 }}
+                onClick={saveKnowledge}
+                disabled={knowledgeSaving}
+              >
+                {knowledgeSaving ? '...' : '💾 Save Knowledge'}
+              </button>
+            </div>
+            {scrapePreview !== null && (
+              <div style={{ marginTop: 10, padding: 10, background: th.surface, borderRadius: 6, border: `1px solid ${th.border}` }}>
+                <div style={{ fontSize: 11, color: th.muted, marginBottom: 6 }}>Preview (click "Use This" to apply):</div>
+                <pre style={{ fontSize: 11, whiteSpace: 'pre-wrap', maxHeight: 150, overflow: 'auto', color: th.text, margin: 0 }}>{scrapePreview.slice(0, 500)}{scrapePreview.length > 500 ? '...' : ''}</pre>
+                <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                  <button style={{ ...th.btn, fontSize: 11 }} onClick={() => {
+                    setS(p => ({ ...p, knowledgeText: scrapePreview.slice(0, 3000) }));
+                    setScrapePreview(null);
+                  }}>✓ Use This</button>
+                  <button style={{ ...th.btnGhost, fontSize: 11 }} onClick={() => setScrapePreview(null)}>✕ Cancel</button>
+                </div>
+              </div>
+            )}
+          </div>
         </Section>
 
         {/* Delivery */}
@@ -763,6 +840,7 @@ export function SettingsPage({ th, pageId, tab, onToast }: {
           imageMediumConfidence: s.imageMediumConfidence,
           imageFallbackAiOn: s.imageFallbackAiOn,
           textFallbackAiOn: s.textFallbackAiOn,
+          knowledgeText: s.knowledgeText,
         })} saving={saving}/>
       </div>
     </div>
