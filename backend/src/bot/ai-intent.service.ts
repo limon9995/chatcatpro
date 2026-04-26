@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { WalletService } from '../wallet/wallet.service';
+import { GlobalSettingsService } from '../common/global-settings.service';
 
 /**
  * AiIntentService — PRIMARY intent detector using gpt-4o-mini
@@ -65,14 +66,21 @@ export class AiIntentService {
   private readonly logger = new Logger(AiIntentService.name);
   private readonly apiKey: string;
   private readonly model: string;
+  private readonly ollamaBaseUrl: string;
+  private readonly ollamaModel: string;
 
   private failCount = 0;
   private readonly MAX_FAILS = 5;
   private cooldownUntil = 0;
 
-  constructor(private readonly walletService: WalletService) {
+  constructor(
+    private readonly walletService: WalletService,
+    private readonly globalSettings: GlobalSettingsService,
+  ) {
     this.apiKey = process.env.OPENAI_API_KEY ?? '';
     this.model = process.env.AI_INTENT_MODEL ?? 'gpt-4o-mini';
+    this.ollamaBaseUrl = (process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434').replace(/\/$/, '');
+    this.ollamaModel = process.env.OLLAMA_CHAT_MODEL ?? 'qwen2:1.5b';
 
     if (this.apiKey) {
       this.logger.log(`[AiIntent] Enabled — model=${this.model}`);
@@ -82,7 +90,7 @@ export class AiIntentService {
   }
 
   isAvailable(): boolean {
-    return !!this.apiKey && Date.now() > this.cooldownUntil;
+    return (!!this.apiKey || !!this.ollamaBaseUrl) && Date.now() > this.cooldownUntil;
   }
 
   async detectIntent(
@@ -102,14 +110,19 @@ export class AiIntentService {
     const userMsg = this.buildUserMessage(text, awaitingConfirm, draftStep);
 
     try {
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      const { localAiEnabled } = await this.globalSettings.get();
+      const useLocal = localAiEnabled && !!this.ollamaBaseUrl;
+      const apiUrl = useLocal ? `${this.ollamaBaseUrl}/v1/chat/completions` : 'https://api.openai.com/v1/chat/completions';
+      const reqModel = useLocal ? this.ollamaModel : this.model;
+      const reqHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (!useLocal) reqHeaders['Authorization'] = `Bearer ${this.apiKey}`;
+      else reqHeaders['ngrok-skip-browser-warning'] = 'true';
+
+      const response = await fetch(apiUrl, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${this.apiKey}`,
-        },
+        headers: reqHeaders,
         body: JSON.stringify({
-          model: this.model,
+          model: reqModel,
           max_tokens: 200,
           temperature: 0.4,
           response_format: { type: 'json_object' },
@@ -118,7 +131,7 @@ export class AiIntentService {
             { role: 'user', content: userMsg },
           ],
         }),
-        signal: AbortSignal.timeout(8_000),
+        signal: AbortSignal.timeout(useLocal ? 30_000 : 8_000),
       });
 
       if (response.status === 429 || response.status === 402) {
@@ -183,14 +196,19 @@ export class AiIntentService {
     const userMsg = `Customer message: "${text}"`;
 
     try {
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      const { localAiEnabled } = await this.globalSettings.get();
+      const useLocal = localAiEnabled && !!this.ollamaBaseUrl;
+      const apiUrl = useLocal ? `${this.ollamaBaseUrl}/v1/chat/completions` : 'https://api.openai.com/v1/chat/completions';
+      const reqModel = useLocal ? this.ollamaModel : this.model;
+      const reqHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (!useLocal) reqHeaders['Authorization'] = `Bearer ${this.apiKey}`;
+      else reqHeaders['ngrok-skip-browser-warning'] = 'true';
+
+      const response = await fetch(apiUrl, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${this.apiKey}`,
-        },
+        headers: reqHeaders,
         body: JSON.stringify({
-          model: this.model,
+          model: reqModel,
           max_tokens: 180,
           temperature: 0.2,
           response_format: { type: 'json_object' },
@@ -199,7 +217,7 @@ export class AiIntentService {
             { role: 'user', content: userMsg },
           ],
         }),
-        signal: AbortSignal.timeout(8_000),
+        signal: AbortSignal.timeout(useLocal ? 30_000 : 8_000),
       });
 
       if (response.status === 429 || response.status === 402) {
