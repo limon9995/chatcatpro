@@ -1,5 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import axios from 'axios';
+import { readFile } from 'fs/promises';
+import { join, extname } from 'path';
 import {
   VisionAnalysisProvider,
   VisionAttributes,
@@ -74,17 +76,35 @@ Rules:
     };
   }
 
-  // Download the image and return a base64 data URL so OpenAI never needs
-  // to reach our server directly (avoids firewall / accessibility issues).
+  private extToMime(ext: string): string {
+    const map: Record<string, string> = { '.png': 'image/png', '.webp': 'image/webp', '.gif': 'image/gif' };
+    return map[ext.toLowerCase()] ?? 'image/jpeg';
+  }
+
+  // Convert an image URL to a base64 data URL.
+  // For /storage/... paths we read from disk directly (avoids self-HTTPS issues).
+  // For external URLs we download via axios.
   private async toBase64DataUrl(url: string): Promise<string> {
+    const storagePath = url.match(/\/storage\/(.+)$/)?.[1];
+    if (storagePath) {
+      const abs = join(process.cwd(), 'storage', storagePath);
+      try {
+        const buffer = await readFile(abs);
+        const mime = this.extToMime(extname(abs));
+        this.logger.log(`[OpenAIVision] Read local file: ${abs}`);
+        return `data:${mime};base64,${buffer.toString('base64')}`;
+      } catch (e: any) {
+        this.logger.warn(`[OpenAIVision] Local read failed (${e?.message}), falling back to HTTP`);
+      }
+    }
+
     const response = await axios.get<ArrayBuffer>(url, {
       responseType: 'arraybuffer',
       timeout: 15_000,
     });
     const mimeRaw = String(response.headers['content-type'] ?? 'image/jpeg').split(';')[0].trim();
     const mime = mimeRaw.startsWith('image/') ? mimeRaw : 'image/jpeg';
-    const b64 = Buffer.from(response.data).toString('base64');
-    return `data:${mime};base64,${b64}`;
+    return `data:${mime};base64,${Buffer.from(response.data).toString('base64')}`;
   }
 
   private async callAPI(imageUrls: string[]): Promise<VisionAttributes> {
