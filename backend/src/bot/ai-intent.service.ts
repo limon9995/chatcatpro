@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { GlobalSettingsService } from '../common/global-settings.service';
 import { WalletService } from '../wallet/wallet.service';
 import { BusinessContext } from './bot-context.service';
 
@@ -66,14 +67,21 @@ export class AiIntentService {
   private readonly logger = new Logger(AiIntentService.name);
   private readonly apiKey: string;
   private readonly model: string;
+  private readonly ollamaBaseUrl: string;
+  private readonly ollamaModel: string;
 
   private failCount = 0;
   private readonly MAX_FAILS = 5;
   private cooldownUntil = 0;
 
-  constructor(private readonly walletService: WalletService) {
+  constructor(
+    private readonly walletService: WalletService,
+    private readonly globalSettings: GlobalSettingsService,
+  ) {
     this.apiKey = process.env.OPENAI_API_KEY ?? '';
     this.model = process.env.AI_INTENT_MODEL ?? 'gpt-4o-mini';
+    this.ollamaBaseUrl = (process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434').replace(/\/$/, '');
+    this.ollamaModel = process.env.OLLAMA_CHAT_MODEL ?? 'qwen2:1.5b';
 
     if (this.apiKey) {
       this.logger.log(`[AiIntent] Enabled — model=${this.model}`);
@@ -86,20 +94,65 @@ export class AiIntentService {
     return !!this.apiKey && Date.now() > this.cooldownUntil;
   }
 
-  private async attemptRequest(
+  private async attemptOllama(
+    messages: { role: string; content: string }[],
+    maxTokens: number,
+  ): Promise<string | null> {
+    try {
+      this.logger.log(`[AiIntent] Ollama (${this.ollamaModel})`);
+      const res = await fetch(`${this.ollamaBaseUrl}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
+        body: JSON.stringify({
+          model: this.ollamaModel,
+          stream: false,
+          options: { num_predict: maxTokens },
+          messages,
+        }),
+        signal: AbortSignal.timeout(12_000),
+      });
+      if (!res.ok) throw new Error(`Ollama ${res.status}`);
+      const data = await res.json() as any;
+      const content = (data?.message?.content ?? '').trim();
+      // Extract JSON object from response (Ollama may add extra text)
+      const match = content.match(/\{[\s\S]*\}/);
+      if (!match) return null;
+      JSON.parse(match[0]); // validate parseable
+      return match[0];
+    } catch (err: any) {
+      this.logger.warn(`[AiIntent] Ollama failed — falling back to OpenAI: ${err?.message ?? err}`);
+      return null;
+    }
+  }
+
+  private async attemptOpenAI(
     messages: { role: string; content: string }[],
     maxTokens: number,
     temperature: number,
-  ): Promise<Response | null> {
+  ): Promise<string | null> {
+    if (!this.apiKey) return null;
     try {
-      return await fetch('https://api.openai.com/v1/chat/completions', {
+      const res = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${this.apiKey}` },
         body: JSON.stringify({ model: this.model, max_tokens: maxTokens, temperature, response_format: { type: 'json_object' }, messages }),
         signal: AbortSignal.timeout(8_000),
       });
+      if (res.status === 429 || res.status === 402) {
+        this.logger.warn(`[AiIntent] OpenAI quota/limit (${res.status}) — keyword fallback`);
+        this.enterCooldown();
+        return null;
+      }
+      if (!res.ok) {
+        this.logger.error(`[AiIntent] OpenAI error ${res.status}`);
+        this.recordFailure();
+        return null;
+      }
+      const data = await res.json() as any;
+      return (data?.choices?.[0]?.message?.content ?? '').trim() || null;
     } catch (err: any) {
       this.logger.warn(`[AiIntent] OpenAI network error: ${err?.message ?? err}`);
+      this.recordFailure();
       return null;
     }
   }
@@ -109,28 +162,27 @@ export class AiIntentService {
     maxTokens: number,
     temperature: number,
     label: string,
-  ): Promise<{ response: Response } | null> {
+  ): Promise<{ raw: string } | null> {
+    const { localAiEnabled } = await this.globalSettings.get();
+
+    // Try Ollama first if enabled
+    if (localAiEnabled && this.ollamaBaseUrl) {
+      const ollamaRaw = await this.attemptOllama(messages, maxTokens);
+      if (ollamaRaw) {
+        this.logger.log(`[AiIntent] ${label} — Ollama OK`);
+        return { raw: ollamaRaw };
+      }
+    }
+
+    // Fall back to OpenAI
     if (!this.apiKey) {
       this.logger.warn(`[AiIntent] No OpenAI key — keyword fallback`);
       return null;
     }
-
     this.logger.log(`[AiIntent] ${label} — OpenAI (${this.model})`);
-    const res = await this.attemptRequest(messages, maxTokens, temperature);
-    if (!res) { this.recordFailure(); return null; }
-
-    if (res.status === 429 || res.status === 402) {
-      this.logger.warn(`[AiIntent] OpenAI quota/limit (${res.status}) — keyword fallback`);
-      this.enterCooldown();
-      return null;
-    }
-    if (!res.ok) {
-      this.logger.error(`[AiIntent] OpenAI error ${res.status}`);
-      this.recordFailure();
-      return null;
-    }
-
-    return { response: res };
+    const raw = await this.attemptOpenAI(messages, maxTokens, temperature);
+    if (!raw) return null;
+    return { raw };
   }
 
   async detectIntent(
@@ -155,11 +207,9 @@ export class AiIntentService {
     if (!resolved) return { intent: null, reply: null };
 
     try {
-      const data = await resolved.response.json() as any;
-      const raw = (data?.choices?.[0]?.message?.content ?? '').trim();
       let parsed: any;
-      try { parsed = JSON.parse(raw); } catch {
-        this.logger.warn(`[AiIntent] JSON parse failed: ${raw.slice(0, 80)}`);
+      try { parsed = JSON.parse(resolved.raw); } catch {
+        this.logger.warn(`[AiIntent] JSON parse failed: ${resolved.raw.slice(0, 80)}`);
         this.recordFailure();
         return { intent: null, reply: null };
       }
@@ -173,7 +223,7 @@ export class AiIntentService {
       this.failCount = 0;
       const reply = (parsed?.reply ?? '').trim() || null;
       await this.walletService.deductUsage(pageId, 'TEXT');
-      this.logger.log(`[AiIntent] [OpenAI] intent=${intent} reply="${reply?.slice(0, 60) ?? 'none'}"`);
+      this.logger.log(`[AiIntent] intent=${intent} reply="${reply?.slice(0, 60) ?? 'none'}"`);
       return { intent, reply };
     } catch (err: any) {
       this.logger.error(`[AiIntent] detectIntent parse error: ${err?.message ?? err}`);
@@ -203,11 +253,9 @@ export class AiIntentService {
     if (!resolved) return null;
 
     try {
-      const data = await resolved.response.json() as any;
-      const raw = (data?.choices?.[0]?.message?.content ?? '').trim();
       let parsed: any;
-      try { parsed = JSON.parse(raw); } catch {
-        this.logger.warn(`[AiIntent] Draft review JSON parse failed: ${raw.slice(0, 80)}`);
+      try { parsed = JSON.parse(resolved.raw); } catch {
+        this.logger.warn(`[AiIntent] Draft review JSON parse failed: ${resolved.raw.slice(0, 80)}`);
         this.recordFailure();
         return null;
       }
@@ -220,7 +268,7 @@ export class AiIntentService {
 
       this.failCount = 0;
       await this.walletService.deductUsage(pageId, 'TEXT');
-      this.logger.log(`[AiIntent] [OpenAI] draft action=${action}`);
+      this.logger.log(`[AiIntent] draft action=${action}`);
       return {
         action: action as DraftStepReviewResult['action'],
         reply: (parsed?.reply ?? '').trim() || null,
