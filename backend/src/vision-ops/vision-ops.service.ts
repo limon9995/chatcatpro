@@ -348,9 +348,9 @@ export class VisionOpsService {
 
     const attrs = await this.visionAnalysis.analyze(imageUrl);
 
-    if (attrs.confidence < 0.20) {
+    if (attrs.confidence < 0.05) {
       throw new HttpException(
-        'ছবিটা ঝাপসা বা পণ্যের ছবি নয়। Clear light-এ তুলে আবার upload করুন।',
+        'AI ছবিটা analyze করতে পারেনি। ছবিটা আবার upload করুন বা অন্য একটা ছবি try করুন।',
         HttpStatus.UNPROCESSABLE_ENTITY,
       );
     }
@@ -374,9 +374,9 @@ export class VisionOpsService {
     const urls = imageUrls.slice(0, 5);
     const attrs = await this.visionAnalysis.analyzeMultiple(urls);
 
-    if (attrs.confidence < 0.20) {
+    if (attrs.confidence < 0.05) {
       throw new HttpException(
-        'ছবিগুলো ঝাপসা বা পণ্যের ছবি নয়। Clear light-এ তুলে আবার upload করুন।',
+        'AI ছবিগুলো analyze করতে পারেনি। ছবিগুলো আবার upload করুন বা অন্য ছবি try করুন।',
         HttpStatus.UNPROCESSABLE_ENTITY,
       );
     }

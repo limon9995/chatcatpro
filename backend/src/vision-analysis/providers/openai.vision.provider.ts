@@ -40,11 +40,13 @@ Required JSON format:
 }
 
 Rules:
-- If images are extremely blurry or definitely not fashion products, set confidence <= 0.1
+- If images are clearly visible and recognizable, confidence should be >= 0.6
+- Only set confidence <= 0.1 for extremely blurry images where you cannot make out the subject at all
 - For full-body model shots, focus on the clothing details and maintain high confidence if product is clear
+- For non-clothing items (bags, shoes, accessories), still analyze and set confidence based on image clarity, not on whether it is clothing
 - Do NOT guess gender unless clearly evident from the product style
-- Be honest about uncertainty — low confidence is better than wrong answer
-- category "non_clothing" means the image is not a clothing product`;
+- Be honest about uncertainty but do NOT penalize clear images with low confidence
+- category "non_clothing" means the image is definitely not a clothing product`;
   }
 
   private parseResponse(content: string): VisionAttributes {
@@ -66,7 +68,7 @@ Rules:
     const isMulti = imageUrls.length > 1;
     const imageContent = imageUrls.map((url) => ({
       type: 'image_url' as const,
-      image_url: { url, detail: 'low' as const },
+      image_url: { url, detail: 'auto' as const },
     }));
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {

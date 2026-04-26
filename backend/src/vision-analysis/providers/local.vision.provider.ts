@@ -91,23 +91,32 @@ export class LocalVisionProvider implements VisionAnalysisProvider, OnModuleInit
 
       const topCat = catResult[0];
 
-      // Non-clothing or very unclear → return zero confidence
-      if (topCat.label === 'non clothing item' || topCat.score < 0.30) {
+      // Definitely non-clothing → return zero confidence
+      if (topCat.label === 'non clothing item' && topCat.score > 0.60) {
         return {
           ...ZERO,
-          rawDescription: `Local CLIP: non-clothing or unclear (score=${topCat.score.toFixed(2)})`,
+          rawDescription: `Local CLIP: non-clothing (score=${topCat.score.toFixed(2)})`,
+        };
+      }
+
+      // Very low score → return low but non-zero so OpenAI fallback can still try
+      if (topCat.score < 0.15) {
+        return {
+          ...ZERO,
+          confidence: 0.05,
+          rawDescription: `Local CLIP: low score (score=${topCat.score.toFixed(2)})`,
         };
       }
 
       const topPat = patResult[0];
       const topSlv = slvResult[0];
 
-      const pattern = topPat.score > 0.35 ? (PATTERN_NORM[topPat.label] ?? null) : null;
-      const sleeveType = topSlv.score > 0.40 ? (SLEEVE_NORM[topSlv.label] ?? null) : null;
+      const pattern = topPat.score > 0.30 ? (PATTERN_NORM[topPat.label] ?? null) : null;
+      const sleeveType = topSlv.score > 0.35 ? (SLEEVE_NORM[topSlv.label] ?? null) : null;
       const gender = GENDER_MAP[topCat.label] ?? null;
 
-      // confidence: high when CLIP is certain
-      const confidence = topCat.score >= 0.55 ? topCat.score : 0.35;
+      // confidence: scaled by CLIP score
+      const confidence = topCat.score >= 0.55 ? topCat.score : topCat.score >= 0.30 ? 0.35 : 0.20;
 
       return {
         category: topCat.label,
