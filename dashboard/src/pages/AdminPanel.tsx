@@ -126,6 +126,10 @@ export function AdminPanel({ th, onToast, onLogout }: {
   const [subPages, setSubPages] = useState<any[]>([]);
   const [subLoading, setSubLoading] = useState(false);
 
+  // Laptop AI toggle state
+  const [laptopAiEnabled, setLaptopAiEnabled] = useState(false);
+  const [laptopAiSaving, setLaptopAiSaving] = useState(false);
+
   // Create client form state
   const [showCreateClient, setShowCreateClient] = useState(false);
   const [newClient, setNewClient] = useState({ identifier: '', name: '', password: '', pageIds: '' });
@@ -135,10 +139,27 @@ export function AdminPanel({ th, onToast, onLogout }: {
 
   const loadOverview = useCallback(async () => {
     setLoading(true);
-    try { setOverview(await request(`${BASE}/overview`)); }
+    try {
+      const [ov, ai] = await Promise.all([
+        request(`${BASE}/overview`),
+        request(`${BASE}/laptop-ai`),
+      ]);
+      setOverview(ov);
+      setLaptopAiEnabled(!!ai?.localAiEnabled);
+    }
     catch (e: any) { onToast(e.message, 'error'); }
     finally { setLoading(false); }
   }, []);
+
+  const toggleLaptopAi = async (val: boolean) => {
+    setLaptopAiSaving(true);
+    try {
+      await request(`${BASE}/laptop-ai`, { method: 'PATCH', body: JSON.stringify({ localAiEnabled: val }) });
+      setLaptopAiEnabled(val);
+      onToast(val ? 'Laptop AI চালু — Ollama ব্যবহার হবে' : 'Laptop AI বন্ধ — OpenAI সরাসরি ব্যবহার হবে');
+    } catch (e: any) { onToast(e.message, 'error'); }
+    finally { setLaptopAiSaving(false); }
+  };
 
   const loadClients = useCallback(async () => {
     setLoading(true);
@@ -553,6 +574,34 @@ export function AdminPanel({ th, onToast, onLogout }: {
           </div>
           <div style={{ fontSize: 11, color: th.muted, marginTop: 10 }}>
             Generated: {new Date(overview.generatedAt).toLocaleString()}
+          </div>
+        </div>
+
+        {/* Laptop AI Toggle */}
+        <div style={th.card}>
+          <div style={{ fontSize: 11.5, fontWeight: 800, color: th.muted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 14 }}>
+            🤖 AI Provider Control
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 14 }}>Laptop AI (Ollama)</div>
+              <div style={{ fontSize: 12.5, color: th.muted, marginTop: 4 }}>
+                {laptopAiEnabled
+                  ? '✅ Ollama চালু — laptop-এর AI ব্যবহার হচ্ছে। Laptop বন্ধ করলে এটা OFF করুন।'
+                  : '❌ OpenAI mode — সরাসরি OpenAI ব্যবহার হচ্ছে।'}
+              </div>
+            </div>
+            <button
+              disabled={laptopAiSaving}
+              onClick={() => toggleLaptopAi(!laptopAiEnabled)}
+              style={{
+                ...laptopAiEnabled ? th.btnPrimary : th.btnGhost,
+                minWidth: 80, flexShrink: 0,
+                opacity: laptopAiSaving ? 0.6 : 1,
+              }}
+            >
+              {laptopAiSaving ? '...' : laptopAiEnabled ? 'ON' : 'OFF'}
+            </button>
           </div>
         </div>
       </div>

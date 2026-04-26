@@ -16,13 +16,25 @@ import { AuthGuard } from '../auth/auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { AdminService } from './admin.service';
+import { GlobalSettingsService } from '../common/global-settings.service';
 
 @SkipThrottle({ global: true, auth: true })
 @Controller('admin')
 @UseGuards(AuthGuard, RolesGuard)
 @Roles('admin')
 export class AdminController {
-  constructor(private readonly svc: AdminService) {}
+  constructor(
+    private readonly svc: AdminService,
+    private readonly globalSettings: GlobalSettingsService,
+  ) {}
+
+  @Get('laptop-ai')
+  getLaptopAi() { return this.globalSettings.get(); }
+
+  @Patch('laptop-ai')
+  setLaptopAi(@Body() b: any) {
+    return this.globalSettings.set({ localAiEnabled: !!b?.localAiEnabled });
+  }
 
   private parsePageId(raw: string): number {
     const pageId = Number(raw);
