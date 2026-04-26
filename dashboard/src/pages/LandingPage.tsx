@@ -242,7 +242,8 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
 .chip-c-dot{width:8px;height:8px;border-radius:50%;background:#4ade80;box-shadow:0 0 10px #4ade80;animation:pulse 2s ease infinite;flex-shrink:0}
 .chip-d{bottom:6%;left:-12%;color:#f59e0b;animation-delay:2s}.chip-d .sc-ic{background:rgba(245,158,11,.14);color:#f59e0b}
 
-@media(max-width:768px){.demo-sec{padding:72px 5% 56px}.scene-root{height:460px;transform:none!important}.sc-chip{display:none}.phone-body{width:224px}.p-screen{height:400px}}
+@media(max-width:768px){.demo-sec{padding:60px 5% 48px}.scene-root{height:auto!important;min-height:500px;transform:none!important;padding:24px 0}.phone-scene-wrap{position:relative!important;top:auto!important;left:auto!important;transform:none!important;margin:0 auto;display:flex;justify-content:center;width:100%}.sc-chip{display:none}.phone-body{width:min(240px,80vw)}.p-screen{height:min(430px,60vh)}}
+@media(max-width:400px){.phone-body{width:min(210px,88vw)}.p-screen{height:min(380px,58vh)}}
 
 /* ══ Custom Cursor ══ */
 @media(pointer:fine){
@@ -563,7 +564,7 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
   <div class="demo-inner">
     <span class="section-label fade-up">Live Demo</span>
     <h2 class="demo-title fade-up">Bot-এর সাথে কথা বলুন</h2>
-    <p class="demo-sub fade-up">দেখুন কিভাবে Chatcat bot customer-দের প্রশ্নের উত্তর দেয়। নিচের <span style="color:#6366f1;font-weight:700">chat bubble</span>-এ click করে আপনিও সরাসরি AI-এর সাথে কথা বলুন।</p>
+    <p class="demo-sub fade-up">Phone-এ type করুন অথবা নিচের <span style="color:#6366f1;font-weight:700">chat bubble</span>-এ click করুন — সরাসরি Chatcat AI-এর সাথে কথা বলুন।</p>
 
     <div class="scene-root" id="sceneRoot">
       <!-- BG orbs -->
@@ -592,10 +593,10 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
             <div class="ms-chat-area" id="demoChat"></div>
             <!-- Input bar -->
             <div class="ms-bar">
-              <div class="ms-inp-box">Type a message...</div>
-              <div class="ms-send-ic">
+              <input class="ms-inp-real" id="demoInput" type="text" placeholder="Type a message..." autocomplete="off"/>
+              <button class="ms-send-ic" id="demoSend">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="m22 2-7 20-4-9-9-4Z"/></svg>
-              </div>
+              </button>
             </div>
           </div>
           <div class="p-btn-r p-btn-r-1"></div>
@@ -1122,22 +1123,19 @@ document.querySelectorAll('.btn-primary,.nav-cta').forEach(function(btn) {
   });
 });
 
-// ── Animated Demo Chat ──
+// ── Phone Live Chat ──
 (function() {
   var chat = document.getElementById('demoChat');
-  if (!chat) return;
+  var input = document.getElementById('demoInput');
+  var sendBtn = document.getElementById('demoSend');
+  if (!chat || !input || !sendBtn) return;
 
-  var msgs = [
-    {r:'b', t:'হ্যালো! 👋 আমি Chatcat AI bot। কিভাবে সাহায্য করতে পারি?'},
-    {r:'u', t:'আপনার service কী?'},
-    {r:'b', t:'Chatcat হলো Facebook Messenger automation platform। আপনার page-এ auto-reply, order management, courier booking সব automatically হবে! 🚀'},
-    {r:'u', t:'দাম কত?'},
-    {r:'b', t:'মাত্র ৳৬৯৯/মাস। AI reply, order tracking, courier integration, accounting — সব included! 💰'},
-    {r:'u', t:'Trial আছে?'},
-    {r:'b', t:'হ্যাঁ! ৭ দিনের free trial — কোনো credit card লাগবে না। এখনই শুরু করুন! ✅'},
-  ];
+  var history = [];
+  var busy = false;
 
   function addBbl(role, text) {
+    var te = document.getElementById('demoTyping');
+    if (te) te.remove();
     var el = document.createElement('div');
     el.className = 'ms-bbl ' + role;
     el.style.whiteSpace = 'pre-line';
@@ -1156,29 +1154,44 @@ document.querySelectorAll('.btn-primary,.nav-cta').forEach(function(btn) {
     }
   }
 
-  function removeTyping() {
-    var t = document.getElementById('demoTyping');
-    if (t) t.remove();
+  function setDisabled(val) {
+    busy = val;
+    input.disabled = val;
+    sendBtn.disabled = val;
   }
 
-  function runDemo() {
-    chat.innerHTML = '';
-    var delay = 400;
-    for (var i = 0; i < msgs.length; i++) {
-      (function(m, d) {
-        if (m.r === 'b') {
-          setTimeout(showTyping, d);
-          setTimeout(function() { removeTyping(); addBbl('b', m.t); }, d + 800);
-        } else {
-          setTimeout(function() { addBbl('u', m.t); }, d);
-        }
-      })(msgs[i], delay);
-      delay += msgs[i].r === 'b' ? 2600 : 1200;
-    }
-    setTimeout(runDemo, delay + 3000);
+  // Auto welcome
+  setTimeout(function() { showTyping(); }, 500);
+  setTimeout(function() {
+    addBbl('b', 'হ্যালো! 👋 আমি Chatcat AI। Features, pricing বা কিভাবে শুরু করবেন — যেকোনো প্রশ্ন করুন।');
+  }, 1400);
+
+  function send() {
+    var msg = input.value.trim();
+    if (!msg || busy) return;
+    input.value = '';
+    addBbl('u', msg);
+    history.push({role:'user', content:msg});
+    setDisabled(true);
+    showTyping();
+    fetch('https://api.chatcat.pro/chat', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({message: msg, history: history.slice(-8)})
+    }).then(function(r) { return r.json(); }).then(function(data) {
+      var reply = data && data.reply ? data.reply : 'দুঃখিত, উত্তর পেতে সমস্যা হচ্ছে।';
+      addBbl('b', reply);
+      history.push({role:'assistant', content:reply});
+      if (history.length > 20) history = history.slice(-20);
+    }).catch(function() {
+      addBbl('b', 'দুঃখিত, সংযোগে সমস্যা হচ্ছে। একটু পরে আবার চেষ্টা করুন।');
+    }).finally(function() { setDisabled(false); input.focus(); });
   }
 
-  runDemo();
+  sendBtn.addEventListener('click', send);
+  input.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') { e.preventDefault(); send(); }
+  });
 })();
 
 // ── Live 3D Demo: scene parallax ──
