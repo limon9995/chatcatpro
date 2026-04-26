@@ -211,7 +211,7 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
 /* Messenger */
 .ms-hd{background:linear-gradient(135deg,#1877f2,#0d6fe8);padding:11px 13px;display:flex;align-items:center;gap:9px;flex-shrink:0}
 .ms-back-ic{color:rgba(255,255,255,.85);font-size:20px;font-weight:300;line-height:1}
-.ms-av{width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,#6366f1,#818cf8);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;color:#fff;letter-spacing:-0.04em;border:2px solid rgba(255,255,255,.22);flex-shrink:0;box-shadow:0 2px 8px rgba(99,102,241,.5)}
+.ms-av{width:32px;height:32px;border-radius:9px;background:#fff url('https://app.chatcat.pro/logo.png') no-repeat left center;background-size:auto 100%;border:2px solid rgba(255,255,255,.22);flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.3);overflow:hidden}
 .ms-nm{font-size:13px;font-weight:700;color:#fff;line-height:1.2}.ms-ac{display:flex;align-items:center;gap:4px;font-size:10px;color:rgba(255,255,255,.7);margin-top:1px}
 .ms-gdot{width:6px;height:6px;border-radius:50%;background:#4ade80;box-shadow:0 0 6px #4ade80;animation:pulse 2s ease infinite;flex-shrink:0}
 .ms-chat-area{flex:1;overflow:hidden;padding:10px 9px;display:flex;flex-direction:column;gap:5px;background:#0c0c1a}
@@ -582,7 +582,7 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
             <!-- Messenger header -->
             <div class="ms-hd">
               <div class="ms-back-ic">‹</div>
-              <div class="ms-av">C</div>
+              <div class="ms-av"></div>
               <div style="flex:1">
                 <div class="ms-nm">Chatcat Bot</div>
                 <div class="ms-ac"><span class="ms-gdot"></span> Active now</div>
@@ -1354,12 +1354,12 @@ document.querySelectorAll('.btn-primary,.nav-cta').forEach(function(btn) {
     background: linear-gradient(90deg, #6366f1, #818cf8, #22d3ee);
   }
   #cc-avatar {
-    width: 40px; height: 40px; border-radius: 11px;
-    background: linear-gradient(135deg, #6366f1, #818cf8);
-    display: flex; align-items: center; justify-content: center;
-    font-size: 20px; font-weight: 900; color: #fff; letter-spacing: -0.05em;
-    flex-shrink: 0; font-family: 'DM Sans', sans-serif;
-    box-shadow: 0 2px 14px rgba(99,102,241,.5);
+    width: 42px; height: 42px; border-radius: 11px;
+    background: #fff url('https://app.chatcat.pro/logo.png') no-repeat left center;
+    background-size: auto 100%;
+    flex-shrink: 0;
+    box-shadow: 0 2px 14px rgba(0,0,0,.3);
+    overflow: hidden;
   }
   #cc-header-info { flex: 1; }
   #cc-header-name { font-weight: 800; font-size: 15px; color: #f1f5f9; }
@@ -1396,12 +1396,12 @@ document.querySelectorAll('.btn-primary,.nav-cta').forEach(function(btn) {
 </style>
 
 <button id="cc-bubble" aria-label="Chat with us" title="Chat with Chatcat">
-  <span style="font-size:26px;font-weight:900;letter-spacing:-0.05em;color:#fff;font-family:'DM Sans',sans-serif;line-height:1">C</span>
+  <svg viewBox="0 0 24 24"><path d="M20 2H4a2 2 0 0 0-2 2v18l4-4h14a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2z"/></svg>
 </button>
 
 <div id="cc-panel" role="dialog" aria-label="Chatcat support chat">
   <div id="cc-header">
-    <div id="cc-avatar">C</div>
+    <div id="cc-avatar"></div>
     <div id="cc-header-info">
       <div id="cc-header-name">Chatcat Bot</div>
       <div id="cc-header-status">Active now</div>
