@@ -711,7 +711,7 @@ export function ProductsPage({ th, pageId, onToast }: {
                     }
                     {/* Badges */}
                     <div style={{ position: 'absolute', top: 8, left: 8, display: 'flex', gap: 4 }}>
-                      {p.videoUrl && <span style={{ ...th.pill, background: '#0891b244', color: '#0891b2', border: '1px solid #0891b244', fontSize: 9.5 }}>🎬</span>}
+                      {getVideoEmbedUrl(p.videoUrl) && <span style={{ ...th.pill, background: '#0891b244', color: '#0891b2', border: '1px solid #0891b244', fontSize: 9.5 }}>🎬</span>}
                       {referenceCount > 0 && <span style={{ ...th.pill, background: '#ec489922', color: '#db2777', border: '1px solid #ec489944', fontSize: 9.5 }}>📸 {referenceCount + 1}</span>}
                       {!p.catalogVisible && <span style={{ ...th.pill, ...th.pillGray, fontSize: 9.5 }}>Hidden</span>}
                     </div>
@@ -987,7 +987,7 @@ export function ProductsPage({ th, pageId, onToast }: {
                         </span>
                       </td>
                       <td style={th.td}>
-                        {p.videoUrl && <span style={{ ...th.pill, ...th.pillBlue, fontSize: 10, marginRight: 4 }}>🎬</span>}
+                        {getVideoEmbedUrl(p.videoUrl) && <span style={{ ...th.pill, ...th.pillBlue, fontSize: 10, marginRight: 4 }}>🎬</span>}
                         {!p.catalogVisible && <span style={{ ...th.pill, ...th.pillGray, fontSize: 10 }}>Hidden</span>}
                       </td>
                       <td style={th.td}>

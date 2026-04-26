@@ -870,7 +870,7 @@ ${poweredByBadge()}
         <div class="c-media">
           ${topBlock}
           ${!inStock ? '<div class="c-out-badge">Stock Out</div>' : ''}
-          ${p.videoUrl ? '<div class="c-vid-badge">🎬</div>' : ''}
+          ${videoType ? '<div class="c-vid-badge">🎬</div>' : ''}
         </div>
         <div class="c-body">
           <div class="c-code">${esc(p.code)}</div>
