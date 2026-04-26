@@ -93,6 +93,83 @@ export class AiIntentService {
     return (!!this.apiKey || !!this.ollamaBaseUrl) && Date.now() > this.cooldownUntil;
   }
 
+  /**
+   * Try one provider. Returns the Response on success, null on network failure.
+   * Does NOT throw — caller decides what to do on null.
+   */
+  private async attemptRequest(
+    isOllama: boolean,
+    messages: { role: string; content: string }[],
+    maxTokens: number,
+    temperature: number,
+  ): Promise<Response | null> {
+    const apiUrl = isOllama
+      ? `${this.ollamaBaseUrl}/v1/chat/completions`
+      : 'https://api.openai.com/v1/chat/completions';
+    const model = isOllama ? this.ollamaModel : this.model;
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (!isOllama) headers['Authorization'] = `Bearer ${this.apiKey}`;
+    else headers['ngrok-skip-browser-warning'] = 'true';
+
+    try {
+      return await fetch(apiUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ model, max_tokens: maxTokens, temperature, response_format: { type: 'json_object' }, messages }),
+        signal: AbortSignal.timeout(isOllama ? 30_000 : 8_000),
+      });
+    } catch (err: any) {
+      this.logger.warn(`[AiIntent] ${isOllama ? 'Ollama' : 'OpenAI'} network error: ${err?.message ?? err}`);
+      return null;
+    }
+  }
+
+  /**
+   * Resolve which provider to use with three-tier fallback:
+   * Ollama (if localAiEnabled) → OpenAI → null (keyword fallback)
+   * Returns { response, isOllama } or null if all providers failed.
+   */
+  private async resolveProvider(
+    messages: { role: string; content: string }[],
+    maxTokens: number,
+    temperature: number,
+    label: string,
+  ): Promise<{ response: Response; isOllama: boolean } | null> {
+    const { localAiEnabled } = await this.globalSettings.get();
+    const tryOllama = localAiEnabled && !!this.ollamaBaseUrl;
+
+    if (tryOllama) {
+      this.logger.log(`[AiIntent] ${label} — trying Ollama (${this.ollamaModel})`);
+      const res = await this.attemptRequest(true, messages, maxTokens, temperature);
+      if (res && res.ok) {
+        return { response: res, isOllama: true };
+      }
+      this.logger.warn(`[AiIntent] Ollama unavailable/failed (${res?.status ?? 'network'}) — falling back to OpenAI`);
+    }
+
+    if (!this.apiKey) {
+      this.logger.warn(`[AiIntent] No OpenAI key — keyword fallback`);
+      return null;
+    }
+
+    this.logger.log(`[AiIntent] ${label} — using OpenAI (${this.model})`);
+    const res = await this.attemptRequest(false, messages, maxTokens, temperature);
+    if (!res) { this.recordFailure(); return null; }
+
+    if (res.status === 429 || res.status === 402) {
+      this.logger.warn(`[AiIntent] OpenAI quota/limit (${res.status}) — keyword fallback`);
+      this.enterCooldown();
+      return null;
+    }
+    if (!res.ok) {
+      this.logger.error(`[AiIntent] OpenAI error ${res.status}`);
+      this.recordFailure();
+      return null;
+    }
+
+    return { response: res, isOllama: false };
+  }
+
   async detectIntent(
     pageId: number,
     text: string,
@@ -106,60 +183,25 @@ export class AiIntentService {
       return { intent: null, reply: null };
     }
 
-    const systemPrompt = this.buildSystemPrompt(businessName, draftStep);
-    const userMsg = this.buildUserMessage(text, awaitingConfirm, draftStep);
+    const messages = [
+      { role: 'system', content: this.buildSystemPrompt(businessName, draftStep) },
+      { role: 'user', content: this.buildUserMessage(text, awaitingConfirm, draftStep) },
+    ];
+
+    const resolved = await this.resolveProvider(messages, 200, 0.4, 'detectIntent');
+    if (!resolved) return { intent: null, reply: null };
 
     try {
-      const { localAiEnabled } = await this.globalSettings.get();
-      const useLocal = localAiEnabled && !!this.ollamaBaseUrl;
-      const apiUrl = useLocal ? `${this.ollamaBaseUrl}/v1/chat/completions` : 'https://api.openai.com/v1/chat/completions';
-      const reqModel = useLocal ? this.ollamaModel : this.model;
-      const reqHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (!useLocal) reqHeaders['Authorization'] = `Bearer ${this.apiKey}`;
-      else reqHeaders['ngrok-skip-browser-warning'] = 'true';
-
-      this.logger.log(`[AiIntent] Using ${useLocal ? 'Ollama' : 'OpenAI'} for intent detection`);
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: reqHeaders,
-        body: JSON.stringify({
-          model: reqModel,
-          max_tokens: 200,
-          temperature: 0.4,
-          response_format: { type: 'json_object' },
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userMsg },
-          ],
-        }),
-        signal: AbortSignal.timeout(useLocal ? 30_000 : 8_000),
-      });
-
-      if (response.status === 429 || response.status === 402) {
-        this.logger.warn(`[AiIntent] ${useLocal ? 'Ollama' : 'OpenAI'} quota/limit hit (${response.status}) — keyword fallback`);
-        this.enterCooldown();
-        return { intent: null, reply: null };
-      }
-
-      if (!response.ok) {
-        this.logger.error(`[AiIntent] API error ${response.status}`);
-        this.recordFailure();
-        return { intent: null, reply: null };
-      }
-
-      const data = await response.json() as any;
+      const data = await resolved.response.json() as any;
       const raw = (data?.choices?.[0]?.message?.content ?? '').trim();
-
       let parsed: any;
-      try {
-        parsed = JSON.parse(raw);
-      } catch {
+      try { parsed = JSON.parse(raw); } catch {
         this.logger.warn(`[AiIntent] JSON parse failed: ${raw.slice(0, 80)}`);
         this.recordFailure();
         return { intent: null, reply: null };
       }
 
-      const intent: string = (parsed?.intent ?? '').toUpperCase().trim();
+      const intent = (parsed?.intent ?? '').toUpperCase().trim();
       if (!VALID_INTENTS.has(intent)) {
         this.logger.warn(`[AiIntent] Invalid intent: "${intent}"`);
         return { intent: null, reply: null };
@@ -167,14 +209,11 @@ export class AiIntentService {
 
       this.failCount = 0;
       const reply = (parsed?.reply ?? '').trim() || null;
-
       await this.walletService.deductUsage(pageId, 'TEXT');
-
-      this.logger.log(`[AiIntent] intent=${intent} reply="${reply?.slice(0, 80) ?? 'none'}"`);
+      this.logger.log(`[AiIntent] [${resolved.isOllama ? 'Ollama' : 'OpenAI'}] intent=${intent} reply="${reply?.slice(0, 60) ?? 'none'}"`);
       return { intent, reply };
-
     } catch (err: any) {
-      this.logger.error(`[AiIntent] Request failed: ${err?.message ?? err}`);
+      this.logger.error(`[AiIntent] detectIntent parse error: ${err?.message ?? err}`);
       this.recordFailure();
       return { intent: null, reply: null };
     }
@@ -188,58 +227,23 @@ export class AiIntentService {
   ): Promise<DraftStepReviewResult | null> {
     if (!this.isAvailable()) return null;
     if (!(await this.walletService.canProcessAi(pageId))) {
-       this.logger.warn(`[AiIntent] pageId=${pageId} suspended or insufficient balance for draft review`);
-       return null;
+      this.logger.warn(`[AiIntent] pageId=${pageId} suspended or insufficient balance for draft review`);
+      return null;
     }
 
-    const systemPrompt = this.buildDraftReviewPrompt(businessName, draftStep);
-    const userMsg = `Customer message: "${text}"`;
+    const messages = [
+      { role: 'system', content: this.buildDraftReviewPrompt(businessName, draftStep) },
+      { role: 'user', content: `Customer message: "${text}"` },
+    ];
+
+    const resolved = await this.resolveProvider(messages, 180, 0.2, 'reviewDraftStep');
+    if (!resolved) return null;
 
     try {
-      const { localAiEnabled } = await this.globalSettings.get();
-      const useLocal = localAiEnabled && !!this.ollamaBaseUrl;
-      const apiUrl = useLocal ? `${this.ollamaBaseUrl}/v1/chat/completions` : 'https://api.openai.com/v1/chat/completions';
-      const reqModel = useLocal ? this.ollamaModel : this.model;
-      const reqHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (!useLocal) reqHeaders['Authorization'] = `Bearer ${this.apiKey}`;
-      else reqHeaders['ngrok-skip-browser-warning'] = 'true';
-
-      this.logger.log(`[AiIntent] Using ${useLocal ? 'Ollama' : 'OpenAI'} for draft review`);
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: reqHeaders,
-        body: JSON.stringify({
-          model: reqModel,
-          max_tokens: 180,
-          temperature: 0.2,
-          response_format: { type: 'json_object' },
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userMsg },
-          ],
-        }),
-        signal: AbortSignal.timeout(useLocal ? 30_000 : 8_000),
-      });
-
-      if (response.status === 429 || response.status === 402) {
-        this.logger.warn(`[AiIntent] Draft review quota/limit hit (${response.status})`);
-        this.enterCooldown();
-        return null;
-      }
-
-      if (!response.ok) {
-        this.logger.error(`[AiIntent] Draft review API error ${response.status}`);
-        this.recordFailure();
-        return null;
-      }
-
-      const data = await response.json() as any;
+      const data = await resolved.response.json() as any;
       const raw = (data?.choices?.[0]?.message?.content ?? '').trim();
-
       let parsed: any;
-      try {
-        parsed = JSON.parse(raw);
-      } catch {
+      try { parsed = JSON.parse(raw); } catch {
         this.logger.warn(`[AiIntent] Draft review JSON parse failed: ${raw.slice(0, 80)}`);
         this.recordFailure();
         return null;
@@ -252,16 +256,15 @@ export class AiIntentService {
       }
 
       this.failCount = 0;
-
       await this.walletService.deductUsage(pageId, 'TEXT');
-
+      this.logger.log(`[AiIntent] [${resolved.isOllama ? 'Ollama' : 'OpenAI'}] draft action=${action}`);
       return {
         action: action as DraftStepReviewResult['action'],
         reply: (parsed?.reply ?? '').trim() || null,
         normalizedValue: (parsed?.normalizedValue ?? '').trim() || null,
       };
     } catch (err: any) {
-      this.logger.error(`[AiIntent] Draft review failed: ${err?.message ?? err}`);
+      this.logger.error(`[AiIntent] reviewDraftStep parse error: ${err?.message ?? err}`);
       this.recordFailure();
       return null;
     }
