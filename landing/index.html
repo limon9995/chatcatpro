@@ -1537,7 +1537,7 @@ document.querySelectorAll('.btn-primary,.nav-cta').forEach(function(btn) {
     setTyping(true);
 
     try {
-      const res = await fetch('/chat', {
+      const res = await fetch('https://api.chatcat.pro/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: msg, history: history.slice(-8) }),
