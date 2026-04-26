@@ -35,6 +35,7 @@ import { BillingModule } from './billing/billing.module';
 import { WalletModule } from './wallet/wallet.module';
 import { WhisperModule } from './whisper/whisper.module';
 import { MessageQueueModule } from './message-queue/message-queue.module';
+import { ChatModule } from './chat/chat.module';
 
 @Module({
   imports: [
@@ -55,6 +56,11 @@ import { MessageQueueModule } from './message-queue/message-queue.module';
         ttl: 300_000, // 5 minute window
         limit: 10, // max 10 login attempts per IP per 5 minutes
       },
+      {
+        name: 'chat',
+        ttl: 60_000, // 1 minute window
+        limit: 20, // max 20 chat messages per IP per minute
+      },
     ]),
 
     CommonModule,
@@ -73,6 +79,7 @@ import { MessageQueueModule } from './message-queue/message-queue.module';
     ClientDashboardModule,
     AuthModule,
     CallModule,
+    ChatModule,
     ConversationContextModule,
     FacebookModule,
     AccountingModule,
