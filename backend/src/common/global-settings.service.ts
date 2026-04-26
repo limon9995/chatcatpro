@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { promises as fs } from 'fs';
 import { join } from 'path';
 
-interface GlobalSettings {
+export interface GlobalSettings {
   localAiEnabled: boolean; // true = use Ollama laptop, false = use OpenAI directly
 }
 
