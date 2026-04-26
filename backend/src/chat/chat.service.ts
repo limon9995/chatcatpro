@@ -37,13 +37,18 @@ export class ChatService {
     const messages: ChatMessage[] = history.slice(-8);
     messages.push({ role: 'user', content: message });
 
-    try {
-      if (localAiEnabled && this.ollamaBaseUrl) {
+    if (localAiEnabled && this.ollamaBaseUrl) {
+      try {
         return await this.chatWithOllama(messages);
+      } catch (err: any) {
+        this.logger.warn(`[Chat] Ollama failed — falling back to OpenAI: ${err?.message ?? err}`);
       }
+    }
+
+    try {
       return await this.chatWithOpenAI(messages);
     } catch (err: any) {
-      this.logger.error(`[Chat] Failed: ${err?.message ?? err}`);
+      this.logger.error(`[Chat] OpenAI also failed: ${err?.message ?? err}`);
       return FALLBACK_REPLY;
     }
   }
