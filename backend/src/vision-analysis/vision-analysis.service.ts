@@ -3,8 +3,9 @@ import { VisionAttributes, VisionAnalysisProvider } from './vision-analysis.inte
 import { MockVisionProvider } from './providers/mock.vision.provider';
 import { OpenAIVisionProvider } from './providers/openai.vision.provider';
 import { LocalVisionProvider } from './providers/local.vision.provider';
+import { OllamaVisionProvider } from './providers/ollama.vision.provider';
 
-type VisionMode = 'openai' | 'local' | 'local-with-fallback' | 'mock';
+type VisionMode = 'openai' | 'local' | 'local-with-fallback' | 'ollama' | 'ollama-with-fallback' | 'mock';
 
 @Injectable()
 export class VisionAnalysisService {
@@ -17,6 +18,7 @@ export class VisionAnalysisService {
     private readonly mockProvider: MockVisionProvider,
     private readonly openaiProvider: OpenAIVisionProvider,
     private readonly localProvider: LocalVisionProvider,
+    private readonly ollamaProvider: OllamaVisionProvider,
   ) {
     const raw = (process.env.VISION_PROVIDER ?? '').toLowerCase().trim();
     this.confidenceThreshold = Number(process.env.VISION_CONFIDENCE_THRESHOLD ?? 0.15);
@@ -24,12 +26,15 @@ export class VisionAnalysisService {
     if (raw === 'openai') this.mode = 'openai';
     else if (raw === 'local') this.mode = 'local';
     else if (raw === 'local-with-fallback') this.mode = 'local-with-fallback';
-    else if (process.env.OPENAI_API_KEY) this.mode = 'openai'; // auto-detect when key is present
+    else if (raw === 'ollama') this.mode = 'ollama';
+    else if (raw === 'ollama-with-fallback') this.mode = 'ollama-with-fallback';
+    else if (process.env.OLLAMA_BASE_URL) this.mode = 'ollama-with-fallback'; // auto-detect Ollama
+    else if (process.env.OPENAI_API_KEY) this.mode = 'openai'; // auto-detect OpenAI
     else this.mode = 'mock';
 
-    // Simple single-provider for non-fallback modes
     if (this.mode === 'openai') this.provider = this.openaiProvider;
     else if (this.mode === 'local') this.provider = this.localProvider;
+    else if (this.mode === 'ollama') this.provider = this.ollamaProvider;
     else this.provider = this.mockProvider;
 
     this.logger.log(`[VisionAnalysis] Mode: ${this.mode} | threshold: ${this.confidenceThreshold}`);
@@ -57,6 +62,22 @@ export class VisionAnalysisService {
         const result = await this.openaiProvider.analyze(imageUrl);
         return { ...result, usedApi: true };
       }
+
+      if (this.mode === 'ollama-with-fallback') {
+        try {
+          const ollama = await this.ollamaProvider.analyze(imageUrl);
+          if (ollama.confidence >= this.confidenceThreshold) {
+            this.logger.log(`[VisionAnalysis] Ollama OK — cat=${ollama.category} conf=${ollama.confidence.toFixed(2)}`);
+            return { ...ollama, usedApi: false };
+          }
+          this.logger.log(`[VisionAnalysis] Ollama conf=${ollama.confidence.toFixed(2)} → OpenAI fallback`);
+        } catch (ollamaErr: any) {
+          this.logger.warn(`[VisionAnalysis] Ollama unavailable (${ollamaErr?.message}) → OpenAI fallback`);
+        }
+        const result = await this.openaiProvider.analyze(imageUrl);
+        return { ...result, usedApi: true };
+      }
+
       const result = await this.provider.analyze(imageUrl);
       return { ...result, usedApi: this.mode === 'openai' };
     } catch (err: any) {
