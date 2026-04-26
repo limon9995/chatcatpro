@@ -224,7 +224,12 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
 .ms-typing-d span:nth-child(2){animation-delay:.16s}.ms-typing-d span:nth-child(3){animation-delay:.32s}
 .ms-bar{padding:7px 9px;background:rgba(255,255,255,.025);border-top:1px solid rgba(255,255,255,.04);display:flex;align-items:center;gap:7px;flex-shrink:0}
 .ms-inp-box{flex:1;background:rgba(255,255,255,.07);border-radius:20px;padding:7px 13px;font-size:11px;color:rgba(255,255,255,.25);border:1px solid rgba(255,255,255,.05)}
-.ms-send-ic{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#1877f2,#0d6fe8);display:flex;align-items:center;justify-content:center;color:#fff;flex-shrink:0;box-shadow:0 2px 8px rgba(24,119,242,.4)}
+.ms-inp-real{flex:1;background:rgba(255,255,255,.07);border-radius:20px;padding:7px 13px;font-size:11px;color:#fff;border:1px solid rgba(255,255,255,.12);outline:none;font-family:'DM Sans','Noto Sans Bengali',sans-serif}
+.ms-inp-real::placeholder{color:rgba(255,255,255,.3)}
+.ms-inp-real:focus{border-color:rgba(24,119,242,.5);background:rgba(255,255,255,.1)}
+.ms-send-ic{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#1877f2,#0d6fe8);display:flex;align-items:center;justify-content:center;color:#fff;flex-shrink:0;box-shadow:0 2px 8px rgba(24,119,242,.4);cursor:pointer;border:none}
+.ms-send-ic:disabled{opacity:0.45;cursor:not-allowed}
+.ms-chat-area{flex:1;overflow-y:auto;padding:10px 9px;display:flex;flex-direction:column;gap:5px;background:#0c0c1a;scrollbar-width:none}
 
 /* Floating chips */
 .sc-chip{position:absolute;background:rgba(9,9,21,.93);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid rgba(255,255,255,.09);border-radius:14px;padding:10px 14px;display:flex;align-items:center;gap:10px;box-shadow:0 8px 30px rgba(0,0,0,.5);white-space:nowrap;animation:chipFloat 4s ease-in-out infinite}
@@ -557,8 +562,8 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
 <section class="demo-sec" id="live-demo">
   <div class="demo-inner">
     <span class="section-label fade-up">Live Demo</span>
-    <h2 class="demo-title fade-up">Bot কীভাবে order নেয়?</h2>
-    <p class="demo-sub fade-up">Real customer conversation — এটাই আপনার page-এ হবে, ২৪/৭, automatically।</p>
+    <h2 class="demo-title fade-up">Bot-এর সাথে কথা বলুন</h2>
+    <p class="demo-sub fade-up">নিচে type করুন — AI আপনাকে Chatcat সম্পর্কে সব বলবে। এটাই আপনার bot-এর মতো কাজ করবে।</p>
 
     <div class="scene-root" id="sceneRoot">
       <!-- BG orbs -->
@@ -587,10 +592,10 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
             <div class="ms-chat-area" id="demoChat"></div>
             <!-- Input bar -->
             <div class="ms-bar">
-              <div class="ms-inp-box">Type a message...</div>
-              <div class="ms-send-ic">
+              <input class="ms-inp-real" id="demoInput" type="text" placeholder="Type a message..." autocomplete="off"/>
+              <button class="ms-send-ic" id="demoSend">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="m22 2-7 20-4-9-9-4Z"/></svg>
-              </div>
+              </button>
             </div>
           </div>
           <div class="p-btn-r p-btn-r-1"></div>
@@ -1117,57 +1122,85 @@ document.querySelectorAll('.btn-primary,.nav-cta').forEach(function(btn) {
   });
 });
 
-// ── Live 3D Demo: Messenger chat animation ──
+// ── Live Chat Demo ──
 (function() {
   var chat = document.getElementById('demoChat');
-  if (!chat) return;
+  var input = document.getElementById('demoInput');
+  var sendBtn = document.getElementById('demoSend');
+  if (!chat || !input || !sendBtn) return;
 
-  var msgs = [
-    {s:'u', t:'ভাই CC101 available আছে?'},
-    {s:'typing', d:1300},
-    {s:'b', t:'হ্যাঁ! CC101 stock এ আছে 🎉\nদাম ৳৮৫০। নেবেন?'},
-    {s:'u', t:'হ্যাঁ নেবো। Dhaka delivery।'},
-    {s:'b', t:'নাম আর mobile নম্বরটা দিন।'},
-    {s:'u', t:'Karim Ahmed\n01712-345678'},
-    {s:'typing', d:1500},
-    {s:'b', t:'✅ Order Confirmed!\nOrder #CC2847\n📦 Pathao বুক হয়েছে।', cls:'confirm'},
-    {s:'b', t:'Delivery 2-3 দিনে হবে। ধন্যবাদ! 🙏'},
-  ];
+  var history = [];
+  var busy = false;
 
-  function addMsg(msg) {
-    if (msg.s === 'typing') {
-      var el = document.createElement('div');
-      el.className = 'ms-typing-d'; el.id = 'typingEl';
-      el.innerHTML = '<span></span><span></span><span></span>';
-      chat.appendChild(el); chat.scrollTop = 9999; return el;
-    }
-    var te = document.getElementById('typingEl');
+  // Welcome message
+  appendBot('হ্যালো! 👋 আমি Chatcat AI। আমাকে যেকোনো প্রশ্ন করুন — features, pricing, কিভাবে শুরু করবেন।');
+
+  function appendUser(text) {
+    var el = document.createElement('div');
+    el.className = 'ms-bbl u';
+    el.style.whiteSpace = 'pre-line';
+    el.textContent = text;
+    chat.appendChild(el);
+    chat.scrollTop = 9999;
+  }
+
+  function appendBot(text) {
+    var te = document.getElementById('demoTyping');
     if (te) te.remove();
     var el = document.createElement('div');
-    el.className = 'ms-bbl ' + msg.s + (msg.cls ? ' ' + msg.cls : '');
+    el.className = 'ms-bbl b';
     el.style.whiteSpace = 'pre-line';
-    el.textContent = msg.t;
-    chat.appendChild(el); chat.scrollTop = 9999; return el;
+    el.textContent = text;
+    chat.appendChild(el);
+    chat.scrollTop = 9999;
   }
 
-  function runChat() {
-    chat.innerHTML = '';
-    var t = 700;
-    msgs.forEach(function(m) {
-      var gap = m.s === 'u' ? 1600 : m.s === 'typing' ? 200 : m.s === 'b' ? (m.d || 1100) : 900;
-      t += gap;
-      var tt = t;
-      setTimeout(function() { addMsg(m); }, tt);
+  function showTyping() {
+    var te = document.getElementById('demoTyping');
+    if (te) return;
+    var el = document.createElement('div');
+    el.className = 'ms-typing-d'; el.id = 'demoTyping';
+    el.innerHTML = '<span></span><span></span><span></span>';
+    chat.appendChild(el);
+    chat.scrollTop = 9999;
+  }
+
+  function setDisabled(val) {
+    busy = val;
+    input.disabled = val;
+    sendBtn.disabled = val;
+  }
+
+  function send() {
+    var msg = input.value.trim();
+    if (!msg || busy) return;
+    input.value = '';
+    appendUser(msg);
+    history.push({role:'user', content:msg});
+    setDisabled(true);
+    showTyping();
+
+    fetch('https://api.chatcat.pro/chat', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({message: msg, history: history.slice(-8)})
+    }).then(function(r) { return r.json(); }).then(function(data) {
+      var reply = data && data.reply ? data.reply : 'দুঃখিত, উত্তর পেতে সমস্যা হচ্ছে।';
+      appendBot(reply);
+      history.push({role:'assistant', content:reply});
+      if (history.length > 20) history = history.slice(-20);
+    }).catch(function() {
+      appendBot('দুঃখিত, সংযোগে সমস্যা হচ্ছে। একটু পরে আবার চেষ্টা করুন।');
+    }).finally(function() {
+      setDisabled(false);
+      input.focus();
     });
-    setTimeout(runChat, t + 3200);
   }
 
-  var started = false;
-  var obs = new IntersectionObserver(function(en) {
-    en.forEach(function(e) { if (e.isIntersecting && !started) { started=true; setTimeout(runChat,600); } });
-  }, {threshold: 0.25});
-  var sec = document.querySelector('.demo-sec');
-  if (sec) obs.observe(sec);
+  sendBtn.addEventListener('click', send);
+  input.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') { e.preventDefault(); send(); }
+  });
 })();
 
 // ── Live 3D Demo: scene parallax ──
@@ -1308,9 +1341,10 @@ document.querySelectorAll('.btn-primary,.nav-cta').forEach(function(btn) {
 })();
 </script>
 
-<!-- ── Chatcat Live Chat Widget ───────────────────────────────────────── -->
+<!-- ── Chatcat Live Chat Widget (disabled — chat is in demo section) ── -->
 <style>
   #cc-bubble {
+    display: none !important;
     position: fixed; bottom: 28px; right: 28px; z-index: 9999;
     width: 56px; height: 56px; border-radius: 50%;
     background: linear-gradient(135deg, #6366f1, #22d3ee);
@@ -1322,6 +1356,7 @@ document.querySelectorAll('.btn-primary,.nav-cta').forEach(function(btn) {
   #cc-bubble:hover { transform: scale(1.08); box-shadow: 0 6px 32px rgba(99,102,241,.65); }
   #cc-bubble svg { width: 26px; height: 26px; fill: #fff; }
   #cc-panel {
+    display: none !important;
     position: fixed; bottom: 96px; right: 28px; z-index: 9998;
     width: 340px; height: 520px;
     background: #0f1422; border-radius: 18px;
