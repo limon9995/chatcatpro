@@ -211,7 +211,7 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
 /* Messenger */
 .ms-hd{background:linear-gradient(135deg,#1877f2,#0d6fe8);padding:11px 13px;display:flex;align-items:center;gap:9px;flex-shrink:0}
 .ms-back-ic{color:rgba(255,255,255,.85);font-size:20px;font-weight:300;line-height:1}
-.ms-av{width:32px;height:32px;border-radius:9px;background:#fff url('https://app.chatcat.pro/logo.png') no-repeat left center;background-size:auto 100%;border:2px solid rgba(255,255,255,.22);flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.3);overflow:hidden}
+.ms-av{width:32px;height:32px;border-radius:9px;background:#fff url('https://app.chatcat.pro/logo.png') no-repeat;background-size:auto 88%;background-position:12% center;border:2px solid rgba(255,255,255,.22);flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.3);overflow:hidden}
 .ms-nm{font-size:13px;font-weight:700;color:#fff;line-height:1.2}.ms-ac{display:flex;align-items:center;gap:4px;font-size:10px;color:rgba(255,255,255,.7);margin-top:1px}
 .ms-gdot{width:6px;height:6px;border-radius:50%;background:#4ade80;box-shadow:0 0 6px #4ade80;animation:pulse 2s ease infinite;flex-shrink:0}
 .ms-chat-area{flex:1;overflow:hidden;padding:10px 9px;display:flex;flex-direction:column;gap:5px;background:#0c0c1a}
@@ -1355,8 +1355,9 @@ document.querySelectorAll('.btn-primary,.nav-cta').forEach(function(btn) {
   }
   #cc-avatar {
     width: 42px; height: 42px; border-radius: 11px;
-    background: #fff url('https://app.chatcat.pro/logo.png') no-repeat left center;
-    background-size: auto 100%;
+    background: #fff url('https://app.chatcat.pro/logo.png') no-repeat;
+    background-size: auto 88%;
+    background-position: 12% center;
     flex-shrink: 0;
     box-shadow: 0 2px 14px rgba(0,0,0,.3);
     overflow: hidden;
