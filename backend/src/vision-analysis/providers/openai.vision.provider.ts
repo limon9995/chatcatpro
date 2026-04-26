@@ -49,8 +49,17 @@ Rules:
 - category "non_clothing" means the image is definitely not a clothing product`;
   }
 
+  private extractJson(content: string): string {
+    const fenceMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (fenceMatch) return fenceMatch[1].trim();
+    const objMatch = content.match(/\{[\s\S]*\}/);
+    if (objMatch) return objMatch[0];
+    return content.trim();
+  }
+
   private parseResponse(content: string): VisionAttributes {
-    const parsed = JSON.parse(content) as Partial<VisionAttributes>;
+    const json = this.extractJson(content);
+    const parsed = JSON.parse(json) as Partial<VisionAttributes>;
     return {
       category: parsed.category ?? null,
       color: parsed.color ?? null,

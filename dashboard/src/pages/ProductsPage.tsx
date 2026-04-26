@@ -282,12 +282,7 @@ export function ProductsPage({ th, pageId, onToast }: {
       }
       onToast(copy('AI analysis applied', 'AI analysis applied'), 'success');
     } catch (e: any) {
-      const msg: string = e.message ?? '';
-      if (msg.includes('ঝাপসা') || msg.includes('অস্পষ্ট') || msg.includes('পণ্যের ছবি নয়')) {
-        onToast('ছবিটা ঝাপসা — clear light-এ তুলে আবার try করুন', 'warning');
-      } else {
-        onToast(msg, 'error');
-      }
+      onToast((e as any).message ?? copy('AI analysis ব্যর্থ হয়েছে', 'AI analysis failed'), 'error');
     } finally {
       if (target === 'new') setAnalyzingNew(false);
       else setAnalyzingEdit(false);
@@ -332,12 +327,7 @@ export function ProductsPage({ th, pageId, onToast }: {
       }
       onToast(copy(`${urls.length}টা angle থেকে AI analysis সম্পন্ন ✓`, `AI analysis from ${urls.length} angles done ✓`), 'success');
     } catch (e: any) {
-      const msg: string = e.message ?? '';
-      if (msg.includes('ঝাপসা') || msg.includes('অস্পষ্ট') || msg.includes('পণ্যের ছবি নয়')) {
-        onToast('ছবিগুলো ঝাপসা — clear light-এ তুলে আবার try করুন', 'warning');
-      } else {
-        onToast(msg, 'error');
-      }
+      onToast((e as any).message ?? copy('AI analysis ব্যর্থ হয়েছে', 'AI analysis failed'), 'error');
     } finally {
       if (target === 'new') setAnalyzingNew(false);
       else setAnalyzingEdit(false);
