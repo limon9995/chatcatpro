@@ -161,9 +161,9 @@ export default function WalletPage({
             <span style={{ opacity: 0.8 }}>Voice Message STT</span>
             <span>৳ {wallet?.costPerVoiceMsgBdt ?? 0.40}</span>
             <span style={{ opacity: 0.8 }}>Customer Image</span>
-            <span>৳ {wallet?.costPerImageBdt ?? 1.70}</span>
+            <span>৳ {wallet?.costPerImageBdt ?? 0.50}</span>
             <span style={{ opacity: 0.8 }}>Product Auto-Analyze</span>
-            <span>৳ {wallet?.costPerAnalyzeBdt ?? 1.70}</span>
+            <span>৳ {wallet?.costPerAnalyzeBdt ?? 0.50}</span>
           </div>
         </div>
       </div>

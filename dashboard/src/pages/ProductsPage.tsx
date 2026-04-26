@@ -656,8 +656,8 @@ export function ProductsPage({ th, pageId, onToast }: {
                   </div>
                   <span style={{ fontSize: 11, color: th.muted ?? '#888', lineHeight: 1.5 }}>
                     {mode === 'OCR'
-                      ? 'Customer image থেকে product code পড়বে। কোনো AI API call হবে না। খরচ: ৳0.85/image (50%)'
-                      : 'OpenAI Vision দিয়ে product detect করবে। খরচ: ৳1.70/image (100%)'}
+                      ? 'Customer image থেকে product code পড়বে। কোনো AI API call হবে না। খরচ: ৳0.25/image'
+                      : 'OpenAI Vision দিয়ে product detect করবে। খরচ: ৳0.50/image'}
                   </span>
                 </label>
               ))}
@@ -961,7 +961,7 @@ export function ProductsPage({ th, pageId, onToast }: {
                                   <span style={{ fontWeight: 700, fontSize: 12, color: th.text }}>{mode === 'OCR' ? '📷 OCR Mode' : '🤖 AI Vision'}</span>
                                 </div>
                                 <span style={{ fontSize: 10, color: th.muted ?? '#888', lineHeight: 1.4 }}>
-                                  {mode === 'OCR' ? `Product code পড়বে • ৳${(1.70 * 0.5).toFixed(2)}/image` : `AI দিয়ে detect করবে • ৳1.70/image`}
+                                  {mode === 'OCR' ? 'Product code পড়বে • ৳0.25/image' : 'AI দিয়ে detect করবে • ৳0.50/image'}
                                 </span>
                               </label>
                             ))}

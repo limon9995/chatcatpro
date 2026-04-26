@@ -118,7 +118,7 @@ export function AdminPanel({ th, onToast, onLogout }: {
   const [walletDirectSaving, setWalletDirectSaving] = useState(false);
 
   // Pricing tab state
-  const DEFAULT_PRICING = { costPerTextMsgBdt: 0.05, costPerVoiceMsgBdt: 0.50, costPerImageBdt: 1.70, costPerImageLocalBdt: 1.20, costPerAnalyzeBdt: 1.70 };
+  const DEFAULT_PRICING = { costPerTextMsgBdt: 0.05, costPerVoiceMsgBdt: 0.50, costPerImageBdt: 0.50, costPerImageLocalBdt: 0.30, costPerAnalyzeBdt: 0.50 };
   const [pricingForm, setPricingForm] = useState(DEFAULT_PRICING);
   const [pricingSaving, setPricingSaving] = useState(false);
 
@@ -2388,9 +2388,9 @@ function AdminPricingTab({ th, form, setForm, saving, onApplyAll }: {
           {[
             { label: 'Text Message', value: '৳0.05' },
             { label: 'Voice Message', value: '৳0.50' },
-            { label: 'Image — API (OpenAI)', value: '৳1.70' },
-            { label: 'Image — Local CLIP', value: '৳1.20' },
-            { label: 'Admin Analyze', value: '৳1.70' },
+            { label: 'Image — API (OpenAI)', value: '৳0.50' },
+            { label: 'Image — Local CLIP', value: '৳0.30' },
+            { label: 'Admin Analyze', value: '৳0.50' },
             { label: 'Uniqueness Check', value: '৳0.02 (fixed)' },
           ].map(({ label, value }) => (
             <div key={label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, padding: '4px 0', borderBottom: `1px solid ${th.border}` }}>
