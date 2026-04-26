@@ -356,18 +356,15 @@ export class VisionOpsService {
       );
     }
 
-    // Skip billing for cached results (same image analyzed before)
     if (attrs.fromCache) {
       this.logger.log(`[VisionOps] Cache hit — skipping wallet deduction for pageId=${pageId}`);
-    } else if (attrs.usedApi) {
-      await this.walletService.deductUsage(pageId, 'ADMIN_VISION');
     } else {
-      this.logger.log(`[VisionOps] Skipping ADMIN_VISION deduction (Local/Ollama used)`);
+      await this.walletService.deductUsage(pageId, 'ADMIN_VISION');
     }
 
     const uniqueness = await this.productMatch.checkUniqueness(pageId, attrs, excludeCode);
 
-    if (!attrs.fromCache && attrs.usedApi) {
+    if (!attrs.fromCache) {
       await this.walletService.deductUsage(pageId, 'IMAGE_UNIQUENESS');
     }
 
@@ -394,13 +391,13 @@ export class VisionOpsService {
 
     if (attrs.fromCache) {
       this.logger.log(`[VisionOps] Batch cache hit — skipping wallet deduction for pageId=${pageId}`);
-    } else if (attrs.usedApi) {
+    } else {
       await this.walletService.deductUsage(pageId, 'ADMIN_VISION');
     }
 
     const uniqueness = await this.productMatch.checkUniqueness(pageId, attrs, excludeCode);
 
-    if (!attrs.fromCache && attrs.usedApi) {
+    if (!attrs.fromCache) {
       await this.walletService.deductUsage(pageId, 'IMAGE_UNIQUENESS');
     }
 

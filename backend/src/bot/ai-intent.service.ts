@@ -118,6 +118,7 @@ export class AiIntentService {
       if (!useLocal) reqHeaders['Authorization'] = `Bearer ${this.apiKey}`;
       else reqHeaders['ngrok-skip-browser-warning'] = 'true';
 
+      this.logger.log(`[AiIntent] Using ${useLocal ? 'Ollama' : 'OpenAI'} for intent detection`);
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: reqHeaders,
@@ -135,7 +136,7 @@ export class AiIntentService {
       });
 
       if (response.status === 429 || response.status === 402) {
-        this.logger.warn(`[AiIntent] Quota/limit hit (${response.status}) — keyword fallback`);
+        this.logger.warn(`[AiIntent] ${useLocal ? 'Ollama' : 'OpenAI'} quota/limit hit (${response.status}) — keyword fallback`);
         this.enterCooldown();
         return { intent: null, reply: null };
       }
@@ -166,10 +167,9 @@ export class AiIntentService {
 
       this.failCount = 0;
       const reply = (parsed?.reply ?? '').trim() || null;
-      
-      // Deduct balance
+
       await this.walletService.deductUsage(pageId, 'TEXT');
-      
+
       this.logger.log(`[AiIntent] intent=${intent} reply="${reply?.slice(0, 80) ?? 'none'}"`);
       return { intent, reply };
 
@@ -204,6 +204,7 @@ export class AiIntentService {
       if (!useLocal) reqHeaders['Authorization'] = `Bearer ${this.apiKey}`;
       else reqHeaders['ngrok-skip-browser-warning'] = 'true';
 
+      this.logger.log(`[AiIntent] Using ${useLocal ? 'Ollama' : 'OpenAI'} for draft review`);
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: reqHeaders,
@@ -251,10 +252,9 @@ export class AiIntentService {
       }
 
       this.failCount = 0;
-      
-      // Deduct balance
+
       await this.walletService.deductUsage(pageId, 'TEXT');
-      
+
       return {
         action: action as DraftStepReviewResult['action'],
         reply: (parsed?.reply ?? '').trim() || null,
