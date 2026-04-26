@@ -563,7 +563,7 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
   <div class="demo-inner">
     <span class="section-label fade-up">Live Demo</span>
     <h2 class="demo-title fade-up">Bot-এর সাথে কথা বলুন</h2>
-    <p class="demo-sub fade-up">নিচে type করুন — AI আপনাকে Chatcat সম্পর্কে সব বলবে। এটাই আপনার bot-এর মতো কাজ করবে।</p>
+    <p class="demo-sub fade-up">দেখুন কিভাবে Chatcat bot customer-দের প্রশ্নের উত্তর দেয়। নিচের <span style="color:#6366f1;font-weight:700">chat bubble</span>-এ click করে আপনিও সরাসরি AI-এর সাথে কথা বলুন।</p>
 
     <div class="scene-root" id="sceneRoot">
       <!-- BG orbs -->
@@ -592,10 +592,10 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
             <div class="ms-chat-area" id="demoChat"></div>
             <!-- Input bar -->
             <div class="ms-bar">
-              <input class="ms-inp-real" id="demoInput" type="text" placeholder="Type a message..." autocomplete="off"/>
-              <button class="ms-send-ic" id="demoSend">
+              <div class="ms-inp-box">Type a message...</div>
+              <div class="ms-send-ic">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="m22 2-7 20-4-9-9-4Z"/></svg>
-              </button>
+              </div>
             </div>
           </div>
           <div class="p-btn-r p-btn-r-1"></div>
@@ -1122,33 +1122,24 @@ document.querySelectorAll('.btn-primary,.nav-cta').forEach(function(btn) {
   });
 });
 
-// ── Live Chat Demo ──
+// ── Animated Demo Chat ──
 (function() {
   var chat = document.getElementById('demoChat');
-  var input = document.getElementById('demoInput');
-  var sendBtn = document.getElementById('demoSend');
-  if (!chat || !input || !sendBtn) return;
+  if (!chat) return;
 
-  var history = [];
-  var busy = false;
+  var msgs = [
+    {r:'b', t:'হ্যালো! 👋 আমি Chatcat AI bot। কিভাবে সাহায্য করতে পারি?'},
+    {r:'u', t:'আপনার service কী?'},
+    {r:'b', t:'Chatcat হলো Facebook Messenger automation platform। আপনার page-এ auto-reply, order management, courier booking সব automatically হবে! 🚀'},
+    {r:'u', t:'দাম কত?'},
+    {r:'b', t:'মাত্র ৳৬৯৯/মাস। AI reply, order tracking, courier integration, accounting — সব included! 💰'},
+    {r:'u', t:'Trial আছে?'},
+    {r:'b', t:'হ্যাঁ! ৭ দিনের free trial — কোনো credit card লাগবে না। এখনই শুরু করুন! ✅'},
+  ];
 
-  // Welcome message
-  appendBot('হ্যালো! 👋 আমি Chatcat AI। আমাকে যেকোনো প্রশ্ন করুন — features, pricing, কিভাবে শুরু করবেন।');
-
-  function appendUser(text) {
+  function addBbl(role, text) {
     var el = document.createElement('div');
-    el.className = 'ms-bbl u';
-    el.style.whiteSpace = 'pre-line';
-    el.textContent = text;
-    chat.appendChild(el);
-    chat.scrollTop = 9999;
-  }
-
-  function appendBot(text) {
-    var te = document.getElementById('demoTyping');
-    if (te) te.remove();
-    var el = document.createElement('div');
-    el.className = 'ms-bbl b';
+    el.className = 'ms-bbl ' + role;
     el.style.whiteSpace = 'pre-line';
     el.textContent = text;
     chat.appendChild(el);
@@ -1156,51 +1147,38 @@ document.querySelectorAll('.btn-primary,.nav-cta').forEach(function(btn) {
   }
 
   function showTyping() {
-    var te = document.getElementById('demoTyping');
-    if (te) return;
-    var el = document.createElement('div');
-    el.className = 'ms-typing-d'; el.id = 'demoTyping';
-    el.innerHTML = '<span></span><span></span><span></span>';
-    chat.appendChild(el);
-    chat.scrollTop = 9999;
+    if (!document.getElementById('demoTyping')) {
+      var el = document.createElement('div');
+      el.className = 'ms-typing-d'; el.id = 'demoTyping';
+      el.innerHTML = '<span></span><span></span><span></span>';
+      chat.appendChild(el);
+      chat.scrollTop = 9999;
+    }
   }
 
-  function setDisabled(val) {
-    busy = val;
-    input.disabled = val;
-    sendBtn.disabled = val;
+  function removeTyping() {
+    var t = document.getElementById('demoTyping');
+    if (t) t.remove();
   }
 
-  function send() {
-    var msg = input.value.trim();
-    if (!msg || busy) return;
-    input.value = '';
-    appendUser(msg);
-    history.push({role:'user', content:msg});
-    setDisabled(true);
-    showTyping();
-
-    fetch('https://api.chatcat.pro/chat', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({message: msg, history: history.slice(-8)})
-    }).then(function(r) { return r.json(); }).then(function(data) {
-      var reply = data && data.reply ? data.reply : 'দুঃখিত, উত্তর পেতে সমস্যা হচ্ছে।';
-      appendBot(reply);
-      history.push({role:'assistant', content:reply});
-      if (history.length > 20) history = history.slice(-20);
-    }).catch(function() {
-      appendBot('দুঃখিত, সংযোগে সমস্যা হচ্ছে। একটু পরে আবার চেষ্টা করুন।');
-    }).finally(function() {
-      setDisabled(false);
-      input.focus();
-    });
+  function runDemo() {
+    chat.innerHTML = '';
+    var delay = 400;
+    for (var i = 0; i < msgs.length; i++) {
+      (function(m, d) {
+        if (m.r === 'b') {
+          setTimeout(showTyping, d);
+          setTimeout(function() { removeTyping(); addBbl('b', m.t); }, d + 800);
+        } else {
+          setTimeout(function() { addBbl('u', m.t); }, d);
+        }
+      })(msgs[i], delay);
+      delay += msgs[i].r === 'b' ? 2600 : 1200;
+    }
+    setTimeout(runDemo, delay + 3000);
   }
 
-  sendBtn.addEventListener('click', send);
-  input.addEventListener('keydown', function(e) {
-    if (e.key === 'Enter') { e.preventDefault(); send(); }
-  });
+  runDemo();
 })();
 
 // ── Live 3D Demo: scene parallax ──
@@ -1341,10 +1319,9 @@ document.querySelectorAll('.btn-primary,.nav-cta').forEach(function(btn) {
 })();
 </script>
 
-<!-- ── Chatcat Live Chat Widget (disabled — chat is in demo section) ── -->
+<!-- ── Chatcat Live Chat Widget ── -->
 <style>
   #cc-bubble {
-    display: none !important;
     position: fixed; bottom: 28px; right: 28px; z-index: 9999;
     width: 56px; height: 56px; border-radius: 50%;
     background: linear-gradient(135deg, #6366f1, #22d3ee);
@@ -1356,7 +1333,6 @@ document.querySelectorAll('.btn-primary,.nav-cta').forEach(function(btn) {
   #cc-bubble:hover { transform: scale(1.08); box-shadow: 0 6px 32px rgba(99,102,241,.65); }
   #cc-bubble svg { width: 26px; height: 26px; fill: #fff; }
   #cc-panel {
-    display: none !important;
     position: fixed; bottom: 96px; right: 28px; z-index: 9998;
     width: 340px; height: 520px;
     background: #0f1422; border-radius: 18px;
