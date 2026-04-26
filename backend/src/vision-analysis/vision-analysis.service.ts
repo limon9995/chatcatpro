@@ -4,6 +4,7 @@ import { MockVisionProvider } from './providers/mock.vision.provider';
 import { OpenAIVisionProvider } from './providers/openai.vision.provider';
 import { LocalVisionProvider } from './providers/local.vision.provider';
 import { OllamaVisionProvider } from './providers/ollama.vision.provider';
+import { GlobalSettingsService } from '../common/global-settings.service';
 
 type VisionMode = 'openai' | 'local' | 'local-with-fallback' | 'ollama' | 'ollama-with-fallback' | 'mock';
 
@@ -19,6 +20,7 @@ export class VisionAnalysisService {
     private readonly openaiProvider: OpenAIVisionProvider,
     private readonly localProvider: LocalVisionProvider,
     private readonly ollamaProvider: OllamaVisionProvider,
+    private readonly globalSettings: GlobalSettingsService,
   ) {
     const raw = (process.env.VISION_PROVIDER ?? '').toLowerCase().trim();
     this.confidenceThreshold = Number(process.env.VISION_CONFIDENCE_THRESHOLD ?? 0.15);
@@ -64,15 +66,20 @@ export class VisionAnalysisService {
       }
 
       if (this.mode === 'ollama-with-fallback') {
-        try {
-          const ollama = await this.ollamaProvider.analyze(imageUrl);
-          if (ollama.confidence >= this.confidenceThreshold) {
-            this.logger.log(`[VisionAnalysis] Ollama OK — cat=${ollama.category} conf=${ollama.confidence.toFixed(2)}`);
-            return { ...ollama, usedApi: false };
+        const { localAiEnabled } = await this.globalSettings.get();
+        if (localAiEnabled) {
+          try {
+            const ollama = await this.ollamaProvider.analyze(imageUrl);
+            if (ollama.confidence >= this.confidenceThreshold) {
+              this.logger.log(`[VisionAnalysis] Ollama OK — cat=${ollama.category} conf=${ollama.confidence.toFixed(2)}`);
+              return { ...ollama, usedApi: false };
+            }
+            this.logger.log(`[VisionAnalysis] Ollama conf=${ollama.confidence.toFixed(2)} → OpenAI fallback`);
+          } catch (ollamaErr: any) {
+            this.logger.warn(`[VisionAnalysis] Ollama unavailable (${ollamaErr?.message}) → OpenAI fallback`);
           }
-          this.logger.log(`[VisionAnalysis] Ollama conf=${ollama.confidence.toFixed(2)} → OpenAI fallback`);
-        } catch (ollamaErr: any) {
-          this.logger.warn(`[VisionAnalysis] Ollama unavailable (${ollamaErr?.message}) → OpenAI fallback`);
+        } else {
+          this.logger.log(`[VisionAnalysis] Laptop AI OFF (admin toggle) → OpenAI directly`);
         }
         const result = await this.openaiProvider.analyze(imageUrl);
         return { ...result, usedApi: true };
@@ -93,6 +100,23 @@ export class VisionAnalysisService {
         const local = await this.localProvider.analyzeMultiple(imageUrls);
         if (local.confidence >= this.confidenceThreshold) return { ...local, usedApi: false };
         this.logger.log(`[VisionAnalysis] Multi local low conf → OpenAI fallback`);
+        let apiResult: VisionAttributes;
+        if (typeof (this.openaiProvider as any).analyzeMultiple === 'function') {
+          apiResult = await (this.openaiProvider as any).analyzeMultiple(imageUrls);
+        } else {
+          apiResult = await this.openaiProvider.analyze(imageUrls[0]);
+        }
+        return { ...apiResult, usedApi: true };
+      }
+
+      if (this.mode === 'ollama-with-fallback') {
+        const { localAiEnabled } = await this.globalSettings.get();
+        if (localAiEnabled) {
+          try {
+            const ollama = await this.ollamaProvider.analyze(imageUrls[0]);
+            if (ollama.confidence >= this.confidenceThreshold) return { ...ollama, usedApi: false };
+          } catch { /* fall through to OpenAI */ }
+        }
         let apiResult: VisionAttributes;
         if (typeof (this.openaiProvider as any).analyzeMultiple === 'function') {
           apiResult = await (this.openaiProvider as any).analyzeMultiple(imageUrls);

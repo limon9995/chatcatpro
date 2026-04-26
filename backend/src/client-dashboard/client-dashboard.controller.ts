@@ -26,6 +26,7 @@ import { CourierAccountingService } from '../courier/courier-accounting.service'
 import { FollowUpService } from '../followup/followup.service';
 import { BroadcastService } from '../broadcast/broadcast.service';
 import { SpamCheckerService } from '../spam-checker/spam-checker.service';
+import { GlobalSettingsService } from '../common/global-settings.service';
 import { SkipThrottle } from '@nestjs/throttler';
 
 @SkipThrottle({ global: true, auth: true })
@@ -44,6 +45,7 @@ export class ClientDashboardController {
     private readonly followUp: FollowUpService,
     private readonly broadcast: BroadcastService,
     private readonly spamChecker: SpamCheckerService,
+    private readonly globalSettings: GlobalSettingsService,
   ) {}
 
   private pid(req: any, pageId: string): number {
@@ -1096,5 +1098,16 @@ export class ClientDashboardController {
     @Query('limit') limit?: string,
   ) {
     return this.spamChecker.getRecentLogs(this.pid(r, p), limit ? Number(limit) : 20);
+  }
+
+  // ── Global AI Settings (Laptop AI toggle) ────────────────────────────────
+  @Get('global-ai')
+  getGlobalAi() {
+    return this.globalSettings.get();
+  }
+
+  @Patch('global-ai')
+  updateGlobalAi(@Body() b: any) {
+    return this.globalSettings.set({ localAiEnabled: !!b?.localAiEnabled });
   }
 }

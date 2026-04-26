@@ -199,9 +199,12 @@ export function SettingsPage({ th, pageId, tab, onToast }: {
   const [reconnectToken, setReconnectToken] = useState('');
   const [reconnectBusy, setReconnectBusy] = useState(false);
   const [unlinkingId, setUnlinkingId] = useState<number | null>(null);
+  const [localAiEnabled, setLocalAiEnabled] = useState(false);
+  const [aiToggleBusy, setAiToggleBusy] = useState(false);
   const banglaVoiceUploadRef = useRef<HTMLInputElement>(null);
   const englishVoiceUploadRef = useRef<HTMLInputElement>(null);
   const BASE = `${API_BASE}/client-dashboard/${pageId}`;
+  const GLOBAL_AI_URL = `${API_BASE}/client-dashboard/global-ai`;
 
   // ── CSS vars for inner components ─────────────────────────────────────────
   const cssVars = {
@@ -216,11 +219,12 @@ export function SettingsPage({ th, pageId, tab, onToast }: {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [biz, modes, tut, linked] = await Promise.all([
+      const [biz, modes, tut, linked, globalAi] = await Promise.all([
         request<any>(`${BASE}/settings`),
         request<any>(`${BASE}/modes`),
         request<any>(`${BASE}/tutorials`).catch(() => null),
         request<any>(`${API_BASE}/page/${pageId}/linked-pages`).catch(() => []),
+        request<any>(GLOBAL_AI_URL).catch(() => null),
       ]);
       setS(prev => ({
         ...prev, ...biz, ...modes,
@@ -230,6 +234,7 @@ export function SettingsPage({ th, pageId, tab, onToast }: {
       }));
       if (tut?.facebookAccessToken) setFbTutorialUrl(tut.facebookAccessToken);
       setLinkedPages(Array.isArray(linked) ? linked : []);
+      if (globalAi) setLocalAiEnabled(!!globalAi.localAiEnabled);
     } catch (e: any) { onToast(e.message, 'error'); }
     finally { setLoading(false); }
   }, [pageId]);
@@ -243,6 +248,16 @@ export function SettingsPage({ th, pageId, tab, onToast }: {
       onToast('✓ Saved');
     } catch (e: any) { onToast(e.message, 'error'); }
     finally { setSaving(false); }
+  };
+
+  const toggleLocalAi = async (val: boolean) => {
+    setAiToggleBusy(true);
+    try {
+      await request(GLOBAL_AI_URL, { method: 'PATCH', body: JSON.stringify({ localAiEnabled: val }) });
+      setLocalAiEnabled(val);
+      onToast(val ? '✓ Laptop AI চালু — Ollama ব্যবহার হবে' : '✓ Laptop AI বন্ধ — OpenAI সরাসরি ব্যবহার হবে');
+    } catch (e: any) { onToast(e.message, 'error'); }
+    finally { setAiToggleBusy(false); }
   };
 
   const reconnectPage = async () => {
@@ -655,6 +670,24 @@ export function SettingsPage({ th, pageId, tab, onToast }: {
             )}
             <div style={{ fontSize: 12, color: th.muted, padding: '8px 12px', borderRadius: 8, background: th.surface, border: `1px solid ${th.border}` }}>
               {copy('Note: Server-এ VISION_PROVIDER=openai এবং OPENAI_API_KEY set না থাকলে এই feature কাজ করবে না। Product এর Category, Color, Keywords field fill করুন matching ভালো হওয়ার জন্য।', 'Note: This feature requires VISION_PROVIDER=openai and OPENAI_API_KEY set in the server .env file. Fill in Category, Color, and Keywords on each product for better matching accuracy.')}
+            </div>
+
+            {/* Laptop AI (Ollama) toggle */}
+            <div style={{ borderTop: `1px solid ${th.border}`, paddingTop: 14, marginTop: 4 }}>
+              <Toggle th={th}
+                label={copy('Laptop AI চালু (Ollama)', 'Laptop AI ON (Ollama)')}
+                sub={copy(
+                  localAiEnabled
+                    ? '✅ Laptop চালু আছে — Ollama দিয়ে AI চলছে (free). বন্ধ করলে সরাসরি OpenAI ব্যবহার হবে।'
+                    : '❌ Laptop বন্ধ মোড — সরাসরি OpenAI ব্যবহার হচ্ছে। Laptop চালু করলে এখানে ON করুন।',
+                  localAiEnabled
+                    ? '✅ Laptop is ON — Ollama (free local AI) is active. Turn off when laptop is off.'
+                    : '❌ Laptop OFF mode — OpenAI is used directly. Turn ON when your laptop is running.',
+                )}
+                checked={localAiEnabled}
+                onChange={toggleLocalAi}
+                disabled={aiToggleBusy}
+              />
             </div>
           </div>
         </Section>
