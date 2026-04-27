@@ -8,6 +8,7 @@ export class AiGenerateService {
   private readonly ollamaBaseUrl: string;
   private readonly ollamaChatModel: string;
   private readonly openaiApiKey: string;
+  private ollamaBusy = false;
 
   constructor(
     private readonly globalSettings: GlobalSettingsService,
@@ -19,6 +20,11 @@ export class AiGenerateService {
   }
 
   private async callOllama(systemPrompt: string, userPrompt: string): Promise<string | null> {
+    if (this.ollamaBusy) {
+      this.logger.log('[AiGenerate] Ollama busy → OpenAI handles this one');
+      return null;
+    }
+    this.ollamaBusy = true;
     try {
       this.logger.log(`[AiGenerate] Ollama (${this.ollamaChatModel})`);
       const res = await fetch(`${this.ollamaBaseUrl}/api/chat`, {
@@ -40,6 +46,8 @@ export class AiGenerateService {
     } catch (err: any) {
       this.logger.warn(`[AiGenerate] Ollama failed: ${err?.message ?? err}`);
       return null;
+    } finally {
+      this.ollamaBusy = false;
     }
   }
 

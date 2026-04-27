@@ -73,6 +73,7 @@ export class AiIntentService {
   private failCount = 0;
   private readonly MAX_FAILS = 5;
   private cooldownUntil = 0;
+  private ollamaBusy = false; // true while an Ollama request is in-flight
 
   constructor(
     private readonly walletService: WalletService,
@@ -99,6 +100,11 @@ export class AiIntentService {
     draftStep: string | null,
     awaitingConfirm: boolean,
   ): Promise<string | null> {
+    if (this.ollamaBusy) {
+      this.logger.log('[AiIntent] Ollama busy → OpenAI handles this one');
+      return null;
+    }
+    this.ollamaBusy = true;
     try {
       this.logger.log(`[AiIntent] Ollama (${this.ollamaModel})`);
       const ollamaMessages = [
@@ -131,6 +137,8 @@ export class AiIntentService {
     } catch (err: any) {
       this.logger.warn(`[AiIntent] Ollama failed: ${err?.message ?? err}`);
       return null;
+    } finally {
+      this.ollamaBusy = false;
     }
   }
 
