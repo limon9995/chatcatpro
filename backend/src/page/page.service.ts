@@ -122,6 +122,13 @@ export class PageService {
     if (body.deliveryFeeOutsideDhaka !== undefined)
       data.deliveryFeeOutsideDhaka = Number(body.deliveryFeeOutsideDhaka) || 0;
 
+    // Dual Photo Mode
+    if (typeof body.dualPhotoMode === 'boolean') data.dualPhotoMode = body.dualPhotoMode;
+    if ('dualWearingProductId' in body)
+      data.dualWearingProductId = body.dualWearingProductId ? Number(body.dualWearingProductId) : null;
+    if ('dualHoldingProductId' in body)
+      data.dualHoldingProductId = body.dualHoldingProductId ? Number(body.dualHoldingProductId) : null;
+
     if (Object.keys(data).length === 0) return this.getById(id);
 
     try {

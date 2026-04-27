@@ -15,6 +15,7 @@ import { BotKnowledgeService } from '../bot-knowledge/bot-knowledge.service';
 import { CallService } from '../call/call.service';
 import { TtsService } from '../call/tts.service';
 import { VisionOpsService } from '../vision-ops/vision-ops.service';
+import { OcrService } from '../ocr/ocr.service';
 
 @Injectable()
 export class ClientDashboardService {
@@ -41,6 +42,7 @@ export class ClientDashboardService {
     private readonly callService: CallService,
     private readonly ttsService: TtsService,
     private readonly visionOps: VisionOpsService,
+    private readonly ocrService: OcrService,
   ) {}
 
   // ── Summary ────────────────────────────────────────────────────────────────
@@ -484,6 +486,23 @@ export class ClientDashboardService {
     return this.visionOps.uploadProductAsset(pageId, file);
   }
 
+  async detectProductCodeFromImage(pageId: number, imageUrl: string) {
+    if (!imageUrl) throw new BadRequestException('imageUrl required');
+    const products = await this.prisma.product.findMany({
+      where: { pageId, isActive: true },
+      select: { id: true, code: true, name: true, price: true, postCaption: true },
+    });
+    const ocrResult = await this.ocrService.extractFull(
+      imageUrl,
+      undefined,
+      products.map(p => ({ code: p.code, postCaption: p.postCaption })),
+    );
+    const matchedProducts = products
+      .filter(p => ocrResult.allCodes.includes(p.code))
+      .map(p => ({ id: p.id, code: p.code, name: p.name, price: Number(p.price) }));
+    return { codes: ocrResult.allCodes, products: matchedProducts };
+  }
+
   async analyzeProductImage(pageId: number, body: any) {
     const imageUrl = String(body?.imageUrl || '').trim();
     const excludeCode = body?.excludeCode ? String(body.excludeCode).trim() : undefined;
@@ -591,6 +610,16 @@ export class ClientDashboardService {
       imageHighConfidence: page.imageHighConfidence ?? 0.75,
       imageMediumConfidence: page.imageMediumConfidence ?? 0.45,
       imageFallbackAiOn: Boolean(page.imageFallbackAiOn),
+      // Dual Photo Mode
+      dualPhotoMode: Boolean(page.dualPhotoMode),
+      dualWearingProductId: page.dualWearingProductId ?? null,
+      dualHoldingProductId: page.dualHoldingProductId ?? null,
+      dualWearingProduct: page.dualWearingProductId
+        ? await this.prisma.product.findUnique({ where: { id: page.dualWearingProductId }, select: { code: true, name: true } }).catch(() => null)
+        : null,
+      dualHoldingProduct: page.dualHoldingProductId
+        ? await this.prisma.product.findUnique({ where: { id: page.dualHoldingProductId }, select: { code: true, name: true } }).catch(() => null)
+        : null,
       // Pricing (from bot-knowledge config)
       pricingPolicy: cfg?.pricingPolicy || {},
       // Call — all fields explicit
@@ -658,6 +687,10 @@ export class ClientDashboardService {
       'imageHighConfidence',
       'imageMediumConfidence',
       'imageFallbackAiOn',
+      // Dual Photo Mode
+      'dualPhotoMode',
+      'dualWearingProductId',
+      'dualHoldingProductId',
     ];
     const pagePatch: any = {};
     for (const k of PAGE_FIELDS) {

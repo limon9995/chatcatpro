@@ -36,6 +36,8 @@ const VALID_INTENTS = new Set([
   'SOFT_HESITATION',
   'MULTI_CONFIRM',
   'UNKNOWN',
+  'DUAL_WEARING',
+  'DUAL_HOLDING',
 ]);
 
 // Intents where AI reply replaces the hardcoded template
@@ -52,6 +54,8 @@ const AI_REPLY_INTENTS = new Set([
   'FABRIC_TYPE',       // AI answers from knowledgeText
   'CATALOG_REQUEST',   // AI lists real products from DB
   'PHOTO_REQUEST',     // AI explains photo process
+  'DUAL_WEARING',      // AI describes the dress model is wearing
+  'DUAL_HOLDING',      // AI describes the dress model is holding
 ]);
 
 const STEP_LABELS: Record<string, string> = {
@@ -99,6 +103,7 @@ export class AiIntentService {
     userText: string,
     draftStep: string | null,
     awaitingConfirm: boolean,
+    context?: BusinessContext,
   ): Promise<string | null> {
     if (this.ollamaBusy) {
       this.logger.log('[AiIntent] Ollama busy → OpenAI handles this one');
@@ -108,7 +113,7 @@ export class AiIntentService {
     try {
       this.logger.log(`[AiIntent] Ollama (${this.ollamaModel})`);
       const ollamaMessages = [
-        { role: 'system', content: this.buildOllamaPrompt(draftStep, awaitingConfirm) },
+        { role: 'system', content: this.buildOllamaPrompt(draftStep, awaitingConfirm, context) },
         { role: 'user', content: `Customer: "${userText}"` },
       ];
       const res = await fetch(`${this.ollamaBaseUrl}/api/chat`, {
@@ -179,13 +184,13 @@ export class AiIntentService {
     maxTokens: number,
     temperature: number,
     label: string,
-    ollamaCtx?: { userText: string; draftStep: string | null; awaitingConfirm: boolean },
+    ollamaCtx?: { userText: string; draftStep: string | null; awaitingConfirm: boolean; context?: BusinessContext },
   ): Promise<{ raw: string } | null> {
     const { localAiMode } = await this.globalSettings.get();
 
     // Try Ollama for bot only when mode is 'all' (generate_only skips bot)
     if (localAiMode === 'all' && this.ollamaBaseUrl && ollamaCtx) {
-      const ollamaRaw = await this.attemptOllama(ollamaCtx.userText, ollamaCtx.draftStep, ollamaCtx.awaitingConfirm);
+      const ollamaRaw = await this.attemptOllama(ollamaCtx.userText, ollamaCtx.draftStep, ollamaCtx.awaitingConfirm, ollamaCtx.context);
       if (ollamaRaw) {
         this.logger.log(`[AiIntent] ${label} — Ollama OK`);
         return { raw: ollamaRaw };
@@ -221,7 +226,7 @@ export class AiIntentService {
       { role: 'user', content: this.buildUserMessage(text, awaitingConfirm, draftStep) },
     ];
 
-    const resolved = await this.resolveProvider(messages, 300, 0.4, 'detectIntent', { userText: text, draftStep, awaitingConfirm });
+    const resolved = await this.resolveProvider(messages, 300, 0.4, 'detectIntent', { userText: text, draftStep, awaitingConfirm, context });
     if (!resolved) return { intent: null, reply: null };
 
     try {
@@ -318,13 +323,17 @@ export class AiIntentService {
     return AI_REPLY_INTENTS.has(intent);
   }
 
-  private buildOllamaPrompt(draftStep: string | null, awaitingConfirm: boolean): string {
+  private buildOllamaPrompt(draftStep: string | null, awaitingConfirm: boolean, context?: BusinessContext): string {
     const stepNote = draftStep ? `\nCurrent step: collecting "${STEP_LABELS[draftStep] ?? draftStep}".` : '';
     const confirmNote = awaitingConfirm ? '\nawaitingConfirm=true means "ok/haa/yes" → CONFIRM.' : '';
+    const dualNote = context?.dualPhotoMode
+      ? `\nDUAL PHOTO MODE active: "hate thaka/holding/hand dress" → DUAL_HOLDING; "pore ache/gaye/wearing dress" → DUAL_WEARING.`
+      : '';
+    const dualIntents = context?.dualPhotoMode ? ', DUAL_WEARING, DUAL_HOLDING' : '';
     return `You are a Bangladeshi e-commerce chatbot. Classify the customer message.
-Return ONLY valid JSON: {"intent":"INTENT","reply":null}${stepNote}${confirmNote}
+Return ONLY valid JSON: {"intent":"INTENT","reply":null}${stepNote}${confirmNote}${dualNote}
 
-Intents: GREETING, ORDER_INTENT, CANCEL, CONFIRM, EDIT_ORDER, NEGOTIATION, SIZE_REQUEST, PHOTO_REQUEST, DELIVERY_TIME, DELIVERY_FEE, FABRIC_TYPE, CATALOG_REQUEST, SOFT_HESITATION, MULTI_CONFIRM, UNKNOWN
+Intents: GREETING, ORDER_INTENT, CANCEL, CONFIRM, EDIT_ORDER, NEGOTIATION, SIZE_REQUEST, PHOTO_REQUEST, DELIVERY_TIME, DELIVERY_FEE, FABRIC_TYPE, CATALOG_REQUEST, SOFT_HESITATION, MULTI_CONFIRM, UNKNOWN${dualIntents}
 
 Rules:
 - "nibo na"/"lagbe na"/"cancel"/"bad den" → CANCEL
@@ -368,7 +377,17 @@ Rules:
       ? `\n\nBusiness Knowledge (FAQ/Policy):\n${context.knowledgeText}`
       : '';
 
-    return `তুমি ${shop}-এর Facebook Messenger chatbot। Tone: warm, conversational Bangla/Banglish — template-এর মতো না, স্বাভাবিকভাবে কথা বলো। 💖 emoji মাঝে মাঝে।${stepCtx}${deliveryCtx}${paymentCtx}${productCtx}${knowledgeCtx}
+    let dualCtx = '';
+    if (context.dualPhotoMode && (context.dualWearingProduct || context.dualHoldingProduct)) {
+      dualCtx = `\n\n## DUAL PHOTO MODE চালু আছে\nএই মুহূর্তে দুটো product active:\n`;
+      if (context.dualWearingProduct)
+        dualCtx += `- মডেল **পরে আছে** (গায়ে): ${context.dualWearingProduct.name} — code: ${context.dualWearingProduct.code}, ৳${context.dualWearingProduct.price}\n`;
+      if (context.dualHoldingProduct)
+        dualCtx += `- **হাতে ধরা** আছে: ${context.dualHoldingProduct.name} — code: ${context.dualHoldingProduct.code}, ৳${context.dualHoldingProduct.price}\n`;
+      dualCtx += `\nCustomer গায়ে পরা/wearing dress জিজ্ঞেস করলে → intent: "DUAL_WEARING"\nCustomer হাতে ধরা/holding dress জিজ্ঞেস করলে → intent: "DUAL_HOLDING"\nreply-তে product name ও price উল্লেখ করো।\n`;
+    }
+
+    return `তুমি ${shop}-এর Facebook Messenger chatbot। Tone: warm, conversational Bangla/Banglish — template-এর মতো না, স্বাভাবিকভাবে কথা বলো। 💖 emoji মাঝে মাঝে।${stepCtx}${deliveryCtx}${paymentCtx}${productCtx}${knowledgeCtx}${dualCtx}
 
 Customer-এর message দেখে JSON return করো:
 { "intent": "<INTENT>", "reply": "<natural reply>" }
@@ -388,6 +407,8 @@ Customer-এর message দেখে JSON return করো:
 - CATALOG_REQUEST — product list চাইছে ("ki ki ache", "ki ache", "catalog", "sob product")
 - SOFT_HESITATION — পরে দেখবে, এখন না
 - MULTI_CONFIRM — একসাথে সব order দিতে চায়
+- DUAL_WEARING — (only when dualPhotoMode) customer গায়ে পরা dress সম্পর্কে জিজ্ঞেস করছে
+- DUAL_HOLDING — (only when dualPhotoMode) customer হাতে ধরা dress সম্পর্কে জিজ্ঞেস করছে
 - UNKNOWN — অন্য সব
 
 ━━ CLASSIFICATION RULES (এগুলো কখনো ভুল করো না) ━━
@@ -423,6 +444,8 @@ CATALOG_REQUEST reply:
 CANCEL reply → warmly acknowledge, কোনো সমস্যা নেই।
 SOFT_HESITATION reply → বুঝলাম, যখন সুবিধা জানাবেন।
 PHOTO_REQUEST reply → বলো photo পাঠানো হবে বা page-এ দেখুন।
+DUAL_WEARING reply → DUAL PHOTO MODE section থেকে "পরে আছে" product-এর name ও price বলো। শেষে বলো "নিতে চাইলে বলুন 💖"।
+DUAL_HOLDING reply → DUAL PHOTO MODE section থেকে "হাতে ধরা" product-এর name ও price বলো। শেষে বলো "নিতে চাইলে বলুন 💖"।
 UNKNOWN + draft চলছে → draft reminder দিয়ে warmly redirect।
 UNKNOWN + no draft → তারা কী বলতে চাইছে acknowledge করো, suggest করো (product code/screenshot দিতে বলো অথবা delivery/size/payment নিয়ে জিজ্ঞেস করতে পারেন বলো)।
 অন্য সব intent → reply=null`;

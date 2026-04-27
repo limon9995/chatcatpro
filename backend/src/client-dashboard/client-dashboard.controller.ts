@@ -255,6 +255,14 @@ export class ClientDashboardController {
   ) {
     return this.svc.uploadProductImage(this.pid(r, p), file);
   }
+  @Post(':pageId/products/detect-code')
+  detectProductCodeFromImage(
+    @Param('pageId') p: string,
+    @Body() b: any,
+    @Req() r: any,
+  ) {
+    return this.svc.detectProductCodeFromImage(this.pid(r, p), String(b?.imageUrl || '').trim());
+  }
   @Post(':pageId/products/analyze-image')
   analyzeProductImage(
     @Param('pageId') p: string,

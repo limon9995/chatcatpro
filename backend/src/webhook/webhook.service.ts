@@ -558,6 +558,29 @@ export class WebhookService {
       }
     }
 
+    // ── DUAL PHOTO MODE ────────────────────────────────────────────────────
+    if (intent === 'DUAL_WEARING' || intent === 'DUAL_HOLDING') {
+      if (!page.dualPhotoMode) {
+        await this.safeSend(token, psid, aiResult.reply ?? 'Dual Photo Mode চালু নেই। Product code বা screenshot দিন 😊');
+        return;
+      }
+      const productId = intent === 'DUAL_WEARING' ? page.dualWearingProductId : page.dualHoldingProductId;
+      if (!productId) {
+        await this.safeSend(token, psid, aiResult.reply ?? 'Product এখনো set হয়নি।');
+        return;
+      }
+      const dualProduct = await this.prisma.product.findFirst({
+        where: { id: Number(productId), pageId, isActive: true },
+      });
+      if (!dualProduct) {
+        await this.safeSend(token, psid, 'Product পাওয়া যায়নি।');
+        return;
+      }
+      if (aiResult.reply) await this.safeSend(token, psid, aiResult.reply);
+      await this.ctx.setLastPresentedProducts(pageId, psid, [{ code: dualProduct.code, price: Number(dualProduct.price) }]);
+      return;
+    }
+
     // ── ORDER INTENT without product code ─────────────────────────────────
     if (intent === 'ORDER_INTENT' && page.orderModeOn) {
       const contextCode = await this.resolveReferencedProductCode(

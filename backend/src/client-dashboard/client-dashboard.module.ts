@@ -15,6 +15,7 @@ import { CourierModule } from '../courier/courier.module';
 import { FollowUpModule } from '../followup/followup.module';
 import { BroadcastModule } from '../broadcast/broadcast.module';
 import { VisionOpsModule } from '../vision-ops/vision-ops.module';
+import { OcrModule } from '../ocr/ocr.module';
 import { SpamCheckerModule } from '../spam-checker/spam-checker.module';
 import { ClientDashboardService } from './client-dashboard.service';
 import { ClientDashboardController } from './client-dashboard.controller';
@@ -32,6 +33,7 @@ import { ClientDashboardController } from './client-dashboard.controller';
     MemoModule,
     BotKnowledgeModule,
     VisionOpsModule,
+    OcrModule,
     SpamCheckerModule,
     AccountingModule,
     CrmModule,

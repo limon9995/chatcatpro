@@ -10,6 +10,12 @@ export interface BusinessProduct {
   category: string | null;
 }
 
+export interface DualProduct {
+  name: string;
+  code: string;
+  price: number;
+}
+
 export interface BusinessContext {
   businessName: string | null;
   deliveryInsideFee: number;
@@ -19,6 +25,9 @@ export interface BusinessContext {
   paymentRules: Record<string, any>;
   pricingPolicy: Record<string, any>;
   knowledgeText: string;
+  dualPhotoMode: boolean;
+  dualWearingProduct: DualProduct | null;
+  dualHoldingProduct: DualProduct | null;
 }
 
 @Injectable()
@@ -40,6 +49,9 @@ export class BotContextService {
           deliveryFeeOutsideDhaka: true,
           deliveryTimeText: true,
           knowledgeText: true,
+          dualPhotoMode: true,
+          dualWearingProductId: true,
+          dualHoldingProductId: true,
         },
       }),
       this.prisma.product.findMany({
@@ -51,6 +63,24 @@ export class BotContextService {
       this.botKnowledge.getConfig(pageId).catch(() => null),
     ]);
 
+    let dualWearingProduct: DualProduct | null = null;
+    let dualHoldingProduct: DualProduct | null = null;
+
+    if ((page as any)?.dualPhotoMode) {
+      const wearingId = (page as any)?.dualWearingProductId;
+      const holdingId = (page as any)?.dualHoldingProductId;
+      const [wearing, holding] = await Promise.all([
+        wearingId
+          ? this.prisma.product.findUnique({ where: { id: wearingId }, select: { name: true, code: true, price: true } })
+          : Promise.resolve(null),
+        holdingId
+          ? this.prisma.product.findUnique({ where: { id: holdingId }, select: { name: true, code: true, price: true } })
+          : Promise.resolve(null),
+      ]);
+      dualWearingProduct = wearing ? { name: wearing.name ?? '', code: wearing.code, price: Number(wearing.price) } : null;
+      dualHoldingProduct = holding ? { name: holding.name ?? '', code: holding.code, price: Number(holding.price) } : null;
+    }
+
     return {
       businessName: page?.businessName ?? null,
       deliveryInsideFee: (page as any)?.deliveryFeeInsideDhaka ?? 80,
@@ -60,6 +90,9 @@ export class BotContextService {
       paymentRules: (knowledgeConfig as any)?.paymentRules ?? {},
       pricingPolicy: (knowledgeConfig as any)?.pricingPolicy ?? {},
       knowledgeText: (page as any)?.knowledgeText ?? '',
+      dualPhotoMode: Boolean((page as any)?.dualPhotoMode),
+      dualWearingProduct,
+      dualHoldingProduct,
     };
   }
 }

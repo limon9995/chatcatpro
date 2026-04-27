@@ -163,6 +163,13 @@ model Page {
   costPerAnalyzeBdt    Float @default(0.50)  // Admin uploading product
   costPerAiGenerateBdt Float @default(0.10)  // AI text generation (description/broadcast draft)
 
+  // -- DUAL PHOTO MODE --
+  dualPhotoMode        Boolean  @default(false)
+  dualWearingProductId Int?
+  dualHoldingProductId Int?
+  dualWearingProduct   Product? @relation("DualWearing", fields: [dualWearingProductId], references: [id])
+  dualHoldingProduct   Product? @relation("DualHolding", fields: [dualHoldingProductId], references: [id])
+
   // -- BUSINESS KNOWLEDGE --
   knowledgeText String @default("") // Client FAQ, policies, product info — fed to AI system prompt
 
@@ -243,7 +250,9 @@ model Product {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  orderItems OrderItem[]
+  orderItems    OrderItem[]
+  dualWearingPages Page[] @relation("DualWearing")
+  dualHoldingPages Page[] @relation("DualHolding")
 
   @@unique([pageId, code])
   @@index([pageId])
