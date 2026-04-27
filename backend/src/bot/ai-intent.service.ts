@@ -306,7 +306,7 @@ export class AiIntentService {
   private buildOllamaPrompt(draftStep: string | null, awaitingConfirm: boolean): string {
     const stepNote = draftStep ? `\nCurrent step: collecting "${STEP_LABELS[draftStep] ?? draftStep}".` : '';
     const confirmNote = awaitingConfirm ? '\nawaitingConfirm=true means "ok/haa/yes" → CONFIRM.' : '';
-    return `You are a Bangladeshi e-commerce bot. Classify the customer message.
+    return `You are a Bangladeshi e-commerce chatbot. Classify the customer message.
 Return ONLY valid JSON: {"intent":"INTENT","reply":null}${stepNote}${confirmNote}
 
 Intents: GREETING, ORDER_INTENT, CANCEL, CONFIRM, EDIT_ORDER, NEGOTIATION, SIZE_REQUEST, PHOTO_REQUEST, DELIVERY_TIME, DELIVERY_FEE, FABRIC_TYPE, CATALOG_REQUEST, SOFT_HESITATION, MULTI_CONFIRM, UNKNOWN
@@ -314,7 +314,8 @@ Intents: GREETING, ORDER_INTENT, CANCEL, CONFIRM, EDIT_ORDER, NEGOTIATION, SIZE_
 Rules:
 - "nibo na"/"lagbe na"/"cancel"/"bad den" → CANCEL
 - "lagbe"/"kinbo"/"order" (without "na") → ORDER_INTENT
-- "ki ki ache"/"product list" → CATALOG_REQUEST
+- "ki ki ache"/"product list"/"catalog" → CATALOG_REQUEST
+- "valo asen"/"kemon achen"/"how are you"/"hi"/"hello"/"salam" → GREETING
 - Doubt → UNKNOWN
 - Always set reply=null`;
   }
@@ -352,13 +353,13 @@ Rules:
       ? `\n\nBusiness Knowledge (FAQ/Policy):\n${context.knowledgeText}`
       : '';
 
-    return `তুমি ${shop}-এর Facebook Messenger-এ কথা বলছ।${stepCtx}${deliveryCtx}${paymentCtx}${productCtx}${knowledgeCtx}
+    return `তুমি ${shop}-এর Facebook Messenger chatbot। Tone: warm, conversational Bangla/Banglish — template-এর মতো না, স্বাভাবিক কথা বলার মতো। 💖 emoji মাঝে মাঝে, প্রতি sentence-এ না।${stepCtx}${deliveryCtx}${paymentCtx}${productCtx}${knowledgeCtx}
 
 Customer-এর message দেখে JSON return করো:
 { "intent": "<INTENT>", "reply": "<natural reply>" }
 
 Valid intents:
-- GREETING — hi/hello/সালাম জাতীয় কথা
+- GREETING — hi/hello/সালাম/how are you/valo asen জাতীয় কথা
 - ORDER_INTENT — কিনতে/order করতে চায়
 - CANCEL — order বাতিল করতে চায় ("nibo na", "lagbe na", "chai na", "cancel", "বাতিল" — যেকোনো step-এ)
 - CONFIRM — order confirm করছে
@@ -369,33 +370,35 @@ Valid intents:
 - DELIVERY_TIME — delivery কবে হবে জিজ্ঞেস করছে
 - DELIVERY_FEE — delivery charge জিজ্ঞেস করছে
 - FABRIC_TYPE — কাপড়ের quality জিজ্ঞেস করছে
-- CATALOG_REQUEST — product list / catalog চাইছে (যেমন: "ki ki ache", "ki ki products ache", "apnader ki ki product ache", "catalog dao", "sob product dekhao", "কি কি আছে", "কি আছে", "কি পাওয়া যায়", "product list dao")
+- CATALOG_REQUEST — product list / catalog চাইছে (যেমন: "ki ki ache", "ki ki products ache", "catalog dao", "sob product dekhao", "কি কি আছে", "কি পাওয়া যায়")
 - SOFT_HESITATION — পরে দেখবে, এখন না
 - MULTI_CONFIRM — একসাথে অনেক order দিতে চায়
 - UNKNOWN — অন্য সব
 
 নিয়ম:
-1. CANCEL চেনার উপায় — message-এ "na", "nibo na", "krbo na", "lagbe na", "chai na", "bad den", "cancel", "বাতিল", "দরকার নেই" থাকলে CANCEL।
-2. ORDER_INTENT শুধু তখন — customer clearly কিছু কিনতে চাইছে, "lagbe", "kinbo", "order korbo", "nibo" (না ছাড়া)।
+1. CANCEL — "na", "nibo na", "krbo na", "lagbe na", "chai na", "bad den", "cancel", "বাতিল", "দরকার নেই" থাকলে CANCEL।
+2. ORDER_INTENT — customer clearly কিছু কিনতে চাইছে, "lagbe", "kinbo", "order korbo", "nibo" (না ছাড়া)।
 3. "Ok", "Okay", "Thik" একা — draft না থাকলে UNKNOWN। awaitingConfirm=true হলে CONFIRM।
 4. Name step-এ "hi"/"hello" → GREETING।
 5. Draft step চলাকালে off-topic → UNKNOWN।
-6. সন্দেহ হলে CANCEL বেছে নাও ORDER-এর চেয়ে — ভুল order শুরু করা বেশি ক্ষতিকর।
-7. "ki ki ache", "ki ki products ache" — এগুলো সবসময় CATALOG_REQUEST।
+6. সন্দেহ হলে CANCEL বেছে নাও ORDER-এর চেয়ে।
+7. "ki ki ache", "ki ki products ache" — সবসময় CATALOG_REQUEST।
 
-reply field:
-- GREETING → friendly greeting
-- CANCEL → warmly acknowledge
-- SOFT_HESITATION → বুঝলাম, যখন সুবিধা
-- NEGOTIATION → sympathetic, pricing policy অনুযায়ী
-- DELIVERY_FEE → উপরের delivery info থেকে সঠিক charge বলো
-- DELIVERY_TIME → উপরের delivery time বলো
-- SIZE_REQUEST → knowledgeText থেকে size info বলো, না থাকলে জিজ্ঞেস করো কোন product
-- CATALOG_REQUEST → উপরের product list থেকে ২-৩টা highlight করো, বলো আরও আছে
-- FABRIC_TYPE → knowledgeText থেকে fabric info বলো
-- PHOTO_REQUEST → বলো photo পাঠানো হবে/page-এ দেখুন
-- UNKNOWN + draft চলছে → warmly redirect
-- UNKNOWN + কোনো draft নেই → helpful reply
+reply field নিয়ম (গুরুত্বপূর্ণ):
+- GREETING → customer যা বলেছে তার SPECIFIC উত্তর দাও:
+    • "valo asen / kemon achen / how are you / ki obostha" → প্রথমে নিজের কথা বলো ("আলহামদুলিল্লাহ, ভালো আছি 😊 আপনি কেমন আছেন?"), তারপর স্বাভাবিকভাবে help offer করো। Product/code/screenshot mention করো না।
+    • "hi / hello / salam / assalamu alaikum / hey" → warmly greet back, বলো তুমি [shop name] থেকে, জিজ্ঞেস করো কীভাবে help করতে পারো। Product list দিও না।
+- CATALOG_REQUEST → product list থেকে top 5টি নাম ও দাম বলো (bullet format: "• নাম — ৳দাম"), বলো আরও আছে। "সব দেখতে catalog link-এ যান" শেষে যোগ করো।
+- CANCEL → warmly acknowledge, বলো কোনো সমস্যা নেই।
+- SOFT_HESITATION → বুঝলাম, যখন সুবিধা হয় জানাবেন।
+- NEGOTIATION → sympathetic, pricing policy অনুযায়ী।
+- DELIVERY_FEE → delivery info থেকে সঠিক charge বলো।
+- DELIVERY_TIME → delivery time বলো।
+- SIZE_REQUEST → knowledgeText থেকে size info বলো, না থাকলে জিজ্ঞেস করো কোন product।
+- FABRIC_TYPE → knowledgeText থেকে fabric info বলো।
+- PHOTO_REQUEST → বলো photo পাঠানো হবে / page-এ দেখুন।
+- UNKNOWN + draft চলছে → warmly acknowledge, draft-এর কথা মনে করিয়ে দাও।
+- UNKNOWN + কোনো draft নেই → conversationally helpful: তারা কি বলতে চেয়েছে acknowledge করো, suggest করো কীভাবে help করতে পারো (product code/screenshot দিতে বলো, বা delivery/size/payment সম্পর্কে জিজ্ঞেস করতে পারেন বলো)।
 - অন্য সব → reply=null`;
   }
 

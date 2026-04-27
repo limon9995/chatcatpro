@@ -259,7 +259,7 @@ export class WebhookService {
     let intent = keywordIntent;
     let aiResult = { intent: null as string | null, reply: null as string | null };
 
-    const isStrongKeyword = !!keywordIntent && ['CATALOG_REQUEST', 'CANCEL', 'ORDER_REMOVE_ITEM', 'MULTI_CONFIRM'].includes(keywordIntent);
+    const isStrongKeyword = !!keywordIntent && ['CANCEL', 'ORDER_REMOVE_ITEM', 'MULTI_CONFIRM'].includes(keywordIntent);
     const aiAllowed = await this.isAiAllowedForPage(page.ownerId);
 
     if (!isStrongKeyword && aiAllowed) {
@@ -600,7 +600,7 @@ export class WebhookService {
             await this.safeSend(
               token,
               psid,
-              `ঠিক আছে 💖 ${contextCode} এর জন্য order নিচ্ছি।\n\nআপনার **নাম + ফোন নম্বর + ঠিকানা** দিন।`,
+              `ঠিক আছে! 😊 ${contextCode} order করছি।\n\nপ্রথমে আপনার **নামটা** বলুন।`,
             );
           }
           return;
@@ -636,23 +636,32 @@ export class WebhookService {
     if (intent === 'CATALOG_REQUEST') {
       const businessName = page.businessName || page.pageName || 'আমাদের';
       const websiteUrl = String(page.websiteUrl || '').trim();
-      if (websiteUrl) {
-        await this.safeSend(
-          token,
-          psid,
-          `${businessName} এর সব product দেখতে এই website/page visit করুন 👇\n\n${websiteUrl}\n\nপছন্দের item দেখে আমাদের message দিন, আমরা help করব 💖`,
-        );
+      const catalogBaseUrl = (process.env.CATALOG_BASE_URL || 'https://chatcat.pro').replace(/\/$/, '');
+      const slug = page.catalogSlug || String(page.id);
+      const catalogUrl = websiteUrl || `${catalogBaseUrl}/catalog/${slug}`;
+
+      if (aiResult.reply) {
+        // AI listed products from context — append catalog URL
+        await this.safeSend(token, psid, `${aiResult.reply}\n\n🛍️ সব product দেখতে:\n${catalogUrl}`);
         return;
       }
 
-      const catalogBaseUrl = (process.env.CATALOG_BASE_URL || 'https://chatcat.pro').replace(/\/$/, '');
-      const slug = page.catalogSlug || String(page.id);
-      const catalogUrl = `${catalogBaseUrl}/catalog/${slug}`;
-      await this.safeSend(
-        token,
-        psid,
-        `${businessName} এর সব product দেখতে এই link এ click করুন 👇\n\n${catalogUrl}\n\nপছন্দের product এর code বা screenshot দিন — আমরা order নেব 💖`,
-      );
+      // AI unavailable — dynamic DB-driven fallback with real product list
+      const topProducts = await this.prisma.product.findMany({
+        where: { pageId, isActive: true, stockQty: { gt: 0 } },
+        select: { name: true, price: true },
+        orderBy: { createdAt: 'desc' },
+        take: 6,
+      });
+
+      let catalogMsg: string;
+      if (topProducts.length > 0) {
+        const list = topProducts.map(p => `• ${p.name} — ৳${p.price}`).join('\n');
+        catalogMsg = `${businessName}-এর কিছু popular product:\n\n${list}\n\n🛍️ সব দেখতে:\n${catalogUrl}\n\nপছন্দের product-এর code বা screenshot দিন, order নেব 💖`;
+      } else {
+        catalogMsg = `${businessName}-এর সব product দেখতে:\n\n${catalogUrl}\n\nপছন্দের product-এর code বা screenshot দিন 💖`;
+      }
+      await this.safeSend(token, psid, catalogMsg);
       return;
     }
 
@@ -1039,7 +1048,7 @@ export class WebhookService {
           await this.safeSend(
             token,
             psid,
-            `${returnGreet}ঠিক আছে 💖 আপনার **নাম + ফোন নম্বর + ঠিকানা** দিন।`,
+            `${returnGreet}ঠিক আছে! 😊 ${code} order করছি।\n\nপ্রথমে আপনার **নামটা** বলুন।`,
           );
         }
       } else {

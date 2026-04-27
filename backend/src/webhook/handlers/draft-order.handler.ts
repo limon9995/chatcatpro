@@ -273,7 +273,7 @@ export class DraftOrderHandler {
       // All custom fields done → now collect customer info
       draft.currentStep = 'name';
       await this.ctx.saveDraft(pageId, psid, draft);
-      return 'ধন্যবাদ 💖 এখন আপনার **নাম + ফোন নম্বর + ঠিকানা** দিন।';
+      return 'ধন্যবাদ 💖 এখন **নামটা** বলুন।';
     }
 
     // ── NAME / PHONE / ADDRESS — Smart multi-field parsing ───────────────────
