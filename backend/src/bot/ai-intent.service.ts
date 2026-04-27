@@ -95,21 +95,26 @@ export class AiIntentService {
   }
 
   private async attemptOllama(
-    messages: { role: string; content: string }[],
-    maxTokens: number,
+    userText: string,
+    draftStep: string | null,
+    awaitingConfirm: boolean,
   ): Promise<string | null> {
     try {
       this.logger.log(`[AiIntent] Ollama (${this.ollamaModel})`);
+      const ollamaMessages = [
+        { role: 'system', content: this.buildOllamaPrompt(draftStep, awaitingConfirm) },
+        { role: 'user', content: `Customer: "${userText}"` },
+      ];
       const res = await fetch(`${this.ollamaBaseUrl}/api/chat`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: this.ollamaModel,
           stream: false,
-          options: { num_predict: maxTokens },
-          messages,
+          options: { num_predict: 80 },
+          messages: ollamaMessages,
         }),
-        signal: AbortSignal.timeout(18_000),
+        signal: AbortSignal.timeout(6_000),
       });
       if (!res.ok) throw new Error(`Ollama HTTP ${res.status}`);
       const data = await res.json() as any;
@@ -166,12 +171,13 @@ export class AiIntentService {
     maxTokens: number,
     temperature: number,
     label: string,
+    ollamaCtx?: { userText: string; draftStep: string | null; awaitingConfirm: boolean },
   ): Promise<{ raw: string } | null> {
     const { localAiEnabled } = await this.globalSettings.get();
 
-    // Try Ollama first if enabled
-    if (localAiEnabled && this.ollamaBaseUrl) {
-      const ollamaRaw = await this.attemptOllama(messages, maxTokens);
+    // Try Ollama first if enabled (lightweight prompt only)
+    if (localAiEnabled && this.ollamaBaseUrl && ollamaCtx) {
+      const ollamaRaw = await this.attemptOllama(ollamaCtx.userText, ollamaCtx.draftStep, ollamaCtx.awaitingConfirm);
       if (ollamaRaw) {
         this.logger.log(`[AiIntent] ${label} — Ollama OK`);
         return { raw: ollamaRaw };
@@ -207,7 +213,7 @@ export class AiIntentService {
       { role: 'user', content: this.buildUserMessage(text, awaitingConfirm, draftStep) },
     ];
 
-    const resolved = await this.resolveProvider(messages, 300, 0.4, 'detectIntent');
+    const resolved = await this.resolveProvider(messages, 300, 0.4, 'detectIntent', { userText: text, draftStep, awaitingConfirm });
     if (!resolved) return { intent: null, reply: null };
 
     try {
@@ -287,6 +293,22 @@ export class AiIntentService {
 
   shouldUseAiReply(intent: string): boolean {
     return AI_REPLY_INTENTS.has(intent);
+  }
+
+  private buildOllamaPrompt(draftStep: string | null, awaitingConfirm: boolean): string {
+    const stepNote = draftStep ? `\nCurrent step: collecting "${STEP_LABELS[draftStep] ?? draftStep}".` : '';
+    const confirmNote = awaitingConfirm ? '\nawaitingConfirm=true means "ok/haa/yes" → CONFIRM.' : '';
+    return `You are a Bangladeshi e-commerce bot. Classify the customer message.
+Return ONLY valid JSON: {"intent":"INTENT","reply":null}${stepNote}${confirmNote}
+
+Intents: GREETING, ORDER_INTENT, CANCEL, CONFIRM, EDIT_ORDER, NEGOTIATION, SIZE_REQUEST, PHOTO_REQUEST, DELIVERY_TIME, DELIVERY_FEE, FABRIC_TYPE, CATALOG_REQUEST, SOFT_HESITATION, MULTI_CONFIRM, UNKNOWN
+
+Rules:
+- "nibo na"/"lagbe na"/"cancel"/"bad den" → CANCEL
+- "lagbe"/"kinbo"/"order" (without "na") → ORDER_INTENT
+- "ki ki ache"/"product list" → CATALOG_REQUEST
+- Doubt → UNKNOWN
+- Always set reply=null`;
   }
 
   private buildSystemPrompt(context: BusinessContext, draftStep: string | null): string {
