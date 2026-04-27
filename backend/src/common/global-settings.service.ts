@@ -2,11 +2,16 @@ import { Injectable } from '@nestjs/common';
 import { promises as fs } from 'fs';
 import { join } from 'path';
 
+// 'all'           → Laptop ON: Ollama for bot + AI Generate
+// 'generate_only' → Laptop OFF (Bot): bot uses OpenAI, AI Generate still tries Ollama
+// 'none'          → Laptop OFF (Full): everything uses OpenAI directly
+export type LocalAiMode = 'all' | 'generate_only' | 'none';
+
 export interface GlobalSettings {
-  localAiEnabled: boolean; // true = use Ollama laptop, false = use OpenAI directly
+  localAiMode: LocalAiMode;
 }
 
-const DEFAULTS: GlobalSettings = { localAiEnabled: false };
+const DEFAULTS: GlobalSettings = { localAiMode: 'none' };
 const FILE = join(process.cwd(), 'storage', 'settings', 'global.json');
 
 @Injectable()
@@ -22,7 +27,12 @@ export class GlobalSettingsService {
     if (this.loaded) return this.cache;
     try {
       const raw = await fs.readFile(FILE, 'utf8');
-      this.cache = { ...DEFAULTS, ...JSON.parse(raw) };
+      const parsed = JSON.parse(raw);
+      // Migrate old boolean field
+      if (parsed.localAiMode === undefined) {
+        parsed.localAiMode = parsed.localAiEnabled === true ? 'all' : 'none';
+      }
+      this.cache = { ...DEFAULTS, ...parsed };
     } catch {
       this.cache = { ...DEFAULTS };
     }

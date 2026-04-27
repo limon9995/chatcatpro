@@ -70,9 +70,10 @@ export class AiGenerateService {
   }
 
   private async generate(systemPrompt: string, userPrompt: string, maxTokens = 250): Promise<string | null> {
-    const { localAiEnabled } = await this.globalSettings.get();
+    const { localAiMode } = await this.globalSettings.get();
 
-    if (localAiEnabled && this.ollamaBaseUrl) {
+    // Ollama for AI Generate if mode is 'all' or 'generate_only'
+    if ((localAiMode === 'all' || localAiMode === 'generate_only') && this.ollamaBaseUrl) {
       const result = await this.callOllama(systemPrompt, userPrompt);
       if (result) return result;
       this.logger.warn('[AiGenerate] Ollama failed — falling back to OpenAI');

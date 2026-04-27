@@ -126,8 +126,8 @@ export function AdminPanel({ th, onToast, onLogout }: {
   const [subPages, setSubPages] = useState<any[]>([]);
   const [subLoading, setSubLoading] = useState(false);
 
-  // Laptop AI toggle state
-  const [laptopAiEnabled, setLaptopAiEnabled] = useState(false);
+  // Laptop AI mode state
+  const [localAiMode, setLocalAiMode] = useState<'all' | 'generate_only' | 'none'>('none');
   const [laptopAiSaving, setLaptopAiSaving] = useState(false);
 
   // Create client form state
@@ -145,18 +145,24 @@ export function AdminPanel({ th, onToast, onLogout }: {
         request(`${BASE}/laptop-ai`),
       ]);
       setOverview(ov);
-      setLaptopAiEnabled(!!ai?.localAiEnabled);
+      const mode = ai?.localAiMode;
+      setLocalAiMode(mode === 'all' || mode === 'generate_only' ? mode : 'none');
     }
     catch (e: any) { onToast(e.message, 'error'); }
     finally { setLoading(false); }
   }, []);
 
-  const toggleLaptopAi = async (val: boolean) => {
+  const setAiMode = async (mode: 'all' | 'generate_only' | 'none') => {
     setLaptopAiSaving(true);
     try {
-      await request(`${BASE}/laptop-ai`, { method: 'PATCH', body: JSON.stringify({ localAiEnabled: val }) });
-      setLaptopAiEnabled(val);
-      onToast(val ? 'Laptop AI চালু — Ollama ব্যবহার হবে' : 'Laptop AI বন্ধ — OpenAI সরাসরি ব্যবহার হবে');
+      await request(`${BASE}/laptop-ai`, { method: 'PATCH', body: JSON.stringify({ localAiMode: mode }) });
+      setLocalAiMode(mode);
+      const msg = mode === 'all'
+        ? 'Laptop ON — Ollama সব জায়গায় ব্যবহার হবে'
+        : mode === 'generate_only'
+          ? 'Laptop OFF (Bot) — Bot OpenAI, AI Generate Ollama'
+          : 'Laptop OFF (সব) — সব কিছু সরাসরি OpenAI';
+      onToast(msg, 'success');
     } catch (e: any) { onToast(e.message, 'error'); }
     finally { setLaptopAiSaving(false); }
   };
@@ -577,31 +583,40 @@ export function AdminPanel({ th, onToast, onLogout }: {
           </div>
         </div>
 
-        {/* Laptop AI Toggle */}
+        {/* Laptop AI Mode */}
         <div style={th.card}>
           <div style={{ fontSize: 11.5, fontWeight: 800, color: th.muted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 14 }}>
             🤖 AI Provider Control
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
-            <div>
-              <div style={{ fontWeight: 700, fontSize: 14 }}>Laptop AI (Ollama)</div>
-              <div style={{ fontSize: 12.5, color: th.muted, marginTop: 4 }}>
-                {laptopAiEnabled
-                  ? '✅ Ollama চালু — laptop-এর AI ব্যবহার হচ্ছে। Laptop বন্ধ করলে এটা OFF করুন।'
-                  : '❌ OpenAI mode — সরাসরি OpenAI ব্যবহার হচ্ছে।'}
-              </div>
-            </div>
-            <button
-              disabled={laptopAiSaving}
-              onClick={() => toggleLaptopAi(!laptopAiEnabled)}
-              style={{
-                ...laptopAiEnabled ? th.btnPrimary : th.btnGhost,
-                minWidth: 80, flexShrink: 0,
-                opacity: laptopAiSaving ? 0.6 : 1,
-              }}
-            >
-              {laptopAiSaving ? '...' : laptopAiEnabled ? 'ON' : 'OFF'}
-            </button>
+          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>Laptop (Ollama) Mode</div>
+          <div style={{ fontSize: 12.5, color: th.muted, marginBottom: 14 }}>
+            {localAiMode === 'all'
+              ? '✅ Laptop ON — Bot + AI Generate সব Ollama দিয়ে চলবে। Laptop বন্ধ করলে নিচের option বেছে নিন।'
+              : localAiMode === 'generate_only'
+                ? '⚡ Laptop OFF (Bot) — Messenger bot সরাসরি OpenAI, AI Generate এখনো Ollama চেষ্টা করবে।'
+                : '❌ Laptop OFF (সব) — সব কিছু সরাসরি OpenAI ব্যবহার করবে।'}
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {([
+              { mode: 'all', label: '💻 Laptop ON', desc: 'সব Ollama' },
+              { mode: 'generate_only', label: '⚡ Bot OFF', desc: 'Bot → OpenAI, Generate → Ollama' },
+              { mode: 'none', label: '🌐 সব OFF', desc: 'সব → OpenAI' },
+            ] as const).map(({ mode, label, desc }) => (
+              <button
+                key={mode}
+                disabled={laptopAiSaving}
+                onClick={() => setAiMode(mode)}
+                style={{
+                  ...(localAiMode === mode ? th.btnPrimary : th.btnGhost),
+                  opacity: laptopAiSaving ? 0.6 : 1,
+                  display: 'flex', flexDirection: 'column', alignItems: 'flex-start',
+                  padding: '8px 14px', gap: 2,
+                }}
+              >
+                <span style={{ fontWeight: 700, fontSize: 13 }}>{laptopAiSaving && localAiMode === mode ? '...' : label}</span>
+                <span style={{ fontSize: 11, opacity: 0.75 }}>{desc}</span>
+              </button>
+            ))}
           </div>
         </div>
       </div>

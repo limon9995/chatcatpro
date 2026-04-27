@@ -84,8 +84,8 @@ export class VisionAnalysisService {
           result = { ...(await this.openaiProvider.analyze(imageUrl)), usedApi: true };
         }
       } else if (this.mode === 'ollama-with-fallback') {
-        const { localAiEnabled } = await this.globalSettings.get();
-        if (localAiEnabled) {
+        const { localAiMode } = await this.globalSettings.get();
+        if (localAiMode === 'all' || localAiMode === 'generate_only') {
           try {
             const ollama = await this.ollamaProvider.analyze(imageUrl);
             if (ollama.confidence >= this.confidenceThreshold) {

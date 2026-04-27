@@ -1108,6 +1108,8 @@ export class ClientDashboardController {
 
   @Patch('global-ai')
   updateGlobalAi(@Body() b: any) {
-    return this.globalSettings.set({ localAiEnabled: !!b?.localAiEnabled });
+    const valid = ['all', 'generate_only', 'none'];
+    const mode = valid.includes(b?.localAiMode) ? b.localAiMode : (b?.localAiEnabled === true ? 'all' : 'none');
+    return this.globalSettings.set({ localAiMode: mode });
   }
 }

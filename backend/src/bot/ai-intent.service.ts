@@ -173,10 +173,10 @@ export class AiIntentService {
     label: string,
     ollamaCtx?: { userText: string; draftStep: string | null; awaitingConfirm: boolean },
   ): Promise<{ raw: string } | null> {
-    const { localAiEnabled } = await this.globalSettings.get();
+    const { localAiMode } = await this.globalSettings.get();
 
-    // Try Ollama first if enabled (lightweight prompt only)
-    if (localAiEnabled && this.ollamaBaseUrl && ollamaCtx) {
+    // Try Ollama for bot only when mode is 'all' (generate_only skips bot)
+    if (localAiMode === 'all' && this.ollamaBaseUrl && ollamaCtx) {
       const ollamaRaw = await this.attemptOllama(ollamaCtx.userText, ollamaCtx.draftStep, ollamaCtx.awaitingConfirm);
       if (ollamaRaw) {
         this.logger.log(`[AiIntent] ${label} — Ollama OK`);

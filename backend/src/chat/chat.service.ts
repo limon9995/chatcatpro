@@ -32,12 +32,12 @@ export class ChatService {
   }
 
   async chat(message: string, history: ChatMessage[]): Promise<string> {
-    const { localAiEnabled } = await this.globalSettings.get();
+    const { localAiMode } = await this.globalSettings.get();
 
     const messages: ChatMessage[] = history.slice(-8);
     messages.push({ role: 'user', content: message });
 
-    if (localAiEnabled && this.ollamaBaseUrl) {
+    if ((localAiMode === 'all' || localAiMode === 'generate_only') && this.ollamaBaseUrl) {
       try {
         return await this.chatWithOllama(messages);
       } catch (err: any) {
