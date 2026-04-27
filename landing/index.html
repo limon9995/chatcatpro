@@ -11,6 +11,7 @@
 <meta name="robots" content="index, follow"/>
 <meta name="author" content="Chatcat"/>
 <link rel="canonical" href="https://chatcat.pro/"/>
+<link rel="sitemap" type="application/xml" href="/sitemap.xml"/>
 
 <!-- Open Graph (Facebook, WhatsApp, Messenger share preview) -->
 <meta property="og:type" content="website"/>
@@ -1001,6 +1002,126 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
   <p style="margin-top:20px;font-size:13.5px;opacity:.6;position:relative">যোগাযোগ: <a href="mailto:info@chatcat.pro" style="color:#a5b4fc;text-decoration:none;font-weight:600">info@chatcat.pro</a></p>
 </div>
 
+<!-- ══ FAQ ══ -->
+<section class="section" id="faq" style="padding-bottom:60px">
+  <div style="max-width:780px;margin:0 auto">
+    <span class="section-label">FAQ</span>
+    <h2 class="section-title" style="margin-bottom:12px">সাধারণ প্রশ্নোত্তর</h2>
+    <p class="section-sub" style="margin-bottom:48px">যা জানতে চান সব এখানে আছে — না পেলে WhatsApp-এ জিজ্ঞেস করুন।</p>
+
+    <div id="faq-list">
+
+      <div class="faq-item">
+        <button class="faq-q" aria-expanded="false">
+          Chatcat কি শুধু Facebook Messenger-এ কাজ করে?
+          <svg class="faq-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="faq-a">
+          <p>হ্যাঁ, এই মুহূর্তে Chatcat শুধু <strong>Facebook Page Messenger</strong>-এ কাজ করে। আপনার Facebook Page-এ customer message করলে bot automatically reply দেবে, order নেবে, product info দেবে। WhatsApp ও Instagram integration আমাদের roadmap-এ আছে।</p>
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-q" aria-expanded="false">
+          Bot কি বাংলা ভাষায় কথা বলতে পারে?
+          <svg class="faq-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="faq-a">
+          <p>অবশ্যই। Chatcat-এর bot <strong>বাংলা, Banglish (বাংলা Latin হরফে)</strong> এবং English তিনটিতেই বোঝে ও reply দেয়। "lagbe", "kinbo", "ডেলিভারি কত", "ki ki ase" — সব ধরনের কথা bot হ্যান্ডেল করতে পারে।</p>
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-q" aria-expanded="false">
+          OCR মানে কী? Product screenshot থেকে কীভাবে order হয়?
+          <svg class="faq-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="faq-a">
+          <p>OCR (Optical Character Recognition) মানে ছবি থেকে text বের করা। Customer যখন আপনার product-এর screenshot দেয়, Chatcat সেই ছবি থেকে product code (যেমন DF-0042) বের করে — তারপর database থেকে product খুঁজে order শুরু করে। Customer-কে আলাদা করে code type করতে হয় না।</p>
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-q" aria-expanded="false">
+          Pathao, Steadfast, RedX courier booking কীভাবে কাজ করে?
+          <svg class="faq-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="faq-a">
+          <p>Order confirm হওয়ার পর dashboard থেকে এক-ক্লিকে courier booking করতে পারবেন। Chatcat সরাসরি <strong>Pathao, Steadfast, RedX ও Paperfly</strong>-এর API-এ connected। Consignment number automatic save হয়, tracking update আসে।</p>
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-q" aria-expanded="false">
+          Chatcat কি ব্যবহার করতে technical knowledge লাগে?
+          <svg class="faq-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="faq-a">
+          <p>না। Chatcat setup করতে মাত্র ২০-৩০ মিনিট লাগে — Facebook Page connect, product add, delivery charge set, bot চালু। কোনো coding বা technical skill দরকার নেই। আমাদের support team সবসময় WhatsApp-এ আছে।</p>
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-q" aria-expanded="false">
+          ৳৬৯৯/মাসে কী কী পাব? কোনো hidden charge আছে কি?
+          <svg class="faq-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="faq-a">
+          <p>৳৬৯৯/মাসে পাবেন: unlimited order, unlimited product, courier integration, CRM, accounting, broadcast — সব features। আলাদা charge শুধু <strong>AI usage-এ</strong> (image analysis ও AI reply) — যা pay-as-you-go ভিত্তিতে wallet থেকে কাটে। অনেক seller-এর AI cost মাসে ৳১০০-২০০-এর মধ্যে থাকে।</p>
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-q" aria-expanded="false">
+          কতজন customer একসাথে chat করলেও bot সামলাতে পারবে?
+          <svg class="faq-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="faq-a">
+          <p>Bot সম্পূর্ণ <strong>cloud-based ও scalable</strong>। একসাথে ১০০ জন customer message করলেও কোনো সমস্যা নেই — সবাই instantaneous reply পাবে। Facebook Messenger limit পর্যন্ত সব handle করতে পারে।</p>
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-q" aria-expanded="false">
+          Trial বা refund policy কী?
+          <svg class="faq-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="faq-a">
+          <p>আমরা বিশ্বাস করি product ভালো কাজ না করলে আপনার টাকা নেওয়া উচিত না। যেকোনো সময় cancel করতে পারবেন — পরের cycle charge হবে না। কোনো প্রশ্ন বা সমস্যায় <a href="https://wa.me/8801720450797" style="color:var(--accent2)">WhatsApp</a>-এ যোগাযোগ করুন।</p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<style>
+.faq-item{border-bottom:1px solid var(--border);padding:4px 0}
+.faq-q{width:100%;display:flex;align-items:center;justify-content:space-between;gap:16px;background:none;border:none;color:var(--text);font-family:inherit;font-size:16px;font-weight:600;text-align:left;padding:20px 0;cursor:pointer;transition:color .15s}
+.faq-q:hover{color:var(--accent2)}
+.faq-arrow{flex-shrink:0;transition:transform .25s cubic-bezier(.22,1,.36,1)}
+.faq-q[aria-expanded="true"] .faq-arrow{transform:rotate(180deg)}
+.faq-a{max-height:0;overflow:hidden;transition:max-height .35s cubic-bezier(.22,1,.36,1)}
+.faq-a.open{max-height:400px}
+.faq-a p{padding:0 0 20px;color:var(--muted);font-size:15px;line-height:1.7}
+</style>
+<script>
+document.querySelectorAll('.faq-q').forEach(function(btn){
+  btn.addEventListener('click',function(){
+    var expanded = this.getAttribute('aria-expanded')==='true';
+    // close all
+    document.querySelectorAll('.faq-q').forEach(function(b){
+      b.setAttribute('aria-expanded','false');
+      b.nextElementSibling.classList.remove('open');
+    });
+    if(!expanded){
+      this.setAttribute('aria-expanded','true');
+      this.nextElementSibling.classList.add('open');
+    }
+  });
+});
+</script>
+
 <!-- ══ Footer ══ -->
 <footer>
   <div>
@@ -1015,6 +1136,7 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
     <a href="#how-it-works" class="footer-link">How it works</a>
     <a href="#pricing" class="footer-link">Pricing</a>
     <a href="mailto:info@chatcat.pro" class="footer-link">Contact</a>
+    <a href="/privacy.html" class="footer-link">Privacy Policy</a>
   </div>
 </footer>
 
