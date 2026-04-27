@@ -429,16 +429,35 @@ export class CatalogController {
     const selectText = encodeURIComponent(`SELECT_PRODUCT:${p.code}`);
     const priceFormatted = Number(p.price).toLocaleString('bn-BD');
 
+    const productPublicUrl = `https://api.chatcat.pro/catalog/${esc(page.id)}/product/${esc(p.code)}`;
+    const productDesc = `মূল্য: ${currency}${Number(p.price).toLocaleString()} · ${inStock ? 'Stock আছে' : 'Stock নেই'} · ${esc(p.description || p.name || p.code)} — ${esc(page.name)}`;
+
     return `<!DOCTYPE html>
 <html lang="bn">
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <meta name="theme-color" content="${primary}"/>
+<title>${esc(p.name || p.code)} — ${esc(page.name)} | Online Shop</title>
+<meta name="description" content="${productDesc}"/>
+<meta name="robots" content="index, follow"/>
+<link rel="canonical" href="${productPublicUrl}"/>
+<meta property="og:type" content="product"/>
+<meta property="og:url" content="${productPublicUrl}"/>
+<meta property="og:site_name" content="${esc(page.name)}"/>
 <meta property="og:title" content="${esc(p.name || p.code)} — ${esc(page.name)}"/>
-${primaryImage ? `<meta property="og:image" content="${esc(primaryImage)}"/>` : ''}
-<meta property="og:description" content="মূল্য: ${currency}${Number(p.price).toLocaleString()} · ${esc(p.description || p.name || '')}"/>
-<title>${esc(p.name || p.code)} — ${esc(page.name)}</title>
+<meta property="og:description" content="${productDesc}"/>
+${primaryImage ? `<meta property="og:image" content="${esc(primaryImage)}"/>
+<meta property="og:image:width" content="800"/>
+<meta property="og:image:height" content="800"/>` : ''}
+<meta property="og:locale" content="bn_BD"/>
+<meta property="product:price:amount" content="${Number(p.price)}"/>
+<meta property="product:price:currency" content="BDT"/>
+<meta property="product:availability" content="${inStock ? 'in stock' : 'out of stock'}"/>
+<meta name="twitter:card" content="summary_large_image"/>
+<meta name="twitter:title" content="${esc(p.name || p.code)} — ${esc(page.name)}"/>
+<meta name="twitter:description" content="${productDesc}"/>
+${primaryImage ? `<meta name="twitter:image" content="${esc(primaryImage)}"/>` : ''}
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
 <style>
@@ -906,13 +925,31 @@ ${poweredByBadge()}
       </div>`
         : '';
 
+    const catalogSlugOrId = page.catalogSlug || page.id;
+    const catalogPublicUrl = `https://api.chatcat.pro/catalog/${catalogSlugOrId}`;
+    const ogDesc = `${esc(page.name)}-এর সব product দেখুন। ${products.length > 0 ? `${products.length}টি product available।` : ''} পছন্দের product বেছে Messenger-এ order করুন।`;
+    const ogImage = products.find((p: any) => p.imageUrl)?.imageUrl || '';
+
     return `<!DOCTYPE html>
 <html lang="bn">
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <meta name="theme-color" content="${primary}"/>
-<title>${esc(page.name)} — Product Catalog</title>
+<title>${esc(page.name)} — Product Catalog | Online Shop</title>
+<meta name="description" content="${ogDesc}"/>
+<meta name="robots" content="index, follow"/>
+<link rel="canonical" href="${catalogPublicUrl}"/>
+<meta property="og:type" content="website"/>
+<meta property="og:url" content="${catalogPublicUrl}"/>
+<meta property="og:title" content="${esc(page.name)} — Product Catalog"/>
+<meta property="og:description" content="${ogDesc}"/>
+${ogImage ? `<meta property="og:image" content="${esc(ogImage)}"/>` : ''}
+<meta property="og:locale" content="bn_BD"/>
+<meta name="twitter:card" content="summary_large_image"/>
+<meta name="twitter:title" content="${esc(page.name)} — Product Catalog"/>
+<meta name="twitter:description" content="${ogDesc}"/>
+${ogImage ? `<meta name="twitter:image" content="${esc(ogImage)}"/>` : ''}
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
 <style>
