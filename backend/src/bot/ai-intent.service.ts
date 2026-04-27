@@ -109,7 +109,7 @@ export class AiIntentService {
           options: { num_predict: maxTokens },
           messages,
         }),
-        signal: AbortSignal.timeout(12_000),
+        signal: AbortSignal.timeout(18_000),
       });
       if (!res.ok) throw new Error(`Ollama ${res.status}`);
       const data = await res.json() as any;
