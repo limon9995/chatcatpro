@@ -1,0 +1,1 @@
+{"model": "qwen2:1.5b", "messages":[{"role": "system", "content": "You output JSON. { intent: string }"}, {"role": "user", "content": "I want to buy"}], "stream": false, "response_format": {"type": "json_object"}}

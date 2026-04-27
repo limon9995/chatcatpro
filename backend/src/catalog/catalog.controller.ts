@@ -1154,8 +1154,36 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:radial-
 [data-dark="1"] .filter-btn:hover{border-color:color-mix(in srgb,var(--p) 35%,rgba(255,255,255,.12))}
 [data-dark="1"] .site-footer{background:transparent}
 [data-dark="1"] .section-text,[data-dark="1"] .c-desc,[data-dark="1"] .hero-panel-text,[data-dark="1"] .footer-help{color:var(--sub)}
-[data-dark="0"]{color-scheme:light;--bg:#f0f2f8;--surface:#fff;--text:#0f172a;--sub:#475569;--muted:#94a3b8;--border:#e2e8f0}
-[data-dark="0"] .s-input{background:rgba(255,255,255,.92);border-color:rgba(255,255,255,.76);color:var(--text)}
+[data-dark="0"]{color-scheme:light;--bg:#f0f2f8;--surface:#fff;--text:#0f172a;--sub:#475569;--muted:#94a3b8;--border:#e2e8f0;--shadow:0 18px 50px rgba(15,23,42,.08);--shadow-sm:0 8px 24px rgba(15,23,42,.06)}
+[data-dark="0"] body{background:radial-gradient(circle at top left,color-mix(in srgb,var(--p) 12%,transparent),transparent 34%),linear-gradient(180deg,#f9fbff 0%,#f6f7fb 32%,#eef2f8 100%)!important}
+[data-dark="0"] .header{background:linear-gradient(135deg,var(--p),var(--p2))!important;box-shadow:0 10px 30px rgba(15,23,42,.16)!important}
+[data-dark="0"] .hero-card{background:linear-gradient(135deg,rgba(255,255,255,.14),rgba(255,255,255,.06))!important;border-color:rgba(255,255,255,.12)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.12)!important}
+[data-dark="0"] .s-input{background:rgba(255,255,255,.15);border-color:rgba(255,255,255,.28);color:#fff}
+[data-dark="0"] .s-input::placeholder{color:rgba(255,255,255,.55)}
+[data-dark="0"] .hero-panel,[data-dark="0"] .footer-inner{background:rgba(255,255,255,.96)!important;color:var(--text)!important;border-color:var(--border)!important}
+[data-dark="0"] .hero-kicker,[data-dark="0"] .hero-pill{background:rgba(255,255,255,.16)!important;border-color:rgba(255,255,255,.18)!important}
+[data-dark="0"] .stats-badge{background:rgba(255,255,255,.9)!important;color:var(--sub)!important;border-color:var(--border)!important;box-shadow:var(--shadow-sm)!important}
+[data-dark="0"] .filter-btn{background:rgba(255,255,255,.88)!important;color:var(--sub)!important;border-color:var(--border)!important;box-shadow:var(--shadow-sm)!important}
+[data-dark="0"] .filter-btn.active{background:linear-gradient(135deg,var(--p),var(--p2))!important;color:#fff!important;border-color:transparent!important;box-shadow:0 14px 28px color-mix(in srgb,var(--p) 28%,transparent)!important}
+[data-dark="0"] .card{background:linear-gradient(180deg,#fff 0%,#fbfcff 100%)!important;border-color:rgba(148,163,184,.16)!important}
+[data-dark="0"] .c-name{color:#0f172a!important}
+[data-dark="0"] .c-img{background:linear-gradient(135deg,#f8fbff,#eef3ff)!important}
+[data-dark="0"] .c-ph{background:radial-gradient(circle at top left,#eff4ff,#dfe8ff)!important}
+[data-dark="0"] .c-store-badge{background:rgba(255,255,255,.88)!important;color:var(--text)!important;border-color:rgba(255,255,255,.95)!important}
+[data-dark="0"] .c-order-dis{background:var(--border)!important;color:var(--muted)!important}
+[data-dark="0"] .hero-stat{background:rgba(255,255,255,.6)!important}
+[data-dark="0"] .footer-links a{background:rgba(255,255,255,.9)!important;color:var(--text)!important;border-color:var(--border)!important}
+[data-dark="0"] .site-footer{background:unset!important}
+[data-dark="0"] .h-msg-btn,[data-dark="0"] .dk-btn{background:rgba(255,255,255,.18)!important;border-color:rgba(255,255,255,.35)!important;color:#fff!important}
+[data-dark="0"] .section-title{color:#0f172a!important}
+[data-dark="0"] .section-text{color:#475569!important}
+[data-dark="0"] .hero-panel-title,[data-dark="0"] .hero-panel-label,[data-dark="0"] .hero-panel-text{color:inherit!important}
+[data-dark="0"] .stats-count{color:var(--sub)!important}
+[data-dark="0"] .stats-count span{color:var(--p)!important}
+
+/* Search clear button */
+.s-clear{position:absolute;right:14px;top:50%;transform:translateY(-50%);background:none;border:none;color:rgba(255,255,255,.55);font-size:15px;cursor:pointer;display:none;padding:4px 7px;line-height:1;border-radius:50%;transition:all .15s}
+.s-clear:hover{color:#fff;background:rgba(255,255,255,.15)}
 
 /* Dark toggle in header */
 .dk-btn{background:rgba(255,255,255,.14);border:1.5px solid rgba(255,255,255,.25);color:#fff;border-radius:22px;padding:7px 12px;font-size:14px;cursor:pointer;transition:all .15s;line-height:1;backdrop-filter:blur(8px);flex-shrink:0}

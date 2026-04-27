@@ -1,0 +1,1 @@
+{"model": "qwen2:1.5b", "messages":[{"role": "user", "content": "hello"}], "stream": false}
