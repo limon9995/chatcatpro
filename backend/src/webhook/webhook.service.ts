@@ -347,7 +347,7 @@ export class WebhookService {
 
     // ── NEGOTIATION ────────────────────────────────────────────────────────
     if (intent === 'NEGOTIATION') {
-      const reply = await this.negotiationHandler.handle(
+      const reply = aiResult.reply ?? await this.negotiationHandler.handle(
         pageId,
         psid,
         text,
@@ -616,19 +616,8 @@ export class WebhookService {
 
     // ── GREETING ───────────────────────────────────────────────────────────
     if (intent === 'GREETING') {
-      if (aiResult.reply) {
-        await this.safeSend(token, psid, aiResult.reply);
-      } else {
-        // AI unavailable — use cooldown-aware fallback
-        const session = await this.ctx.getSession(pageId, psid);
-        const minsSinceLast = session ? (Date.now() - new Date(session.updatedAt).getTime()) / 60_000 : 999;
-        if (minsSinceLast < 15) {
-          await this.safeSend(token, psid, 'জি বলুন, আমি আপনাকে কীভাবে সাহায্য করতে পারি? 💖');
-        } else {
-          const greetMsg = await this.botKnowledge.resolveSystemReply(pageId, 'greeting');
-          await this.safeSend(token, psid, greetMsg);
-        }
-      }
+      const greetReply = aiResult.reply ?? 'জি বলুন 😊 কীভাবে সাহায্য করতে পারি?';
+      await this.safeSend(token, psid, greetReply);
       return;
     }
 
