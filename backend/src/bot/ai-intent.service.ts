@@ -111,16 +111,20 @@ export class AiIntentService {
         }),
         signal: AbortSignal.timeout(18_000),
       });
-      if (!res.ok) throw new Error(`Ollama ${res.status}`);
+      if (!res.ok) throw new Error(`Ollama HTTP ${res.status}`);
       const data = await res.json() as any;
       const content = (data?.message?.content ?? '').trim();
       // Extract JSON object from response (Ollama may add extra text)
       const match = content.match(/\{[\s\S]*\}/);
-      if (!match) return null;
+      if (!match) {
+        this.logger.warn(`[AiIntent] Ollama no JSON in response: ${content.slice(0, 80)}`);
+        return null;
+      }
       JSON.parse(match[0]); // validate parseable
+      this.logger.log(`[AiIntent] Ollama OK`);
       return match[0];
     } catch (err: any) {
-      this.logger.warn(`[AiIntent] Ollama failed — falling back to OpenAI: ${err?.message ?? err}`);
+      this.logger.warn(`[AiIntent] Ollama failed: ${err?.message ?? err}`);
       return null;
     }
   }
