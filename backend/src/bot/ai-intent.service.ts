@@ -239,7 +239,22 @@ export class AiIntentService {
       }
 
       this.failCount = 0;
-      const reply = (parsed?.reply ?? '').trim() || null;
+      let reply = (parsed?.reply ?? '').trim() || null;
+
+      // Ollama compact prompt always returns reply=null.
+      // When intent needs a reply (greeting, negotiation, delivery, etc.),
+      // call OpenAI with the full business-context prompt to get the actual reply.
+      if (!reply && AI_REPLY_INTENTS.has(intent) && this.apiKey && Date.now() > this.cooldownUntil) {
+        this.logger.log(`[AiIntent] ${intent} needs reply — OpenAI for reply generation`);
+        const openaiRaw = await this.attemptOpenAI(messages, 250, 0.5);
+        if (openaiRaw) {
+          try {
+            const oai = JSON.parse(openaiRaw);
+            reply = (oai?.reply ?? '').trim() || null;
+          } catch { /* ignore */ }
+        }
+      }
+
       await this.walletService.deductUsage(pageId, 'TEXT');
       this.logger.log(`[AiIntent] intent=${intent} reply="${reply?.slice(0, 60) ?? 'none'}"`);
       return { intent, reply };
