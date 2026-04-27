@@ -626,7 +626,18 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:var(--b
 [data-dark="1"] .s-out{background:rgba(220,38,38,.18);color:#f87171;border-color:rgba(220,38,38,.3)}
 [data-dark="1"] .mobile-cta{background:linear-gradient(to top,rgba(11,11,19,1) 60%,rgba(11,11,19,0))!important}
 [data-dark="0"]{color-scheme:light;--bg:#f4f6fb;--surface:#fff;--text:#0d1117;--sub:#4b5563;--muted:#9ca3af;--border:#e5e7eb}
+[data-dark="0"] body{background:var(--bg)!important}
 [data-dark="0"] .nav{background:rgba(255,255,255,.92)!important}
+[data-dark="0"] .no-img-card{background:linear-gradient(145deg,var(--p-light),color-mix(in srgb,var(--p) 6%,#fff))!important;border-color:color-mix(in srgb,var(--p) 14%,#fff)!important}
+[data-dark="0"] .media-info-strip{background:var(--surface)!important}
+[data-dark="0"] .info-card{background:var(--surface)!important}
+[data-dark="0"] .s-in{background:#dcfce7!important;color:#15803d!important;border-color:#bbf7d0!important}
+[data-dark="0"] .s-out{background:#fee2e2!important;color:#dc2626!important;border-color:#fecaca!important}
+[data-dark="0"] .mobile-cta{background:linear-gradient(to top,rgba(255,255,255,1) 60%,rgba(255,255,255,0))!important}
+[data-dark="0"] .chip{background:var(--surface)!important;color:var(--sub)!important;border-color:var(--border)!important}
+[data-dark="0"] .btn-secondary{background:var(--bg)!important;color:var(--sub)!important;border-color:var(--border)!important}
+[data-dark="0"] .btn-action{background:var(--bg)!important;color:var(--sub)!important;border-color:var(--border)!important}
+[data-dark="0"] .site-footer{background:var(--surface)!important;border-color:var(--border)!important}
 
 /* Dark toggle button */
 .dark-btn{background:var(--bg);border:1.5px solid var(--border);color:var(--sub);border-radius:22px;padding:6px 12px;font-size:14px;cursor:pointer;transition:all .15s;flex-shrink:0;line-height:1;display:flex;align-items:center;justify-content:center}
@@ -866,7 +877,7 @@ ${poweredByBadge()}
         }
 
         return `
-      <a class="card" href="/catalog/${esc(page.id)}/product/${esc(p.code)}${selectionMode ? shortlistQuery : ''}" style="animation-delay:${delay}ms" id="p-${esc(p.id)}" data-price="${Number(p.price) || 0}" data-custom-index="${idx}" data-new-index="${idx}" data-product-id="${esc(p.id)}">
+      <a class="card" href="/catalog/${esc(page.id)}/product/${esc(p.code)}${selectionMode ? shortlistQuery : ''}" style="animation-delay:${delay}ms" id="p-${esc(p.id)}" data-price="${Number(p.price) || 0}" data-custom-index="${idx}" data-new-index="${idx}" data-product-id="${esc(p.id)}" data-name="${esc((p.name || p.code || '').toLowerCase())}" data-code="${esc((p.code || '').toLowerCase())}" data-desc="${esc((p.description || '').toLowerCase().slice(0, 300))}">
         <div class="c-media">
           ${topBlock}
           ${!inStock ? '<div class="c-out-badge">Stock Out</div>' : ''}
@@ -1227,11 +1238,11 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:radial-
             <form method="GET" action="/catalog/${esc(page.id)}">
               <div class="s-wrap">
                 <span class="s-icon">🔍</span>
-                <input class="s-input" type="search" name="q"
-                  placeholder="Product খুঁজুন — code বা নাম লিখুন..."
-                  value="${esc(search)}" autocomplete="off"/>
+                <input class="s-input" id="searchBox" type="search"
+                  placeholder="Product খুঁজুন — code, নাম, যেকোনো কিছু..."
+                  value="${esc(search)}" autocomplete="off" spellcheck="false"/>
+                <button class="s-clear" id="sClear" type="button" aria-label="Clear search">✕</button>
               </div>
-            </form>
           </div>
         </div>
       </div>
@@ -1296,29 +1307,121 @@ ${poweredByBadge()}
 <script>
 (function(){
   var grid = document.querySelector('.grid');
-  var buttons = Array.from(document.querySelectorAll('.filter-btn'));
-  if(!grid || !buttons.length) return;
-  var originalCards = Array.from(grid.querySelectorAll('.card'));
-  function sortCards(mode){
-    var cards = originalCards.slice();
-    if(mode === 'price-asc'){
-      cards.sort(function(a,b){ return Number(a.dataset.price||0) - Number(b.dataset.price||0); });
-    } else if(mode === 'price-desc'){
-      cards.sort(function(a,b){ return Number(b.dataset.price||0) - Number(a.dataset.price||0); });
-    } else if(mode === 'new'){
-      cards.sort(function(a,b){ return Number(b.dataset.productId||0) - Number(a.dataset.productId||0); });
-    } else {
-      cards.sort(function(a,b){ return Number(a.dataset.customIndex||0) - Number(b.dataset.customIndex||0); });
-    }
-    cards.forEach(function(card){ grid.appendChild(card); });
+  var searchBox = document.getElementById('searchBox');
+  var sClear = document.getElementById('sClear');
+  var statsEl = document.querySelector('.stats-count');
+  if(!grid) return;
+
+  var allCards = Array.from(grid.querySelectorAll('.card'));
+  var sortMode = 'all';
+  var currentQuery = (searchBox ? searchBox.value : '').toLowerCase().trim();
+
+  /* ── normalize text for matching ── */
+  function norm(s){ return (s||'').toLowerCase().replace(/\s+/g,' ').trim(); }
+
+  /* ── tokenize into words for multi-word search ── */
+  function tokens(s){ return norm(s).split(' ').filter(Boolean); }
+
+  /* ── check one card against query ── */
+  function matches(card, q){
+    if(!q) return true;
+    var name = card.dataset.name || '';
+    var code = card.dataset.code || '';
+    var desc = card.dataset.desc || '';
+    var price = String(card.dataset.price || '');
+    var all = name + ' ' + code + ' ' + desc;
+
+    /* exact substring */
+    if(all.includes(q)) return true;
+
+    /* code digits only: "42" matches "df-0042" */
+    var numQ = q.replace(/\D/g,'');
+    if(numQ.length >= 2 && code.replace(/\D/g,'').includes(numQ)) return true;
+
+    /* every word must appear somewhere */
+    var toks = tokens(q);
+    if(toks.length > 1 && toks.every(function(t){ return all.includes(t); })) return true;
+
+    return false;
   }
+
+  /* ── apply current filter + sort ── */
+  function apply(){
+    var q = norm(currentQuery);
+    var visible = [];
+    allCards.forEach(function(c){
+      var show = matches(c, q);
+      c.style.display = show ? '' : 'none';
+      if(show) visible.push(c);
+    });
+
+    /* sort visible */
+    if(sortMode === 'price-asc'){
+      visible.sort(function(a,b){ return Number(a.dataset.price||0)-Number(b.dataset.price||0); });
+    } else if(sortMode === 'price-desc'){
+      visible.sort(function(a,b){ return Number(b.dataset.price||0)-Number(a.dataset.price||0); });
+    } else if(sortMode === 'new'){
+      visible.sort(function(a,b){ return Number(b.dataset.productId||0)-Number(a.dataset.productId||0); });
+    } else {
+      visible.sort(function(a,b){ return Number(a.dataset.customIndex||0)-Number(b.dataset.customIndex||0); });
+    }
+    visible.forEach(function(c){ grid.appendChild(c); });
+
+    /* update stats */
+    if(statsEl){
+      statsEl.innerHTML = q
+        ? '"'+q+'" — <span>'+visible.length+' টি result</span>'
+        : 'মোট <span>'+allCards.length+'</span> টি product';
+    }
+
+    /* live empty state */
+    var live = grid.querySelector('.empty-live');
+    if(visible.length === 0){
+      if(!live){
+        var e = document.createElement('div');
+        e.className = 'empty empty-live';
+        e.style.cssText = 'grid-column:1/-1';
+        e.innerHTML = '<div class="empty-icon">🔍</div><div class="empty-title">"'+currentQuery+'" পাওয়া যায়নি</div><div style="margin-top:10px;font-size:13px;color:var(--muted)">অন্য keyword বা product code দিয়ে try করুন</div>';
+        grid.appendChild(e);
+      }
+    } else {
+      if(live) live.remove();
+    }
+
+    /* clear button */
+    if(sClear) sClear.style.display = q ? '' : 'none';
+  }
+
+  /* ── search input ── */
+  if(searchBox){
+    searchBox.addEventListener('input', function(){
+      currentQuery = this.value;
+      apply();
+    });
+    /* clear button */
+    if(sClear){
+      sClear.addEventListener('click', function(){
+        searchBox.value = '';
+        currentQuery = '';
+        apply();
+        searchBox.focus();
+      });
+    }
+  }
+
+  /* ── filter buttons ── */
+  var buttons = Array.from(document.querySelectorAll('.filter-btn'));
   buttons.forEach(function(btn){
     btn.addEventListener('click', function(){
-      buttons.forEach(function(item){ item.classList.remove('active'); });
+      buttons.forEach(function(b){ b.classList.remove('active'); });
       btn.classList.add('active');
-      sortCards(btn.dataset.sort || 'all');
+      sortMode = btn.dataset.sort || 'all';
+      apply();
     });
   });
+
+  /* initial render */
+  apply();
 })();
 </script>
 </body>
