@@ -251,25 +251,32 @@ export class WebhookService {
       (draft?.pendingMultiPreview?.length ?? 0) > 0 ||
       (draft?.pendingVisionMatches?.length ?? 0) > 0;
 
-    // OpenAI decides first; keyword matcher takes over if AI is unavailable/unknown.
+    // ── INTENT DETECTION ──────────────────────────────────────────────────
+    const keywordIntent = this.botIntent.detectIntent(text, awaitingConfirm);
+    
+    // If keyword matched a strong intent (GREETING/CATALOG/CANCEL/CODES), skip AI to save cost.
+    // Otherwise, or for nuanced intents (NEGOTIATION/SIDE QUESTIONS), use AI brain.
+    let intent = keywordIntent;
+    let aiResult = { intent: null as string | null, reply: null as string | null };
+
+    const isStrongKeyword = !!keywordIntent && ['CATALOG_REQUEST', 'CANCEL', 'ORDER_REMOVE_ITEM', 'MULTI_CONFIRM'].includes(keywordIntent);
     const aiAllowed = await this.isAiAllowedForPage(page.ownerId);
-    const businessContext = aiAllowed
-      ? await this.botContext.buildBusinessContext(pageId)
-      : null;
-    const aiResult = aiAllowed && businessContext
-      ? await this.aiIntent.detectIntent(
+
+    if (!isStrongKeyword && aiAllowed) {
+      const businessContext = await this.botContext.buildBusinessContext(pageId);
+      if (businessContext) {
+        aiResult = await this.aiIntent.detectIntent(
           pageId,
           text,
           awaitingConfirm,
           draft?.currentStep ?? null,
           businessContext,
-        )
-      : { intent: null, reply: null };
-    const keywordIntent = this.botIntent.detectIntent(text, awaitingConfirm);
-    const intent =
-      aiResult.intent !== null && aiResult.intent !== 'UNKNOWN'
-        ? aiResult.intent
-        : keywordIntent;
+        );
+        if (aiResult.intent && aiResult.intent !== 'UNKNOWN') {
+          intent = aiResult.intent;
+        }
+      }
+    }
 
     // ── LOOP / STUCK DETECTION ────────────────────────────────────────────
     const aiEnabled = page.textFallbackAiOn || this.fallbackAi.isAvailable();
@@ -381,6 +388,10 @@ export class WebhookService {
           return;
         }
       } catch {}
+      if (aiResult.reply) {
+        await this.safeSend(token, psid, `${aiResult.reply}\n\n${this.draftHandler.reminder(draft)}`);
+        return;
+      }
     }
 
     // ── MULTI PRODUCT CODES ────────────────────────────────────────────────
@@ -480,13 +491,17 @@ export class WebhookService {
       return;
     }
 
-    if (recentOrder && (intent === 'CONFIRM' || this.isPostOrderAck(text))) {
-      await this.safeSend(
-        token,
-        psid,
-        'ধন্যবাদ 💖 আপনার order request already received হয়েছে। দরকার হলে "size change", "phone change", "address change" বা "name change" লিখুন।',
-      );
-      return;
+    if (recentOrder && intent === 'CONFIRM') {
+      // V20: Only trigger if order is very recent (last 2 hours) to avoid false "Ok" triggers on old orders
+      const orderAgeHours = (Date.now() - new Date(recentOrder.createdAt).getTime()) / 3_600_000;
+      if (orderAgeHours < 2) {
+        await this.safeSend(
+          token,
+          psid,
+          'ধন্যবাদ 💖 আপনার order request already received হয়েছে। দরকার হলে "size change", "phone change", "address change" বা "name change" লিখুন।',
+        );
+        return;
+      }
     }
 
     // ── ORDER INFO detected without active draft (smart field capture) ────
@@ -601,8 +616,19 @@ export class WebhookService {
 
     // ── GREETING ───────────────────────────────────────────────────────────
     if (intent === 'GREETING') {
-      const greetMsg = await this.botKnowledge.resolveSystemReply(pageId, 'greeting');
-      await this.safeSend(token, psid, greetMsg);
+      if (aiResult.reply) {
+        await this.safeSend(token, psid, aiResult.reply);
+      } else {
+        // AI unavailable — use cooldown-aware fallback
+        const session = await this.ctx.getSession(pageId, psid);
+        const minsSinceLast = session ? (Date.now() - new Date(session.updatedAt).getTime()) / 60_000 : 999;
+        if (minsSinceLast < 15) {
+          await this.safeSend(token, psid, 'জি বলুন, আমি আপনাকে কীভাবে সাহায্য করতে পারি? 💖');
+        } else {
+          const greetMsg = await this.botKnowledge.resolveSystemReply(pageId, 'greeting');
+          await this.safeSend(token, psid, greetMsg);
+        }
+      }
       return;
     }
 
