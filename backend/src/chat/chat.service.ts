@@ -1,81 +1,42 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { GlobalSettingsService } from '../common/global-settings.service';
 
 interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
 }
 
-const SYSTEM_PROMPT = `You are a helpful customer service assistant for Chatcat — a Facebook Messenger automation platform for Bangladeshi e-commerce businesses.
+const SYSTEM_PROMPT = `তুমি Chatcat-এর customer service assistant। Chatcat হলো Bangladeshi Facebook seller দের জন্য একটি Messenger automation platform।
 
-You help customers understand:
-- What Chatcat does (automates Facebook Messenger orders, product detection via AI, courier booking, accounting)
-- Pricing: ৳৬৯৯/month platform fee + prepaid AI wallet (৳০.০৫/text, ৳০.৫০/voice, ৳০.৩০-০.৫০/image)
-- Features: bot automation, OCR, AI image recognition, Pathao/Steadfast/RedX/Paperfly courier integration, CRM, broadcast
-- How to get started: visit chatcat.pro and click "শুরু করুন"
+তুমি যা জানো:
+- Chatcat কী করে: Facebook Messenger-এ automatically order নেয়, AI দিয়ে product detect করে, courier book করে (Pathao/Steadfast/RedX/Paperfly), accounting করে
+- Price: ৳৬৯৯/মাস platform fee + prepaid AI wallet (text ৳০.০৫, voice ৳০.৫০, image ৳০.৩০-০.৫০)
+- Features: bot automation, OCR (ছবি থেকে product code), AI image recognition, CRM, broadcast, courier integration
+- শুরু করতে: chatcat.pro তে গিয়ে "শুরু করুন" বাটনে ক্লিক করুন
 
-Be friendly, concise, and helpful. Reply in the same language the user writes in (Bengali or English). If asked something you don't know, suggest contacting support.`;
+উত্তর দেবে Bengali বা Banglish-এ — যে ভাষায় customer লিখবে সেই ভাষায়। Concise ও friendly থাকো। না জানলে support-এ যোগাযোগ করতে বলো (info@chatcat.pro)।`;
 
-const FALLBACK_REPLY = 'দুঃখিত, এই মুহূর্তে উত্তর দিতে পারছি না। একটু পরে আবার চেষ্টা করুন। 🙏';
+const FALLBACK_REPLY = 'দুঃখিত, এই মুহূর্তে উত্তর দিতে পারছি না। একটু পরে আবার চেষ্টা করুন 🙏';
 
 @Injectable()
 export class ChatService {
   private readonly logger = new Logger(ChatService.name);
-  private readonly ollamaBaseUrl: string;
-  private readonly ollamaChatModel: string;
   private readonly openaiApiKey: string;
 
-  constructor(private readonly globalSettings: GlobalSettingsService) {
-    this.ollamaBaseUrl = (process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434').replace(/\/$/, '');
-    this.ollamaChatModel = process.env.OLLAMA_CHAT_MODEL ?? 'qwen2:1.5b';
+  constructor() {
     this.openaiApiKey = process.env.OPENAI_API_KEY ?? '';
   }
 
   async chat(message: string, history: ChatMessage[]): Promise<string> {
-    const { localAiMode } = await this.globalSettings.get();
-
-    const messages: ChatMessage[] = history.slice(-8);
-    messages.push({ role: 'user', content: message });
-
-    if ((localAiMode === 'all' || localAiMode === 'generate_only') && this.ollamaBaseUrl) {
-      try {
-        return await this.chatWithOllama(messages);
-      } catch (err: any) {
-        this.logger.warn(`[Chat] Ollama failed — falling back to OpenAI: ${err?.message ?? err}`);
-      }
-    }
-
+    const messages: ChatMessage[] = [...history.slice(-8), { role: 'user', content: message }];
     try {
-      return await this.chatWithOpenAI(messages);
+      return await this.callOpenAI(messages);
     } catch (err: any) {
-      this.logger.error(`[Chat] OpenAI also failed: ${err?.message ?? err}`);
+      this.logger.error(`[Chat] OpenAI failed: ${err?.message ?? err}`);
       return FALLBACK_REPLY;
     }
   }
 
-  private async chatWithOllama(messages: ChatMessage[]): Promise<string> {
-    this.logger.log(`[Chat] Ollama (${this.ollamaChatModel})`);
-    const res = await fetch(`${this.ollamaBaseUrl}/api/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
-      body: JSON.stringify({
-        model: this.ollamaChatModel,
-        stream: false,
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          ...messages,
-        ],
-      }),
-      signal: AbortSignal.timeout(30_000),
-    });
-
-    if (!res.ok) throw new Error(`Ollama error ${res.status}`);
-    const data = await res.json() as any;
-    const reply = (data?.message?.content ?? '').trim();
-    return reply || FALLBACK_REPLY;
-  }
-
-  private async chatWithOpenAI(messages: ChatMessage[]): Promise<string> {
+  private async callOpenAI(messages: ChatMessage[]): Promise<string> {
     if (!this.openaiApiKey) return FALLBACK_REPLY;
     this.logger.log('[Chat] OpenAI gpt-4o-mini');
 
@@ -87,18 +48,15 @@ export class ChatService {
       },
       body: JSON.stringify({
         model: 'gpt-4o-mini',
-        max_tokens: 300,
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          ...messages,
-        ],
+        max_tokens: 250,
+        temperature: 0.7,
+        messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...messages],
       }),
-      signal: AbortSignal.timeout(15_000),
+      signal: AbortSignal.timeout(10_000),
     });
 
-    if (!res.ok) throw new Error(`OpenAI error ${res.status}`);
+    if (!res.ok) throw new Error(`OpenAI ${res.status}`);
     const data = await res.json() as any;
-    const reply = (data?.choices?.[0]?.message?.content ?? '').trim();
-    return reply || FALLBACK_REPLY;
+    return (data?.choices?.[0]?.message?.content ?? '').trim() || FALLBACK_REPLY;
   }
 }
