@@ -259,7 +259,7 @@ export class WebhookService {
     let intent = keywordIntent;
     let aiResult = { intent: null as string | null, reply: null as string | null };
 
-    const isStrongKeyword = !!keywordIntent && ['CANCEL', 'ORDER_REMOVE_ITEM', 'MULTI_CONFIRM'].includes(keywordIntent);
+    const isStrongKeyword = !!keywordIntent && ['CATALOG_REQUEST', 'CANCEL', 'ORDER_REMOVE_ITEM', 'MULTI_CONFIRM'].includes(keywordIntent);
     const aiAllowed = await this.isAiAllowedForPage(page.ownerId);
 
     if (!isStrongKeyword && aiAllowed) {
