@@ -25,6 +25,7 @@ import { VisionOpsService } from '../vision-ops/vision-ops.service';
 import { BillingService } from '../billing/billing.service';
 import { WalletService } from '../wallet/wallet.service';
 import { WhisperService } from '../whisper/whisper.service';
+import { SmartBotService } from '../bot/smart-bot.service';
 
 @Injectable()
 export class WebhookService {
@@ -65,6 +66,7 @@ export class WebhookService {
     private readonly walletService: WalletService,
     private readonly whisper: WhisperService,
     private readonly botContext: BotContextService,
+    private readonly smartBot: SmartBotService,
   ) {}
 
   // ── Entry point ────────────────────────────────────────────────────────────
@@ -269,16 +271,23 @@ export class WebhookService {
       (draft?.pendingMultiPreview?.length ?? 0) > 0 ||
       (draft?.pendingVisionMatches?.length ?? 0) > 0;
 
+    const aiAllowed = await this.isAiAllowedForPage(page.ownerId);
+
+    // ── SMART BOT (V19) — single AI call replaces keyword pipeline ────────
+    if (page.smartBotOn && aiAllowed && this.smartBot.isAvailable()) {
+      const handled = await this.smartBot.handle(page, psid, text, draft, message, this.draftHandler);
+      if (handled) return;
+    }
+
     // ── INTENT DETECTION ──────────────────────────────────────────────────
     const keywordIntent = this.botIntent.detectIntent(text, awaitingConfirm);
-    
+
     // If keyword matched a strong intent (GREETING/CATALOG/CANCEL/CODES), skip AI to save cost.
     // Otherwise, or for nuanced intents (NEGOTIATION/SIDE QUESTIONS), use AI brain.
     let intent = keywordIntent;
     let aiResult = { intent: null as string | null, reply: null as string | null };
 
     const isStrongKeyword = !!keywordIntent && ['CATALOG_REQUEST', 'CANCEL', 'ORDER_REMOVE_ITEM', 'MULTI_CONFIRM'].includes(keywordIntent);
-    const aiAllowed = await this.isAiAllowedForPage(page.ownerId);
 
     if (!isStrongKeyword && aiAllowed) {
       const businessContext = await this.botContext.buildBusinessContext(pageId);

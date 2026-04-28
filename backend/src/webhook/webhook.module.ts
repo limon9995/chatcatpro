@@ -19,6 +19,7 @@ import { SpamCheckerModule } from '../spam-checker/spam-checker.module';
 import { MessageQueueModule } from '../message-queue/message-queue.module';
 import { WebhookController } from './webhook.controller';
 import { WebhookService } from './webhook.service';
+import { SmartBotService } from '../bot/smart-bot.service';
 import { DraftOrderHandler } from './handlers/draft-order.handler';
 import { ProductInfoHandler } from './handlers/product-info.handler';
 import { NegotiationHandler } from './handlers/negotiation.handler';
@@ -48,6 +49,7 @@ import { MessageWorker, WEBHOOK_SERVICE_TOKEN } from '../message-queue/message.w
   controllers: [WebhookController],
   providers: [
     WebhookService,
+    SmartBotService,
     DraftOrderHandler,
     ProductInfoHandler,
     NegotiationHandler,

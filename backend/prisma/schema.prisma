@@ -138,6 +138,7 @@ model Page {
   imageMediumConfidence Float   @default(0.45) // >= this: show options, ask customer
   imageFallbackAiOn     Boolean @default(false) // use AI fallback when low confidence
   textFallbackAiOn      Boolean @default(false) // use AI fallback for unmatched text messages
+  smartBotOn            Boolean @default(false)  // V19: SmartBot — single AI call replaces keyword pipeline
 
   callLanguage        String    @default("BN")
   voiceType           String    @default("FEMALE")

@@ -281,11 +281,14 @@ export class ClientDashboardController {
   }
   @Post(':pageId/products/dual-photo-ai')
   setupDualPhotoAI(@Param('pageId') p: string, @Body() b: any, @Req() r: any) {
+    const livePhotoUrls: string[] = Array.isArray(b?.livePhotoUrls)
+      ? b.livePhotoUrls.map((u: any) => String(u).trim()).filter(Boolean)
+      : b?.livePhotoUrl ? [String(b.livePhotoUrl).trim()] : [];
     return this.svc.setupDualPhotoAI(
       this.pid(r, p),
       String(b?.holdingRefUrl || '').trim(),
       String(b?.wearingRefUrl || '').trim(),
-      b?.livePhotoUrl ? String(b.livePhotoUrl).trim() : undefined,
+      livePhotoUrls,
     );
   }
 

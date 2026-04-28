@@ -16,6 +16,7 @@ import { CallService } from '../call/call.service';
 import { TtsService } from '../call/tts.service';
 import { VisionOpsService } from '../vision-ops/vision-ops.service';
 import { OcrService } from '../ocr/ocr.service';
+import { WalletService } from '../wallet/wallet.service';
 
 @Injectable()
 export class ClientDashboardService {
@@ -43,6 +44,7 @@ export class ClientDashboardService {
     private readonly ttsService: TtsService,
     private readonly visionOps: VisionOpsService,
     private readonly ocrService: OcrService,
+    private readonly walletService: WalletService,
   ) {}
 
   // ── Summary ────────────────────────────────────────────────────────────────
@@ -103,6 +105,7 @@ export class ClientDashboardService {
       memoSaveModeOn: Boolean(page.memoSaveModeOn),
       memoTemplateModeOn: Boolean(page.memoTemplateModeOn),
       autoMemoDesignModeOn: Boolean(page.autoMemoDesignModeOn),
+      smartBotOn: Boolean(page.smartBotOn),
       modeAccess: this.getModeAccess(page),
     };
   }
@@ -119,6 +122,7 @@ export class ClientDashboardService {
       'memoSaveModeOn',
       'memoTemplateModeOn',
       'autoMemoDesignModeOn',
+      'smartBotOn',
     ];
     const patch: any = {};
     for (const k of allowed) {
@@ -541,26 +545,36 @@ export class ClientDashboardService {
     pageId: number,
     holdingRefUrl: string,
     wearingRefUrl: string,
-    livePhotoUrl?: string,
+    livePhotoUrls: string[] = [],
   ) {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) throw new BadRequestException('OpenAI API key not configured');
     if (!holdingRefUrl || !wearingRefUrl) throw new BadRequestException('Both reference images required');
 
-    const hasLive = Boolean(livePhotoUrl);
+    // Balance check
+    const hasBalance = await this.walletService.canProcessAi(pageId);
+    if (!hasBalance) throw new BadRequestException('Wallet balance শেষ — recharge করুন');
+
+    const liveCount = livePhotoUrls.length;
+    const totalImages = 2 + liveCount;
+    const hasLive = liveCount > 0;
+
+    const liveDescLines = livePhotoUrls.map((_, i) =>
+      `- Image ${3 + i}: Live video screenshot #${i + 1} showing BOTH dresses at the same time`
+    ).join('\n');
 
     const prompt = `You are analyzing dress products for a Bangladeshi clothing live-video seller.
 
-You have ${hasLive ? '3' : '2'} images:
+You have ${totalImages} images:
 - Image 1: Reference photo of a dress that will be HELD in hand during the live
-- Image 2: Reference photo of a dress that will be WORN on the model's body during the live${hasLive ? '\n- Image 3: Actual live video screenshot showing BOTH dresses at the same time' : ''}
+- Image 2: Reference photo of a dress that will be WORN on the model's body during the live${hasLive ? '\n' + liveDescLines : ''}
 
 Your tasks:
 1. Extract the product code from Image 1 if visible (codes look like: DF-0042, SK-001, LT-100, printed on tag/label/sticker/paper/cloth)
 2. Extract the product code from Image 2 if visible (same)${hasLive ? `
-3. In Image 3, identify which dress is being HELD in someone's hand and which is being WORN on the model's body
-4. Match each dress in Image 3 to its reference image (Image 1 or Image 2)
-5. If the live photo shows Image 1's dress is actually WORN (not held), set swapped=true` : ''}
+3. Using ALL live screenshots (Images 3+), identify which dress is being HELD in hand and which is being WORN on the model's body. Multiple frames improve accuracy.
+4. Match each dress in the live photos to its reference image (Image 1 or Image 2)
+5. If the live photos show Image 1's dress is actually WORN (not held), set swapped=true` : ''}
 
 Return ONLY a single valid JSON object with NO markdown:
 {
@@ -580,15 +594,15 @@ Return ONLY a single valid JSON object with NO markdown:
 
 Rules:
 - productCode must be UPPERCASE. If no code is visible, set productCode to null and codeFound to false
-- confidence is your certainty (0.0 to 1.0) for that detection
-- swapped=true only when live photo proves Image 1's dress is worn and Image 2's dress is held (opposite of what was labeled)
+- confidence is your certainty (0.0 to 1.0) for that detection. Multiple live frames → higher confidence
+- swapped=true only when live photos prove Image 1's dress is worn and Image 2's dress is held (opposite of what was labeled)
 - If no live photo, set swapped=false always`;
 
     const content: any[] = [{ type: 'text', text: prompt }];
     content.push({ type: 'image_url', image_url: { url: holdingRefUrl, detail: 'high' } });
     content.push({ type: 'image_url', image_url: { url: wearingRefUrl, detail: 'high' } });
-    if (hasLive && livePhotoUrl) {
-      content.push({ type: 'image_url', image_url: { url: livePhotoUrl, detail: 'high' } });
+    for (const url of livePhotoUrls) {
+      content.push({ type: 'image_url', image_url: { url, detail: 'high' } });
     }
 
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -600,7 +614,7 @@ Rules:
         temperature: 0.1,
         messages: [{ role: 'user', content }],
       }),
-      signal: AbortSignal.timeout(50_000),
+      signal: AbortSignal.timeout(60_000),
     });
 
     if (!res.ok) throw new BadRequestException(`OpenAI vision error: ${res.status}`);
@@ -630,8 +644,12 @@ Rules:
     };
     const [holdingProduct, wearingProduct] = await Promise.all([lookup(holdingCode), lookup(wearingCode)]);
 
+    // Deduct wallet: 2 reference + N live photos = totalImages × costPerAnalyzeBdt
+    void this.walletService.deductUsage(pageId, 'DUAL_PHOTO_AI', { photoCount: totalImages });
+
     return {
       swapped,
+      totalImages,
       holding: { code: holdingCode, confidence: holdingConf, codeFound: Boolean(holdingCode), product: holdingProduct },
       wearing: { code: wearingCode, confidence: wearingConf, codeFound: Boolean(wearingCode), product: wearingProduct },
       note: ai.note ?? '',

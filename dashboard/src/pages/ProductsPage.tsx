@@ -196,8 +196,8 @@ export function ProductsPage({ th, pageId, onToast }: {
     mode: boolean;
     wearingProductId: number | null; wearingCode: string; wearingName: string;
     holdingProductId: number | null; holdingCode: string; holdingName: string;
-    holdingRefUrl: string; wearingRefUrl: string; livePhotoUrl: string;
-  }>({ mode: false, wearingProductId: null, wearingCode: '', wearingName: '', holdingProductId: null, holdingCode: '', holdingName: '', holdingRefUrl: '', wearingRefUrl: '', livePhotoUrl: '' });
+    holdingRefUrl: string; wearingRefUrl: string; livePhotoUrls: string[];
+  }>({ mode: false, wearingProductId: null, wearingCode: '', wearingName: '', holdingProductId: null, holdingCode: '', holdingName: '', holdingRefUrl: '', wearingRefUrl: '', livePhotoUrls: [] });
   const [dualUploading, setDualUploading] = useState<{ holding: boolean; wearing: boolean; live: boolean }>({ holding: false, wearing: false, live: false });
   const [dualAiLoading, setDualAiLoading] = useState(false);
   const [dualAiResult, setDualAiResult] = useState<any>(null);
@@ -445,9 +445,14 @@ export function ProductsPage({ th, pageId, onToast }: {
       if (!res.ok) { const t = await res.text(); throw new Error(t || 'Upload failed'); }
       const data = await res.json();
       const imageUrl = `${API_BASE.replace(/\/api$/, '')}${data.url}`;
-      const field = slot === 'holding' ? 'holdingRefUrl' : slot === 'wearing' ? 'wearingRefUrl' : 'livePhotoUrl';
-      setDual(prev => ({ ...prev, [field]: imageUrl }));
-      onToast(`✓ ${slot === 'live' ? 'Live' : slot === 'holding' ? 'হাতে ধরা' : 'গায়ে পরা'} ছবি uploaded`);
+      if (slot === 'live') {
+        setDual(prev => ({ ...prev, livePhotoUrls: [...prev.livePhotoUrls, imageUrl] }));
+        onToast(`✓ Live ছবি #${dual.livePhotoUrls.length + 1} uploaded`);
+      } else {
+        const field = slot === 'holding' ? 'holdingRefUrl' : 'wearingRefUrl';
+        setDual(prev => ({ ...prev, [field]: imageUrl }));
+        onToast(`✓ ${slot === 'holding' ? 'হাতে ধরা' : 'গায়ে পরা'} ছবি uploaded`);
+      }
     } catch (e: any) { onToast(e.message || 'Upload failed', 'error'); }
     finally { setDualUploading(b => ({ ...b, [slot]: false })); }
   };
@@ -464,7 +469,7 @@ export function ProductsPage({ th, pageId, onToast }: {
         body: JSON.stringify({
           holdingRefUrl: dual.holdingRefUrl,
           wearingRefUrl: dual.wearingRefUrl,
-          livePhotoUrl: dual.livePhotoUrl || undefined,
+          livePhotoUrls: dual.livePhotoUrls.length > 0 ? dual.livePhotoUrls : undefined,
         }),
       });
       setDualAiResult(result);
@@ -1211,53 +1216,84 @@ export function ProductsPage({ th, pageId, onToast }: {
             <strong>কিভাবে ব্যবহার করবেন:</strong><br/>
             ১. হাতে ধরা dress-এর একটি আলাদা ছবি upload করুন<br/>
             ২. গায়ে পরা dress-এর একটি আলাদা ছবি upload করুন<br/>
-            ৩. Live চলাকালীন একটি ছবি upload করুন যেখানে ২টো dress একসাথে আছে<br/>
+            ৩. Live চলাকালীন <strong>২-৩টা ছবি</strong> upload করুন যেখানে ২টো dress একসাথে দেখা যাচ্ছে (বেশি ছবি = বেশি accurate)<br/>
             ৪. <strong>🤖 AI দিয়ে Identify করুন</strong> — AI নিজেই বুঝবে কোনটা হাতে কোনটা গায়ে
           </div>
 
-          {/* 3 upload slots */}
+          {/* Reference photo slots (holding + wearing) */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 16 }}>
-
-            {/* Slot 1: Holding reference */}
-            {(['holding', 'wearing', 'live'] as const).map(slot => {
-              const label = slot === 'holding' ? '👜 হাতে ধরা dress' : slot === 'wearing' ? '👗 গায়ে পরা dress' : '📸 Live ছবি (দুটো একসাথে)';
-              const hint = slot === 'holding' ? 'শুধু এই dress-টির একটি পরিষ্কার ছবি' : slot === 'wearing' ? 'শুধু এই dress-টির একটি পরিষ্কার ছবি' : 'Live video থেকে যেখানে ২টো dress দেখা যাচ্ছে';
-              const refEl = slot === 'holding' ? dualHoldingRef : slot === 'wearing' ? dualWearingRef : dualLiveRef;
+            {(['holding', 'wearing'] as const).map(slot => {
+              const label = slot === 'holding' ? '👜 হাতে ধরা dress' : '👗 গায়ে পরা dress';
+              const hint = 'শুধু এই dress-টির একটি পরিষ্কার ছবি';
+              const refEl = slot === 'holding' ? dualHoldingRef : dualWearingRef;
               const uploading = dualUploading[slot];
-              const url = slot === 'holding' ? dual.holdingRefUrl : slot === 'wearing' ? dual.wearingRefUrl : dual.livePhotoUrl;
-              const isOptional = slot === 'live';
+              const url = slot === 'holding' ? dual.holdingRefUrl : dual.wearingRefUrl;
               return (
                 <div key={slot} style={{ padding: 14, borderRadius: 12, border: `1.5px solid ${url ? '#16a34a66' : th.border}`, background: th.surface, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  <div style={{ fontSize: 12.5, fontWeight: 700 }}>{label}{isOptional && <span style={{ fontSize: 10.5, color: th.muted, fontWeight: 400 }}> (optional)</span>}</div>
+                  <div style={{ fontSize: 12.5, fontWeight: 700 }}>{label}</div>
                   <div style={{ fontSize: 11, color: th.muted }}>{hint}</div>
                   <input ref={refEl} type="file" accept="image/*" style={{ display: 'none' }}
                     onChange={e => { const f = e.target.files?.[0]; if (f) uploadDualPhoto(f, slot); e.target.value = ''; }} />
                   {url ? (
                     <img src={url} alt="" style={{ width: '100%', height: 120, objectFit: 'cover', borderRadius: 8, border: `1px solid ${th.border}` }} />
                   ) : (
-                    <div style={{ height: 120, borderRadius: 8, border: `2px dashed ${th.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: th.muted, fontSize: 11 }}>
-                      ছবি নেই
-                    </div>
+                    <div style={{ height: 120, borderRadius: 8, border: `2px dashed ${th.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: th.muted, fontSize: 11 }}>ছবি নেই</div>
                   )}
                   <button onClick={() => refEl.current?.click()} disabled={uploading}
                     style={{ ...th.btnGhost, justifyContent: 'center', fontSize: 12 }}>
                     {uploading ? <><Spinner size={12}/> Uploading...</> : url ? '🔄 পরিবর্তন করুন' : '📷 ছবি Upload করুন'}
                   </button>
-                  {url && slot !== 'live' && (
-                    <div style={{ fontSize: 11, color: '#16a34a', fontWeight: 600 }}>✓ Ready</div>
-                  )}
+                  {url && <div style={{ fontSize: 11, color: '#16a34a', fontWeight: 600 }}>✓ Ready</div>}
                 </div>
               );
             })}
           </div>
 
-          {/* AI Analyze button */}
-          <button
-            onClick={runDualPhotoAI}
-            disabled={dualAiLoading || !dual.holdingRefUrl || !dual.wearingRefUrl}
-            style={{ ...th.btnPrimary, fontSize: 13, padding: '10px 24px', alignSelf: 'flex-start', opacity: (!dual.holdingRefUrl || !dual.wearingRefUrl) ? 0.5 : 1 }}>
-            {dualAiLoading ? <><Spinner size={14}/> GPT-4o Analyzing...</> : '🤖 AI দিয়ে Identify করুন'}
-          </button>
+          {/* Live screenshots — multi upload */}
+          <div style={{ padding: 14, borderRadius: 12, border: `1.5px solid ${dual.livePhotoUrls.length > 0 ? '#16a34a66' : th.border}`, background: th.surface, display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <div style={{ fontSize: 12.5, fontWeight: 700 }}>📸 Live ছবি <span style={{ fontSize: 10.5, color: th.muted, fontWeight: 400 }}>(optional — যত বেশি ততো ভালো)</span></div>
+                <div style={{ fontSize: 11, color: th.muted }}>Live video থেকে ২টো dress একসাথে আছে এমন ছবি — ২-৩টা দিলে AI আরো accurate হয়</div>
+              </div>
+              {dual.livePhotoUrls.length > 0 && (
+                <div style={{ fontSize: 12, fontWeight: 700, color: th.accent, flexShrink: 0, marginLeft: 10 }}>{dual.livePhotoUrls.length} ছবি</div>
+              )}
+            </div>
+            {dual.livePhotoUrls.length > 0 && (
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {dual.livePhotoUrls.map((url, i) => (
+                  <div key={url} style={{ position: 'relative', display: 'inline-block' }}>
+                    <img src={url} alt="" style={{ width: 80, height: 80, objectFit: 'cover', borderRadius: 8, border: `1px solid ${th.border}` }} />
+                    <button onClick={() => setDual(p => ({ ...p, livePhotoUrls: p.livePhotoUrls.filter((_, idx) => idx !== i) }))}
+                      style={{ position: 'absolute', top: -4, right: -4, width: 18, height: 18, borderRadius: '50%', background: '#dc2626', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>✕</button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <input ref={dualLiveRef} type="file" accept="image/*" style={{ display: 'none' }}
+              onChange={e => { const f = e.target.files?.[0]; if (f) uploadDualPhoto(f, 'live'); e.target.value = ''; }} />
+            <button onClick={() => dualLiveRef.current?.click()} disabled={dualUploading.live}
+              style={{ ...th.btnGhost, justifyContent: 'center', fontSize: 12, alignSelf: 'flex-start' }}>
+              {dualUploading.live ? <><Spinner size={12}/> Uploading...</> : `➕ Live ছবি যোগ করুন${dual.livePhotoUrls.length > 0 ? ` (এখন ${dual.livePhotoUrls.length}টি)` : ''}`}
+            </button>
+          </div>
+
+          {/* AI Analyze button with cost estimate */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+            <button
+              onClick={runDualPhotoAI}
+              disabled={dualAiLoading || !dual.holdingRefUrl || !dual.wearingRefUrl}
+              style={{ ...th.btnPrimary, fontSize: 13, padding: '10px 24px', opacity: (!dual.holdingRefUrl || !dual.wearingRefUrl) ? 0.5 : 1 }}>
+              {dualAiLoading ? <><Spinner size={14}/> GPT-4o Analyzing...</> : '🤖 AI দিয়ে Identify করুন'}
+            </button>
+            {(dual.holdingRefUrl || dual.wearingRefUrl) && (
+              <div style={{ fontSize: 11.5, color: th.muted }}>
+                মোট <strong>{2 + dual.livePhotoUrls.length} টি</strong> ছবি analyze হবে
+                {dual.livePhotoUrls.length === 0 && <span style={{ color: '#f59e0b' }}> — Live ছবি দিলে accuracy বাড়বে</span>}
+              </div>
+            )}
+          </div>
 
           {/* AI Result */}
           {dualAiResult && (
@@ -1334,7 +1370,7 @@ export function ProductsPage({ th, pageId, onToast }: {
             {dual.mode && (
               <button style={{ ...th.btnSm, background: '#dc2626', color: '#fff', border: 'none' }}
                 onClick={() => {
-                  setDual(p => ({ ...p, mode: false, wearingProductId: null, wearingCode: '', wearingName: '', holdingProductId: null, holdingCode: '', holdingName: '', holdingRefUrl: '', wearingRefUrl: '', livePhotoUrl: '' }));
+                  setDual(p => ({ ...p, mode: false, wearingProductId: null, wearingCode: '', wearingName: '', holdingProductId: null, holdingCode: '', holdingName: '', holdingRefUrl: '', wearingRefUrl: '', livePhotoUrls: [] }));
                   setDualAiResult(null);
                   void request(`${BASE}/settings`, { method: 'PATCH', body: JSON.stringify({ dualPhotoMode: false, dualWearingProductId: null, dualHoldingProductId: null }) }).then(() => onToast('✓ Dual Mode বন্ধ'));
                 }}>

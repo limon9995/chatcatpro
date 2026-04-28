@@ -17,6 +17,7 @@ interface Settings {
   automationOn: boolean; ocrOn: boolean;
   infoModeOn: boolean; orderModeOn: boolean; printModeOn: boolean;
   callConfirmModeOn: boolean; memoSaveModeOn: boolean; memoTemplateModeOn: boolean;
+  smartBotOn: boolean;
   // V18: Image recognition
   imageRecognitionOn: boolean; imageHighConfidence: number;
   imageMediumConfidence: number; imageFallbackAiOn: boolean;
@@ -53,6 +54,7 @@ const S0: Settings = {
   automationOn: false, ocrOn: false,
   infoModeOn: true, orderModeOn: true, printModeOn: false,
   callConfirmModeOn: false, memoSaveModeOn: false, memoTemplateModeOn: false,
+  smartBotOn: false,
   imageRecognitionOn: false, imageHighConfidence: 0.75, imageMediumConfidence: 0.45, imageFallbackAiOn: false, textFallbackAiOn: false,
   pricingPolicy: {
     priceMode: 'FIXED', allowCustomerOffer: false, agentApprovalRequired: true,
@@ -561,6 +563,22 @@ export function SettingsPage({ th, pageId, tab, onToast }: {
                   }}>✓ Use This</button>
                   <button style={{ ...th.btnGhost, fontSize: 11 }} onClick={() => setScrapePreview(null)}>✕ Cancel</button>
                 </div>
+              </div>
+            )}
+          </div>
+        </Section>
+
+        {/* SmartBot */}
+        <Section title="🧠 SmartBot Mode" desc="ChatGPT-style AI — customer যেকোনো ভাষায় কথা বলবে, bot বুঝে order নেবে। Knowledge box-এর তথ্য দিয়ে reply দেবে।">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <Toggle th={th}
+              label="SmartBot চালু করুন"
+              sub="Keyword matching বন্ধ — AI সরাসরি customer-এর সব message বুঝে reply দেবে এবং order নেবে। OPENAI_API_KEY প্রয়োজন।"
+              checked={s.smartBotOn}
+              onChange={v => saveMode('smartBotOn', v)} />
+            {s.smartBotOn && (
+              <div style={{ fontSize: 12, color: th.muted, padding: '10px 14px', borderRadius: 8, background: th.surface, border: `1px solid ${th.border}`, lineHeight: 1.7 }}>
+                <strong style={{ color: th.text }}>SmartBot চালু আছে।</strong> উপরের "AI Business Knowledge" box-এ আপনার business-এর সব তথ্য লিখুন — size chart, return policy, payment info, FAQ — AI এই তথ্য দিয়ে customer-দের reply করবে।
               </div>
             )}
           </div>

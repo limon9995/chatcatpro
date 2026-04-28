@@ -32,7 +32,7 @@ export class WalletService {
   /**
    * Deducts a specific amount from the page's wallet based on the usage type.
    */
-  async deductUsage(pageId: number, type: 'TEXT' | 'VOICE' | 'IMAGE' | 'IMAGE_LOCAL' | 'IMAGE_OCR' | 'ADMIN_VISION' | 'IMAGE_UNIQUENESS' | 'AI_GENERATE'): Promise<boolean> {
+  async deductUsage(pageId: number, type: 'TEXT' | 'VOICE' | 'IMAGE' | 'IMAGE_LOCAL' | 'IMAGE_OCR' | 'ADMIN_VISION' | 'IMAGE_UNIQUENESS' | 'AI_GENERATE' | 'DUAL_PHOTO_AI', options?: { photoCount?: number }): Promise<boolean> {
     try {
       const page = await this.prisma.page.findUnique({ where: { id: pageId } });
       if (!page) return false;
@@ -74,6 +74,12 @@ export class WalletService {
           amountToDeduct = (page as any).costPerAiGenerateBdt ?? 0.10;
           description = 'AI Text Generation';
           break;
+        case 'DUAL_PHOTO_AI': {
+          const photoCount = options?.photoCount ?? 3;
+          amountToDeduct = (page.costPerAnalyzeBdt ?? 0.50) * photoCount;
+          description = `Dual Photo AI Identification (${photoCount} images × GPT-4o)`;
+          break;
+        }
       }
 
       if (amountToDeduct <= 0) return true; // Free setup or overridden to 0
