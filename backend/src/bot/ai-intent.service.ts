@@ -214,6 +214,7 @@ export class AiIntentService {
     awaitingConfirm: boolean,
     draftStep: string | null,
     context: BusinessContext,
+    chatHistory?: { role: string; content: string }[],
   ): Promise<AiIntentResult> {
     if (!this.isAvailable()) return { intent: null, reply: null };
     if (!(await this.walletService.canProcessAi(pageId))) {
@@ -221,8 +222,15 @@ export class AiIntentService {
       return { intent: null, reply: null };
     }
 
+    // Build messages with conversation history for context-aware replies
+    const historyMessages = (chatHistory ?? []).map((m) => ({
+      role: m.role,
+      content: m.content,
+    }));
+
     const messages = [
       { role: 'system', content: this.buildSystemPrompt(context, draftStep) },
+      ...historyMessages,
       { role: 'user', content: this.buildUserMessage(text, awaitingConfirm, draftStep) },
     ];
 
@@ -488,7 +496,7 @@ Allowed ACTION:
 
 Rules:
 1. step=name হলে শুধু মানুষের নাম হলে CAPTURE। greeting, প্রশ্ন, product query, address-like text, long sentence, phone number, negotiation text name না।
-2. step=phone হলে valid Bangladeshi phone number থাকলে CAPTURE। অন্য কিছু RETRY বা EXIT_DRAFT।
+2. step=phone হলে valid Bangladeshi phone number থাকলে CAPTURE। Valid formats: 01XXXXXXXXX, 8801XXXXXXXXX, +8801XXXXXXXXX — সবই valid। শুধু phone number আছে এমন message → CAPTURE। অন্য কিছু RETRY বা EXIT_DRAFT।
 3. step=address হলে full location/address-like text হলে CAPTURE। ছোট chat message address না।
 4. step=confirm হলে confirm/cancel/edit আলাদা action দাও। unrelated হলে RETRY বা EXIT_DRAFT।
 5. step=confirm_address হলে "হ্যাঁ/ঠিক আছে" টাইপ হলে CONFIRM, নতুন address হলে CAPTURE।

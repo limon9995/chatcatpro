@@ -59,6 +59,7 @@ export class ConversationContextService {
       lastCustomerMsg?: string | null;
       lastDraftStep?: string | null;
       loopCount?: number;
+      chatHistoryJson?: string | null;
     },
   ) {
     return this.prisma.conversationSession.upsert({
@@ -160,6 +161,49 @@ export class ConversationContextService {
       activeDraftJson: null,
       awaitingField: null,
       lastIntent: null,
+    });
+  }
+
+  // ── Chat history (last 8 exchanges for AI context) ─────────────────────────
+
+  async getHistory(
+    pageIdRef: number,
+    customerPsid: string,
+  ): Promise<{ role: string; content: string }[]> {
+    const session = await this.getSession(pageIdRef, customerPsid);
+    if (!session?.chatHistoryJson) return [];
+    try {
+      return JSON.parse((session as any).chatHistoryJson);
+    } catch {
+      return [];
+    }
+  }
+
+  async appendToHistory(
+    pageIdRef: number,
+    customerPsid: string,
+    customerMsg: string,
+    botReply: string,
+  ): Promise<void> {
+    const existing = await this.getHistory(pageIdRef, customerPsid);
+    const truncate = (s: string, max: number) =>
+      s.length > max ? s.slice(0, max) + '…' : s;
+
+    existing.push(
+      { role: 'user', content: truncate(customerMsg, 200) },
+      { role: 'assistant', content: truncate(botReply, 250) },
+    );
+
+    // Keep only last 8 pairs (16 messages)
+    const capped = existing.slice(-16);
+    await this.upsertSession(pageIdRef, customerPsid, {
+      chatHistoryJson: JSON.stringify(capped),
+    });
+  }
+
+  async clearHistory(pageIdRef: number, customerPsid: string): Promise<void> {
+    await this.upsertSession(pageIdRef, customerPsid, {
+      chatHistoryJson: null,
     });
   }
 

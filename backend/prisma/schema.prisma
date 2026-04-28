@@ -356,6 +356,9 @@ model ConversationSession {
   lastDraftStep   String? // draft step after last message was processed
   loopCount       Int     @default(0) // consecutive messages without progress
 
+  // Conversation memory — last 8 exchanges [{role,content,ts}]
+  chatHistoryJson String?
+
   updatedAt DateTime @updatedAt
   createdAt DateTime @default(now())
 

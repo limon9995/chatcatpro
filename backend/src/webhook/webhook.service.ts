@@ -39,6 +39,9 @@ export class WebhookService {
   }>();
   private readonly IMAGE_BUFFER_MS = 4_000; // 4-second window
 
+  // Tracks the last reply sent per psid during a processMessage call
+  private readonly inFlightReply = new Map<string, string>();
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly messenger: MessengerService,
@@ -151,7 +154,22 @@ export class WebhookService {
     message: any,
   ): Promise<void> {
     const pageId = page.id as number;
+    const customerText = (message.text || '').trim();
+
+    // Clear any stale reply tracking for this psid before processing
+    this.inFlightReply.delete(psid);
+
     await this._processMessageInner(page, psid, message);
+
+    // Save conversation exchange to history for AI context
+    if (customerText) {
+      const botReply = this.inFlightReply.get(psid) ?? null;
+      if (botReply) {
+        await this.ctx.appendToHistory(pageId, psid, customerText, botReply).catch(() => {});
+      }
+      this.inFlightReply.delete(psid);
+    }
+
     // Record the current draft step after processing so loop detection can compare next time
     const updatedDraft = await this.ctx.getActiveDraft(pageId, psid);
     await this.ctx.recordDraftStepAfterProcessing(pageId, psid, updatedDraft?.currentStep ?? null);
@@ -265,12 +283,21 @@ export class WebhookService {
     if (!isStrongKeyword && aiAllowed) {
       const businessContext = await this.botContext.buildBusinessContext(pageId);
       if (businessContext) {
+        // Pass conversation history only when the message is ambiguous (no keyword match)
+        // or for intents that need contextual replies. Skipping history for clear keywords
+        // saves ~800 tokens per call.
+        const needsHistory = !keywordIntent; // keyword already matched → no history needed
+        const chatHistory = needsHistory
+          ? await this.ctx.getHistory(pageId, psid)
+          : undefined;
+
         aiResult = await this.aiIntent.detectIntent(
           pageId,
           text,
           awaitingConfirm,
           draft?.currentStep ?? null,
           businessContext,
+          chatHistory,
         );
         if (aiResult.intent && aiResult.intent !== 'UNKNOWN') {
           intent = aiResult.intent;
@@ -535,6 +562,13 @@ export class WebhookService {
               [product as any],
               variantOptions,
             );
+            const crmCust = await this.prefillDraftFromCrm(pageId, psid, newDraft);
+            if (crmCust?.name && crmCust?.phone && crmCust?.address) {
+              newDraft.currentStep = 'confirm_address';
+              await this.ctx.saveDraft(pageId, psid, newDraft);
+              await this.safeSend(token, psid, `স্বাগতম ফিরে ${crmCust.name}! 🎉\n\nআগের ঠিকানায় পাঠাব?\n📍 *${crmCust.address}*\n\n"হ্যাঁ" বললে যাবে, অথবা নতুন ঠিকানা দিন 💖`);
+              return;
+            }
             await this.ctx.saveDraft(pageId, psid, newDraft);
             const result = await this.draftHandler.captureField(
               pageId,
@@ -608,22 +642,31 @@ export class WebhookService {
             [product as any],
             variantOptions,
           );
+          const crmFill = await this.prefillDraftFromCrm(pageId, psid, newDraft);
+          if (crmFill?.name && crmFill?.phone && crmFill?.address) {
+            newDraft.currentStep = 'confirm_address';
+            await this.ctx.saveDraft(pageId, psid, newDraft);
+            await this.safeSend(token, psid, `স্বাগতম ফিরে ${crmFill.name}! 🎉\n\nআগের ঠিকানায় পাঠাব?\n📍 *${crmFill.address}*\n\n"হ্যাঁ" বললে যাবে, অথবা নতুন ঠিকানা দিন 💖`);
+            return;
+          }
           await this.ctx.saveDraft(pageId, psid, newDraft);
           if (variantOptions.length > 0) {
             const firstField = variantOptions[0];
             const opts = firstField.choices?.length
               ? `\n${firstField.choices.map((c, i) => `${i + 1}. ${c}`).join('\n')}`
               : '';
+            const returnGreet = crmFill?.totalOrders ? 'স্বাগতম ফিরে! 🎉 ' : '';
             await this.safeSend(
               token,
               psid,
-              `ঠিক আছে 💖 ${contextCode} এর জন্য order নিচ্ছি।\n\n${firstField.label} কোনটা নেবেন?${opts}`,
+              `${returnGreet}ঠিক আছে 💖 ${contextCode} এর জন্য order নিচ্ছি।\n\n${firstField.label} কোনটা নেবেন?${opts}`,
             );
           } else {
+            const returnGreet = crmFill?.totalOrders ? 'স্বাগতম ফিরে! 🎉 ' : '';
             await this.safeSend(
               token,
               psid,
-              `ঠিক আছে! 😊 ${contextCode} order করছি।\n\nপ্রথমে আপনার **নামটা** বলুন।`,
+              `${returnGreet}ঠিক আছে! 😊 ${contextCode} order করছি।\n\nপ্রথমে আপনার **নামটা** বলুন।`,
             );
           }
           return;
@@ -800,8 +843,15 @@ export class WebhookService {
         codes,
         products as any[],
       );
+      const crmCustomer = await this.prefillDraftFromCrm(pageId, psid, newDraft);
       await this.ctx.saveDraft(pageId, psid, newDraft);
-      await this.safeSend(token, psid, 'ঠিক আছে 💖 আপনার নাম দিন।');
+      if (crmCustomer?.name && crmCustomer?.phone && crmCustomer?.address) {
+        newDraft.currentStep = 'confirm_address';
+        await this.ctx.saveDraft(pageId, psid, newDraft);
+        await this.safeSend(token, psid, `স্বাগতম ফিরে ${crmCustomer.name}! 🎉\n\nআগের ঠিকানায় পাঠাব?\n📍 *${crmCustomer.address}*\n\n"হ্যাঁ" বললে যাবে, অথবা নতুন ঠিকানা দিন 💖`);
+      } else {
+        await this.safeSend(token, psid, `${crmCustomer?.totalOrders ? `স্বাগতম ফিরে! 🎉 ` : ''}ঠিক আছে 💖 আপনার নাম দিন।`);
+      }
     } else {
       await this.safeSend(
         token,
@@ -1905,6 +1955,7 @@ export class WebhookService {
   ): Promise<void> {
     try {
       await this.messenger.sendText(token, psid, text);
+      this.inFlightReply.set(psid, text); // track last reply for history
     } catch (err) {
       this.logger.error(`[Webhook] safeSend failed psid=${psid}: ${err}`);
     }
@@ -1955,6 +2006,30 @@ export class WebhookService {
     // constructing a synthetic message object and re-calling processMessage
     const syntheticMessage = { text: transcribed };
     await this.processMessage(page, psid, syntheticMessage);
+  }
+
+  /**
+   * Fetch CRM record for a psid and pre-fill a new draft with name/phone/address.
+   * Returns the crmCustomer so callers can decide the greeting message.
+   */
+  private async prefillDraftFromCrm(
+    pageId: number,
+    psid: string,
+    draft: DraftSession,
+  ): Promise<{ name: string | null; phone: string | null; address: string | null; totalOrders: number } | null> {
+    try {
+      const crm = await this.prisma.customer.findUnique({
+        where: { pageId_psid: { pageId, psid } },
+        select: { name: true, phone: true, address: true, totalOrders: true },
+      });
+      if (!crm) return null;
+      if (crm.name) draft.customerName = crm.name;
+      if (crm.phone) draft.phone = crm.phone;
+      if (crm.address) draft.address = crm.address;
+      return crm;
+    } catch {
+      return null;
+    }
   }
 
   /** Returns false for Basic plan users — AI features are disabled on Basic */

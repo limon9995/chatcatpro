@@ -138,25 +138,39 @@ export class DraftOrderHandler {
     const step = draft.currentStep;
     let workingText = text;
 
-    const aiReview = await this.aiIntent.reviewDraftStep(
-      pageId,
-      text,
-      step,
-      page?.businessName ?? null,
-    );
-    if (aiReview) {
-      if (aiReview.action === 'EXIT_DRAFT') {
-        await this.ctx.clearDraft(pageId, psid);
-        return aiReview.reply ?? 'ঠিক আছে 💖 আপনি যা জানতে চান সেটাই বলুন।';
-      }
-      if (aiReview.action === 'RETRY') {
-        return aiReview.reply ?? this.reminder(draft);
-      }
-      if (aiReview.action === 'CONFIRM') workingText = aiReview.normalizedValue ?? 'confirm';
-      if (aiReview.action === 'CANCEL') workingText = aiReview.normalizedValue ?? 'cancel';
-      if (aiReview.action === 'EDIT') workingText = aiReview.normalizedValue ?? 'change';
-      if (aiReview.action === 'CAPTURE' && aiReview.normalizedValue) {
-        workingText = aiReview.normalizedValue;
+    // ── Regex-first gate: skip AI for clear-cut inputs ─────────────────────
+    // For phone/name/address steps, if the input is unambiguous, skip the
+    // AI reviewDraftStep call entirely (saves cost + avoids false REJECTs).
+    const regexCapture = this.tryRegexCapture(step, text);
+    if (regexCapture === 'CANCEL') {
+      await this.ctx.clearDraft(pageId, psid);
+      return null;
+    }
+    if (regexCapture !== null) {
+      // Regex gave a clean value — use it directly, no AI needed
+      workingText = regexCapture;
+    } else {
+      // Only call AI when regex can't conclusively decide
+      const aiReview = await this.aiIntent.reviewDraftStep(
+        pageId,
+        text,
+        step,
+        page?.businessName ?? null,
+      );
+      if (aiReview) {
+        if (aiReview.action === 'EXIT_DRAFT') {
+          await this.ctx.clearDraft(pageId, psid);
+          return aiReview.reply ?? 'ঠিক আছে 💖 আপনি যা জানতে চান সেটাই বলুন।';
+        }
+        if (aiReview.action === 'RETRY') {
+          return aiReview.reply ?? this.reminder(draft);
+        }
+        if (aiReview.action === 'CONFIRM') workingText = aiReview.normalizedValue ?? 'confirm';
+        if (aiReview.action === 'CANCEL') workingText = aiReview.normalizedValue ?? 'cancel';
+        if (aiReview.action === 'EDIT') workingText = aiReview.normalizedValue ?? 'change';
+        if (aiReview.action === 'CAPTURE' && aiReview.normalizedValue) {
+          workingText = aiReview.normalizedValue;
+        }
       }
     }
 
@@ -489,6 +503,8 @@ export class DraftOrderHandler {
     });
 
     await this.ctx.clearDraft(pageId, psid);
+    // Clear conversation history after order is placed — fresh start for next conversation
+    await this.ctx.clearHistory(pageId, psid).catch(() => {});
 
     // V8: auto-decrement stock
     await this.products.decrementStock(
@@ -730,6 +746,48 @@ export class DraftOrderHandler {
     );
     const m = normalized.match(/(?:\+?88)?01[3-9]\d{8}/);
     return m ? m[0] : null;
+  }
+
+  /**
+   * Fast regex-based capture decision — runs BEFORE AI to avoid false rejects.
+   *
+   * Returns:
+   *   'CANCEL'   → clear draft immediately
+   *   string     → clean captured value (use as workingText, skip AI)
+   *   null       → inconclusive, let AI decide
+   */
+  private tryRegexCapture(step: string, text: string): string | 'CANCEL' | null {
+    const t = text.trim();
+
+    // Always treat explicit cancel keywords as CANCEL regardless of step
+    if (this.botIntent.detectIntent(t, false) === 'CANCEL') return 'CANCEL';
+
+    if (step === 'phone') {
+      const ph = this.extractPhone(t);
+      if (ph) return ph; // clear phone → CAPTURE directly
+      // No phone found — let AI decide if it's RETRY or EXIT_DRAFT
+      return null;
+    }
+
+    if (step === 'address') {
+      if (this.isAddressLike(t)) return t; // clearly address → CAPTURE
+      return null;
+    }
+
+    if (step === 'name') {
+      // Short text with no phone, no geo keyword, no question mark, no product code → name
+      const hasPhone = /\d{7,}/.test(t);
+      const hasQuestion = t.includes('?') || t.includes('।') === false && /কি|কী|কেন|কোন|কত/.test(t);
+      const hasCode = /\bDF[-\s]?\d{3,}/i.test(t);
+      const isShort = t.length <= 50 && t.split(' ').length <= 6;
+      if (isShort && !hasPhone && !hasQuestion && !hasCode && !this.hasGeoKeyword(t)) {
+        return t;
+      }
+      return null;
+    }
+
+    // For confirm/advance_payment/custom fields — let AI handle
+    return null;
   }
 
   private promptForCustomField(field: CustomFieldDef): string {
