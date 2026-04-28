@@ -196,11 +196,15 @@ export function ProductsPage({ th, pageId, onToast }: {
     mode: boolean;
     wearingProductId: number | null; wearingCode: string; wearingName: string;
     holdingProductId: number | null; holdingCode: string; holdingName: string;
-  }>({ mode: false, wearingProductId: null, wearingCode: '', wearingName: '', holdingProductId: null, holdingCode: '', holdingName: '' });
-  const [dualUploading, setDualUploading] = useState<{ wearing: boolean; holding: boolean }>({ wearing: false, holding: false });
+    holdingRefUrl: string; wearingRefUrl: string; livePhotoUrl: string;
+  }>({ mode: false, wearingProductId: null, wearingCode: '', wearingName: '', holdingProductId: null, holdingCode: '', holdingName: '', holdingRefUrl: '', wearingRefUrl: '', livePhotoUrl: '' });
+  const [dualUploading, setDualUploading] = useState<{ holding: boolean; wearing: boolean; live: boolean }>({ holding: false, wearing: false, live: false });
+  const [dualAiLoading, setDualAiLoading] = useState(false);
+  const [dualAiResult, setDualAiResult] = useState<any>(null);
   const [dualSaving, setDualSaving] = useState(false);
   const dualWearingRef = useRef<HTMLInputElement>(null);
   const dualHoldingRef = useRef<HTMLInputElement>(null);
+  const dualLiveRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -210,7 +214,8 @@ export function ProductsPage({ th, pageId, onToast }: {
         request<any>(`${BASE}/settings`).catch(() => null),
       ]);
       setProducts(prods);
-      if (biz) setDual({
+      if (biz) setDual(prev => ({
+        ...prev,
         mode: Boolean(biz.dualPhotoMode),
         wearingProductId: biz.dualWearingProductId ?? null,
         wearingCode: biz.dualWearingProduct?.code ?? '',
@@ -218,7 +223,7 @@ export function ProductsPage({ th, pageId, onToast }: {
         holdingProductId: biz.dualHoldingProductId ?? null,
         holdingCode: biz.dualHoldingProduct?.code ?? '',
         holdingName: biz.dualHoldingProduct?.name ?? '',
-      });
+      }));
     }
     catch (e: any) { onToast(e.message, 'error'); }
     finally { setLoading(false); }
@@ -425,8 +430,9 @@ export function ProductsPage({ th, pageId, onToast }: {
     }
   };
 
-  const uploadDualImage = async (file: File, slot: 'wearing' | 'holding') => {
+  const uploadDualPhoto = async (file: File, slot: 'holding' | 'wearing' | 'live') => {
     setDualUploading(b => ({ ...b, [slot]: true }));
+    setDualAiResult(null);
     try {
       const token = localStorage.getItem('dfbot_token') || '';
       const fd = new FormData();
@@ -439,22 +445,41 @@ export function ProductsPage({ th, pageId, onToast }: {
       if (!res.ok) { const t = await res.text(); throw new Error(t || 'Upload failed'); }
       const data = await res.json();
       const imageUrl = `${API_BASE.replace(/\/api$/, '')}${data.url}`;
-      const ocrRes = await request<{ codes: string[]; products: { id: number; code: string; name: string; price: number }[] }>(
-        `${BASE}/products/detect-code`, { method: 'POST', body: JSON.stringify({ imageUrl }) },
-      );
-      if (ocrRes.products.length === 1) {
-        const p = ocrRes.products[0];
-        setDual(prev => slot === 'wearing'
-          ? { ...prev, wearingProductId: p.id, wearingCode: p.code, wearingName: p.name }
-          : { ...prev, holdingProductId: p.id, holdingCode: p.code, holdingName: p.name });
-        onToast(`✓ OCR: ${p.code} — ${p.name}`);
-      } else if (ocrRes.codes.length > 0) {
-        onToast(`OCR detected: ${ocrRes.codes.join(', ')} — manually pick করুন`, 'error');
-      } else {
-        onToast('OCR-এ code পাওয়া যায়নি — manually code দিন', 'error');
-      }
+      const field = slot === 'holding' ? 'holdingRefUrl' : slot === 'wearing' ? 'wearingRefUrl' : 'livePhotoUrl';
+      setDual(prev => ({ ...prev, [field]: imageUrl }));
+      onToast(`✓ ${slot === 'live' ? 'Live' : slot === 'holding' ? 'হাতে ধরা' : 'গায়ে পরা'} ছবি uploaded`);
     } catch (e: any) { onToast(e.message || 'Upload failed', 'error'); }
     finally { setDualUploading(b => ({ ...b, [slot]: false })); }
+  };
+
+  const runDualPhotoAI = async () => {
+    if (!dual.holdingRefUrl || !dual.wearingRefUrl) {
+      onToast('প্রথমে হাতে ধরা ও গায়ে পরা ছবি upload করুন', 'error'); return;
+    }
+    setDualAiLoading(true);
+    setDualAiResult(null);
+    try {
+      const result = await request<any>(`${BASE}/products/dual-photo-ai`, {
+        method: 'POST',
+        body: JSON.stringify({
+          holdingRefUrl: dual.holdingRefUrl,
+          wearingRefUrl: dual.wearingRefUrl,
+          livePhotoUrl: dual.livePhotoUrl || undefined,
+        }),
+      });
+      setDualAiResult(result);
+      // Auto-fill if products found
+      setDual(prev => ({
+        ...prev,
+        holdingProductId: result.holding?.product?.id ?? prev.holdingProductId,
+        holdingCode: result.holding?.code ?? prev.holdingCode,
+        holdingName: result.holding?.product?.name ?? prev.holdingName,
+        wearingProductId: result.wearing?.product?.id ?? prev.wearingProductId,
+        wearingCode: result.wearing?.code ?? prev.wearingCode,
+        wearingName: result.wearing?.product?.name ?? prev.wearingName,
+      }));
+    } catch (e: any) { onToast(e.message || 'AI analysis failed', 'error'); }
+    finally { setDualAiLoading(false); }
   };
 
   const saveDualPhotoMode = async () => {
@@ -1179,103 +1204,145 @@ export function ProductsPage({ th, pageId, onToast }: {
 
       {/* Dual Photo tab */}
       {productTab === 'dual' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div style={{ fontSize: 13, color: th.muted }}>
-            {copy('Live video-তে model একটা dress পরে, আরেকটা হাতে ধরে — bot দুটো product আলাদা করে চিনবে।', 'During live video, model wears one dress and holds another — the bot recognizes each product separately.')}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+          {/* Instruction banner */}
+          <div style={{ padding: '12px 16px', borderRadius: 12, background: `${th.accent}12`, border: `1px solid ${th.accent}44`, fontSize: 12.5, color: th.text, lineHeight: 1.7 }}>
+            <strong>কিভাবে ব্যবহার করবেন:</strong><br/>
+            ১. হাতে ধরা dress-এর একটি আলাদা ছবি upload করুন<br/>
+            ২. গায়ে পরা dress-এর একটি আলাদা ছবি upload করুন<br/>
+            ৩. Live চলাকালীন একটি ছবি upload করুন যেখানে ২টো dress একসাথে আছে<br/>
+            ৪. <strong>🤖 AI দিয়ে Identify করুন</strong> — AI নিজেই বুঝবে কোনটা হাতে কোনটা গায়ে
           </div>
 
-          {/* Toggle */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderRadius: 12, background: th.surface, border: `1px solid ${th.border}` }}>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 13, fontWeight: 700 }}>{copy('Dual Photo Mode', 'Dual Photo Mode')}</div>
-              <div style={{ fontSize: 11.5, color: th.muted, marginTop: 2 }}>{copy('Customer "হাতে ধরা" বা "পরে আছে" বললে AI সঠিক product দেখাবে', 'AI shows the correct product when customer asks about worn or held dress')}</div>
-            </div>
-            <div
-              onClick={() => setDual(p => ({ ...p, mode: !p.mode }))}
-              style={{ width: 44, height: 24, borderRadius: 12, background: dual.mode ? th.accent : th.border, cursor: 'pointer', position: 'relative', transition: 'background .2s', flexShrink: 0 }}>
-              <div style={{ position: 'absolute', top: 3, left: dual.mode ? 23 : 3, width: 18, height: 18, borderRadius: '50%', background: '#fff', transition: 'left .2s', boxShadow: '0 1px 3px rgba(0,0,0,.2)' }} />
-            </div>
-          </div>
+          {/* 3 upload slots */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 16 }}>
 
-          {/* Two slots */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            {/* Wearing slot */}
-            <div style={{ padding: 14, borderRadius: 12, border: `1px solid ${th.border}`, background: th.surface, display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <div style={{ fontSize: 12.5, fontWeight: 700 }}>👗 {copy('মডেল পরে আছে', 'Model is wearing')}</div>
-              <input ref={dualWearingRef} type="file" accept="image/*" style={{ display: 'none' }}
-                onChange={e => { const f = e.target.files?.[0]; if (f) uploadDualImage(f, 'wearing'); e.target.value = ''; }} />
-              <button onClick={() => dualWearingRef.current?.click()} disabled={dualUploading.wearing}
-                style={{ ...th.btnGhost, justifyContent: 'center', fontSize: 12 }}>
-                {dualUploading.wearing ? <><Spinner size={12}/> OCR চলছে...</> : '📷 ছবি দিয়ে OCR'}
-              </button>
-              {dual.wearingCode ? (
-                <div style={{ fontSize: 12, padding: '6px 10px', borderRadius: 8, background: 'rgba(34,197,94,.12)', border: '1px solid rgba(34,197,94,.3)', color: '#16a34a', fontWeight: 600 }}>
-                  ✓ {dual.wearingCode} — {dual.wearingName || '—'}
+            {/* Slot 1: Holding reference */}
+            {(['holding', 'wearing', 'live'] as const).map(slot => {
+              const label = slot === 'holding' ? '👜 হাতে ধরা dress' : slot === 'wearing' ? '👗 গায়ে পরা dress' : '📸 Live ছবি (দুটো একসাথে)';
+              const hint = slot === 'holding' ? 'শুধু এই dress-টির একটি পরিষ্কার ছবি' : slot === 'wearing' ? 'শুধু এই dress-টির একটি পরিষ্কার ছবি' : 'Live video থেকে যেখানে ২টো dress দেখা যাচ্ছে';
+              const refEl = slot === 'holding' ? dualHoldingRef : slot === 'wearing' ? dualWearingRef : dualLiveRef;
+              const uploading = dualUploading[slot];
+              const url = slot === 'holding' ? dual.holdingRefUrl : slot === 'wearing' ? dual.wearingRefUrl : dual.livePhotoUrl;
+              const isOptional = slot === 'live';
+              return (
+                <div key={slot} style={{ padding: 14, borderRadius: 12, border: `1.5px solid ${url ? '#16a34a66' : th.border}`, background: th.surface, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 700 }}>{label}{isOptional && <span style={{ fontSize: 10.5, color: th.muted, fontWeight: 400 }}> (optional)</span>}</div>
+                  <div style={{ fontSize: 11, color: th.muted }}>{hint}</div>
+                  <input ref={refEl} type="file" accept="image/*" style={{ display: 'none' }}
+                    onChange={e => { const f = e.target.files?.[0]; if (f) uploadDualPhoto(f, slot); e.target.value = ''; }} />
+                  {url ? (
+                    <img src={url} alt="" style={{ width: '100%', height: 120, objectFit: 'cover', borderRadius: 8, border: `1px solid ${th.border}` }} />
+                  ) : (
+                    <div style={{ height: 120, borderRadius: 8, border: `2px dashed ${th.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: th.muted, fontSize: 11 }}>
+                      ছবি নেই
+                    </div>
+                  )}
+                  <button onClick={() => refEl.current?.click()} disabled={uploading}
+                    style={{ ...th.btnGhost, justifyContent: 'center', fontSize: 12 }}>
+                    {uploading ? <><Spinner size={12}/> Uploading...</> : url ? '🔄 পরিবর্তন করুন' : '📷 ছবি Upload করুন'}
+                  </button>
+                  {url && slot !== 'live' && (
+                    <div style={{ fontSize: 11, color: '#16a34a', fontWeight: 600 }}>✓ Ready</div>
+                  )}
                 </div>
-              ) : (
-                <div style={{ fontSize: 11.5, color: th.muted }}>{copy('কোনো product set নেই', 'No product set')}</div>
+              );
+            })}
+          </div>
+
+          {/* AI Analyze button */}
+          <button
+            onClick={runDualPhotoAI}
+            disabled={dualAiLoading || !dual.holdingRefUrl || !dual.wearingRefUrl}
+            style={{ ...th.btnPrimary, fontSize: 13, padding: '10px 24px', alignSelf: 'flex-start', opacity: (!dual.holdingRefUrl || !dual.wearingRefUrl) ? 0.5 : 1 }}>
+            {dualAiLoading ? <><Spinner size={14}/> GPT-4o Analyzing...</> : '🤖 AI দিয়ে Identify করুন'}
+          </button>
+
+          {/* AI Result */}
+          {dualAiResult && (
+            <div style={{ padding: 16, borderRadius: 12, border: `1.5px solid ${dualAiResult.swapped ? '#ea580c66' : '#16a34a66'}`, background: th.surface }}>
+              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>
+                {dualAiResult.swapped ? '⚠️ AI swap detect করেছে — automatically corrected' : '✅ AI successfully identified করেছে'}
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                {(['holding', 'wearing'] as const).map(slot => {
+                  const r = dualAiResult[slot];
+                  const label = slot === 'holding' ? '👜 হাতে ধরা' : '👗 গায়ে পরা';
+                  return (
+                    <div key={slot} style={{ padding: 12, borderRadius: 8, background: th.panel, border: `1px solid ${th.border}` }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6 }}>{label}</div>
+                      {r?.product ? (
+                        <div style={{ fontSize: 12, color: '#16a34a', fontWeight: 600 }}>✓ {r.product.code} — {r.product.name}</div>
+                      ) : r?.code ? (
+                        <div style={{ fontSize: 12, color: '#ea580c' }}>⚠️ Code: {r.code} — DB-তে পাওয়া যায়নি</div>
+                      ) : (
+                        <div style={{ fontSize: 12, color: th.muted }}>Code detect হয়নি</div>
+                      )}
+                      {r?.confidence > 0 && (
+                        <div style={{ fontSize: 11, color: th.muted, marginTop: 4 }}>Confidence: {Math.round((r.confidence ?? 0) * 100)}%</div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              {dualAiResult.note && (
+                <div style={{ fontSize: 11.5, color: th.muted, marginTop: 10, padding: '6px 10px', borderRadius: 6, background: th.panel }}>
+                  💬 {dualAiResult.note}
+                </div>
               )}
-              <div style={{ display: 'flex', gap: 6 }}>
-                <input style={{ ...th.input, flex: 1, fontSize: 12 }} placeholder={copy('Code manually দিন', 'Enter code manually')}
-                  value={dual.wearingCode}
-                  onChange={e => setDual(p => ({ ...p, wearingCode: e.target.value.toUpperCase(), wearingProductId: null, wearingName: '' }))} />
-                <button style={{ ...th.btnSm }} disabled={!dual.wearingCode}
-                  onClick={async () => {
-                    const res = await request<any>(`${BASE}/products?code=${dual.wearingCode}&limit=1`).catch(() => null);
-                    const prod = Array.isArray(res?.products) ? res.products.find((p: any) => p.code === dual.wearingCode) : null;
-                    if (prod) setDual(p => ({ ...p, wearingProductId: prod.id, wearingName: prod.name }));
-                    else onToast('Product পাওয়া যায়নি', 'error');
-                  }}>{copy('খুঁজুন', 'Find')}</button>
+              {/* Manual correction fallback */}
+              <div style={{ marginTop: 12, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                {(['holding', 'wearing'] as const).map(slot => (
+                  <div key={slot} style={{ display: 'flex', gap: 6 }}>
+                    <input style={{ ...th.input, flex: 1, fontSize: 12 }}
+                      placeholder={slot === 'holding' ? 'হাতে ধরা code' : 'গায়ে পরা code'}
+                      value={slot === 'holding' ? dual.holdingCode : dual.wearingCode}
+                      onChange={e => {
+                        const v = e.target.value.toUpperCase();
+                        setDual(p => slot === 'holding' ? { ...p, holdingCode: v, holdingProductId: null, holdingName: '' } : { ...p, wearingCode: v, wearingProductId: null, wearingName: '' });
+                      }} />
+                    <button style={{ ...th.btnSm }} disabled={!(slot === 'holding' ? dual.holdingCode : dual.wearingCode)}
+                      onClick={async () => {
+                        const code = slot === 'holding' ? dual.holdingCode : dual.wearingCode;
+                        const res = await request<any>(`${BASE}/products?code=${code}&limit=1`).catch(() => null);
+                        const prod = Array.isArray(res?.products) ? res.products.find((p: any) => p.code === code) : null;
+                        if (prod) setDual(p => slot === 'holding' ? { ...p, holdingProductId: prod.id, holdingName: prod.name } : { ...p, wearingProductId: prod.id, wearingName: prod.name });
+                        else onToast('Product পাওয়া যায়নি', 'error');
+                      }}>খুঁজুন</button>
+                  </div>
+                ))}
               </div>
             </div>
+          )}
 
-            {/* Holding slot */}
-            <div style={{ padding: 14, borderRadius: 12, border: `1px solid ${th.border}`, background: th.surface, display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <div style={{ fontSize: 12.5, fontWeight: 700 }}>👜 {copy('হাতে ধরা আছে', 'Model is holding')}</div>
-              <input ref={dualHoldingRef} type="file" accept="image/*" style={{ display: 'none' }}
-                onChange={e => { const f = e.target.files?.[0]; if (f) uploadDualImage(f, 'holding'); e.target.value = ''; }} />
-              <button onClick={() => dualHoldingRef.current?.click()} disabled={dualUploading.holding}
-                style={{ ...th.btnGhost, justifyContent: 'center', fontSize: 12 }}>
-                {dualUploading.holding ? <><Spinner size={12}/> OCR চলছে...</> : '📷 ছবি দিয়ে OCR'}
-              </button>
-              {dual.holdingCode ? (
-                <div style={{ fontSize: 12, padding: '6px 10px', borderRadius: 8, background: 'rgba(34,197,94,.12)', border: '1px solid rgba(34,197,94,.3)', color: '#16a34a', fontWeight: 600 }}>
-                  ✓ {dual.holdingCode} — {dual.holdingName || '—'}
-                </div>
-              ) : (
-                <div style={{ fontSize: 11.5, color: th.muted }}>{copy('কোনো product set নেই', 'No product set')}</div>
-              )}
-              <div style={{ display: 'flex', gap: 6 }}>
-                <input style={{ ...th.input, flex: 1, fontSize: 12 }} placeholder={copy('Code manually দিন', 'Enter code manually')}
-                  value={dual.holdingCode}
-                  onChange={e => setDual(p => ({ ...p, holdingCode: e.target.value.toUpperCase(), holdingProductId: null, holdingName: '' }))} />
-                <button style={{ ...th.btnSm }} disabled={!dual.holdingCode}
-                  onClick={async () => {
-                    const res = await request<any>(`${BASE}/products?code=${dual.holdingCode}&limit=1`).catch(() => null);
-                    const prod = Array.isArray(res?.products) ? res.products.find((p: any) => p.code === dual.holdingCode) : null;
-                    if (prod) setDual(p => ({ ...p, holdingProductId: prod.id, holdingName: prod.name }));
-                    else onToast('Product পাওয়া যায়নি', 'error');
-                  }}>{copy('খুঁজুন', 'Find')}</button>
+          {/* Enable toggle + Save */}
+          {(dualAiResult || dual.holdingProductId || dual.wearingProductId) && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '12px 16px', borderRadius: 12, background: th.surface, border: `1px solid ${th.border}` }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13, fontWeight: 700 }}>{copy('Dual Photo Mode চালু করুন', 'Enable Dual Photo Mode')}</div>
+                <div style={{ fontSize: 11.5, color: th.muted, marginTop: 2 }}>Customer "হাতে ধরা" বা "পরে আছে" বললে AI সঠিক product দেখাবে</div>
+              </div>
+              <div onClick={() => setDual(p => ({ ...p, mode: !p.mode }))}
+                style={{ width: 44, height: 24, borderRadius: 12, background: dual.mode ? th.accent : th.border, cursor: 'pointer', position: 'relative', transition: 'background .2s', flexShrink: 0 }}>
+                <div style={{ position: 'absolute', top: 3, left: dual.mode ? 23 : 3, width: 18, height: 18, borderRadius: '50%', background: '#fff', transition: 'left .2s', boxShadow: '0 1px 3px rgba(0,0,0,.2)' }} />
               </div>
             </div>
-          </div>
-
-          <div style={{ fontSize: 12, color: th.muted, padding: '8px 12px', borderRadius: 8, background: th.surface, border: `1px solid ${th.border}` }}>
-            {copy('💡 Customer "হাতে থাকা dress" বা "পরা dress" জিজ্ঞেস করলে AI automatically সঠিক product দেখাবে এবং order নিতে পারবে।', '💡 When a customer asks about the held or worn dress, AI automatically shows the correct product and can take orders.')}
-          </div>
+          )}
 
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
             {dual.mode && (
-              <button style={{ ...th.btnSm, background: '#dc2626', color: '#fff', border: 'none', fontSize: 12 }}
+              <button style={{ ...th.btnSm, background: '#dc2626', color: '#fff', border: 'none' }}
                 onClick={() => {
-                  setDual({ mode: false, wearingProductId: null, wearingCode: '', wearingName: '', holdingProductId: null, holdingCode: '', holdingName: '' });
+                  setDual(p => ({ ...p, mode: false, wearingProductId: null, wearingCode: '', wearingName: '', holdingProductId: null, holdingCode: '', holdingName: '', holdingRefUrl: '', wearingRefUrl: '', livePhotoUrl: '' }));
+                  setDualAiResult(null);
                   void request(`${BASE}/settings`, { method: 'PATCH', body: JSON.stringify({ dualPhotoMode: false, dualWearingProductId: null, dualHoldingProductId: null }) }).then(() => onToast('✓ Dual Mode বন্ধ'));
                 }}>
                 🔴 {copy('বন্ধ করুন', 'Turn Off')}
               </button>
             )}
-            <button style={{ ...th.btnPrimary, fontSize: 12 }} disabled={dualSaving} onClick={saveDualPhotoMode}>
-              {dualSaving ? <><Spinner size={12}/> Saving...</> : (dual.mode ? `✅ ${copy('Dual Mode চালু করুন', 'Enable Dual Mode')}` : copy('Save', 'Save'))}
+            <button style={{ ...th.btnPrimary, fontSize: 12 }} disabled={dualSaving || !dual.holdingProductId || !dual.wearingProductId} onClick={saveDualPhotoMode}>
+              {dualSaving ? <><Spinner size={12}/> Saving...</> : `✅ ${dual.mode ? 'Dual Mode চালু করুন' : 'Save করুন'}`}
             </button>
           </div>
         </div>

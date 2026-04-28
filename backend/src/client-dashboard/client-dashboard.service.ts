@@ -537,6 +537,107 @@ export class ClientDashboardService {
     return result;
   }
 
+  async setupDualPhotoAI(
+    pageId: number,
+    holdingRefUrl: string,
+    wearingRefUrl: string,
+    livePhotoUrl?: string,
+  ) {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) throw new BadRequestException('OpenAI API key not configured');
+    if (!holdingRefUrl || !wearingRefUrl) throw new BadRequestException('Both reference images required');
+
+    const hasLive = Boolean(livePhotoUrl);
+
+    const prompt = `You are analyzing dress products for a Bangladeshi clothing live-video seller.
+
+You have ${hasLive ? '3' : '2'} images:
+- Image 1: Reference photo of a dress that will be HELD in hand during the live
+- Image 2: Reference photo of a dress that will be WORN on the model's body during the live${hasLive ? '\n- Image 3: Actual live video screenshot showing BOTH dresses at the same time' : ''}
+
+Your tasks:
+1. Extract the product code from Image 1 if visible (codes look like: DF-0042, SK-001, LT-100, printed on tag/label/sticker/paper/cloth)
+2. Extract the product code from Image 2 if visible (same)${hasLive ? `
+3. In Image 3, identify which dress is being HELD in someone's hand and which is being WORN on the model's body
+4. Match each dress in Image 3 to its reference image (Image 1 or Image 2)
+5. If the live photo shows Image 1's dress is actually WORN (not held), set swapped=true` : ''}
+
+Return ONLY a single valid JSON object with NO markdown:
+{
+  "holding": {
+    "productCode": "DF-0042",
+    "codeFound": true,
+    "confidence": 0.92
+  },
+  "wearing": {
+    "productCode": "SK-001",
+    "codeFound": true,
+    "confidence": 0.88
+  },
+  "swapped": false,
+  "note": "brief English explanation"
+}
+
+Rules:
+- productCode must be UPPERCASE. If no code is visible, set productCode to null and codeFound to false
+- confidence is your certainty (0.0 to 1.0) for that detection
+- swapped=true only when live photo proves Image 1's dress is worn and Image 2's dress is held (opposite of what was labeled)
+- If no live photo, set swapped=false always`;
+
+    const content: any[] = [{ type: 'text', text: prompt }];
+    content.push({ type: 'image_url', image_url: { url: holdingRefUrl, detail: 'high' } });
+    content.push({ type: 'image_url', image_url: { url: wearingRefUrl, detail: 'high' } });
+    if (hasLive && livePhotoUrl) {
+      content.push({ type: 'image_url', image_url: { url: livePhotoUrl, detail: 'high' } });
+    }
+
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        max_tokens: 400,
+        temperature: 0.1,
+        messages: [{ role: 'user', content }],
+      }),
+      signal: AbortSignal.timeout(50_000),
+    });
+
+    if (!res.ok) throw new BadRequestException(`OpenAI vision error: ${res.status}`);
+    const data = await res.json() as any;
+    const text: string = data.choices?.[0]?.message?.content ?? '';
+
+    let ai: any = {};
+    try {
+      const match = text.match(/\{[\s\S]*\}/);
+      if (match) ai = JSON.parse(match[0]);
+    } catch { /* use empty */ }
+
+    const swapped = Boolean(ai.swapped);
+    const holdingCode: string | null = swapped ? (ai.wearing?.productCode ?? null) : (ai.holding?.productCode ?? null);
+    const wearingCode: string | null = swapped ? (ai.holding?.productCode ?? null) : (ai.wearing?.productCode ?? null);
+    const holdingConf: number = swapped ? (ai.wearing?.confidence ?? 0) : (ai.holding?.confidence ?? 0);
+    const wearingConf: number = swapped ? (ai.holding?.confidence ?? 0) : (ai.wearing?.confidence ?? 0);
+
+    // Find products by code (case-insensitive)
+    const lookup = async (code: string | null) => {
+      if (!code) return null;
+      const p = await this.prisma.product.findFirst({
+        where: { pageId, isActive: true, code: { equals: code, mode: 'insensitive' } as any },
+        select: { id: true, code: true, name: true, price: true },
+      });
+      return p ? { id: p.id, code: p.code, name: p.name ?? '', price: Number(p.price) } : null;
+    };
+    const [holdingProduct, wearingProduct] = await Promise.all([lookup(holdingCode), lookup(wearingCode)]);
+
+    return {
+      swapped,
+      holding: { code: holdingCode, confidence: holdingConf, codeFound: Boolean(holdingCode), product: holdingProduct },
+      wearing: { code: wearingCode, confidence: wearingConf, codeFound: Boolean(wearingCode), product: wearingProduct },
+      note: ai.note ?? '',
+    };
+  }
+
   async getProductVideoGuide(pageId: number, body: any) {
     const videoUrl = String(body?.videoUrl || '').trim();
     const existingImages = Number(body?.existingImages || 0);

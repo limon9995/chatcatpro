@@ -279,6 +279,16 @@ export class ClientDashboardController {
   ) {
     return this.svc.batchAnalyzeReferenceImages(this.pid(r, p), b || {});
   }
+  @Post(':pageId/products/dual-photo-ai')
+  setupDualPhotoAI(@Param('pageId') p: string, @Body() b: any, @Req() r: any) {
+    return this.svc.setupDualPhotoAI(
+      this.pid(r, p),
+      String(b?.holdingRefUrl || '').trim(),
+      String(b?.wearingRefUrl || '').trim(),
+      b?.livePhotoUrl ? String(b.livePhotoUrl).trim() : undefined,
+    );
+  }
+
   @Post(':pageId/products/video-guide')
   getProductVideoGuide(
     @Param('pageId') p: string,
