@@ -275,8 +275,12 @@ export class WebhookService {
 
     // ── SMART BOT (V19) — single AI call replaces keyword pipeline ────────
     if (page.smartBotOn && aiAllowed && this.smartBot.isAvailable()) {
-      const handled = await this.smartBot.handle(page, psid, text, draft, message, this.draftHandler);
-      if (handled) return;
+      const reply = await this.smartBot.handle(page, psid, text, draft, this.draftHandler);
+      if (reply !== false) {
+        // Use WebhookService.safeSend so inFlightReply is updated → history gets saved
+        await this.safeSend(token, psid, reply);
+        return;
+      }
     }
 
     // ── INTENT DETECTION ──────────────────────────────────────────────────
