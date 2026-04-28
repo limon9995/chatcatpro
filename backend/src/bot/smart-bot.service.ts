@@ -136,6 +136,14 @@ export class SmartBotService {
     }
   }
 
+  private buildCatalogUrl(page: any): string {
+    const website = String(page.websiteUrl || '').trim();
+    if (website) return website;
+    const base = (process.env.CATALOG_BASE_URL || 'https://chatcat.pro').replace(/\/$/, '');
+    const slug = page.catalogSlug || String(page.id);
+    return `${base}/catalog/${slug}`;
+  }
+
   private buildSystemPrompt(ctx: BusinessContext, draft: DraftSession | null, page: any): string {
     const shop = ctx.businessName
       ? `"${ctx.businessName}" নামের Bangladeshi e-commerce shop`
@@ -172,6 +180,10 @@ export class SmartBotService {
     const knowledgeCtx = ctx.knowledgeText
       ? `\n\n## Business Knowledge\n${ctx.knowledgeText}`
       : '';
+
+    // Catalog link
+    const catalogUrl = this.buildCatalogUrl(page);
+    const catalogCtx = `\n\n## Product Catalog Link\n${catalogUrl}\n(Customer ছবি/photo চাইলে বা সব product দেখতে চাইলে এই link দাও)`;
 
     // Current draft state — EXPLICITLY show collected vs missing
     let draftCtx = '\n\n## Current Order Draft\nকোনো active order নেই।';
@@ -229,9 +241,11 @@ Customer-এর message দেখে **strictly valid JSON** return করো:
 2. collected-এ শুধু এই message-এ নতুন পাওয়া তথ্য রাখো। আগে ✅ collected fields: null দাও।
 3. Phone: 01XXXXXXXXX বা +8801XXXXXXXXX দুটোই valid — COLLECT করো।
 4. Customer একসাথে নাম+ফোন+ঠিকানা দিলে সব একসাথে collect করো।
-5. reply-এ order summary সহ confirm চাইতে পারো যখন সব ✅ হয়ে যায়।`;
+5. reply-এ order summary সহ confirm চাইতে পারো যখন সব ✅ হয়ে যায়।
+6. **Photo/ছবি চাইলে**: "ছবি দেখতে এই link-এ যান 👉 ${catalogUrl}" — সরাসরি catalog link দাও।
+7. **"ki ki ache / সব দেখাও / catalog" চাইলে**: product list briefly বলো তারপর catalog link দাও।`;
 
-    return `তুমি ${shop}-এর Facebook Messenger AI sales assistant।${deliveryCtx}${paymentCtx}${productCtx}${knowledgeCtx}${draftCtx}${taskRules}`;
+    return `তুমি ${shop}-এর Facebook Messenger AI sales assistant।${deliveryCtx}${paymentCtx}${productCtx}${knowledgeCtx}${catalogCtx}${draftCtx}${taskRules}`;
   }
 
   private async callOpenAI(
