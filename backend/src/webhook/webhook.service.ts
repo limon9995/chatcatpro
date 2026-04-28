@@ -250,7 +250,16 @@ export class WebhookService {
       return;
     }
 
-    const text = (message.text || '').trim();
+    // ── Facebook Like button (👍 sticker_id 369239263222822) → treat as "👍" text
+    const LIKE_STICKER_ID = 369239263222822;
+    const isLikeSticker =
+      message.sticker_id === LIKE_STICKER_ID ||
+      (message.attachments ?? []).some(
+        (a: any) => a.payload?.sticker_id === LIKE_STICKER_ID,
+      );
+
+    let text = (message.text || '').trim();
+    if (!text && isLikeSticker) text = '👍';
     if (!text) return;
 
     // Auto-expire drafts older than 24 hours
