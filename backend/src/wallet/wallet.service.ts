@@ -118,7 +118,7 @@ export class WalletService {
   }
 
   /**
-   * Deducts the monthly 500 BDT base platform fee.
+   * Deducts the monthly 699 BDT base platform fee.
    * Suspends the page if balance drops to 0 or below after deduction.
    */
   async deductBaseFee(pageId: number, feeBdt: number): Promise<{ suspended: boolean }> {

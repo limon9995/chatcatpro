@@ -895,10 +895,20 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
           <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-radius:10px;background:rgba(255,255,255,.04);border:1px solid var(--border)">
             <div>
               <div style="font-size:13px;font-weight:600">💬 Text Message (AI reply)</div>
-              <div style="font-size:11px;color:var(--muted)">AI — প্রতি customer message</div>
+              <div style="font-size:11px;color:var(--muted)">Keyword AI — প্রতি customer message</div>
             </div>
             <div style="text-align:right;flex-shrink:0">
               <div style="font-size:16px;font-weight:900;color:var(--green)">৳০.০৫</div>
+              <div style="font-size:10px;color:var(--muted)">per message</div>
+            </div>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-radius:10px;background:rgba(91,76,245,.07);border:1px solid rgba(91,76,245,.25)">
+            <div>
+              <div style="font-size:13px;font-weight:600">🧠 SmartBot (ChatGPT-style reply)</div>
+              <div style="font-size:11px;color:var(--muted)">Full AI — order নেওয়া থেকে confirm পর্যন্ত</div>
+            </div>
+            <div style="text-align:right;flex-shrink:0">
+              <div style="font-size:16px;font-weight:900;color:#a5b4fc">৳০.১০</div>
               <div style="font-size:10px;color:var(--muted)">per message</div>
             </div>
           </div>
@@ -955,10 +965,10 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
     </div>
 
     <!-- ── Real cost example ── -->
-    <div style="background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.2);border-radius:16px;padding:22px 28px;margin-bottom:28px;text-align:left">
-      <div style="font-weight:800;font-size:14px;color:#34d399;margin-bottom:4px">📊 Real Example — মাসে ৫০০ text reply হলে কত লাগবে?</div>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:14px">Courier, Accounting, CRM, Analytics — এগুলোর জন্য কোনো আলাদা চার্জ নেই</div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px">
+    <div style="background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.2);border-radius:16px;padding:22px 28px;margin-bottom:16px;text-align:left">
+      <div style="font-weight:800;font-size:14px;color:#34d399;margin-bottom:4px">📊 Example ১ — মাসে ৫০০ Keyword AI reply (basic)</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:14px">Courier, Accounting, CRM — কোনো আলাদা চার্জ নেই</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px">
         <div style="background:rgba(255,255,255,.04);border-radius:10px;padding:12px 14px">
           <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Platform Fee</div>
           <div style="font-weight:800;font-size:16px">৳৬৯৯</div>
@@ -978,6 +988,32 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
           <div style="font-size:11px;color:#a5b4fc;margin-bottom:4px">মোট খরচ/মাস</div>
           <div style="font-weight:900;font-size:20px">৳৭২৪</div>
           <div style="font-size:11px;color:#a5b4fc">৬৯৯ + ২৫ মাত্র!</div>
+        </div>
+      </div>
+    </div>
+    <div style="background:rgba(91,76,245,.06);border:1px solid rgba(91,76,245,.22);border-radius:16px;padding:22px 28px;margin-bottom:28px;text-align:left">
+      <div style="font-weight:800;font-size:14px;color:#a5b4fc;margin-bottom:4px">🧠 Example ২ — মাসে ৫০০ SmartBot reply (ChatGPT-style)</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:14px">SmartBot — customer নিজে নিজে order করে, কোনো manual reply লাগে না</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px">
+        <div style="background:rgba(255,255,255,.04);border-radius:10px;padding:12px 14px">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Platform Fee</div>
+          <div style="font-weight:800;font-size:16px">৳৬৯৯</div>
+          <div style="font-size:11px;color:var(--muted)">fixed/মাস</div>
+        </div>
+        <div style="background:rgba(255,255,255,.04);border-radius:10px;padding:12px 14px">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">৫০০ SmartBot reply</div>
+          <div style="font-weight:800;font-size:16px">৳৫০</div>
+          <div style="font-size:11px;color:var(--muted)">৫০০ × ৳০.১০</div>
+        </div>
+        <div style="background:rgba(255,255,255,.04);border-radius:10px;padding:12px 14px">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Courier + Accounting</div>
+          <div style="font-weight:800;font-size:16px">৳০</div>
+          <div style="font-size:11px;color:var(--muted)">সম্পূর্ণ FREE</div>
+        </div>
+        <div style="background:linear-gradient(135deg,rgba(91,76,245,.18),rgba(139,92,246,.12));border:1px solid rgba(91,76,245,.35);border-radius:10px;padding:12px 14px">
+          <div style="font-size:11px;color:#a5b4fc;margin-bottom:4px">মোট খরচ/মাস</div>
+          <div style="font-weight:900;font-size:20px">৳৭৪৯</div>
+          <div style="font-size:11px;color:#a5b4fc">৬৯৯ + ৫০ মাত্র!</div>
         </div>
       </div>
     </div>
