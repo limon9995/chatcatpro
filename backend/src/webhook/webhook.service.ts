@@ -2081,6 +2081,7 @@ export class WebhookService {
     if (!apiKey) return null;
 
     try {
+      // Quick DB check — return null immediately if no active analyzed sessions
       const sessions = await this.prisma.liveSession.findMany({
         where: { pageId, isActive: true, aiMemo: { not: null } },
         include: {
@@ -2090,6 +2091,9 @@ export class WebhookService {
         take: 5,
       });
       if (!sessions.length) return null;
+
+      // Check wallet before making the GPT-4o call
+      if (!(await this.walletService.canProcessAi(pageId))) return null;
 
       const sessionDescs = sessions.map(s => {
         let memo: any = {};

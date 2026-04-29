@@ -310,12 +310,13 @@ export class ClientDashboardController {
 
   @Patch(':pageId/live-sessions/:id')
   updateLiveSession(@Param('pageId') p: string, @Param('id') id: string, @Body() b: any, @Req() r: any) {
+    const body = b ?? {};
     return this.svc.updateLiveSession(this.pid(r, p), Number(id), {
-      label: b?.label,
-      screenshots: Array.isArray(b?.screenshots) ? b.screenshots.map(String) : undefined,
-      wornProductId: 'wornProductId' in b ? (b.wornProductId ? Number(b.wornProductId) : null) : undefined,
-      heldProductId: 'heldProductId' in b ? (b.heldProductId ? Number(b.heldProductId) : null) : undefined,
-      isActive: b?.isActive !== undefined ? Boolean(b.isActive) : undefined,
+      label: body.label,
+      screenshots: Array.isArray(body.screenshots) ? body.screenshots.map(String) : undefined,
+      wornProductId: 'wornProductId' in body ? (body.wornProductId ? Number(body.wornProductId) : null) : undefined,
+      heldProductId: 'heldProductId' in body ? (body.heldProductId ? Number(body.heldProductId) : null) : undefined,
+      isActive: body.isActive !== undefined ? Boolean(body.isActive) : undefined,
     });
   }
 

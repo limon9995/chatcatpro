@@ -522,10 +522,17 @@ export function ProductsPage({ th, pageId, onToast }: {
   const uploadNewScreenshot = async (file: File) => {
     setSessionUploading(true);
     try {
-      const fd = new FormData(); fd.append('image', file);
-      const res = await fetch(`${BASE}/products/upload-asset`, { method: 'POST', headers: { Authorization: `Bearer ${localStorage.getItem('authToken') || ''}` }, body: fd });
+      const token = localStorage.getItem('dfbot_token') || '';
+      const fd = new FormData(); fd.append('file', file);
+      const res = await fetch(`${BASE}/products/upload-image`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        body: fd,
+      });
+      if (!res.ok) throw new Error(await res.text() || 'Upload failed');
       const data = await res.json();
-      const url: string = data.imageUrl || data.url || '';
+      // Construct absolute URL so backend can send it to OpenAI
+      const url: string = data.url ? `${API_BASE.replace(/\/api$/, '')}${data.url}` : '';
       if (url) setNewSession(p => ({ ...p, screenshots: [...p.screenshots, url] }));
       else onToast('Upload failed', 'error');
     } catch (e: any) { onToast(e.message, 'error'); }
