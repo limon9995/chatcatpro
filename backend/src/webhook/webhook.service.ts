@@ -1558,6 +1558,18 @@ export class WebhookService {
 
     await this.ctx.clearPendingVisionMatches(pageId, psid);
 
+    // ── Live Session matching (new Dual Photo system) ──────────────────────
+    const liveMatch = await this.matchLiveSession(pageId, imageUrl);
+    if (liveMatch) {
+      this.logger.log(`[LiveSession] Matched product=${liveMatch.product.code} slot=${liveMatch.slot} conf=${liveMatch.confidence}`);
+      await this.ctx.setLastPresentedProducts(pageId, psid, [{ code: liveMatch.product.code, price: Number(liveMatch.product.price) }]);
+      const slotLabel = liveMatch.slot === 'worn' ? 'পরা পোশাক' : 'হাতে ধরা পোশাক';
+      await this.safeSend(token, psid,
+        `👗 ${slotLabel}: *${liveMatch.product.name}*\n💰 দাম: ৳${Number(liveMatch.product.price).toLocaleString()}\n\nOrder করতে চাইলে বলুন 😊`
+      );
+      return;
+    }
+
     this.logger.log(
       `[OCR] Starting for page=${page.pageId} psid=${psid} hasCustomerText=${Boolean(customerText)}`,
     );
@@ -2050,6 +2062,111 @@ export class WebhookService {
       if (crm.address) draft.address = crm.address;
       return crm;
     } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Checks active live sessions for this page. If any session has an aiMemo,
+   * sends the customer's image to GPT-4o to match against stored visual profiles.
+   * Returns the matched product or null (→ falls through to OCR pipeline).
+   */
+  private async matchLiveSession(pageId: number, imageUrl: string): Promise<{
+    sessionId: number;
+    slot: 'worn' | 'held';
+    product: { id: number; code: string; name: string; price: number };
+    confidence: number;
+  } | null> {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) return null;
+
+    try {
+      const sessions = await this.prisma.liveSession.findMany({
+        where: { pageId, isActive: true, aiMemo: { not: null } },
+        include: {
+          wornProduct: { select: { id: true, code: true, name: true, price: true } },
+          heldProduct: { select: { id: true, code: true, name: true, price: true } },
+        },
+        take: 5,
+      });
+      if (!sessions.length) return null;
+
+      const sessionDescs = sessions.map(s => {
+        let memo: any = {};
+        try { memo = JSON.parse(s.aiMemo!); } catch { /* skip */ }
+        const wornDesc = memo.worn?.description ?? (s.wornProduct ? `${s.wornProduct.name} — worn by model` : null);
+        const heldDesc = memo.held?.description ?? (s.heldProduct ? `${s.heldProduct.name} — held in hand` : null);
+        const parts: string[] = [];
+        if (wornDesc && s.wornProduct) parts.push(`  - WORN (${s.wornProduct.code}): ${wornDesc}`);
+        if (heldDesc && s.heldProduct) parts.push(`  - HELD (${s.heldProduct.code}): ${heldDesc}`);
+        return `Session ${s.id}${s.label ? ` "${s.label}"` : ''}:\n${parts.join('\n')}`;
+      }).join('\n\n');
+
+      const prompt = `A customer sent this screenshot from a Bangladeshi clothing live sale.
+
+Known products visible in live sessions:
+${sessionDescs}
+
+Look at the customer's image and identify which product they are referring to.
+Return ONLY valid JSON (no markdown):
+{
+  "matched": true,
+  "sessionId": 1,
+  "slot": "worn",
+  "productCode": "DF-001",
+  "confidence": 0.85,
+  "reason": "brief explanation"
+}
+
+If you cannot match any product with confidence > 0.5, return:
+{"matched": false}`;
+
+      const res = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({
+          model: 'gpt-4o',
+          max_tokens: 200,
+          temperature: 0.1,
+          messages: [{
+            role: 'user',
+            content: [
+              { type: 'text', text: prompt },
+              { type: 'image_url', image_url: { url: imageUrl, detail: 'high' } },
+            ],
+          }],
+        }),
+        signal: AbortSignal.timeout(15_000),
+      });
+
+      if (!res.ok) return null;
+      const data = await res.json() as any;
+      const text: string = data.choices?.[0]?.message?.content ?? '';
+      let ai: any = {};
+      try {
+        const m = text.match(/\{[\s\S]*\}/);
+        if (m) ai = JSON.parse(m[0]);
+      } catch { return null; }
+
+      if (!ai.matched || ai.confidence < 0.5) return null;
+
+      const session = sessions.find(s => s.id === ai.sessionId);
+      if (!session) return null;
+
+      const slot: 'worn' | 'held' = ai.slot === 'held' ? 'held' : 'worn';
+      const product = slot === 'worn' ? session.wornProduct : session.heldProduct;
+      if (!product) return null;
+
+      void this.walletService.deductUsage(pageId, 'DUAL_PHOTO_AI', { photoCount: 1 });
+
+      return {
+        sessionId: session.id,
+        slot,
+        product: { id: product.id, code: product.code, name: product.name ?? '', price: Number(product.price) },
+        confidence: ai.confidence ?? 0,
+      };
+    } catch (err: any) {
+      this.logger.warn(`[LiveSession] Match error: ${err?.message}`);
       return null;
     }
   }

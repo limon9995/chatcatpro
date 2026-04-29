@@ -292,6 +292,43 @@ export class ClientDashboardController {
     );
   }
 
+  // ── Live Sessions (new Dual Photo system) ────────────────────────────────
+  @Get(':pageId/live-sessions')
+  getLiveSessions(@Param('pageId') p: string, @Req() r: any) {
+    return this.svc.getLiveSessions(this.pid(r, p));
+  }
+
+  @Post(':pageId/live-sessions')
+  createLiveSession(@Param('pageId') p: string, @Body() b: any, @Req() r: any) {
+    return this.svc.createLiveSession(this.pid(r, p), {
+      label: b?.label,
+      screenshots: Array.isArray(b?.screenshots) ? b.screenshots.map(String) : [],
+      wornProductId: b?.wornProductId ? Number(b.wornProductId) : null,
+      heldProductId: b?.heldProductId ? Number(b.heldProductId) : null,
+    });
+  }
+
+  @Patch(':pageId/live-sessions/:id')
+  updateLiveSession(@Param('pageId') p: string, @Param('id') id: string, @Body() b: any, @Req() r: any) {
+    return this.svc.updateLiveSession(this.pid(r, p), Number(id), {
+      label: b?.label,
+      screenshots: Array.isArray(b?.screenshots) ? b.screenshots.map(String) : undefined,
+      wornProductId: 'wornProductId' in b ? (b.wornProductId ? Number(b.wornProductId) : null) : undefined,
+      heldProductId: 'heldProductId' in b ? (b.heldProductId ? Number(b.heldProductId) : null) : undefined,
+      isActive: b?.isActive !== undefined ? Boolean(b.isActive) : undefined,
+    });
+  }
+
+  @Delete(':pageId/live-sessions/:id')
+  deleteLiveSession(@Param('pageId') p: string, @Param('id') id: string, @Req() r: any) {
+    return this.svc.deleteLiveSession(this.pid(r, p), Number(id));
+  }
+
+  @Post(':pageId/live-sessions/:id/analyze')
+  analyzeLiveSession(@Param('pageId') p: string, @Param('id') id: string, @Req() r: any) {
+    return this.svc.analyzeLiveSession(this.pid(r, p), Number(id));
+  }
+
   @Post(':pageId/products/video-guide')
   getProductVideoGuide(
     @Param('pageId') p: string,

@@ -206,6 +206,20 @@ export function ProductsPage({ th, pageId, onToast }: {
   const dualHoldingRef = useRef<HTMLInputElement>(null);
   const dualLiveRef = useRef<HTMLInputElement>(null);
 
+  // Live Session state (new Dual Photo system)
+  const [liveSessions, setLiveSessions] = useState<any[]>([]);
+  const [newSession, setNewSession] = useState<{ label: string; screenshots: string[]; wornProductId: number | null; heldProductId: number | null }>({ label: '', screenshots: [], wornProductId: null, heldProductId: null });
+  const [sessionSaving, setSessionSaving] = useState(false);
+  const [sessionUploading, setSessionUploading] = useState(false);
+  const [sessionAnalyzing, setSessionAnalyzing] = useState<number | null>(null);
+  const [showNewForm, setShowNewForm] = useState(false);
+  const newScreenshotRef = useRef<HTMLInputElement>(null);
+
+  const loadLiveSessions = useCallback(async () => {
+    const rows = await request<any[]>(`${BASE}/live-sessions`).catch(() => []);
+    setLiveSessions(rows);
+  }, [BASE]);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -230,6 +244,7 @@ export function ProductsPage({ th, pageId, onToast }: {
   }, [pageId]);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { if (productTab === 'dual') loadLiveSessions(); }, [productTab, loadLiveSessions]);
 
   const openEdit = (p: Product) => {
     setEditId(p.id);
@@ -501,6 +516,55 @@ export function ProductsPage({ th, pageId, onToast }: {
       onToast('✓ Dual Photo Mode saved');
     } catch (e: any) { onToast(e.message, 'error'); }
     finally { setDualSaving(false); }
+  };
+
+  // ── Live Session functions ─────────────────────────────────────────────────
+  const uploadNewScreenshot = async (file: File) => {
+    setSessionUploading(true);
+    try {
+      const fd = new FormData(); fd.append('image', file);
+      const res = await fetch(`${BASE}/products/upload-asset`, { method: 'POST', headers: { Authorization: `Bearer ${localStorage.getItem('authToken') || ''}` }, body: fd });
+      const data = await res.json();
+      const url: string = data.imageUrl || data.url || '';
+      if (url) setNewSession(p => ({ ...p, screenshots: [...p.screenshots, url] }));
+      else onToast('Upload failed', 'error');
+    } catch (e: any) { onToast(e.message, 'error'); }
+    finally { setSessionUploading(false); }
+  };
+
+  const saveNewSession = async () => {
+    if (!newSession.screenshots.length) return onToast('কমপক্ষে ১টা screenshot upload করুন', 'error');
+    if (!newSession.wornProductId && !newSession.heldProductId) return onToast('অন্তত ১টা product assign করুন', 'error');
+    setSessionSaving(true);
+    try {
+      await request(`${BASE}/live-sessions`, { method: 'POST', body: JSON.stringify(newSession) });
+      onToast('✓ Session saved');
+      setNewSession({ label: '', screenshots: [], wornProductId: null, heldProductId: null });
+      setShowNewForm(false);
+      await loadLiveSessions();
+    } catch (e: any) { onToast(e.message, 'error'); }
+    finally { setSessionSaving(false); }
+  };
+
+  const analyzeSession = async (id: number) => {
+    setSessionAnalyzing(id);
+    try {
+      await request(`${BASE}/live-sessions/${id}/analyze`, { method: 'POST' });
+      onToast('✓ AI analysis complete');
+      await loadLiveSessions();
+    } catch (e: any) { onToast(e.message || 'Analysis failed', 'error'); }
+    finally { setSessionAnalyzing(null); }
+  };
+
+  const deleteSession = async (id: number) => {
+    if (!confirm('এই session delete করবেন?')) return;
+    await request(`${BASE}/live-sessions/${id}`, { method: 'DELETE' }).catch(() => null);
+    await loadLiveSessions();
+  };
+
+  const toggleSession = async (id: number, isActive: boolean) => {
+    await request(`${BASE}/live-sessions/${id}`, { method: 'PATCH', body: JSON.stringify({ isActive }) }).catch(() => null);
+    await loadLiveSessions();
   };
 
   const filtered = products.filter(p => {
@@ -1207,180 +1271,181 @@ export function ProductsPage({ th, pageId, onToast }: {
 
       </>)}
 
-      {/* Dual Photo tab */}
+      {/* Live Session tab (new Dual Photo system) */}
       {productTab === 'dual' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
-          {/* Instruction banner */}
-          <div style={{ padding: '12px 16px', borderRadius: 12, background: `${th.accent}12`, border: `1px solid ${th.accent}44`, fontSize: 12.5, color: th.text, lineHeight: 1.7 }}>
-            <strong>কিভাবে ব্যবহার করবেন:</strong><br/>
-            ১. হাতে ধরা dress-এর একটি আলাদা ছবি upload করুন<br/>
-            ২. গায়ে পরা dress-এর একটি আলাদা ছবি upload করুন<br/>
-            ৩. Live চলাকালীন <strong>২-৩টা ছবি</strong> upload করুন যেখানে ২টো dress একসাথে দেখা যাচ্ছে (বেশি ছবি = বেশি accurate)<br/>
-            ৪. <strong>🤖 AI দিয়ে Identify করুন</strong> — AI নিজেই বুঝবে কোনটা হাতে কোনটা গায়ে
+          {/* How it works */}
+          <div style={{ padding: '12px 16px', borderRadius: 12, background: `${th.accent}12`, border: `1px solid ${th.accent}44`, fontSize: 12.5, lineHeight: 1.7 }}>
+            <strong>📌 কিভাবে কাজ করে:</strong><br/>
+            ১. Live video থেকে screenshot নিন (যেখানে ২টো product একসাথে আছে)<br/>
+            ২. আপনি নিজে বলুন — কোনটা <strong>পরা আছে</strong>, কোনটা <strong>হাতে ধরা</strong><br/>
+            ৩. <strong>AI কে মনে রাখাও</strong> — AI screenshots দেখে visual profile তৈরি করবে<br/>
+            ৪. Customer screenshot পাঠালে AI এই memory দেখে product চিনবে ও auto-reply দেবে
           </div>
 
-          {/* Reference photo slots (holding + wearing) */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 16 }}>
-            {(['holding', 'wearing'] as const).map(slot => {
-              const label = slot === 'holding' ? '👜 হাতে ধরা dress' : '👗 গায়ে পরা dress';
-              const hint = 'শুধু এই dress-টির একটি পরিষ্কার ছবি';
-              const refEl = slot === 'holding' ? dualHoldingRef : dualWearingRef;
-              const uploading = dualUploading[slot];
-              const url = slot === 'holding' ? dual.holdingRefUrl : dual.wearingRefUrl;
-              return (
-                <div key={slot} style={{ padding: 14, borderRadius: 12, border: `1.5px solid ${url ? '#16a34a66' : th.border}`, background: th.surface, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  <div style={{ fontSize: 12.5, fontWeight: 700 }}>{label}</div>
-                  <div style={{ fontSize: 11, color: th.muted }}>{hint}</div>
-                  <input ref={refEl} type="file" accept="image/*" style={{ display: 'none' }}
-                    onChange={e => { const f = e.target.files?.[0]; if (f) uploadDualPhoto(f, slot); e.target.value = ''; }} />
-                  {url ? (
-                    <img src={url} alt="" style={{ width: '100%', height: 120, objectFit: 'cover', borderRadius: 8, border: `1px solid ${th.border}` }} />
-                  ) : (
-                    <div style={{ height: 120, borderRadius: 8, border: `2px dashed ${th.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: th.muted, fontSize: 11 }}>ছবি নেই</div>
-                  )}
-                  <button onClick={() => refEl.current?.click()} disabled={uploading}
-                    style={{ ...th.btnGhost, justifyContent: 'center', fontSize: 12 }}>
-                    {uploading ? <><Spinner size={12}/> Uploading...</> : url ? '🔄 পরিবর্তন করুন' : '📷 ছবি Upload করুন'}
-                  </button>
-                  {url && <div style={{ fontSize: 11, color: '#16a34a', fontWeight: 600 }}>✓ Ready</div>}
-                </div>
-              );
-            })}
+          {/* Add new session button */}
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <button style={{ ...th.btnPrimary, fontSize: 13 }} onClick={() => setShowNewForm(v => !v)}>
+              {showNewForm ? '✕ বাতিল' : '➕ নতুন Live Session যোগ করুন'}
+            </button>
           </div>
 
-          {/* Live screenshots — multi upload */}
-          <div style={{ padding: 14, borderRadius: 12, border: `1.5px solid ${dual.livePhotoUrls.length > 0 ? '#16a34a66' : th.border}`, background: th.surface, display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          {/* New session form */}
+          {showNewForm && (
+            <div style={{ padding: 18, borderRadius: 14, border: `1.5px solid ${th.accent}55`, background: th.surface, display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: th.accent }}>নতুন Live Session</div>
+
+              <input style={{ ...th.input, fontSize: 13 }} placeholder="Session-এর নাম (optional) — যেমন: Live ২৯ এপ্রিল"
+                value={newSession.label} onChange={e => setNewSession(p => ({ ...p, label: e.target.value }))} />
+
+              {/* Screenshot upload */}
               <div>
-                <div style={{ fontSize: 12.5, fontWeight: 700 }}>📸 Live ছবি <span style={{ fontSize: 10.5, color: th.muted, fontWeight: 400 }}>(optional — যত বেশি ততো ভালো)</span></div>
-                <div style={{ fontSize: 11, color: th.muted }}>Live video থেকে ২টো dress একসাথে আছে এমন ছবি — ২-৩টা দিলে AI আরো accurate হয়</div>
-              </div>
-              {dual.livePhotoUrls.length > 0 && (
-                <div style={{ fontSize: 12, fontWeight: 700, color: th.accent, flexShrink: 0, marginLeft: 10 }}>{dual.livePhotoUrls.length} ছবি</div>
-              )}
-            </div>
-            {dual.livePhotoUrls.length > 0 && (
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                {dual.livePhotoUrls.map((url, i) => (
-                  <div key={url} style={{ position: 'relative', display: 'inline-block' }}>
-                    <img src={url} alt="" style={{ width: 80, height: 80, objectFit: 'cover', borderRadius: 8, border: `1px solid ${th.border}` }} />
-                    <button onClick={() => setDual(p => ({ ...p, livePhotoUrls: p.livePhotoUrls.filter((_, idx) => idx !== i) }))}
-                      style={{ position: 'absolute', top: -4, right: -4, width: 18, height: 18, borderRadius: '50%', background: '#dc2626', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>✕</button>
+                <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>📸 Live Screenshots (২-৫টা দিন)</div>
+                {newSession.screenshots.length > 0 && (
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
+                    {newSession.screenshots.map((url, i) => (
+                      <div key={url+i} style={{ position: 'relative' }}>
+                        <img src={url} alt="" style={{ width: 80, height: 80, objectFit: 'cover', borderRadius: 8, border: `1px solid ${th.border}` }} />
+                        <button onClick={() => setNewSession(p => ({ ...p, screenshots: p.screenshots.filter((_, idx) => idx !== i) }))}
+                          style={{ position: 'absolute', top: -4, right: -4, width: 18, height: 18, borderRadius: '50%', background: '#dc2626', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>✕</button>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                )}
+                <input ref={newScreenshotRef} type="file" accept="image/*" style={{ display: 'none' }}
+                  onChange={e => { const f = e.target.files?.[0]; if (f) { uploadNewScreenshot(f); e.target.value = ''; } }} />
+                <button style={{ ...th.btnGhost, fontSize: 12 }} disabled={sessionUploading} onClick={() => newScreenshotRef.current?.click()}>
+                  {sessionUploading ? <><Spinner size={12}/> Uploading...</> : `📷 Screenshot যোগ করুন${newSession.screenshots.length > 0 ? ` (${newSession.screenshots.length}টি)` : ''}`}
+                </button>
               </div>
-            )}
-            <input ref={dualLiveRef} type="file" accept="image/*" style={{ display: 'none' }}
-              onChange={e => { const f = e.target.files?.[0]; if (f) uploadDualPhoto(f, 'live'); e.target.value = ''; }} />
-            <button onClick={() => dualLiveRef.current?.click()} disabled={dualUploading.live}
-              style={{ ...th.btnGhost, justifyContent: 'center', fontSize: 12, alignSelf: 'flex-start' }}>
-              {dualUploading.live ? <><Spinner size={12}/> Uploading...</> : `➕ Live ছবি যোগ করুন${dual.livePhotoUrls.length > 0 ? ` (এখন ${dual.livePhotoUrls.length}টি)` : ''}`}
-            </button>
-          </div>
 
-          {/* AI Analyze button with cost estimate */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
-            <button
-              onClick={runDualPhotoAI}
-              disabled={dualAiLoading || !dual.holdingRefUrl || !dual.wearingRefUrl}
-              style={{ ...th.btnPrimary, fontSize: 13, padding: '10px 24px', opacity: (!dual.holdingRefUrl || !dual.wearingRefUrl) ? 0.5 : 1 }}>
-              {dualAiLoading ? <><Spinner size={14}/> GPT-4o Analyzing...</> : '🤖 AI দিয়ে Identify করুন'}
-            </button>
-            {(dual.holdingRefUrl || dual.wearingRefUrl) && (
-              <div style={{ fontSize: 11.5, color: th.muted }}>
-                মোট <strong>{2 + dual.livePhotoUrls.length} টি</strong> ছবি analyze হবে
-                {dual.livePhotoUrls.length === 0 && <span style={{ color: '#f59e0b' }}> — Live ছবি দিলে accuracy বাড়বে</span>}
-              </div>
-            )}
-          </div>
-
-          {/* AI Result */}
-          {dualAiResult && (
-            <div style={{ padding: 16, borderRadius: 12, border: `1.5px solid ${dualAiResult.swapped ? '#ea580c66' : '#16a34a66'}`, background: th.surface }}>
-              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>
-                {dualAiResult.swapped ? '⚠️ AI swap detect করেছে — automatically corrected' : '✅ AI successfully identified করেছে'}
-              </div>
+              {/* Product pickers */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                {(['holding', 'wearing'] as const).map(slot => {
-                  const r = dualAiResult[slot];
-                  const label = slot === 'holding' ? '👜 হাতে ধরা' : '👗 গায়ে পরা';
+                {(['worn', 'held'] as const).map(slot => {
+                  const label = slot === 'worn' ? '👗 গায়ে পরা product' : '👜 হাতে ধরা product';
+                  const val = slot === 'worn' ? newSession.wornProductId : newSession.heldProductId;
                   return (
-                    <div key={slot} style={{ padding: 12, borderRadius: 8, background: th.panel, border: `1px solid ${th.border}` }}>
-                      <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6 }}>{label}</div>
-                      {r?.product ? (
-                        <div style={{ fontSize: 12, color: '#16a34a', fontWeight: 600 }}>✓ {r.product.code} — {r.product.name}</div>
-                      ) : r?.code ? (
-                        <div style={{ fontSize: 12, color: '#ea580c' }}>⚠️ Code: {r.code} — DB-তে পাওয়া যায়নি</div>
-                      ) : (
-                        <div style={{ fontSize: 12, color: th.muted }}>Code detect হয়নি</div>
-                      )}
-                      {r?.confidence > 0 && (
-                        <div style={{ fontSize: 11, color: th.muted, marginTop: 4 }}>Confidence: {Math.round((r.confidence ?? 0) * 100)}%</div>
-                      )}
+                    <div key={slot}>
+                      <div style={{ fontSize: 11.5, fontWeight: 700, marginBottom: 6, color: slot === 'worn' ? '#16a34a' : '#7c3aed' }}>{label}</div>
+                      <select style={{ ...th.input, fontSize: 12, width: '100%' }}
+                        value={val ?? ''}
+                        onChange={e => {
+                          const v = e.target.value ? Number(e.target.value) : null;
+                          setNewSession(p => slot === 'worn' ? { ...p, wornProductId: v } : { ...p, heldProductId: v });
+                        }}>
+                        <option value="">— product select করুন —</option>
+                        {products.filter(p => p.isActive).map(p => (
+                          <option key={p.id} value={p.id}>{p.code} — {p.name || '(no name)'}</option>
+                        ))}
+                      </select>
                     </div>
                   );
                 })}
               </div>
-              {dualAiResult.note && (
-                <div style={{ fontSize: 11.5, color: th.muted, marginTop: 10, padding: '6px 10px', borderRadius: 6, background: th.panel }}>
-                  💬 {dualAiResult.note}
-                </div>
-              )}
-              {/* Manual correction fallback */}
-              <div style={{ marginTop: 12, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                {(['holding', 'wearing'] as const).map(slot => (
-                  <div key={slot} style={{ display: 'flex', gap: 6 }}>
-                    <input style={{ ...th.input, flex: 1, fontSize: 12 }}
-                      placeholder={slot === 'holding' ? 'হাতে ধরা code' : 'গায়ে পরা code'}
-                      value={slot === 'holding' ? dual.holdingCode : dual.wearingCode}
-                      onChange={e => {
-                        const v = e.target.value.toUpperCase();
-                        setDual(p => slot === 'holding' ? { ...p, holdingCode: v, holdingProductId: null, holdingName: '' } : { ...p, wearingCode: v, wearingProductId: null, wearingName: '' });
-                      }} />
-                    <button style={{ ...th.btnSm }} disabled={!(slot === 'holding' ? dual.holdingCode : dual.wearingCode)}
-                      onClick={async () => {
-                        const code = slot === 'holding' ? dual.holdingCode : dual.wearingCode;
-                        const res = await request<any>(`${BASE}/products?code=${code}&limit=1`).catch(() => null);
-                        const prod = Array.isArray(res?.products) ? res.products.find((p: any) => p.code === code) : null;
-                        if (prod) setDual(p => slot === 'holding' ? { ...p, holdingProductId: prod.id, holdingName: prod.name } : { ...p, wearingProductId: prod.id, wearingName: prod.name });
-                        else onToast('Product পাওয়া যায়নি', 'error');
-                      }}>খুঁজুন</button>
+
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                <button style={{ ...th.btnGhost, fontSize: 12 }} onClick={() => setShowNewForm(false)}>বাতিল</button>
+                <button style={{ ...th.btnPrimary, fontSize: 12 }} disabled={sessionSaving || !newSession.screenshots.length} onClick={saveNewSession}>
+                  {sessionSaving ? <><Spinner size={12}/> Saving...</> : '✅ Session Save করুন'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Session list */}
+          {liveSessions.length === 0 && !showNewForm && (
+            <div style={{ textAlign: 'center', padding: 40, color: th.muted, fontSize: 13 }}>
+              কোনো Live Session নেই। উপরের বাটন দিয়ে নতুন session তৈরি করুন।
+            </div>
+          )}
+
+          {liveSessions.map(session => {
+            const memo = session.aiMemo;
+            const isAnalyzed = !!memo;
+            const isAnalyzingThis = sessionAnalyzing === session.id;
+            const screenshots: string[] = session.screenshots ?? [];
+            return (
+              <div key={session.id} style={{ borderRadius: 14, border: `1.5px solid ${session.isActive ? '#16a34a44' : th.border}`, background: th.surface, overflow: 'hidden' }}>
+                {/* Session header */}
+                <div style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12, borderBottom: `1px solid ${th.border}` }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700 }}>
+                      {session.label || `Session #${session.id}`}
+                      {session.isActive && <span style={{ marginLeft: 8, fontSize: 10, background: '#16a34a22', color: '#16a34a', borderRadius: 4, padding: '2px 6px', fontWeight: 600 }}>Active</span>}
+                    </div>
+                    <div style={{ fontSize: 11, color: th.muted, marginTop: 2 }}>
+                      {new Date(session.createdAt).toLocaleDateString('bn-BD')} • {screenshots.length} screenshot
+                    </div>
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
+                  {/* Active toggle */}
+                  <div onClick={() => toggleSession(session.id, !session.isActive)}
+                    style={{ width: 40, height: 22, borderRadius: 11, background: session.isActive ? '#16a34a' : th.border, cursor: 'pointer', position: 'relative', transition: 'background .2s', flexShrink: 0 }}>
+                    <div style={{ position: 'absolute', top: 2, left: session.isActive ? 20 : 2, width: 18, height: 18, borderRadius: '50%', background: '#fff', transition: 'left .2s', boxShadow: '0 1px 3px rgba(0,0,0,.25)' }} />
+                  </div>
+                  <button style={{ ...th.btnSm, background: '#dc262622', color: '#dc2626', border: '1px solid #dc262633', fontSize: 11 }} onClick={() => deleteSession(session.id)}>🗑</button>
+                </div>
 
-          {/* Enable toggle + Save */}
-          {(dualAiResult || dual.holdingProductId || dual.wearingProductId) && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '12px 16px', borderRadius: 12, background: th.surface, border: `1px solid ${th.border}` }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13, fontWeight: 700 }}>{copy('Dual Photo Mode চালু করুন', 'Enable Dual Photo Mode')}</div>
-                <div style={{ fontSize: 11.5, color: th.muted, marginTop: 2 }}>Customer "হাতে ধরা" বা "পরে আছে" বললে AI সঠিক product দেখাবে</div>
-              </div>
-              <div onClick={() => setDual(p => ({ ...p, mode: !p.mode }))}
-                style={{ width: 44, height: 24, borderRadius: 12, background: dual.mode ? th.accent : th.border, cursor: 'pointer', position: 'relative', transition: 'background .2s', flexShrink: 0 }}>
-                <div style={{ position: 'absolute', top: 3, left: dual.mode ? 23 : 3, width: 18, height: 18, borderRadius: '50%', background: '#fff', transition: 'left .2s', boxShadow: '0 1px 3px rgba(0,0,0,.2)' }} />
-              </div>
-            </div>
-          )}
+                <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {/* Screenshots preview */}
+                  {screenshots.length > 0 && (
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      {screenshots.slice(0, 6).map((url, i) => (
+                        <img key={url+i} src={url} alt="" style={{ width: 72, height: 72, objectFit: 'cover', borderRadius: 8, border: `1px solid ${th.border}` }} />
+                      ))}
+                      {screenshots.length > 6 && <div style={{ width: 72, height: 72, borderRadius: 8, background: th.panel, border: `1px solid ${th.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: th.muted }}>+{screenshots.length - 6}</div>}
+                    </div>
+                  )}
 
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-            {dual.mode && (
-              <button style={{ ...th.btnSm, background: '#dc2626', color: '#fff', border: 'none' }}
-                onClick={() => {
-                  setDual(p => ({ ...p, mode: false, wearingProductId: null, wearingCode: '', wearingName: '', holdingProductId: null, holdingCode: '', holdingName: '', holdingRefUrl: '', wearingRefUrl: '', livePhotoUrls: [] }));
-                  setDualAiResult(null);
-                  void request(`${BASE}/settings`, { method: 'PATCH', body: JSON.stringify({ dualPhotoMode: false, dualWearingProductId: null, dualHoldingProductId: null }) }).then(() => onToast('✓ Dual Mode বন্ধ'));
-                }}>
-                🔴 {copy('বন্ধ করুন', 'Turn Off')}
-              </button>
-            )}
-            <button style={{ ...th.btnPrimary, fontSize: 12 }} disabled={dualSaving || !dual.holdingProductId || !dual.wearingProductId} onClick={saveDualPhotoMode}>
-              {dualSaving ? <><Spinner size={12}/> Saving...</> : `✅ ${dual.mode ? 'Dual Mode চালু করুন' : 'Save করুন'}`}
-            </button>
-          </div>
+                  {/* Product assignments */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    {(['worn', 'held'] as const).map(slot => {
+                      const prod = slot === 'worn' ? session.wornProduct : session.heldProduct;
+                      const slotLabel = slot === 'worn' ? '👗 পরা' : '👜 হাতে ধরা';
+                      const slotColor = slot === 'worn' ? '#16a34a' : '#7c3aed';
+                      return (
+                        <div key={slot} style={{ padding: '8px 12px', borderRadius: 8, background: th.panel, border: `1px solid ${th.border}` }}>
+                          <div style={{ fontSize: 10.5, fontWeight: 700, color: slotColor, marginBottom: 4 }}>{slotLabel}</div>
+                          {prod ? (
+                            <div style={{ fontSize: 12, fontWeight: 600 }}>{prod.code} — {prod.name || ''}</div>
+                          ) : (
+                            <div style={{ fontSize: 11, color: th.muted }}>assign করা হয়নি</div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* AI memo status + analyze button */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                    {isAnalyzed ? (
+                      <div style={{ fontSize: 11.5, color: '#16a34a', fontWeight: 600 }}>
+                        ✅ AI memory ready — Customer screenshot আসলে match করবে
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: 11.5, color: '#f59e0b', fontWeight: 600 }}>
+                        ⚠️ AI analysis বাকি — নিচের বাটন চাপুন
+                      </div>
+                    )}
+                    <button
+                      style={{ ...th.btnPrimary, fontSize: 11.5, padding: '7px 16px', marginLeft: 'auto' }}
+                      disabled={isAnalyzingThis || !screenshots.length}
+                      onClick={() => analyzeSession(session.id)}>
+                      {isAnalyzingThis ? <><Spinner size={11}/> GPT-4o analyzing...</> : isAnalyzed ? '🔄 Re-analyze' : '🧠 AI কে মনে রাখাও'}
+                    </button>
+                  </div>
+
+                  {/* AI memo preview */}
+                  {isAnalyzed && memo && (
+                    <div style={{ padding: '10px 12px', borderRadius: 8, background: `${th.accent}08`, border: `1px solid ${th.accent}22`, fontSize: 11, color: th.muted, lineHeight: 1.6 }}>
+                      {memo.worn?.description && <div><strong style={{ color: '#16a34a' }}>👗 পরা:</strong> {memo.worn.description}</div>}
+                      {memo.held?.description && <div style={{ marginTop: 4 }}><strong style={{ color: '#7c3aed' }}>👜 হাতে:</strong> {memo.held.description}</div>}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 

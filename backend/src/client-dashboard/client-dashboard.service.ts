@@ -662,6 +662,188 @@ Rules:
     return this.visionOps.buildVideoCaptureGuide(videoUrl, existingImages);
   }
 
+  // ── LIVE SESSION (new Dual Photo system) ────────────────────────────────────
+
+  private readonly PRODUCT_SELECT = {
+    id: true, code: true, name: true, price: true, imageUrl: true,
+  } as const;
+
+  private parseSessions(sessions: any[]) {
+    return sessions.map(s => ({
+      ...s,
+      screenshots: this.parseJson(s.screenshots, []),
+      aiMemo: s.aiMemo ? this.parseJson(s.aiMemo, null) : null,
+    }));
+  }
+
+  private parseJson(raw: string | null | undefined, fallback: any) {
+    if (!raw) return fallback;
+    try { return JSON.parse(raw); } catch { return fallback; }
+  }
+
+  async getLiveSessions(pageId: number) {
+    const rows = await this.prisma.liveSession.findMany({
+      where: { pageId },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        wornProduct: { select: this.PRODUCT_SELECT },
+        heldProduct: { select: this.PRODUCT_SELECT },
+      },
+    });
+    return this.parseSessions(rows);
+  }
+
+  async createLiveSession(pageId: number, body: {
+    label?: string;
+    screenshots?: string[];
+    wornProductId?: number | null;
+    heldProductId?: number | null;
+  }) {
+    const row = await this.prisma.liveSession.create({
+      data: {
+        pageId,
+        label: body.label?.trim() || null,
+        screenshots: JSON.stringify(body.screenshots ?? []),
+        wornProductId: body.wornProductId ?? null,
+        heldProductId: body.heldProductId ?? null,
+      },
+      include: {
+        wornProduct: { select: this.PRODUCT_SELECT },
+        heldProduct: { select: this.PRODUCT_SELECT },
+      },
+    });
+    return this.parseSessions([row])[0];
+  }
+
+  async updateLiveSession(pageId: number, sessionId: number, body: {
+    label?: string;
+    screenshots?: string[];
+    wornProductId?: number | null;
+    heldProductId?: number | null;
+    isActive?: boolean;
+  }) {
+    const data: any = {};
+    if (body.label !== undefined) data.label = body.label?.trim() || null;
+    if (body.screenshots !== undefined) data.screenshots = JSON.stringify(body.screenshots);
+    if ('wornProductId' in body) data.wornProductId = body.wornProductId ?? null;
+    if ('heldProductId' in body) data.heldProductId = body.heldProductId ?? null;
+    if (body.isActive !== undefined) data.isActive = body.isActive;
+    data.updatedAt = new Date();
+
+    const row = await this.prisma.liveSession.updateMany({
+      where: { id: sessionId, pageId },
+      data,
+    });
+    if (row.count === 0) throw new NotFoundException('Session not found');
+
+    const updated = await this.prisma.liveSession.findUnique({
+      where: { id: sessionId },
+      include: {
+        wornProduct: { select: this.PRODUCT_SELECT },
+        heldProduct: { select: this.PRODUCT_SELECT },
+      },
+    });
+    return this.parseSessions([updated!])[0];
+  }
+
+  async deleteLiveSession(pageId: number, sessionId: number) {
+    await this.prisma.liveSession.deleteMany({ where: { id: sessionId, pageId } });
+    return { ok: true };
+  }
+
+  async analyzeLiveSession(pageId: number, sessionId: number) {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) throw new BadRequestException('OpenAI API key not configured');
+
+    const session = await this.prisma.liveSession.findFirst({
+      where: { id: sessionId, pageId },
+      include: {
+        wornProduct: true,
+        heldProduct: true,
+      },
+    });
+    if (!session) throw new NotFoundException('Session not found');
+
+    const screenshots: string[] = this.parseJson(session.screenshots, []);
+    if (!screenshots.length) throw new BadRequestException('No screenshots uploaded yet');
+    if (!session.wornProductId && !session.heldProductId) {
+      throw new BadRequestException('Assign at least one product (worn or held) before analyzing');
+    }
+
+    if (!(await this.walletService.canProcessAi(pageId))) {
+      throw new BadRequestException('Wallet balance শেষ — recharge করুন');
+    }
+
+    const wornName = session.wornProduct ? `${session.wornProduct.name} (Code: ${session.wornProduct.code})` : 'Not assigned';
+    const heldName = session.heldProduct ? `${session.heldProduct.name} (Code: ${session.heldProduct.code})` : 'Not assigned';
+
+    const prompt = `You are helping a Bangladeshi clothing seller identify products from live video screenshots.
+
+In these screenshots from a live video sale:
+- The MODEL IS WEARING: ${wornName}
+- HELD IN HAND: ${heldName}
+
+Create a detailed visual profile of each product as visible in these screenshots. Focus on:
+- Colors, patterns, design details
+- Position in frame (worn on body vs held in hand)
+- Distinguishing features that make each product unique
+
+Return ONLY valid JSON (no markdown):
+{
+  "worn": {
+    "productCode": "${session.wornProduct?.code ?? ''}",
+    "description": "detailed visual description of the worn product",
+    "visualCues": ["color", "pattern", "style details", "position"]
+  },
+  "held": {
+    "productCode": "${session.heldProduct?.code ?? ''}",
+    "description": "detailed visual description of the held product",
+    "visualCues": ["color", "pattern", "style details", "position"]
+  },
+  "sessionNote": "brief note about this live session setup"
+}`;
+
+    const content: any[] = [{ type: 'text', text: prompt }];
+    for (const url of screenshots.slice(0, 5)) {
+      content.push({ type: 'image_url', image_url: { url, detail: 'high' } });
+    }
+
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        max_tokens: 600,
+        temperature: 0.1,
+        messages: [{ role: 'user', content }],
+      }),
+      signal: AbortSignal.timeout(60_000),
+    });
+
+    if (!res.ok) throw new BadRequestException(`OpenAI error: ${res.status}`);
+    const data = await res.json() as any;
+    const text: string = data.choices?.[0]?.message?.content ?? '';
+
+    let memo: any = {};
+    try {
+      const match = text.match(/\{[\s\S]*\}/);
+      if (match) memo = JSON.parse(match[0]);
+    } catch { /* use empty */ }
+
+    const photoCount = screenshots.length;
+    void this.walletService.deductUsage(pageId, 'DUAL_PHOTO_AI', { photoCount });
+
+    const updated = await this.prisma.liveSession.update({
+      where: { id: sessionId },
+      data: { aiMemo: JSON.stringify(memo), updatedAt: new Date() },
+      include: {
+        wornProduct: { select: this.PRODUCT_SELECT },
+        heldProduct: { select: this.PRODUCT_SELECT },
+      },
+    });
+    return this.parseSessions([updated])[0];
+  }
+
   async getVisionSummary(pageId: number, days = 30): Promise<any> {
     return this.visionOps.getSummary(pageId, days);
   }

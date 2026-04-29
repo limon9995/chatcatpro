@@ -164,7 +164,7 @@ model Page {
   costPerAnalyzeBdt    Float @default(0.50)  // Admin uploading product
   costPerAiGenerateBdt Float @default(0.10)  // AI text generation (description/broadcast draft)
 
-  // -- DUAL PHOTO MODE --
+  // -- DUAL PHOTO MODE (legacy single-pair, kept for backward compat) --
   dualPhotoMode        Boolean  @default(false)
   dualWearingProductId Int?
   dualHoldingProductId Int?
@@ -210,6 +210,9 @@ model Page {
   // Spam checker
   spamCheckLogs SpamCheckLog[]
 
+  // Live sessions (new dual photo system)
+  liveSessions LiveSession[]
+
   @@index([masterPageId])
 }
 
@@ -254,6 +257,8 @@ model Product {
   orderItems    OrderItem[]
   dualWearingPages Page[] @relation("DualWearing")
   dualHoldingPages Page[] @relation("DualHolding")
+  liveSessionsWorn LiveSession[] @relation("SessionWorn")
+  liveSessionsHeld LiveSession[] @relation("SessionHeld")
 
   @@unique([pageId, code])
   @@index([pageId])
@@ -720,4 +725,25 @@ model SpamCheckLog {
 
   @@index([pageId, phone])
   @@index([pageId])
+}
+
+// ── LIVE SESSION (new Dual Photo system) ─────────────────────────────────────
+
+model LiveSession {
+  id            Int       @id @default(autoincrement())
+  pageId        Int
+  page          Page      @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  label         String?                       // optional name e.g. "Live 29 April"
+  screenshots   String    @default("[]")      // JSON array of screenshot image URLs
+  wornProductId Int?
+  heldProductId Int?
+  wornProduct   Product?  @relation("SessionWorn", fields: [wornProductId], references: [id])
+  heldProduct   Product?  @relation("SessionHeld", fields: [heldProductId], references: [id])
+  aiMemo        String?                       // JSON: AI visual description of each product
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([pageId])
+  @@index([pageId, isActive])
 }
