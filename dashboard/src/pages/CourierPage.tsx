@@ -53,6 +53,7 @@ export function CourierPage({ th, pageId, onToast }: {
   const [statusModal, setStatusModal] = useState<any>(null);
   const [manualModal, setManualModal] = useState<any>(null);
   const [filterStatus, setFilterStatus] = useState('');
+  const [courierStatusTab, setCourierStatusTab] = useState<'all' | 'pending' | 'done'>('pending');
   const [statusForm, setStatusForm] = useState({ status: '', note: '', exchangeOriginalAmount: 0, exchangeNewAmount: 0 });
   const [manualForm, setManualForm] = useState({
     courierName: 'manual',
@@ -208,6 +209,13 @@ export function CourierPage({ th, pageId, onToast }: {
     } catch (e: any) { onToast(e.message, 'error'); }
   };
 
+  const PENDING_STATUSES = new Set(['pending', 'booked', 'picked', 'in_transit']);
+  const DONE_STATUSES = new Set(['delivered', 'returned', 'cancelled', 'exchanged']);
+  const visibleShipments = shipments.filter(s => {
+    if (courierStatusTab === 'pending') return PENDING_STATUSES.has(s.status);
+    if (courierStatusTab === 'done') return DONE_STATUSES.has(s.status);
+    return true;
+  });
   const bookedOrderIds = new Set(shipments.map(s => s.order?.id || s.orderId));
   const unbookedOrders = orders.filter(o => !bookedOrderIds.has(o.id));
 
@@ -442,25 +450,34 @@ export function CourierPage({ th, pageId, onToast }: {
 
           {/* Shipments list */}
           <div style={th.card}>
-            <CardHeader th={th} title={copy('All Shipments', 'All Shipments')}
-              action={
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <select style={{ ...th.input, width: 130, padding: '6px 10px', fontSize: 12 }}
-                    value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
-                    <option value="">{copy('All Status', 'All Status')}</option>
-                    {STATUS_OPTS.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                  <button style={th.btnGhost} onClick={loadShipments}>{loading ? <Spinner size={13}/> : '🔄'}</button>
-                </div>
-              }
-            />
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 14 }}>
+              <div style={{ display: 'flex', gap: 4, background: th.surface, borderRadius: 10, padding: 3, border: `1px solid ${th.border}` }}>
+                {([['pending', `⏳ Pending (${shipments.filter(s => PENDING_STATUSES.has(s.status)).length})`, '#f59e0b'], ['done', `✅ Done (${shipments.filter(s => DONE_STATUSES.has(s.status)).length})`, '#16a34a'], ['all', 'All', th.muted]] as [string,string,string][]).map(([k,l,c]) => (
+                  <button key={k} onClick={() => setCourierStatusTab(k as any)} style={{
+                    padding: '7px 14px', borderRadius: 9, border: 'none', cursor: 'pointer',
+                    fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
+                    background: courierStatusTab === k ? c + '22' : 'transparent',
+                    color: courierStatusTab === k ? c : th.muted,
+                    borderBottom: courierStatusTab === k ? `2px solid ${c}` : '2px solid transparent',
+                  }}>{l}</button>
+                ))}
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <select style={{ ...th.input, width: 130, padding: '6px 10px', fontSize: 12 }}
+                  value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+                  <option value="">{copy('All Status', 'All Status')}</option>
+                  {STATUS_OPTS.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+                <button style={th.btnGhost} onClick={loadShipments}>{loading ? <Spinner size={13}/> : '🔄'}</button>
+              </div>
+            </div>
             {loading && !shipments.length
               ? <div style={{ textAlign: 'center', padding: 30 }}><Spinner size={20}/></div>
-              : shipments.length === 0
+              : visibleShipments.length === 0
               ? <EmptyState icon="🚚" title={copy('No shipments found', 'কোনো shipment নেই')} />
               : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {shipments.map(s => (
+                  {visibleShipments.map(s => (
                     <div key={s.id} style={{ ...th.card2, display: 'flex', alignItems: 'flex-start', gap: 10 }}>
                       <div style={{ flex: 1 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>

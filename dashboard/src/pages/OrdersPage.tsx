@@ -27,7 +27,7 @@ export interface OrdersPagePreset {
   label?: string;
 }
 
-const STATUS_OPTIONS = ['ALL','RECEIVED','CONFIRMED','CANCELLED','ISSUE'];
+const STATUS_OPTIONS = ['ALL','RECEIVED','CONFIRMED','PACKED','CANCELLED','ISSUE'];
 
 const PAYMENT_FILTERS: { key: string; label: string; color: string }[] = [
   { key: 'ALL',           label: 'সব Payment',      color: '#6366f1' },
@@ -223,6 +223,12 @@ export function OrdersPage({ th, pageId, onToast, preset }: {
 }) {
   const { copy } = useLanguage();
   const { request } = useApi();
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
   const [orders, setOrders]     = useState<Order[]>([]);
   const [loading, setLoading]   = useState(false);
   const [status, setStatus]           = useState('ALL');
@@ -261,6 +267,15 @@ export function OrdersPage({ th, pageId, onToast, preset }: {
   const [callQueue, setCallQueue] = useState<CallQueueOrder[]>([]);
   const [callQueueLoading, setCallQueueLoading] = useState(false);
   const [loggingCallId, setLoggingCallId] = useState<number | null>(null);
+
+  interface PackingOrder {
+    id: number; customerName: string | null; phone: string | null;
+    address: string | null; status: string; createdAt: string;
+    items: OrderItem[];
+  }
+  const [packingOrders, setPackingOrders] = useState<PackingOrder[]>([]);
+  const [packingLoading, setPackingLoading] = useState(false);
+  const [packingId, setPackingId] = useState<number | null>(null);
 
   const BASE = `${API_BASE}/client-dashboard/${pageId}`;
 
@@ -310,6 +325,39 @@ export function OrdersPage({ th, pageId, onToast, preset }: {
   }, [pageId]);
 
   useEffect(() => { loadCallQueue(); }, [loadCallQueue]);
+
+  const loadPackingOrders = useCallback(async () => {
+    setPackingLoading(true);
+    try {
+      const data = await request<PackingOrder[]>(`${BASE}/orders?status=CONFIRMED`);
+      setPackingOrders(data.filter(o => o.status === 'CONFIRMED'));
+    } catch { /* silent */ }
+    finally { setPackingLoading(false); }
+  }, [pageId]);
+
+  useEffect(() => { loadPackingOrders(); }, [loadPackingOrders]);
+
+  const packOrder = async (orderId: number) => {
+    setPackingId(orderId);
+    try {
+      await request(`${BASE}/orders/${orderId}/action`, { method: 'POST', body: JSON.stringify({ action: 'pack' }) });
+      onToast('📦 Order প্যাক করা হয়েছে!', 'success');
+      loadPackingOrders(); load();
+    } catch (e: any) { onToast(e.message, 'error'); }
+    finally { setPackingId(null); }
+  };
+
+  const packAllOrders = async () => {
+    setBusy(true);
+    try {
+      const ids = packingOrders.map(o => o.id);
+      if (ids.length === 0) return;
+      await request(`${BASE}/orders/bulk-action`, { method: 'POST', body: JSON.stringify({ ids, action: 'pack' }) });
+      onToast(`📦 ${ids.length}টি order প্যাক করা হয়েছে!`, 'success');
+      loadPackingOrders(); load();
+    } catch (e: any) { onToast(e.message, 'error'); }
+    finally { setBusy(false); }
+  };
 
   const logManualCall = async (orderId: number, result: 'CONFIRMED' | 'CANCELLED' | 'NOT_ANSWERED' | 'CALLBACK_LATER') => {
     setLoggingCallId(orderId);
@@ -482,7 +530,7 @@ export function OrdersPage({ th, pageId, onToast, preset }: {
   const isPresetView = Boolean(preset?.label);
 
   const STATUS_COLORS: Record<string, string> = {
-    ALL: th.accent, RECEIVED: '#b45309', CONFIRMED: '#16a34a', CANCELLED: '#dc2626', ISSUE: '#ea580c',
+    ALL: th.accent, RECEIVED: '#b45309', CONFIRMED: '#16a34a', PACKED: '#7c3aed', CANCELLED: '#dc2626', ISSUE: '#ea580c',
   };
 
   // Source counts
@@ -776,6 +824,62 @@ export function OrdersPage({ th, pageId, onToast, preset }: {
         </div>
       )}
 
+      {/* ── Packing Zone ──────────────────────────────────────────────────────── */}
+      {!isPresetView && packingOrders.length > 0 && (
+        <div style={{ ...th.card, border: `1.5px solid #7c3aed30`, background: '#7c3aed06' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 800, color: '#7c3aed', display: 'flex', alignItems: 'center', gap: 6 }}>
+                📦 Packing Zone
+                <span style={{ background: '#7c3aed', color: '#fff', fontSize: 10, borderRadius: 10, padding: '2px 7px', fontWeight: 700 }}>{packingOrders.length}</span>
+              </div>
+              <div style={{ fontSize: 11, color: th.muted, marginTop: 2 }}>Confirmed orders — একটি একটি করে প্যাক করুন</div>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button style={{ ...th.btnGhost, fontSize: 12 }} onClick={loadPackingOrders}>
+                {packingLoading ? <Spinner size={12} /> : '↺'} Refresh
+              </button>
+              <button
+                onClick={packAllOrders}
+                disabled={busy || packingLoading}
+                style={{ padding: '7px 14px', borderRadius: 8, fontWeight: 700, fontSize: 12, cursor: 'pointer', border: '1.5px solid #7c3aed', background: '#7c3aed18', color: '#7c3aed' }}>
+                {busy ? <Spinner size={11} /> : '📦 সব Pack করুন'}
+              </button>
+            </div>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {packingOrders.map(o => {
+              const total = o.items.reduce((s, i) => s + i.unitPrice * i.qty, 0);
+              const isPacking = packingId === o.id;
+              return (
+                <div key={o.id} style={{ padding: '12px 14px', borderRadius: 10, background: th.bg, border: `1px solid ${th.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+                  <div style={{ flex: 1, minWidth: 180 }}>
+                    <div style={{ fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {o.customerName || 'Customer'}
+                      <span style={{ fontSize: 10, color: th.muted, fontWeight: 400 }}>#{o.id}</span>
+                    </div>
+                    <div style={{ fontSize: 11, color: th.muted, marginTop: 2 }}>
+                      {o.phone && <span style={{ marginRight: 10 }}>📞 {o.phone}</span>}
+                      <span>📍 {(o.address || '—').slice(0, 50)}</span>
+                    </div>
+                    <div style={{ fontSize: 11, color: th.muted, marginTop: 2 }}>
+                      {o.items.map((i, idx) => <span key={idx} style={{ marginRight: 8 }}>{i.productCode} ×{i.qty}</span>)}
+                      <span style={{ fontWeight: 700, color: th.text }}>৳{total.toLocaleString()}</span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => packOrder(o.id)}
+                    disabled={isPacking}
+                    style={{ padding: '8px 18px', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer', border: '1.5px solid #7c3aed', background: '#7c3aed', color: '#fff', boxShadow: '0 1px 4px #7c3aed30' }}>
+                    {isPacking ? <Spinner size={11} /> : '📦 Pack Done'}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Source filter */}
       {!isPresetView && <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
         {SOURCES.map(s => {
@@ -916,6 +1020,7 @@ export function OrdersPage({ th, pageId, onToast, preset }: {
           <div style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '6px 12px', background: th.accentSoft, borderRadius: 8, border: `1px solid ${th.accent}33` }}>
             <span style={{ fontSize: 12.5, fontWeight: 700, color: th.accentText }}>{selected.size} selected</span>
             <button style={th.btnSmSuccess} onClick={() => action([...selected], 'confirm')} disabled={busy}>✓ Confirm</button>
+            <button style={{ ...th.btnSmGhost, border: '1.5px solid #7c3aed', color: '#7c3aed', fontSize: 10 }} onClick={() => action([...selected], 'pack')} disabled={busy}>📦 Pack</button>
             <button style={th.btnSmDanger} onClick={() => action([...selected], 'cancel')} disabled={busy}>✕ Cancel</button>
             <button style={th.btnSmGhost} onClick={() => setSelected(new Set())}>Clear</button>
           </div>
@@ -942,7 +1047,54 @@ export function OrdersPage({ th, pageId, onToast, preset }: {
         </div>
       )}
 
-      {/* Table */}
+      {/* Orders — mobile cards or desktop table */}
+      {isMobile ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {loading && !orders.length
+            ? <div style={{ textAlign: 'center', padding: 48 }}><Spinner size={22} color={th.accent}/></div>
+            : filtered.length === 0
+            ? <EmptyState icon="📦" title="No orders found" sub="Filter বদলান বা নতুন order যোগ করুন" />
+            : filtered.map(o => {
+                const total = subtotal(o);
+                const canTriggerCall = o.status === 'RECEIVED' || ['PENDING_CALL', 'CALL_FAILED', 'NOT_ANSWERED'].includes(o.callStatus);
+                return (
+                  <div key={o.id} style={{ ...th.card, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div>
+                        <div style={{ fontWeight: 800, fontSize: 14 }}>{o.customerName || '—'}</div>
+                        <div style={{ fontSize: 12, color: th.muted }}>{o.phone || '—'} · #{o.id}</div>
+                        <div style={{ fontSize: 11, color: th.muted, marginTop: 2 }}>{o.address?.slice(0, 60) || '—'}</div>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+                        <StatusBadge th={th} status={o.status} />
+                        <span style={{ fontWeight: 800, fontSize: 14 }}>৳{total.toLocaleString()}</span>
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 12, color: th.muted }}>
+                      {o.items.map((i,idx) => <span key={idx} style={{ marginRight: 8 }}>{i.productCode} ×{i.qty}</span>)}
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      <button style={{ ...th.btnSmGhost, fontSize: 11 }} onClick={() => setMemoOrderId(o.id)}>📋</button>
+                      {o.status === 'RECEIVED' && <button style={th.btnSmSuccess} onClick={() => action([o.id], 'confirm')} disabled={busy}>✓ Confirm</button>}
+                      {o.status === 'CONFIRMED' && <button style={{ ...th.btnSmGhost, border: '1.5px solid #7c3aed', color: '#7c3aed', fontSize: 10 }} onClick={() => action([o.id], 'pack')} disabled={busy}>📦 Pack</button>}
+                      {o.status !== 'CANCELLED' && <button style={th.btnSmDanger} onClick={() => action([o.id], 'cancel')} disabled={busy}>✕ Cancel</button>}
+                      {canTriggerCall && <button style={th.btnSmAccent} onClick={() => callAction(o.id, 'send')}>📞</button>}
+                      <button style={th.btnSmGhost} onClick={() => setExpanded(expanded === o.id ? null : o.id)}>{expanded === o.id ? '▲' : '▼'}</button>
+                    </div>
+                    {expanded === o.id && (
+                      <div style={{ paddingTop: 8, borderTop: `1px solid ${th.border}`, fontSize: 12, color: th.muted, lineHeight: 1.8 }}>
+                        <div>📍 {o.address || '—'}</div>
+                        {o.orderNote && <div>📝 {o.orderNote}</div>}
+                        {o.transactionId && <div>💳 TxnID: {o.transactionId}</div>}
+                        {o.paymentStatus !== 'not_required' && <div><PaymentBadge paymentStatus={o.paymentStatus} /></div>}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+          }
+        </div>
+      ) : (
       <div style={{ ...th.card, padding: 0, overflow: 'hidden' }}>
         {loading && !orders.length ? (
           <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}><Spinner size={22} color={th.accent}/></div>
@@ -1086,7 +1238,10 @@ export function OrdersPage({ th, pageId, onToast, preset }: {
                           {o.status === 'RECEIVED' && (
                             <button style={th.btnSmSuccess} onClick={() => action([o.id], 'confirm')} disabled={busy}>✓</button>
                           )}
-                          {!['CANCELLED','CONFIRMED'].includes(o.status) && (
+                          {o.status === 'CONFIRMED' && (
+                            <button style={{ ...th.btnSmGhost, border: '1.5px solid #7c3aed', color: '#7c3aed', fontSize: 10 }} onClick={() => action([o.id], 'pack')} disabled={busy}>📦</button>
+                          )}
+                          {o.status !== 'CANCELLED' && (
                             <button style={th.btnSmDanger} onClick={() => action([o.id], 'cancel')} disabled={busy}>✕</button>
                           )}
                           <button style={th.btnSmGhost} onClick={() => setExpanded(isOpen ? null : o.id)}>{isOpen ? '▲' : '▼'}</button>
@@ -1206,6 +1361,7 @@ export function OrdersPage({ th, pageId, onToast, preset }: {
           </table>
         )}
       </div>
+      )}
     </div>
   );
 }

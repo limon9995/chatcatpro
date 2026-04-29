@@ -77,7 +77,13 @@ export class SmartBotService {
     const businessContext = await this.botContext.buildBusinessContext(pageId);
     const history = await this.ctx.getHistory(pageId, psid);
 
-    const systemPrompt = this.buildSystemPrompt(businessContext, draft, page);
+    const lastOrder = await this.prisma.order.findFirst({
+      where: { pageIdRef: pageId, customerPsid: psid, status: { not: 'CANCELLED' } },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, status: true, createdAt: true, address: true, items: { select: { productCode: true, qty: true } } },
+    });
+
+    const systemPrompt = this.buildSystemPrompt(businessContext, draft, page, lastOrder);
     const messages: { role: string; content: string }[] = [
       { role: 'system', content: systemPrompt },
       ...history,
@@ -144,7 +150,7 @@ export class SmartBotService {
     return `${base}/catalog/${slug}`;
   }
 
-  private buildSystemPrompt(ctx: BusinessContext, draft: DraftSession | null, page: any): string {
+  private buildSystemPrompt(ctx: BusinessContext, draft: DraftSession | null, page: any, lastOrder?: any): string {
     const shop = ctx.businessName
       ? `"${ctx.businessName}" নামের Bangladeshi e-commerce shop`
       : 'একটি Bangladeshi fashion e-commerce shop';
@@ -168,9 +174,11 @@ export class SmartBotService {
     if (paymentRules) {
       const codLine = paymentRules.codEnabled !== false ? '✅ Cash on Delivery আছে' : '❌ COD নেই';
       const insideAdv = paymentRules.insideDhakaAdvanceEnabled
-        ? `ঢাকার ভিতরে advance: ৳${paymentRules.insideDhakaAdvanceAmount ?? 100}` : '';
+        ? `⚠️ ঢাকার ভিতরে: Advance payment লাগবে ৳${paymentRules.insideDhakaAdvanceAmount ?? 100}`
+        : '✅ ঢাকার ভিতরে: Cash on Delivery (advance লাগে না)';
       const outsideAdv = paymentRules.outsideDhakaAdvanceEnabled
-        ? `ঢাকার বাইরে advance: ৳${paymentRules.outsideDhakaAdvanceAmount ?? 100}` : '';
+        ? `⚠️ ঢাকার বাইরে: Advance payment লাগবে ৳${paymentRules.outsideDhakaAdvanceAmount ?? 100}`
+        : '✅ ঢাকার বাইরে: Cash on Delivery (advance লাগে না)';
       const bkash = page.advanceBkash ? `Bkash: ${page.advanceBkash}` : '';
       const nagad = page.advanceNagad ? `Nagad: ${page.advanceNagad}` : '';
       paymentCtx = `\n${[codLine, insideAdv, outsideAdv, bkash, nagad].filter(Boolean).join('\n')}`;
@@ -212,6 +220,23 @@ export class SmartBotService {
       }
     }
 
+    // Last placed order tracking context
+    let orderTrackCtx = '';
+    if (lastOrder && !draft) {
+      const statusMap: Record<string, string> = {
+        RECEIVED: 'পাওয়া হয়েছে, প্রক্রিয়া চলছে',
+        CONFIRMED: 'নিশ্চিত হয়েছে, প্রস্তুত হচ্ছে',
+        PACKED: 'প্যাক হয়ে গেছে, কুরিয়ারে যাবে',
+        SHIPPED: 'কুরিয়ারে পাঠানো হয়েছে, পথে আছে',
+        DELIVERED: 'ডেলিভারি হয়ে গেছে',
+        CANCELLED: 'বাতিল হয়েছে',
+      };
+      const statusBn = statusMap[lastOrder.status] ?? lastOrder.status;
+      const products = lastOrder.items.map((i: any) => `${i.productCode} x${i.qty}`).join(', ');
+      const date = new Date(lastOrder.createdAt).toLocaleDateString('bn-BD');
+      orderTrackCtx = `\n\n## Customer-এর শেষ Order\nOrder #${lastOrder.id} — ${date}\nProducts: ${products || '?'}\nStatus: **${statusBn}**\n(Customer "কবে পাবো / কোথায় আছে / status" জিজ্ঞেস করলে এই তথ্য দাও)`;
+    }
+
     // Task rules
     const taskRules = `\n\n## তোমার কাজ
 Customer-এর message দেখে **strictly valid JSON** return করো:
@@ -243,9 +268,11 @@ Customer-এর message দেখে **strictly valid JSON** return করো:
 4. Customer একসাথে নাম+ফোন+ঠিকানা দিলে সব একসাথে collect করো।
 5. reply-এ order summary সহ confirm চাইতে পারো যখন সব ✅ হয়ে যায়।
 6. **Photo/ছবি চাইলে**: "ছবি দেখতে এই link-এ যান 👉 ${catalogUrl}" — সরাসরি catalog link দাও।
-7. **"ki ki ache / সব দেখাও / catalog" চাইলে**: product list briefly বলো তারপর catalog link দাও।`;
+7. **"ki ki ache / সব দেখাও / catalog" চাইলে**: product list briefly বলো তারপর catalog link দাও।
+8. **Advance payment**: Customer-এর ঠিকানা দেখে ঢাকার ভিতরে/বাইরে বুঝো, তারপর সেই zone-এর payment rule দেখো। ঢাকার ভিতরে COD হলে advance চাইবে না। Order confirm করার আগে আগে ঠিকানা collect করো।
+9. **Order already confirmed**: যদি draft আগেই confirm হয়ে গিয়ে থাকে এবং customer "ok/ধন্যবাদ/received" বলে, তাহলে CHAT action দিয়ে সাধারণ reply করো — আর order confirm করো না।`;
 
-    return `তুমি ${shop}-এর Facebook Messenger AI sales assistant।${deliveryCtx}${paymentCtx}${productCtx}${knowledgeCtx}${catalogCtx}${draftCtx}${taskRules}`;
+    return `তুমি ${shop}-এর Facebook Messenger AI sales assistant।${deliveryCtx}${paymentCtx}${productCtx}${knowledgeCtx}${catalogCtx}${draftCtx}${orderTrackCtx}${taskRules}`;
   }
 
   private async callOpenAI(
@@ -383,6 +410,15 @@ Customer-এর message দেখে **strictly valid JSON** return করো:
 
   requiresAdvancePayment(draft: DraftSession, page: any): boolean {
     if (!page) return false;
+    const paymentRules = page.paymentRules as any;
+    if (paymentRules) {
+      const addr = (draft?.address || '').toLowerCase();
+      const insideDhaka = /dhaka|ঢাকা|mirpur|gulshan|dhanmondi|uttara|mohammadpur|badda|rampura|khilgaon|motijheel|pallabi|shyamoli|banani|bashundhara/.test(addr);
+      if (insideDhaka) return !!paymentRules.insideDhakaAdvanceEnabled;
+      if (addr) return !!paymentRules.outsideDhakaAdvanceEnabled;
+      // address unknown: require advance if either zone needs it
+      return !!(paymentRules.insideDhakaAdvanceEnabled || paymentRules.outsideDhakaAdvanceEnabled);
+    }
     const paymentMode = (page.paymentMode as string) || 'cod';
     return paymentMode === 'full_advance' || paymentMode === 'advance_outside';
   }

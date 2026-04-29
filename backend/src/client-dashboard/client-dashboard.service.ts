@@ -240,6 +240,8 @@ export class ClientDashboardService {
       return this.ordersService.confirmByAgent(orderId, pageId);
     if (a === 'cancel') return this.ordersService.cancelOrder(orderId, pageId);
     if (a === 'issue') return this.ordersService.markIssue(orderId, pageId);
+    if (a === 'pack')
+      return this.prisma.order.update({ where: { id: orderId }, data: { status: 'PACKED', updatedAt: new Date() } });
     throw new BadRequestException(`Unknown action: ${action}`);
   }
 
@@ -254,7 +256,7 @@ export class ClientDashboardService {
     results: any[];
   }> {
     const a = String(action || '').toLowerCase();
-    if (!['confirm', 'cancel', 'issue'].includes(a))
+    if (!['confirm', 'cancel', 'issue', 'pack'].includes(a))
       throw new BadRequestException(`Unknown action: ${action}`);
     let success = 0,
       failed = 0;
@@ -267,6 +269,8 @@ export class ClientDashboardService {
           await this.ordersService.confirmByAgent(id, pageId);
         if (a === 'cancel') await this.ordersService.cancelOrder(id, pageId);
         if (a === 'issue') await this.ordersService.markIssue(id, pageId);
+        if (a === 'pack')
+          await this.prisma.order.update({ where: { id }, data: { status: 'PACKED', updatedAt: new Date() } });
         results.push({ id, success: true });
         success++;
       } catch (e: any) {

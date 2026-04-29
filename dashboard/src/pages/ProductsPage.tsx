@@ -192,19 +192,12 @@ export function ProductsPage({ th, pageId, onToast }: {
 
   // Dual Photo Mode
   const [productTab, setProductTab] = useState<'single' | 'dual'>('single');
-  const [dual, setDual] = useState<{
+  const [dual] = useState<{
     mode: boolean;
     wearingProductId: number | null; wearingCode: string; wearingName: string;
     holdingProductId: number | null; holdingCode: string; holdingName: string;
     holdingRefUrl: string; wearingRefUrl: string; livePhotoUrls: string[];
   }>({ mode: false, wearingProductId: null, wearingCode: '', wearingName: '', holdingProductId: null, holdingCode: '', holdingName: '', holdingRefUrl: '', wearingRefUrl: '', livePhotoUrls: [] });
-  const [dualUploading, setDualUploading] = useState<{ holding: boolean; wearing: boolean; live: boolean }>({ holding: false, wearing: false, live: false });
-  const [dualAiLoading, setDualAiLoading] = useState(false);
-  const [dualAiResult, setDualAiResult] = useState<any>(null);
-  const [dualSaving, setDualSaving] = useState(false);
-  const dualWearingRef = useRef<HTMLInputElement>(null);
-  const dualHoldingRef = useRef<HTMLInputElement>(null);
-  const dualLiveRef = useRef<HTMLInputElement>(null);
 
   // Live Session state (new Dual Photo system)
   const [liveSessions, setLiveSessions] = useState<any[]>([]);
@@ -223,21 +216,8 @@ export function ProductsPage({ th, pageId, onToast }: {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [prods, biz] = await Promise.all([
-        request<Product[]>(`${BASE}/products`),
-        request<any>(`${BASE}/settings`).catch(() => null),
-      ]);
+      const prods = await request<Product[]>(`${BASE}/products`);
       setProducts(prods);
-      if (biz) setDual(prev => ({
-        ...prev,
-        mode: Boolean(biz.dualPhotoMode),
-        wearingProductId: biz.dualWearingProductId ?? null,
-        wearingCode: biz.dualWearingProduct?.code ?? '',
-        wearingName: biz.dualWearingProduct?.name ?? '',
-        holdingProductId: biz.dualHoldingProductId ?? null,
-        holdingCode: biz.dualHoldingProduct?.code ?? '',
-        holdingName: biz.dualHoldingProduct?.name ?? '',
-      }));
     }
     catch (e: any) { onToast(e.message, 'error'); }
     finally { setLoading(false); }
@@ -443,79 +423,6 @@ export function ProductsPage({ th, pageId, onToast }: {
     } catch (e: any) {
       onToast(e.message, 'error');
     }
-  };
-
-  const uploadDualPhoto = async (file: File, slot: 'holding' | 'wearing' | 'live') => {
-    setDualUploading(b => ({ ...b, [slot]: true }));
-    setDualAiResult(null);
-    try {
-      const token = localStorage.getItem('dfbot_token') || '';
-      const fd = new FormData();
-      fd.append('file', file);
-      const res = await fetch(`${BASE}/products/upload-image`, {
-        method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-        body: fd,
-      });
-      if (!res.ok) { const t = await res.text(); throw new Error(t || 'Upload failed'); }
-      const data = await res.json();
-      const imageUrl = `${API_BASE.replace(/\/api$/, '')}${data.url}`;
-      if (slot === 'live') {
-        setDual(prev => ({ ...prev, livePhotoUrls: [...prev.livePhotoUrls, imageUrl] }));
-        onToast(`✓ Live ছবি #${dual.livePhotoUrls.length + 1} uploaded`);
-      } else {
-        const field = slot === 'holding' ? 'holdingRefUrl' : 'wearingRefUrl';
-        setDual(prev => ({ ...prev, [field]: imageUrl }));
-        onToast(`✓ ${slot === 'holding' ? 'হাতে ধরা' : 'গায়ে পরা'} ছবি uploaded`);
-      }
-    } catch (e: any) { onToast(e.message || 'Upload failed', 'error'); }
-    finally { setDualUploading(b => ({ ...b, [slot]: false })); }
-  };
-
-  const runDualPhotoAI = async () => {
-    if (!dual.holdingRefUrl || !dual.wearingRefUrl) {
-      onToast('প্রথমে হাতে ধরা ও গায়ে পরা ছবি upload করুন', 'error'); return;
-    }
-    setDualAiLoading(true);
-    setDualAiResult(null);
-    try {
-      const result = await request<any>(`${BASE}/products/dual-photo-ai`, {
-        method: 'POST',
-        body: JSON.stringify({
-          holdingRefUrl: dual.holdingRefUrl,
-          wearingRefUrl: dual.wearingRefUrl,
-          livePhotoUrls: dual.livePhotoUrls.length > 0 ? dual.livePhotoUrls : undefined,
-        }),
-      });
-      setDualAiResult(result);
-      // Auto-fill if products found
-      setDual(prev => ({
-        ...prev,
-        holdingProductId: result.holding?.product?.id ?? prev.holdingProductId,
-        holdingCode: result.holding?.code ?? prev.holdingCode,
-        holdingName: result.holding?.product?.name ?? prev.holdingName,
-        wearingProductId: result.wearing?.product?.id ?? prev.wearingProductId,
-        wearingCode: result.wearing?.code ?? prev.wearingCode,
-        wearingName: result.wearing?.product?.name ?? prev.wearingName,
-      }));
-    } catch (e: any) { onToast(e.message || 'AI analysis failed', 'error'); }
-    finally { setDualAiLoading(false); }
-  };
-
-  const saveDualPhotoMode = async () => {
-    setDualSaving(true);
-    try {
-      await request(`${BASE}/settings`, {
-        method: 'PATCH',
-        body: JSON.stringify({
-          dualPhotoMode: dual.mode,
-          dualWearingProductId: dual.wearingProductId,
-          dualHoldingProductId: dual.holdingProductId,
-        }),
-      });
-      onToast('✓ Dual Photo Mode saved');
-    } catch (e: any) { onToast(e.message, 'error'); }
-    finally { setDualSaving(false); }
   };
 
   // ── Live Session functions ─────────────────────────────────────────────────
