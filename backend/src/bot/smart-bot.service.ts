@@ -420,7 +420,15 @@ Customer-এর message দেখে **strictly valid JSON** return করো:
       return !!(paymentRules.insideDhakaAdvanceEnabled || paymentRules.outsideDhakaAdvanceEnabled);
     }
     const paymentMode = (page.paymentMode as string) || 'cod';
-    return paymentMode === 'full_advance' || paymentMode === 'advance_outside';
+    if (paymentMode === 'full_advance') return true;
+    if (paymentMode === 'advance_outside') {
+      // Only outside-Dhaka orders need advance in this mode
+      const addr = (draft?.address || '').toLowerCase();
+      if (!addr) return true;
+      const insideDhaka = /dhaka|ঢাকা|mirpur|gulshan|dhanmondi|uttara|mohammadpur|badda|rampura|khilgaon|motijheel|pallabi|shyamoli|banani|bashundhara/.test(addr);
+      return !insideDhaka;
+    }
+    return false;
   }
 
   private recordFailure(): void {
