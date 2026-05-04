@@ -31,48 +31,50 @@ export class MemoTemplateService {
     const t = this.themeService.getTheme(theme, business.primaryColor);
     const title = layout === 'invoice' ? 'Invoice Print' : 'Memo Print';
     const c4 = count === 4;
-    const gapMm = c4 ? 4 : 6;
-    const minHMm = c4 ? 64 : 86;
+    const gapMm = c4 ? 3 : 4;
+    const minHMm = c4 ? 60 : 78;
 
-    // Size-responsive values
-    const hp = c4 ? '7px 10px' : '9px 12px'; // header padding
-    const bp = c4 ? '6px 10px' : '9px 12px'; // body padding
-    const fp = c4 ? '4px 10px' : '6px 12px'; // footer padding
-    const bg = c4 ? '5px' : '8px'; // body gap
-    const ld = c4 ? 34 : 42; // logo dim
-    const hf = c4 ? '14.5px' : '17px'; // heading font
-    const mf = c4 ? '10.5px' : '11.5px'; // meta font
-    const sf = c4 ? '8.5px' : '9.5px'; // section title font
-    const tf = c4 ? '9.5px' : '10.5px'; // table font
-    const cotf = c4 ? '12px' : '13px'; // cod/total font
-    const dh = c4 ? '9' : '11'; // dot height
-    const tcelp = c4 ? '3.5px 6px' : '5px 8px'; // table cell padding
-    const iboxp = c4 ? '5px 8px' : '6px 10px'; // info box padding
-    const totbp = c4 ? '4px 8px' : '6px 10px'; // totals box padding
-    const codp = c4 ? '3px 6px' : '4px 8px'; // cod row padding
+    // Size-responsive values — compact enough to fit 3/4 per A4 page
+    const hp = c4 ? '5px 8px' : '6px 10px'; // header padding
+    const bp = c4 ? '5px 8px' : '6px 10px'; // body padding
+    const fp = c4 ? '3px 8px' : '4px 10px'; // footer padding
+    const bg = c4 ? '3px' : '4px'; // body gap
+    const ld = c4 ? 28 : 34; // logo dim
+    const hf = c4 ? '12px' : '13.5px'; // heading font
+    const mf = c4 ? '9.5px' : '10.5px'; // meta font
+    const sf = c4 ? '7.5px' : '8.5px'; // section title font
+    const tf = c4 ? '8.5px' : '9.5px'; // table font
+    const cotf = c4 ? '11px' : '12px'; // cod/total font
+    const dh = c4 ? '7' : '9'; // dot height
+    const tcelp = c4 ? '2.5px 5px' : '3.5px 6px'; // table cell padding
+    const iboxp = c4 ? '4px 7px' : '5px 8px'; // info box padding
+    const totbp = c4 ? '3px 7px' : '4px 8px'; // totals box padding
+    const codp = c4 ? '2px 5px' : '3px 6px'; // cod row padding
 
     return `<!doctype html>
 <html><head>
 <meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>${this.escape(title)}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;700;800&family=Hind+Siliguri:wght@400;700&display=swap"/>
 <style>
 @page{size:A4;margin:0}
 *{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-@media print{.memo-header::before,.memo-header::after{display:none!important}.section-title::before{display:none!important}}
+.print-actions{display:none!important}
 html,body{margin:0;padding:0;font-family:"Noto Sans Bengali","Hind Siliguri","SolaimanLipi","Kalpurush",Arial,Helvetica,sans-serif;color:${t.text};background:#eaf0fb;text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased}
-.a4-page{width:210mm;height:297mm;padding:8mm;overflow:hidden;display:grid;grid-template-rows:repeat(${count},1fr);gap:${gapMm}mm}
+.a4-page{width:210mm;height:297mm;padding:6mm;overflow:hidden;display:grid;grid-template-rows:repeat(${count},1fr);gap:${gapMm}mm}
 .a4-page + .a4-page{page-break-before:always;break-before:page}
-.memo-slot{border-radius:16px;overflow:hidden;min-height:0}
-.memo-card{height:100%;display:flex;flex-direction:column;border-radius:16px;overflow:hidden;box-shadow:0 3px 16px rgba(0,0,0,.14);border:1.5px solid ${t.border};border-top:3px solid ${t.accent}}
-.memo-header{display:flex;align-items:center;justify-content:space-between;padding:${hp};background:linear-gradient(135deg,${t.primary} 0%,${t.accent} 100%);color:#fff;gap:8px;position:relative;overflow:hidden}
+.memo-slot{border-radius:12px;overflow:hidden;min-height:0;height:100%}
+.memo-card{height:100%;display:flex;flex-direction:column;border-radius:12px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,.12);border:1px solid ${t.border};border-top:3px solid ${t.accent}}
+.memo-header{display:flex;align-items:center;justify-content:space-between;padding:${hp};background:linear-gradient(135deg,${t.primary} 0%,${t.accent} 100%);color:#fff;gap:6px;position:relative;overflow:hidden}
 .memo-header::after{content:'';position:absolute;right:-20px;top:-20px;width:75px;height:75px;border-radius:50%;background:rgba(255,255,255,.1);pointer-events:none}
 .memo-header::before{content:'';position:absolute;left:-15px;bottom:-18px;width:55px;height:55px;border-radius:50%;background:rgba(255,255,255,.07);pointer-events:none}
 .logo{width:${ld}px;height:${ld}px;min-width:${ld}px;border-radius:9px;background:rgba(255,255,255,.22);display:flex;align-items:center;justify-content:center;font-size:${c4 ? '9px' : '11px'};font-weight:800;overflow:hidden;text-transform:uppercase;border:1.5px solid rgba(255,255,255,.4);flex-shrink:0;letter-spacing:.5px}
 .logo img{width:100%;height:100%;object-fit:contain;display:block}
 .logo.logo-hidden{display:none}
 .company-block{flex:1;min-width:0}
-.company-block h1{margin:0;font-size:${hf};line-height:1.2;word-break:break-word;font-weight:800;text-shadow:0 1px 3px rgba(0,0,0,.2)}
-.company-meta{margin-top:3px;font-size:${c4 ? '8.5px' : '9.5px'};opacity:.93;line-height:1.4;word-break:break-word}
+.company-block h1{margin:0;font-size:${hf};line-height:1.2;font-weight:800;text-shadow:0 1px 2px rgba(0,0,0,.2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.company-meta{margin-top:2px;font-size:${c4 ? '8px' : '9px'};opacity:.93;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .memo-badge{font-size:${c4 ? '8.5px' : '9.5px'};font-weight:800;letter-spacing:1.3px;background:rgba(255,255,255,.22);padding:${c4 ? '3px 7px' : '5px 10px'};border-radius:999px;border:1.5px solid rgba(255,255,255,.4);white-space:nowrap;flex-shrink:0}
 .memo-body{padding:${bp};display:flex;flex-direction:column;gap:${bg};flex:1;background:linear-gradient(170deg,${t.secondary} 0%,#ffffff 100%)}
 .meta-row{display:flex;justify-content:space-between;gap:10px;font-size:${mf};line-height:1.4}
@@ -269,7 +271,7 @@ ${pages
           )
           .join('')
       : `<tr class="empty-row"><td colspan="4">No item added</td></tr>`;
-    return `<div class="memo-slot"><div class="memo-card"><div class="memo-header">${logoHtml}<div class="company-block"><h1>${this.escape(companyName)}</h1><div class="company-meta"><div>${this.escape(businessPhone)}</div><div>${this.escape(businessAddress)}</div></div></div><div class="memo-badge">${badge}</div></div><div class="memo-body"><div class="meta-row"><div><span class="section-title">Order ID</span><br/>#${order.id || '-'}</div><div style="text-align:right"><span class="section-title">Date</span><br/>${this.escape(this.formatDate(order.createdAt))}</div></div><div class="info-grid"><div><div class="section-title">Customer</div><div class="field-value">${this.escape(customerName)}</div></div><div><div class="section-title">Phone</div><div class="field-value">${this.escape(customerPhone)}</div></div><div><div class="section-title">Address</div><div class="field-value field-address">${this.escape(customerAddress)}</div></div></div><table><thead><tr><th>Code</th><th class="number">Qty</th><th class="number">Price</th><th class="number">Total</th></tr></thead><tbody>${rows}</tbody></table><div class="totals-box"><div class="totals-row"><span>Subtotal</span><span>${this.money(subtotal, currency)}</span></div><div class="totals-row"><span>Delivery Fee</span><span>${this.money(delivery, currency)}</span></div><div class="totals-row cod"><span>${this.escape(business.codLabel || 'COD')}</span><span>${this.money(total, currency)}</span></div><div class="totals-row total"><span>Total</span><span>${this.money(total, currency)}</span></div></div></div><div class="memo-footer">${this.escape(business.footerText || 'Thank you for your order')}</div></div></div>`;
+    return `<div class="memo-slot"><div class="memo-card"><div class="memo-header">${logoHtml}<div class="company-block"><h1>${this.escape(companyName)}</h1><div class="company-meta">${this.escape(businessPhone)}</div></div><div class="memo-badge">${badge}</div></div><div class="memo-body"><div class="meta-row"><div><span class="section-title">Order ID</span><br/>#${order.id || '-'}</div><div style="text-align:right"><span class="section-title">Date</span><br/>${this.escape(this.formatDate(order.createdAt))}</div></div><div class="info-grid"><div><div class="section-title">Customer</div><div class="field-value">${this.escape(customerName)}</div></div><div><div class="section-title">Phone</div><div class="field-value">${this.escape(customerPhone)}</div></div><div><div class="section-title">Address</div><div class="field-value field-address">${this.escape(customerAddress)}</div></div></div><table><thead><tr><th>Code</th><th class="number">Qty</th><th class="number">Price</th><th class="number">Total</th></tr></thead><tbody>${rows}</tbody></table><div class="totals-box"><div class="totals-row"><span>Subtotal</span><span>${this.money(subtotal, currency)}</span></div><div class="totals-row"><span>Delivery Fee</span><span>${this.money(delivery, currency)}</span></div><div class="totals-row cod"><span>${this.escape(business.codLabel || 'COD')}</span><span>${this.money(total, currency)}</span></div><div class="totals-row total"><span>Total</span><span>${this.money(total, currency)}</span></div></div></div><div class="memo-footer">${this.escape(business.footerText || 'Thank you for your order')}</div></div></div>`;
   }
 
   private buildMappedTemplateHtml(
