@@ -585,7 +585,7 @@ export function SettingsPage({ th, pageId, tab, onToast }: {
         </Section>
 
         {/* Delivery */}
-        <Section title="Delivery Settings" desc="Fees used in order summaries sent to customers">
+        <Section title="Delivery Settings" desc={copy('Bot এই settings থেকে পড়ে customer-কে delivery fee ও সময় বলে', 'Bot reads these to tell customers about delivery fees and time')}>
           <Grid cols={3}>
             <div>
               <Label text="Inside Dhaka (৳)" hint={copy('ঢাকার ভেতরে delivery fee', 'Delivery fee inside Dhaka')}/>
@@ -598,8 +598,8 @@ export function SettingsPage({ th, pageId, tab, onToast }: {
                 onChange={e => setS(p => ({ ...p, deliveryFeeOutsideDhaka: Number(e.target.value) }))}/>
             </div>
             <div>
-              <Label text="Delivery Time" hint={copy('যেমন: 2-3 business days', 'For example: 2-3 business days')}/>
-              <input style={inp} value={s.deliveryTimeText} placeholder="2-3 days"
+              <Label text="Delivery Time" hint={copy('Unit সহ লিখুন — এটাই bot হুবহু বলবে। যেমন: ৩-৪ কার্যদিবস, 4 দিন', 'Write with unit — bot will say exactly this. e.g. 3-4 business days')}/>
+              <input style={inp} value={s.deliveryTimeText} placeholder="যেমন: ৩-৪ কার্যদিবস"
                 onChange={e => setS(p => ({ ...p, deliveryTimeText: e.target.value }))}/>
             </div>
           </Grid>
