@@ -1,0 +1,191 @@
+import { Injectable, Logger } from '@nestjs/common';
+import axios from 'axios';
+import { readFile } from 'fs/promises';
+import { join, extname } from 'path';
+import {
+  VisionAnalysisProvider,
+  VisionAttributes,
+} from '../vision-analysis.interface';
+
+@Injectable()
+export class GeminiVisionProvider implements VisionAnalysisProvider {
+  private readonly logger = new Logger(GeminiVisionProvider.name);
+  private readonly apiKey: string;
+  private readonly model: string;
+
+  constructor() {
+    this.apiKey = process.env.GEMINI_API_KEY ?? '';
+    this.model = process.env.VISION_MODEL ?? 'gemini-2.0-flash';
+  }
+
+  private buildPrompt(multi: boolean): string {
+    return `You are an expert fashion product analyzer for a Bangladeshi e-commerce store.
+${multi
+  ? 'You are given multiple photos of the SAME product from different angles. Analyze ALL images together and provide a comprehensive description that captures every visible detail.'
+  : 'Analyze this product image.'
+}
+Respond ONLY with a valid JSON object (no markdown, no explanation).
+
+Required JSON format:
+{
+  "category": "<one of: dress, saree, panjabi, shirt, t-shirt, kurti, tops, lehenga, salwar_kameez, three_piece, other_clothing, non_clothing>",
+  "color": "<primary color: black, white, red, blue, green, yellow, orange, pink, purple, maroon, navy, grey, multicolor, beige, cream, golden, silver>",
+  "pattern": "<one of: plain, printed, floral, embroidered, striped, checked, geometric, abstract, solid>",
+  "sleeveType": "<one of: full, half, three_quarter, sleeveless, null if not visible>",
+  "gender": "<one of: women, men, unisex, null if uncertain>",
+  "confidence": <number 0.0 to 1.0 — your overall certainty>,
+  "rawDescription": "<${multi
+    ? 'comprehensive 2-3 sentence description covering all visible angles, fabric texture, design details, embellishments, and distinctive visual features'
+    : 'one sentence natural description'
+  } in English>"
+}
+
+Rules:
+- If images are clearly visible and recognizable, confidence should be >= 0.6
+- Only set confidence <= 0.1 for extremely blurry images where you cannot make out the subject at all
+- For full-body model shots, focus on the clothing details and maintain high confidence if product is clear
+- For non-clothing items (bags, shoes, accessories), still analyze and set confidence based on image clarity
+- Do NOT guess gender unless clearly evident from the product style
+- Be honest about uncertainty but do NOT penalize clear images with low confidence
+- category "non_clothing" means the image is definitely not a clothing product`;
+  }
+
+  private extractJson(content: string): string {
+    const fenceMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (fenceMatch) return fenceMatch[1].trim();
+    const objMatch = content.match(/\{[\s\S]*\}/);
+    if (objMatch) return objMatch[0];
+    return content.trim();
+  }
+
+  private parseResponse(content: string): VisionAttributes {
+    const json = this.extractJson(content);
+    const parsed = JSON.parse(json) as Partial<VisionAttributes>;
+    return {
+      category: parsed.category ?? null,
+      color: parsed.color ?? null,
+      pattern: parsed.pattern ?? null,
+      sleeveType: parsed.sleeveType ?? null,
+      gender: parsed.gender ?? null,
+      confidence: typeof parsed.confidence === 'number'
+        ? Math.min(1, Math.max(0, parsed.confidence))
+        : 0,
+      rawDescription: parsed.rawDescription ?? content,
+    };
+  }
+
+  private extToMime(ext: string): string {
+    const map: Record<string, string> = { '.png': 'image/png', '.webp': 'image/webp', '.gif': 'image/gif' };
+    return map[ext.toLowerCase()] ?? 'image/jpeg';
+  }
+
+  private async toBase64DataUrl(url: string): Promise<string> {
+    const storagePath = url.match(/\/storage\/(.+)$/)?.[1];
+    if (storagePath) {
+      const abs = join(process.cwd(), 'storage', storagePath);
+      try {
+        const buffer = await readFile(abs);
+        const mime = this.extToMime(extname(abs));
+        this.logger.log(`[GeminiVision] Read local file: ${abs}`);
+        return `data:${mime};base64,${buffer.toString('base64')}`;
+      } catch (e: any) {
+        this.logger.warn(`[GeminiVision] Local read failed (${e?.message}), falling back to HTTP`);
+      }
+    }
+
+    const response = await axios.get<ArrayBuffer>(url, {
+      responseType: 'arraybuffer',
+      timeout: 15_000,
+    });
+    const mimeRaw = String(response.headers['content-type'] ?? 'image/jpeg').split(';')[0].trim();
+    const mime = mimeRaw.startsWith('image/') ? mimeRaw : 'image/jpeg';
+    return `data:${mime};base64,${Buffer.from(response.data).toString('base64')}`;
+  }
+
+  private async callAPI(imageUrls: string[]): Promise<VisionAttributes> {
+    const isMulti = imageUrls.length > 1;
+    const dataUrls = await Promise.all(imageUrls.map((u) => this.toBase64DataUrl(u)));
+
+    // Gemini uses inlineData with raw base64 (no data URL prefix)
+    const imageParts = dataUrls.map((dataUrl) => {
+      const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+      const mimeType = match?.[1] ?? 'image/jpeg';
+      const data = match?.[2] ?? dataUrl;
+      return { inlineData: { mimeType, data } };
+    });
+
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent?key=${this.apiKey}`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          role: 'user',
+          parts: [
+            { text: this.buildPrompt(isMulti) },
+            ...imageParts,
+          ],
+        }],
+        generationConfig: {
+          maxOutputTokens: isMulti ? 500 : 300,
+          responseMimeType: 'application/json',
+        },
+      }),
+      signal: AbortSignal.timeout(30_000),
+    });
+
+    if (!response.ok) {
+      const err = await response.text();
+      this.logger.error(`[GeminiVision] API error ${response.status}: ${err.slice(0, 200)}`);
+      return this.emptyResult(`API error ${response.status}`);
+    }
+
+    const data = await response.json() as any;
+    const content: string = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+    this.logger.log(`[GeminiVision] Response (${imageUrls.length} imgs): ${content.slice(0, 300)}`);
+    return this.parseResponse(content);
+  }
+
+  async analyze(imageUrl: string): Promise<VisionAttributes> {
+    if (!this.apiKey) {
+      this.logger.warn('[GeminiVision] GEMINI_API_KEY not set — returning zero confidence');
+      return this.emptyResult('GEMINI_API_KEY not configured');
+    }
+    try {
+      return await this.callAPI([imageUrl]);
+    } catch (err: any) {
+      this.logger.error(`[GeminiVision] analyze failed: ${err?.message ?? err}`);
+      return this.emptyResult(String(err?.message ?? 'unknown error'));
+    }
+  }
+
+  async analyzeMultiple(imageUrls: string[]): Promise<VisionAttributes> {
+    if (!this.apiKey) {
+      this.logger.warn('[GeminiVision] GEMINI_API_KEY not set — returning zero confidence');
+      return this.emptyResult('GEMINI_API_KEY not configured');
+    }
+    if (!imageUrls.length) return this.emptyResult('No images provided');
+    if (imageUrls.length === 1) return this.analyze(imageUrls[0]);
+
+    const urls = imageUrls.slice(0, 5);
+    this.logger.log(`[GeminiVision] Multi-angle: ${urls.length} images`);
+    try {
+      return await this.callAPI(urls);
+    } catch (err: any) {
+      this.logger.error(`[GeminiVision] analyzeMultiple failed: ${err?.message ?? err}`);
+      return this.emptyResult(String(err?.message ?? 'unknown error'));
+    }
+  }
+
+  private emptyResult(reason: string): VisionAttributes {
+    return {
+      category: null,
+      color: null,
+      pattern: null,
+      sleeveType: null,
+      gender: null,
+      confidence: 0,
+      rawDescription: reason,
+    };
+  }
+}

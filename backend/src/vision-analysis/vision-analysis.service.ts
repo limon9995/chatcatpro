@@ -4,9 +4,10 @@ import { MockVisionProvider } from './providers/mock.vision.provider';
 import { OpenAIVisionProvider } from './providers/openai.vision.provider';
 import { LocalVisionProvider } from './providers/local.vision.provider';
 import { OllamaVisionProvider } from './providers/ollama.vision.provider';
+import { GeminiVisionProvider } from './providers/gemini.vision.provider';
 import { GlobalSettingsService } from '../common/global-settings.service';
 
-type VisionMode = 'openai' | 'local' | 'local-with-fallback' | 'ollama' | 'ollama-with-fallback' | 'mock';
+type VisionMode = 'gemini' | 'gemini-with-fallback' | 'openai' | 'local' | 'local-with-fallback' | 'ollama' | 'ollama-with-fallback' | 'mock';
 
 @Injectable()
 export class VisionAnalysisService {
@@ -22,21 +23,25 @@ export class VisionAnalysisService {
     private readonly openaiProvider: OpenAIVisionProvider,
     private readonly localProvider: LocalVisionProvider,
     private readonly ollamaProvider: OllamaVisionProvider,
+    private readonly geminiProvider: GeminiVisionProvider,
     private readonly globalSettings: GlobalSettingsService,
   ) {
     const raw = (process.env.VISION_PROVIDER ?? '').toLowerCase().trim();
     this.confidenceThreshold = Number(process.env.VISION_CONFIDENCE_THRESHOLD ?? 0.15);
 
-    if (raw === 'openai') this.mode = 'openai';
+    if (raw === 'gemini' || raw === 'gemini-with-fallback') this.mode = 'gemini';
+    else if (raw === 'openai') this.mode = 'openai';
     else if (raw === 'local') this.mode = 'local';
     else if (raw === 'local-with-fallback') this.mode = 'local-with-fallback';
     else if (raw === 'ollama') this.mode = 'ollama';
     else if (raw === 'ollama-with-fallback') this.mode = 'ollama-with-fallback';
+    else if (process.env.GEMINI_API_KEY) this.mode = 'gemini'; // auto-detect Gemini
     else if (process.env.OLLAMA_BASE_URL) this.mode = 'ollama-with-fallback'; // auto-detect Ollama
     else if (process.env.OPENAI_API_KEY) this.mode = 'openai'; // auto-detect OpenAI
     else this.mode = 'mock';
 
-    if (this.mode === 'openai') this.provider = this.openaiProvider;
+    if (this.mode === 'gemini') this.provider = this.geminiProvider;
+    else if (this.mode === 'openai') this.provider = this.openaiProvider;
     else if (this.mode === 'local') this.provider = this.localProvider;
     else if (this.mode === 'ollama') this.provider = this.ollamaProvider;
     else this.provider = this.mockProvider;

@@ -43,8 +43,8 @@ export class SmartBotService {
     private readonly walletService: WalletService,
     private readonly prisma: PrismaService,
   ) {
-    this.apiKey = process.env.OPENAI_API_KEY ?? '';
-    this.model = process.env.AI_INTENT_MODEL ?? 'gpt-4o-mini';
+    this.apiKey = process.env.GEMINI_API_KEY ?? process.env.OPENAI_API_KEY ?? '';
+    this.model = process.env.AI_INTENT_MODEL ?? 'gemini-2.0-flash';
   }
 
   isAvailable(): boolean {
@@ -282,37 +282,52 @@ Customer-এর message দেখে **strictly valid JSON** return করো:
   ): Promise<string | null> {
     if (!this.apiKey) return null;
     try {
-      const res = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${this.apiKey}`,
-        },
-        body: JSON.stringify({
-          model: this.model,
-          max_tokens: 500,
+      // Extract system prompt → systemInstruction
+      const systemMsg = messages.find((m) => m.role === 'system');
+      const rest = messages.filter((m) => m.role !== 'system');
+
+      // Map roles: 'assistant' → 'model'; wrap content in parts
+      const contents = rest.map((m) => ({
+        role: m.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: m.content }],
+      }));
+
+      const body: any = {
+        contents,
+        generationConfig: {
           temperature: 0.3,
-          response_format: { type: 'json_object' },
-          messages,
-        }),
-        signal: AbortSignal.timeout(10_000),
+          maxOutputTokens: 500,
+          responseMimeType: 'application/json',
+        },
+      };
+      if (systemMsg) {
+        body.systemInstruction = { parts: [{ text: systemMsg.content }] };
+      }
+
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent?key=${this.apiKey}`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(15_000),
       });
 
       if (res.status === 429 || res.status === 402) {
-        this.logger.warn(`[SmartBot] OpenAI quota/limit (${res.status})`);
+        this.logger.warn(`[SmartBot] Gemini quota/limit (${res.status})`);
         this.enterCooldown();
         return null;
       }
       if (!res.ok) {
-        this.logger.error(`[SmartBot] OpenAI error ${res.status}`);
+        const errText = await res.text();
+        this.logger.error(`[SmartBot] Gemini error ${res.status}: ${errText.slice(0, 200)}`);
         this.recordFailure();
         return null;
       }
 
       const data = await res.json() as any;
-      return (data?.choices?.[0]?.message?.content ?? '').trim() || null;
+      return (data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '').trim() || null;
     } catch (err: any) {
-      this.logger.warn(`[SmartBot] OpenAI network error: ${err?.message ?? err}`);
+      this.logger.warn(`[SmartBot] Gemini network error: ${err?.message ?? err}`);
       this.recordFailure();
       return null;
     }
