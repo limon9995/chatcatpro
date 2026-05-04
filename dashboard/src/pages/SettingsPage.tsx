@@ -1100,7 +1100,7 @@ export function SettingsPage({ th, pageId, tab, onToast }: {
     const isManualUpload = s.voiceSettings.ttsProvider === 'MANUAL_UPLOAD';
 
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 0, ...cssVars }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 0, position: 'relative', ...cssVars }}>
         <div style={{ marginBottom: 22 }}>
           <h1 style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.04em', margin: 0 }}>🎙 Voice & TTS</h1>
           <p style={{ fontSize: 13, color: th.muted, margin: '3px 0 0' }}>{copy('Call confirmation-এ customer কোন voice শুনবে — script লেখো, audio তৈরি করো', 'Choose the voice customers hear during confirmation calls, write the script, and generate the audio')}</p>
@@ -1322,6 +1322,28 @@ export function SettingsPage({ th, pageId, tab, onToast }: {
           </Section>
 
           <SaveRow onClick={() => saveVoice(true)} saving={saving} label="Save Voice Settings"/>
+        </div>
+
+        {/* ── Coming Soon Overlay ── */}
+        <div style={{
+          position: 'absolute', inset: 0, zIndex: 20,
+          background: 'rgba(15,23,42,0.55)',
+          backdropFilter: 'blur(8px)',
+          WebkitBackdropFilter: 'blur(8px)',
+          borderRadius: 16,
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14,
+        }}>
+          <div style={{ fontSize: 52 }}>🚀</div>
+          <div style={{
+            fontSize: 30, fontWeight: 900, letterSpacing: '-0.04em', color: '#fff',
+            textShadow: '0 2px 16px rgba(0,0,0,0.4)',
+          }}>Coming Soon</div>
+          <div style={{
+            fontSize: 13.5, color: 'rgba(255,255,255,0.75)', textAlign: 'center',
+            maxWidth: 280, lineHeight: 1.7,
+          }}>
+            Voice & TTS feature টি শীঘ্রই চালু হবে।<br/>Stay tuned! 🎉
+          </div>
         </div>
       </div>
     );
