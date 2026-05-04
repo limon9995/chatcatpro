@@ -80,6 +80,8 @@ html,body{margin:0;padding:0;font-family:"Noto Sans Bengali","Hind Siliguri","So
 .section-title{font-size:${sf};text-transform:uppercase;letter-spacing:.7px;color:${t.accent};font-weight:800;margin-bottom:3px;display:flex;align-items:center;gap:4px}
 .section-title::before{content:'';display:inline-block;width:3px;height:${dh}px;background:linear-gradient(to bottom,${t.primary},${t.accent});border-radius:2px;flex-shrink:0}
 .dual-box{display:grid;grid-template-columns:1fr 1fr;gap:${c4 ? '5px' : '7px'}}
+.info-grid{display:grid;grid-template-columns:1fr 1fr 1.4fr;gap:${c4 ? '5px' : '8px'};border:1px solid ${t.border};background:#fff;border-radius:10px;padding:${iboxp};font-size:${mf};line-height:1.45}
+.info-grid>div{min-width:0;overflow:hidden}
 table{width:100%;border-collapse:collapse;background:#fff;border:1px solid ${t.border};border-radius:10px;overflow:hidden}
 th,td{padding:${tcelp};border-bottom:1px solid ${t.border};text-align:left;font-size:${tf};line-height:1.4}
 th{background:linear-gradient(90deg,${t.primary},${t.accent});color:#fff;font-weight:700;letter-spacing:.3px}
@@ -267,7 +269,7 @@ ${pages
           )
           .join('')
       : `<tr class="empty-row"><td colspan="4">No item added</td></tr>`;
-    return `<div class="memo-slot"><div class="memo-card"><div class="memo-header">${logoHtml}<div class="company-block"><h1>${this.escape(companyName)}</h1><div class="company-meta"><div>${this.escape(businessPhone)}</div><div>${this.escape(businessAddress)}</div></div></div><div class="memo-badge">${badge}</div></div><div class="memo-body"><div class="meta-row"><div><span class="section-title">Order ID</span><br/>#${order.id || '-'}</div><div style="text-align:right"><span class="section-title">Date</span><br/>${this.escape(this.formatDate(order.createdAt))}</div></div><div class="dual-box"><div class="business-box"><div class="section-title">Business</div><div><b>Name:</b> ${this.escape(companyName)}</div><div><b>Phone:</b> ${this.escape(businessPhone)}</div></div><div class="customer-box"><div class="section-title">Customer</div><div><b>Name:</b> ${this.escape(customerName)}</div><div><b>Phone:</b> ${this.escape(customerPhone)}</div><div><b>Address:</b> ${this.escape(customerAddress)}</div></div></div><table><thead><tr><th>Code</th><th class="number">Qty</th><th class="number">Price</th><th class="number">Total</th></tr></thead><tbody>${rows}</tbody></table><div class="totals-box"><div class="totals-row"><span>Subtotal</span><span>${this.money(subtotal, currency)}</span></div><div class="totals-row"><span>Delivery Fee</span><span>${this.money(delivery, currency)}</span></div><div class="totals-row cod"><span>${this.escape(business.codLabel || 'COD')}</span><span>${this.money(total, currency)}</span></div><div class="totals-row total"><span>Total</span><span>${this.money(total, currency)}</span></div></div></div><div class="memo-footer">${this.escape(business.footerText || 'Thank you for your order')}</div></div></div>`;
+    return `<div class="memo-slot"><div class="memo-card"><div class="memo-header">${logoHtml}<div class="company-block"><h1>${this.escape(companyName)}</h1><div class="company-meta"><div>${this.escape(businessPhone)}</div><div>${this.escape(businessAddress)}</div></div></div><div class="memo-badge">${badge}</div></div><div class="memo-body"><div class="meta-row"><div><span class="section-title">Order ID</span><br/>#${order.id || '-'}</div><div style="text-align:right"><span class="section-title">Date</span><br/>${this.escape(this.formatDate(order.createdAt))}</div></div><div class="info-grid"><div><div class="section-title">Customer</div><div class="field-value">${this.escape(customerName)}</div></div><div><div class="section-title">Phone</div><div class="field-value">${this.escape(customerPhone)}</div></div><div><div class="section-title">Address</div><div class="field-value field-address">${this.escape(customerAddress)}</div></div></div><table><thead><tr><th>Code</th><th class="number">Qty</th><th class="number">Price</th><th class="number">Total</th></tr></thead><tbody>${rows}</tbody></table><div class="totals-box"><div class="totals-row"><span>Subtotal</span><span>${this.money(subtotal, currency)}</span></div><div class="totals-row"><span>Delivery Fee</span><span>${this.money(delivery, currency)}</span></div><div class="totals-row cod"><span>${this.escape(business.codLabel || 'COD')}</span><span>${this.money(total, currency)}</span></div><div class="totals-row total"><span>Total</span><span>${this.money(total, currency)}</span></div></div></div><div class="memo-footer">${this.escape(business.footerText || 'Thank you for your order')}</div></div></div>`;
   }
 
   private buildMappedTemplateHtml(
@@ -427,11 +429,10 @@ ${pages
     try {
       const d = value ? new Date(value) : new Date();
       if (Number.isNaN(d.getTime())) return '-';
-      return d.toLocaleDateString('bn-BD', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-      });
+      const dd = String(d.getDate()).padStart(2, '0');
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const yyyy = d.getFullYear();
+      return `${dd}/${mm}/${yyyy}`;
     } catch {
       return '-';
     }
