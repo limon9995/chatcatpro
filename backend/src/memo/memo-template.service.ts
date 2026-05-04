@@ -60,9 +60,9 @@ export class MemoTemplateService {
 *{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 @media print{.memo-header::before,.memo-header::after{display:none!important}.section-title::before{display:none!important}}
 html,body{margin:0;padding:0;font-family:"Noto Sans Bengali","Hind Siliguri","SolaimanLipi","Kalpurush",Arial,Helvetica,sans-serif;color:${t.text};background:#eaf0fb;text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased}
-.a4-page{width:210mm;min-height:297mm;padding:8mm;display:grid;grid-template-rows:repeat(${count},1fr);gap:${gapMm}mm}
+.a4-page{width:210mm;height:297mm;padding:8mm;overflow:hidden;display:grid;grid-template-rows:repeat(${count},1fr);gap:${gapMm}mm;page-break-inside:avoid;break-inside:avoid}
 .a4-page + .a4-page{page-break-before:always;break-before:page}
-.memo-slot{border-radius:16px;overflow:hidden;min-height:${minHMm}mm}
+.memo-slot{border-radius:16px;overflow:hidden;height:100%;min-height:0}
 .memo-card{height:100%;display:flex;flex-direction:column;border-radius:16px;overflow:hidden;box-shadow:0 3px 16px rgba(0,0,0,.14);border:1.5px solid ${t.border};border-top:3px solid ${t.accent}}
 .memo-header{display:flex;align-items:center;justify-content:space-between;padding:${hp};background:linear-gradient(135deg,${t.primary} 0%,${t.accent} 100%);color:#fff;gap:8px;position:relative;overflow:hidden}
 .memo-header::after{content:'';position:absolute;right:-20px;top:-20px;width:75px;height:75px;border-radius:50%;background:rgba(255,255,255,.1);pointer-events:none}
