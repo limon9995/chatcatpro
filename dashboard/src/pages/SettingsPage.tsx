@@ -410,12 +410,12 @@ export function SettingsPage({ th, pageId, tab, onToast }: {
     onToast(msg, 'error');
   };
 
-  // ── PAGE SETTINGS ─────────────────────────────────────────────────────────
-  if (tab === 'PAGE') return (
+  // ── SETTINGS_BUSINESS ────────────────────────────────────────────────────
+  if (tab === 'SETTINGS_BUSINESS') return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 0, ...cssVars }}>
       <div style={{ marginBottom: 28 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.04em', margin: 0 }}>Page Settings</h1>
-        <p style={{ fontSize: 13, color: th.muted, margin: '3px 0 0' }}>Business info, delivery, and bot modes</p>
+        <h1 style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.04em', margin: 0 }}>🏪 Business</h1>
+        <p style={{ fontSize: 13, color: th.muted, margin: '3px 0 0' }}>{copy('ব্যবসার তথ্য, ক্যাটালগ ও Facebook সংযোগ', 'Business info, catalog and Facebook connection')}</p>
       </div>
 
       {/* Facebook Access Token Tutorial — shown only when admin has set a URL */}
@@ -519,71 +519,128 @@ export function SettingsPage({ th, pageId, tab, onToast }: {
           </Grid>
         </Section>
 
-        {/* AI Knowledge */}
-        <Section title="🤖 AI Business Knowledge" desc="এখানে লেখো — AI bot এই তথ্য দিয়ে customer-দের সঠিক reply দেবে">
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-              <Label text="FAQ / Product Info / Policies" hint="AI bot এই text পড়ে customer-এর প্রশ্নের উত্তর দেবে। Products, delivery, payment, return policy লেখো।"/>
-              <span style={{ fontSize: 11, color: s.knowledgeText.length > 2800 ? '#f87171' : th.muted }}>
-                {s.knowledgeText.length}/3000
-              </span>
+        {/* Branding */}
+        <Section title="Branding" desc="Currency, labels, and product code format">
+          <Grid cols={3}>
+            <div>
+              <Label text="Currency Symbol" hint={copy('যেমন: ৳, $, £', 'For example: ৳, $, £')}/>
+              <input style={inp} value={s.currencySymbol} maxLength={4}
+                onChange={e => setS(p => ({ ...p, currencySymbol: e.target.value }))}/>
             </div>
-            <textarea
-              style={{ ...inp, minHeight: 140, resize: 'vertical', fontFamily: 'inherit', fontSize: 13 }}
-              value={s.knowledgeText}
-              maxLength={3000}
-              onChange={e => setS(p => ({ ...p, knowledgeText: e.target.value }))}
-              placeholder={`উদাহরণ:\nআমাদের products: সব ধরনের মেয়েদের পোশাক — saree, kameez, kurti। দাম: ৳৩৫০-৳২৫০০।\nDelivery: ঢাকার ভিতরে ৳৮০, বাইরে ৳১৩০। ২-৩ দিনে পাবেন।\nPayment: Cash on Delivery। Outside Dhaka-তে ৳১০০ advance।\nReturn: ৭ দিনের মধ্যে exchange। Cash refund নেই।\nFAQ: রং বদলানো যাবে কি? — হ্যাঁ, order-এর সময় বলুন।`}
-            />
-            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-              <button
-                style={{ ...th.btnGhost, fontSize: 12, opacity: scraping ? 0.6 : 1 }}
-                onClick={scrapeWebsite}
-                disabled={scraping || !s.websiteUrl}
-                title={s.websiteUrl ? 'Website থেকে text extract করবে' : 'আগে Website URL দিন'}
-              >
-                {scraping ? '⏳ Scraping...' : '🌐 Website থেকে Auto-fill'}
-              </button>
-              <button
-                style={{ ...th.btn, fontSize: 12, opacity: knowledgeSaving ? 0.6 : 1 }}
-                onClick={saveKnowledge}
-                disabled={knowledgeSaving}
-              >
-                {knowledgeSaving ? '...' : '💾 Save Knowledge'}
-              </button>
+            <div>
+              <Label text="COD Label" hint="Cash on delivery label"/>
+              <input style={inp} value={s.codLabel}
+                onChange={e => setS(p => ({ ...p, codLabel: e.target.value }))}/>
             </div>
-            {scrapePreview !== null && (
-              <div style={{ marginTop: 10, padding: 10, background: th.surface, borderRadius: 6, border: `1px solid ${th.border}` }}>
-                <div style={{ fontSize: 11, color: th.muted, marginBottom: 6 }}>Preview (click "Use This" to apply):</div>
-                <pre style={{ fontSize: 11, whiteSpace: 'pre-wrap', maxHeight: 150, overflow: 'auto', color: th.text, margin: 0 }}>{scrapePreview.slice(0, 500)}{scrapePreview.length > 500 ? '...' : ''}</pre>
-                <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                  <button style={{ ...th.btn, fontSize: 11 }} onClick={() => {
-                    setS(p => ({ ...p, knowledgeText: scrapePreview.slice(0, 3000) }));
-                    setScrapePreview(null);
-                  }}>✓ Use This</button>
-                  <button style={{ ...th.btnGhost, fontSize: 11 }} onClick={() => setScrapePreview(null)}>✕ Cancel</button>
+            <div>
+              <Label text="Product Code Prefix" hint={copy('যেমন: DF → DF-0001, SK → SK-0001', 'For example: DF -> DF-0001, SK -> SK-0001')}/>
+              <input style={{ ...inp, textTransform: 'uppercase' }} value={s.productCodePrefix} maxLength={6} placeholder="DF"
+                onChange={e => setS(p => ({ ...p, productCodePrefix: e.target.value.toUpperCase().replace(/[^A-Z]/g,'') }))}/>
+              <div style={{ fontSize: 11.5, color: th.muted, marginTop: 5 }}>
+                Preview: <code style={{ background: th.accentSoft, color: th.accentText, padding: '1px 7px', borderRadius: 5, fontSize: 11 }}>
+                  {(s.productCodePrefix||'DF')}-0001
+                </code>
+              </div>
+            </div>
+          </Grid>
+        </Section>
+
+        {/* ── Facebook Connection ── */}
+        <Section title={copy('Facebook Connection', 'Facebook Connection')} desc={copy('Connected page পরিবর্তন করুন — settings ও products অক্ষুণ্ণ থাকবে', 'Change the connected Facebook page while keeping all settings & products intact')}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700 }}>
+                {(s as any).pageName || copy('(নাম জানা নেই)', '(unknown)')}
+              </div>
+              <div style={{ fontSize: 11.5, color: th.muted }}>
+                FB Page ID: {(s as any).fbPageId || '—'}
+              </div>
+            </div>
+            <button
+              onClick={() => { setReconnectToken(''); setShowReconnectModal(true); }}
+              style={{ ...th.btnGhost, whiteSpace: 'nowrap', fontSize: 12 }}
+            >
+              🔄 {copy('Change FB Page', 'Change FB Page')}
+            </button>
+          </div>
+          {showReconnectModal && (
+            <div style={{ marginTop: 14, padding: '14px', borderRadius: 12, border: `1px solid ${th.borderMd}`, background: th.surface, display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 700 }}>
+                🔄 {copy('নতুন Facebook Page Token দিন', 'Enter new Facebook Page Token')}
+              </div>
+              <div style={{ fontSize: 12, color: th.muted }}>
+                {copy('এই page এর সব settings, products এবং bot training অক্ষুণ্ণ থাকবে।', 'All settings, products, and bot training will be preserved.')}
+              </div>
+              <textarea
+                style={{ ...inp, minHeight: 72, resize: 'vertical', lineHeight: 1.5 }}
+                placeholder="EAAxxxxxx..."
+                value={reconnectToken}
+                onChange={e => setReconnectToken(e.target.value)}
+              />
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={reconnectPage} disabled={reconnectBusy} style={{ ...th.btnPrimary, flex: 1, justifyContent: 'center', opacity: reconnectBusy ? 0.6 : 1 }}>
+                  {reconnectBusy ? <><Spinner size={13} /> {copy('Verifying...', 'Verifying...')}</> : copy('✓ Change Page', '✓ Change Page')}
+                </button>
+                <button onClick={() => setShowReconnectModal(false)} style={{ ...th.btnGhost }}>
+                  {copy('বাতিল', 'Cancel')}
+                </button>
+              </div>
+            </div>
+          )}
+        </Section>
+
+        {/* ── Linked Pages ── */}
+        <Section title={copy('Linked Pages', 'Linked Pages')} desc={copy('এই page এর settings ও products share করছে এমন pages', 'Pages that share this profile\'s settings and products')}>
+          {linkedPages.length === 0 ? (
+            <div style={{ fontSize: 12.5, color: th.muted, padding: '10px 0' }}>
+              {copy('কোনো linked page নেই।', 'No linked pages yet.')}
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {linkedPages.map(lp => (
+                <div key={lp.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '9px 12px', borderRadius: 10, border: `1px solid ${th.border}`, background: th.surface }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 15 }}>{lp.isActive ? '🔗' : '⏸️'}</span>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 13 }}>{lp.pageName}</div>
+                      <div style={{ fontSize: 11.5, color: th.muted }}>FB ID: {lp.pageId}</div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => unlinkPage(lp.id)}
+                    disabled={unlinkingId === lp.id}
+                    style={{ ...th.btnGhost, fontSize: 12, color: '#ef4444', borderColor: 'rgba(239,68,68,0.3)', opacity: unlinkingId === lp.id ? 0.5 : 1 }}
+                  >
+                    {unlinkingId === lp.id ? copy('Unlinking...', 'Unlinking...') : copy('Unlink', 'Unlink')}
+                  </button>
                 </div>
-              </div>
-            )}
+              ))}
+            </div>
+          )}
+          <div style={{ marginTop: 10, fontSize: 12, color: th.muted }}>
+            {copy('নতুন page link করতে "পেজ কানেক্ট" থেকে নতুন page add করুন এবং "Link to existing profile" option select করুন।', 'To add a linked page, go to "Connect Page", add a new page, and select "Link to existing profile".')}
           </div>
         </Section>
 
-        {/* SmartBot */}
-        <Section title="🧠 SmartBot Mode" desc="ChatGPT-style AI — customer যেকোনো ভাষায় কথা বলবে, bot বুঝে order নেবে। Knowledge box-এর তথ্য দিয়ে reply দেবে।">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <Toggle th={th}
-              label="SmartBot চালু করুন"
-              sub="Keyword matching বন্ধ — AI সরাসরি customer-এর সব message বুঝে reply দেবে এবং order নেবে। OPENAI_API_KEY প্রয়োজন।"
-              checked={s.smartBotOn}
-              onChange={v => saveMode('smartBotOn', v)} />
-            {s.smartBotOn && (
-              <div style={{ fontSize: 12, color: th.muted, padding: '10px 14px', borderRadius: 8, background: th.surface, border: `1px solid ${th.border}`, lineHeight: 1.7 }}>
-                <strong style={{ color: th.text }}>SmartBot চালু আছে।</strong> উপরের "AI Business Knowledge" box-এ আপনার business-এর সব তথ্য লিখুন — size chart, return policy, payment info, FAQ — AI এই তথ্য দিয়ে customer-দের reply করবে।
-              </div>
-            )}
-          </div>
-        </Section>
+        <SaveRow onClick={() => save({
+          businessName: s.businessName, businessPhone: s.businessPhone,
+          businessAddress: s.businessAddress, websiteUrl: s.websiteUrl,
+          catalogSlug: s.catalogSlug || null, catalogMessengerUrl: s.catalogMessengerUrl,
+          currencySymbol: s.currencySymbol, codLabel: s.codLabel,
+          productCodePrefix: s.productCodePrefix,
+        })} saving={saving}/>
+      </div>
+    </div>
+  );
 
+  // ── SETTINGS_DELIVERY ──────────────────────────────────────────────────────
+  if (tab === 'SETTINGS_DELIVERY') return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 0, ...cssVars }}>
+      <div style={{ marginBottom: 28 }}>
+        <h1 style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.04em', margin: 0 }}>🚀 Fulfillment</h1>
+        <p style={{ fontSize: 13, color: th.muted, margin: '3px 0 0' }}>{copy('ডেলিভারি ফি, সময় ও পেমেন্ট পদ্ধতি', 'Delivery fees, time and payment method')}</p>
+      </div>
+      <div style={{ ...th.card }}>
         {/* Delivery */}
         <Section title="Delivery Settings" desc={copy('Bot এই settings থেকে পড়ে customer-কে delivery fee ও সময় বলে', 'Bot reads these to tell customers about delivery fees and time')}>
           <Grid cols={3}>
@@ -669,30 +726,40 @@ export function SettingsPage({ th, pageId, tab, onToast }: {
           )}
         </Section>
 
-        {/* Branding */}
-        <Section title="Branding" desc="Currency, labels, and product code format">
-          <Grid cols={3}>
-            <div>
-              <Label text="Currency Symbol" hint={copy('যেমন: ৳, $, £', 'For example: ৳, $, £')}/>
-              <input style={inp} value={s.currencySymbol} maxLength={4}
-                onChange={e => setS(p => ({ ...p, currencySymbol: e.target.value }))}/>
-            </div>
-            <div>
-              <Label text="COD Label" hint="Cash on delivery label"/>
-              <input style={inp} value={s.codLabel}
-                onChange={e => setS(p => ({ ...p, codLabel: e.target.value }))}/>
-            </div>
-            <div>
-              <Label text="Product Code Prefix" hint={copy('যেমন: DF → DF-0001, SK → SK-0001', 'For example: DF -> DF-0001, SK -> SK-0001')}/>
-              <input style={{ ...inp, textTransform: 'uppercase' }} value={s.productCodePrefix} maxLength={6} placeholder="DF"
-                onChange={e => setS(p => ({ ...p, productCodePrefix: e.target.value.toUpperCase().replace(/[^A-Z]/g,'') }))}/>
-              <div style={{ fontSize: 11.5, color: th.muted, marginTop: 5 }}>
-                Preview: <code style={{ background: th.accentSoft, color: th.accentText, padding: '1px 7px', borderRadius: 5, fontSize: 11 }}>
-                  {(s.productCodePrefix||'DF')}-0001
-                </code>
+        <SaveRow onClick={() => save({
+          deliveryFeeInsideDhaka: s.deliveryFeeInsideDhaka,
+          deliveryFeeOutsideDhaka: s.deliveryFeeOutsideDhaka,
+          deliveryTimeText: s.deliveryTimeText,
+          paymentMode: s.paymentMode, advanceAmount: s.advanceAmount,
+          advanceBkash: s.advanceBkash, advanceNagad: s.advanceNagad,
+          advancePaymentMessage: s.advancePaymentMessage,
+        })} saving={saving}/>
+      </div>
+    </div>
+  );
+
+  // ── SETTINGS_BOT ───────────────────────────────────────────────────────────
+  if (tab === 'SETTINGS_BOT') return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 0, ...cssVars }}>
+      <div style={{ marginBottom: 28 }}>
+        <h1 style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.04em', margin: 0 }}>⚙ Bot Modes</h1>
+        <p style={{ fontSize: 13, color: th.muted, margin: '3px 0 0' }}>{copy('Bot কী কী করতে পারবে তা এখানে চালু/বন্ধ করো', 'Control which features the bot can use')}</p>
+      </div>
+      <div style={{ ...th.card }}>
+        {/* SmartBot */}
+        <Section title="🧠 SmartBot Mode" desc="ChatGPT-style AI — customer যেকোনো ভাষায় কথা বলবে, bot বুঝে order নেবে। Knowledge box-এর তথ্য দিয়ে reply দেবে।">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <Toggle th={th}
+              label="SmartBot চালু করুন"
+              sub="Keyword matching বন্ধ — AI সরাসরি customer-এর সব message বুঝে reply দেবে এবং order নেবে। OPENAI_API_KEY প্রয়োজন।"
+              checked={s.smartBotOn}
+              onChange={v => saveMode('smartBotOn', v)} />
+            {s.smartBotOn && (
+              <div style={{ fontSize: 12, color: th.muted, padding: '10px 14px', borderRadius: 8, background: th.surface, border: `1px solid ${th.border}`, lineHeight: 1.7 }}>
+                <strong style={{ color: th.text }}>SmartBot চালু আছে।</strong> উপরের "AI Business Knowledge" box-এ আপনার business-এর সব তথ্য লিখুন — size chart, return policy, payment info, FAQ — AI এই তথ্য দিয়ে customer-দের reply করবে।
               </div>
-            </div>
-          </Grid>
+            )}
+          </div>
         </Section>
 
         {/* Bot Modes */}
@@ -755,123 +822,77 @@ export function SettingsPage({ th, pageId, tab, onToast }: {
           </div>
         </Section>
 
-        {/* ── Facebook Connection ── */}
-        <Section title={copy('Facebook Connection', 'Facebook Connection')} desc={copy('Connected page পরিবর্তন করুন — settings ও products অক্ষুণ্ণ থাকবে', 'Change the connected Facebook page while keeping all settings & products intact')}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 700 }}>
-                {(s as any).pageName || copy('(নাম জানা নেই)', '(unknown)')}
-              </div>
-              <div style={{ fontSize: 11.5, color: th.muted }}>
-                FB Page ID: {(s as any).fbPageId || '—'}
-              </div>
-            </div>
-            <button
-              onClick={() => { setReconnectToken(''); setShowReconnectModal(true); }}
-              style={{ ...th.btnGhost, whiteSpace: 'nowrap', fontSize: 12 }}
-            >
-              🔄 {copy('Change FB Page', 'Change FB Page')}
-            </button>
-          </div>
-          {showReconnectModal && (
-            <div style={{ marginTop: 14, padding: '14px', borderRadius: 12, border: `1px solid ${th.borderMd}`, background: th.surface, display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <div style={{ fontSize: 12.5, fontWeight: 700 }}>
-                🔄 {copy('নতুন Facebook Page Token দিন', 'Enter new Facebook Page Token')}
-              </div>
-              <div style={{ fontSize: 12, color: th.muted }}>
-                {copy('এই page এর সব settings, products এবং bot training অক্ষুণ্ণ থাকবে।', 'All settings, products, and bot training will be preserved.')}
-              </div>
-              <textarea
-                style={{ ...inp, minHeight: 72, resize: 'vertical', lineHeight: 1.5 }}
-                placeholder="EAAxxxxxx..."
-                value={reconnectToken}
-                onChange={e => setReconnectToken(e.target.value)}
-              />
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={reconnectPage} disabled={reconnectBusy} style={{ ...th.btnPrimary, flex: 1, justifyContent: 'center', opacity: reconnectBusy ? 0.6 : 1 }}>
-                  {reconnectBusy ? <><Spinner size={13} /> {copy('Verifying...', 'Verifying...')}</> : copy('✓ Change Page', '✓ Change Page')}
-                </button>
-                <button onClick={() => setShowReconnectModal(false)} style={{ ...th.btnGhost }}>
-                  {copy('বাতিল', 'Cancel')}
-                </button>
-              </div>
-            </div>
-          )}
-        </Section>
-
-        {/* ── Linked Pages ── */}
-        <Section title={copy('Linked Pages', 'Linked Pages')} desc={copy('এই page এর settings ও products share করছে এমন pages', 'Pages that share this profile\'s settings and products')}>
-          {linkedPages.length === 0 ? (
-            <div style={{ fontSize: 12.5, color: th.muted, padding: '10px 0' }}>
-              {copy('কোনো linked page নেই।', 'No linked pages yet.')}
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {linkedPages.map(lp => (
-                <div key={lp.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '9px 12px', borderRadius: 10, border: `1px solid ${th.border}`, background: th.surface }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontSize: 15 }}>{lp.isActive ? '🔗' : '⏸️'}</span>
-                    <div>
-                      <div style={{ fontWeight: 700, fontSize: 13 }}>{lp.pageName}</div>
-                      <div style={{ fontSize: 11.5, color: th.muted }}>FB ID: {lp.pageId}</div>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => unlinkPage(lp.id)}
-                    disabled={unlinkingId === lp.id}
-                    style={{ ...th.btnGhost, fontSize: 12, color: '#ef4444', borderColor: 'rgba(239,68,68,0.3)', opacity: unlinkingId === lp.id ? 0.5 : 1 }}
-                  >
-                    {unlinkingId === lp.id ? copy('Unlinking...', 'Unlinking...') : copy('Unlink', 'Unlink')}
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-          <div style={{ marginTop: 10, fontSize: 12, color: th.muted }}>
-            {copy('নতুন page link করতে "পেজ কানেক্ট" থেকে নতুন page add করুন এবং "Link to existing profile" option select করুন।', 'To add a linked page, go to "Connect Page", add a new page, and select "Link to existing profile".')}
-          </div>
-        </Section>
-
         <SaveRow onClick={() => save({
-          businessName: s.businessName, businessPhone: s.businessPhone,
-          businessAddress: s.businessAddress, websiteUrl: s.websiteUrl, deliveryTimeText: s.deliveryTimeText,
-          deliveryFeeInsideDhaka: s.deliveryFeeInsideDhaka,
-          deliveryFeeOutsideDhaka: s.deliveryFeeOutsideDhaka,
-          currencySymbol: s.currencySymbol, codLabel: s.codLabel,
-          productCodePrefix: s.productCodePrefix,
-          automationOn: s.automationOn,
-          ocrOn: s.ocrOn,
-          infoModeOn: s.infoModeOn,
-          orderModeOn: s.orderModeOn,
-          printModeOn: s.printModeOn,
-          callConfirmModeOn: s.callConfirmModeOn,
-          memoSaveModeOn: s.memoSaveModeOn,
-          memoTemplateModeOn: s.memoTemplateModeOn,
-          paymentMode: s.paymentMode, advanceAmount: s.advanceAmount,
-          advanceBkash: s.advanceBkash, advanceNagad: s.advanceNagad,
-          advancePaymentMessage: s.advancePaymentMessage,
-          catalogMessengerUrl: s.catalogMessengerUrl,
-          catalogSlug: s.catalogSlug || null,
-          // V18: image recognition settings
           imageRecognitionOn: s.imageRecognitionOn,
           imageHighConfidence: s.imageHighConfidence,
           imageMediumConfidence: s.imageMediumConfidence,
           imageFallbackAiOn: s.imageFallbackAiOn,
           textFallbackAiOn: s.textFallbackAiOn,
-          knowledgeText: s.knowledgeText,
         })} saving={saving}/>
       </div>
     </div>
   );
 
-  // ── NEGOTIATION ───────────────────────────────────────────────────────────
-  if (tab === 'NEGOTIATION') return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+  // ── SETTINGS_KNOWLEDGE ─────────────────────────────────────────────────────
+  if (tab === 'SETTINGS_KNOWLEDGE') return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 0, ...cssVars }}>
       <div style={{ marginBottom: 28 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.04em', margin: 0 }}>Negotiation</h1>
-        <p style={{ fontSize: 13, color: th.muted, margin: '3px 0 0' }}>Price negotiation rules for the bot</p>
+        <h1 style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.04em', margin: 0 }}>🧠 Knowledge & Pricing</h1>
+        <p style={{ fontSize: 13, color: th.muted, margin: '3px 0 0' }}>{copy('Bot যা জানবে এবং দাম নিয়ে কীভাবে কথা বলবে', 'What the bot knows and how it handles pricing')}</p>
       </div>
-      <div style={th.card}>
+      <div style={{ ...th.card }}>
+        {/* AI Knowledge */}
+        <Section title="🤖 AI Business Knowledge" desc="এখানে লেখো — AI bot এই তথ্য দিয়ে customer-দের সঠিক reply দেবে">
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+              <Label text="FAQ / Product Info / Policies" hint="AI bot এই text পড়ে customer-এর প্রশ্নের উত্তর দেবে। Products, delivery, payment, return policy লেখো।"/>
+              <span style={{ fontSize: 11, color: s.knowledgeText.length > 2800 ? '#f87171' : th.muted }}>
+                {s.knowledgeText.length}/3000
+              </span>
+            </div>
+            <textarea
+              style={{ ...inp, minHeight: 140, resize: 'vertical', fontFamily: 'inherit', fontSize: 13 }}
+              value={s.knowledgeText}
+              maxLength={3000}
+              onChange={e => setS(p => ({ ...p, knowledgeText: e.target.value }))}
+              placeholder={`উদাহরণ:\nআমাদের products: সব ধরনের মেয়েদের পোশাক — saree, kameez, kurti। দাম: ৳৩৫০-৳২৫০০।\nDelivery: ঢাকার ভিতরে ৳৮০, বাইরে ৳১৩০। ২-৩ দিনে পাবেন।\nPayment: Cash on Delivery। Outside Dhaka-তে ৳১০০ advance।\nReturn: ৭ দিনের মধ্যে exchange। Cash refund নেই।\nFAQ: রং বদলানো যাবে কি? — হ্যাঁ, order-এর সময় বলুন।`}
+            />
+            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+              <button
+                style={{ ...th.btnGhost, fontSize: 12, opacity: scraping ? 0.6 : 1 }}
+                onClick={scrapeWebsite}
+                disabled={scraping || !s.websiteUrl}
+                title={s.websiteUrl ? 'Website থেকে text extract করবে' : 'আগে Website URL দিন'}
+              >
+                {scraping ? '⏳ Scraping...' : '🌐 Website থেকে Auto-fill'}
+              </button>
+              <button
+                style={{ ...th.btn, fontSize: 12, opacity: knowledgeSaving ? 0.6 : 1 }}
+                onClick={saveKnowledge}
+                disabled={knowledgeSaving}
+              >
+                {knowledgeSaving ? '...' : '💾 Save Knowledge'}
+              </button>
+            </div>
+            {scrapePreview !== null && (
+              <div style={{ marginTop: 10, padding: 10, background: th.surface, borderRadius: 6, border: `1px solid ${th.border}` }}>
+                <div style={{ fontSize: 11, color: th.muted, marginBottom: 6 }}>Preview (click "Use This" to apply):</div>
+                <pre style={{ fontSize: 11, whiteSpace: 'pre-wrap', maxHeight: 150, overflow: 'auto', color: th.text, margin: 0 }}>{scrapePreview.slice(0, 500)}{scrapePreview.length > 500 ? '...' : ''}</pre>
+                <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                  <button style={{ ...th.btn, fontSize: 11 }} onClick={() => {
+                    setS(p => ({ ...p, knowledgeText: scrapePreview.slice(0, 3000) }));
+                    setScrapePreview(null);
+                  }}>✓ Use This</button>
+                  <button style={{ ...th.btnGhost, fontSize: 11 }} onClick={() => setScrapePreview(null)}>✕ Cancel</button>
+                </div>
+              </div>
+            )}
+          </div>
+        </Section>
+
+        <SaveRow onClick={saveKnowledge} saving={knowledgeSaving} label="Save Knowledge"/>
+      </div>
+      <div style={{ ...th.card, marginTop: 16 }}>
         <Section title="Pricing Policy" desc="How the bot handles customer price requests">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div>
@@ -929,13 +950,13 @@ export function SettingsPage({ th, pageId, tab, onToast }: {
             </div>
           </div>
         </Section>
-        <SaveRow onClick={savePricing} saving={saving}/>
+
+        <SaveRow onClick={savePricing} saving={saving} label="Save Pricing"/>
       </div>
     </div>
   );
-
   // ── CALL ──────────────────────────────────────────────────────────────────
-  if (tab === 'CALL') return (
+  if (tab === 'SETTINGS_CALL') return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 0, position: 'relative', ...cssVars }}>
       <div style={{ marginBottom: 22 }}>
         <h1 style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.04em', margin: 0 }}>📞 Call Confirm</h1>
@@ -1094,7 +1115,7 @@ export function SettingsPage({ th, pageId, tab, onToast }: {
   );
 
   // ── VOICE ─────────────────────────────────────────────────────────────────
-  if (tab === 'VOICE') {
+  if (tab === 'SETTINGS_VOICE') {
     const voiceHints = VOICE_ID_HINTS[s.voiceSettings.ttsProvider] ?? null;
     const codeStyle: React.CSSProperties = { background: th.accentSoft, color: th.accentText, padding: '1px 6px', borderRadius: 4, fontSize: 11 };
     const isManualUpload = s.voiceSettings.ttsProvider === 'MANUAL_UPLOAD';

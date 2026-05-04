@@ -51,50 +51,59 @@ class PageErrorBoundary extends Component<{ children: any; name: string }, { err
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-type NavKey = 'OVERVIEW' | 'ORDERS' | 'PRODUCTS' | 'ACCOUNTING' | 'ANALYTICS' |
-  'BOT_KNOWLEDGE' | 'PRINT' | 'MEMO_TEMPLATE' |
-  'CRM' | 'COURIER' | 'BROADCAST' | 'FOLLOWUP' | 'CATALOG' | 'AGENT_TASKS' |
-  'PAGE' | 'NEGOTIATION' | 'CALL' | 'VOICE' | 'WALLET' | 'FRAUD_CHECKER';
+type NavKey = 'OVERVIEW' | 'AGENT_TASKS' | 'ORDERS' | 'PRODUCTS' | 'ACCOUNTING' | 'ANALYTICS' |
+  'BOT_KNOWLEDGE' | 'PRINT' | 'MEMO_TEMPLATE' | 'CRM' | 'COURIER' |
+  'BROADCAST' | 'FOLLOWUP' | 'CATALOG' | 'FRAUD_CHECKER' |
+  'WALLET' |
+  'SETTINGS_BUSINESS' | 'SETTINGS_DELIVERY' | 'SETTINGS_BOT' |
+  'SETTINGS_KNOWLEDGE' | 'SETTINGS_CALL' | 'SETTINGS_VOICE';
 
 interface NavItem {
   key:   NavKey;
   bn: string;
   en: string;
   icon:  string;
-  group: 'main' | 'manage' | 'tools' | 'settings';
+  group: 'dashboard' | 'orders' | 'store' | 'bot' | 'settings';
   badge?: string;
 }
 
 const NAV: NavItem[] = [
-  { key: 'OVERVIEW',       bn: 'ওভারভিউ',            en: 'Overview',        icon: '⊹', group: 'main' },
-  { key: 'AGENT_TASKS',    bn: 'এজেন্ট টাস্ক',       en: 'Agent Tasks',     icon: '✦', group: 'main' },
-  { key: 'ORDERS',         bn: 'অর্ডার',             en: 'Orders',          icon: '📦', group: 'main' },
-  { key: 'PRODUCTS',       bn: 'প্রোডাক্ট',          en: 'Products',        icon: '🏷', group: 'main' },
-  { key: 'ACCOUNTING',     bn: 'হিসাব',              en: 'Accounting',      icon: '💼', group: 'main' },
-  { key: 'ANALYTICS',      bn: 'অ্যানালিটিক্স',      en: 'Analytics',       icon: '📊', group: 'main' },
-  { key: 'BOT_KNOWLEDGE',  bn: 'বট নলেজ',           en: 'Bot Knowledge',   icon: '🧠', group: 'manage' },
-  { key: 'CRM',            bn: 'কাস্টমার',           en: 'Customers',       icon: '👥', group: 'manage' },
-  { key: 'CATALOG',        bn: 'ক্যাটালগ',           en: 'Catalog',         icon: '📋', group: 'manage' },
-  { key: 'COURIER',        bn: 'কুরিয়ার',            en: 'Courier',         icon: '🚚', group: 'tools' },
-  { key: 'FRAUD_CHECKER',  bn: 'ফ্রড চেকার',         en: 'Fraud Checker',   icon: '🛡', group: 'tools' },
-  { key: 'BROADCAST',      bn: 'ব্রডকাস্ট',          en: 'Broadcast',       icon: '📣', group: 'tools' },
-  { key: 'FOLLOWUP',       bn: 'ফলো-আপ',            en: 'Follow-up',       icon: '🔔', group: 'tools' },
-  { key: 'MEMO_TEMPLATE',  bn: 'মেমো টেমপ্লেট',      en: 'Memo Template',   icon: '📄', group: 'tools' },
-  { key: 'PRINT',          bn: 'প্রিন্ট / ইনভয়েস',   en: 'Print / Invoice', icon: '🖨', group: 'tools' },
-  { key: 'WALLET',         bn: 'ওয়ালেট',            en: 'Wallet',          icon: '💰', group: 'settings' },
-  { key: 'PAGE',           bn: 'পেজ সেটিংস',        en: 'Page Settings',   icon: '⚙', group: 'settings' },
-  { key: 'NEGOTIATION',    bn: 'নেগোশিয়েশন',        en: 'Negotiation',     icon: '🤝', group: 'settings' },
-  { key: 'CALL',           bn: 'কল কনফার্ম',        en: 'Call Confirm',    icon: '📞', group: 'settings' },
-  { key: 'VOICE',          bn: 'ভয়েস ও TTS',        en: 'Voice & TTS',     icon: '🎙', group: 'settings' },
+  // ── Dashboard ─────────────────────────────────────────────────────────
+  { key: 'OVERVIEW',           bn: 'ওভারভিউ',            en: 'Overview',            icon: '⊙', group: 'dashboard' },
+  { key: 'AGENT_TASKS',        bn: 'এজেন্ট টাস্ক',       en: 'Agent Tasks',         icon: '✦', group: 'dashboard' },
+  // ── Order Flow ──────────────────────────────────────────────────────────
+  { key: 'ORDERS',             bn: 'অর্ডার',              en: 'Orders',              icon: '📦', group: 'orders' },
+  { key: 'COURIER',            bn: 'কুরিয়ার',             en: 'Courier',             icon: '🚚', group: 'orders' },
+  { key: 'PRINT',              bn: 'প্রিন্ট / ইনভয়েস',    en: 'Print / Invoice',     icon: '🖸', group: 'orders' },
+  // ── Store ─────────────────────────────────────────────────────────────────
+  { key: 'PRODUCTS',           bn: 'প্রোডান্ট',           en: 'Products',            icon: '🏷', group: 'store' },
+  { key: 'CATALOG',            bn: 'ক্যাটালগ',            en: 'Catalog',             icon: '📋', group: 'store' },
+  { key: 'ACCOUNTING',         bn: 'হিসাব',               en: 'Accounting',          icon: '💼', group: 'store' },
+  { key: 'ANALYTICS',          bn: 'অ্যানালিটিক্স',       en: 'Analytics',           icon: '📊', group: 'store' },
+  // ── Bot & Customers ──────────────────────────────────────────────────
+  { key: 'BOT_KNOWLEDGE',      bn: 'বট নলেজ',            en: 'Bot Knowledge',       icon: '🧠', group: 'bot' },
+  { key: 'CRM',                bn: 'কাস্টমার',            en: 'Customers',           icon: '👥', group: 'bot' },
+  { key: 'BROADCAST',          bn: 'ব্রডকাস্ট',           en: 'Broadcast',           icon: '📣', group: 'bot' },
+  { key: 'FOLLOWUP',           bn: 'ফলো-আপ',             en: 'Follow-up',           icon: '🔔', group: 'bot' },
+  { key: 'MEMO_TEMPLATE',      bn: 'মেমো টেমপ্লেট',       en: 'Memo Template',       icon: '📄', group: 'bot' },
+  { key: 'FRAUD_CHECKER',      bn: 'ফ্রড চেকার',          en: 'Fraud Checker',       icon: '🛡', group: 'bot' },
+  // ── Settings ───────────────────────────────────────────────────────────────
+  { key: 'WALLET',             bn: 'ওয়ালেট',             en: 'Wallet',              icon: '💰', group: 'settings' },
+  { key: 'SETTINGS_BUSINESS',  bn: 'ব্যবসার তথ্য',        en: 'Business',            icon: '🏦', group: 'settings' },
+  { key: 'SETTINGS_DELIVERY',  bn: 'ডেলিভারি ও পেমেন্ট',  en: 'Fulfillment',         icon: '🚀', group: 'settings' },
+  { key: 'SETTINGS_BOT',       bn: 'বট মোড',              en: 'Bot Modes',           icon: '⚙', group: 'settings' },
+  { key: 'SETTINGS_KNOWLEDGE', bn: 'নলেজ ও দর',           en: 'Knowledge & Pricing', icon: '🧠', group: 'settings' },
+  { key: 'SETTINGS_CALL',      bn: 'কল কনফার্ম',          en: 'Call Confirm',        icon: '📞', group: 'settings' },
+  { key: 'SETTINGS_VOICE',     bn: 'ভয়েস ও TTS',          en: 'Voice & TTS',         icon: '🎤', group: 'settings' },
 ];
 
 const GROUPS = [
-  { key: 'main',     bn: null,         en: null },
-  { key: 'manage',   bn: 'ম্যানেজ',    en: 'Manage' },
-  { key: 'tools',    bn: 'টুলস',       en: 'Tools' },
-  { key: 'settings', bn: 'সেটিংস',     en: 'Settings' },
-];
-
+  { key: 'dashboard', bn: null,                en: null },
+  { key: 'orders',    bn: 'অর্ডার ফ্লো',       en: 'Order Flow' },
+  { key: 'store',     bn: 'স্টোর',              en: 'Store' },
+  { key: 'bot',       bn: 'বট ও কাস্টমার',   en: 'Bot & Customers' },
+  { key: 'settings',  bn: 'সেটিংস',           en: 'Settings' },
+]
 const NAV_KEYS = new Set<NavKey>(NAV.map((item) => item.key));
 const LAST_NAV_KEY = 'dfbot_last_nav';
 
@@ -181,9 +190,10 @@ export function DashboardLayout({
   const [searchResults, setSearchResults] = useState<any>(null);
   const [searchLoading, setSearchLoading] = useState(false);
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
-    main: true,
-    manage: false,
-    tools: false,
+    dashboard: true,
+    orders: true,
+    store: false,
+    bot: false,
     settings: false,
   });
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -390,7 +400,7 @@ export function DashboardLayout({
     setNav('ACCOUNTING');
   }, []);
 
-  const openSettingsTab = useCallback((tab: 'PAGE' | 'NEGOTIATION' | 'CALL' | 'VOICE') => {
+  const openSettingsTab = useCallback((tab: 'SETTINGS_BUSINESS' | 'SETTINGS_DELIVERY' | 'SETTINGS_BOT' | 'SETTINGS_KNOWLEDGE' | 'SETTINGS_CALL' | 'SETTINGS_VOICE') => {
     setNav(tab);
   }, []);
 
@@ -404,13 +414,13 @@ export function DashboardLayout({
   }, []);
 
   const renderPage = () => {
-    // Settings-like tabs share SettingsPage with tab prop
-    if (nav === 'PAGE' || nav === 'NEGOTIATION' || nav === 'CALL' || nav === 'VOICE') {
-      const tabMap: Record<string, string> = { PAGE: 'PAGE', NEGOTIATION: 'NEGOTIATION', CALL: 'CALL', VOICE: 'VOICE' };
+    // Settings tabs — nav key IS the tab key
+    const SETTINGS_KEYS = new Set(['SETTINGS_BUSINESS','SETTINGS_DELIVERY','SETTINGS_BOT','SETTINGS_KNOWLEDGE','SETTINGS_CALL','SETTINGS_VOICE']);
+    if (SETTINGS_KEYS.has(nav)) {
       return (
         <PageErrorBoundary name="SettingsPage">
           <Suspense fallback={pageFallback}>
-            <SettingsPage th={th} pageId={pageId} tab={tabMap[nav]} onToast={showToast} />
+            <SettingsPage th={th} pageId={pageId} tab={nav} onToast={showToast} />
           </Suspense>
         </PageErrorBoundary>
       );

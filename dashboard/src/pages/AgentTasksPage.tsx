@@ -8,7 +8,7 @@ import type { PrintPagePreset } from './PrintPage';
 import type { FollowUpPagePreset } from './FollowUpPage';
 import type { AccountingPagePreset } from './AccountingPage';
 
-type SettingsTabKey = 'PAGE' | 'NEGOTIATION' | 'CALL' | 'VOICE';
+type SettingsTabKey = 'SETTINGS_BUSINESS' | 'SETTINGS_DELIVERY' | 'SETTINGS_BOT' | 'SETTINGS_KNOWLEDGE' | 'SETTINGS_CALL' | 'SETTINGS_VOICE';
 
 interface OrderItem {
   productCode: string;
@@ -251,7 +251,7 @@ export function AgentTasksPage({ th, pageId, onToast, onOpenOrders, onOpenPrint,
               ? 1
               : 0,
           preset: { label: 'Complete Business Info' },
-          settingsTab: 'PAGE' as const,
+          settingsTab: 'SETTINGS_BUSINESS' as const,
           openTarget: 'settings' as const,
         },
         {
@@ -268,7 +268,7 @@ export function AgentTasksPage({ th, pageId, onToast, onOpenOrders, onOpenPrint,
               ? 1
               : 0,
           preset: { label: 'Complete Catalog Setup' },
-          settingsTab: 'PAGE' as const,
+          settingsTab: 'SETTINGS_BUSINESS' as const,
           openTarget: 'settings' as const,
         },
         {
@@ -288,7 +288,7 @@ export function AgentTasksPage({ th, pageId, onToast, onOpenOrders, onOpenPrint,
               ? 1
               : 0,
           preset: { label: 'Complete Payment Setup' },
-          settingsTab: 'PAGE' as const,
+          settingsTab: 'SETTINGS_BUSINESS' as const,
           openTarget: 'settings' as const,
         },
         {
@@ -307,7 +307,7 @@ export function AgentTasksPage({ th, pageId, onToast, onOpenOrders, onOpenPrint,
               ? 1
               : 0,
           preset: { label: 'Complete Call Setup' },
-          settingsTab: 'CALL' as const,
+          settingsTab: 'SETTINGS_CALL' as const,
           openTarget: 'settings' as const,
         },
         {
@@ -326,7 +326,7 @@ export function AgentTasksPage({ th, pageId, onToast, onOpenOrders, onOpenPrint,
               ? 1
               : 0,
           preset: { label: 'Complete Voice Setup' },
-          settingsTab: 'VOICE' as const,
+          settingsTab: 'SETTINGS_VOICE' as const,
           openTarget: 'settings' as const,
         },
       ].filter((task) => task.count > 0)
