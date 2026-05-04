@@ -78,7 +78,7 @@ export class SmartBotService {
     const history = await this.ctx.getHistory(pageId, psid);
 
     const lastOrder = await this.prisma.order.findFirst({
-      where: { pageIdRef: pageId, customerPsid: psid, status: { not: 'CANCELLED' } },
+      where: { pageIdRef: pageId, customerPsid: psid },
       orderBy: { createdAt: 'desc' },
       select: { id: true, status: true, createdAt: true, address: true, items: { select: { productCode: true, qty: true } } },
     });
@@ -222,19 +222,19 @@ export class SmartBotService {
 
     // Last placed order tracking context
     let orderTrackCtx = '';
-    if (lastOrder && !draft) {
+    if (lastOrder) {
       const statusMap: Record<string, string> = {
-        RECEIVED: 'পাওয়া হয়েছে, প্রক্রিয়া চলছে',
-        CONFIRMED: 'নিশ্চিত হয়েছে, প্রস্তুত হচ্ছে',
-        PACKED: 'প্যাক হয়ে গেছে, কুরিয়ারে যাবে',
-        SHIPPED: 'কুরিয়ারে পাঠানো হয়েছে, পথে আছে',
-        DELIVERED: 'ডেলিভারি হয়ে গেছে',
-        CANCELLED: 'বাতিল হয়েছে',
+        RECEIVED: '✅ অর্ডার পাওয়া হয়েছে — প্রক্রিয়া চলছে',
+        CONFIRMED: '✅ অর্ডার কনফার্ম হয়েছে — প্রস্তুত হচ্ছে',
+        PACKED: '📦 অর্ডার প্যাক হয়ে গেছে — শীঘ্রই কুরিয়ারে যাবে',
+        SHIPPED: '🚚 কুরিয়ারে পাঠানো হয়েছে — পথে আছে',
+        DELIVERED: '✅ ডেলিভারি সম্পন্ন হয়েছে',
+        CANCELLED: '❌ অর্ডারটি বাতিল হয়েছে',
       };
       const statusBn = statusMap[lastOrder.status] ?? lastOrder.status;
       const products = lastOrder.items.map((i: any) => `${i.productCode} x${i.qty}`).join(', ');
       const date = new Date(lastOrder.createdAt).toLocaleDateString('bn-BD');
-      orderTrackCtx = `\n\n## Customer-এর শেষ Order\nOrder #${lastOrder.id} — ${date}\nProducts: ${products || '?'}\nStatus: **${statusBn}**\n(Customer "কবে পাবো / কোথায় আছে / status" জিজ্ঞেস করলে এই তথ্য দাও)`;
+      orderTrackCtx = `\n\n## Customer-এর সর্বশেষ Order (DB থেকে)\nOrder #${lastOrder.id} — ${date}\nProducts: ${products || '?'}\nStatus: **${statusBn}**\n\n⚠️ Customer "কবে পাবো / কোথায় আছে / status / order কী হলো / cancel হয়েছে" ইত্যাদি জিজ্ঞেস করলে এই DB status দেখে CHAT action দিয়ে reply করো। অনুমান করবে না।`;
     }
 
     // Task rules
@@ -271,7 +271,8 @@ Customer-এর message দেখে **strictly valid JSON** return করো:
 7. **"ki ki ache / সব দেখাও / catalog" চাইলে**: product list briefly বলো তারপর catalog link দাও।
 8. **Advance payment**: Customer-এর ঠিকানা দেখে ঢাকার ভিতরে/বাইরে বুঝো, তারপর সেই zone-এর payment rule দেখো। ঢাকার ভিতরে COD হলে advance চাইবে না। Order confirm করার আগে আগে ঠিকানা collect করো।
 9. **Order already confirmed**: যদি draft আগেই confirm হয়ে গিয়ে থাকে এবং customer "ok/ধন্যবাদ/received" বলে, তাহলে CHAT action দিয়ে সাধারণ reply করো — আর order confirm করো না।
-10. **Delivery সময় ও fee**: "## Delivery & Payment" section-এ যা **হুবহু** লেখা আছে তাই বলো। নিজে কোনো unit (ঘণ্টা/দিন/কার্যদিবস), সংখ্যা, বা estimate যোগ করবে না, বাদ দেবে না, পরিবর্তন করবে না। যদি delivery সময় "৩-৪ কার্যদিবস" লেখা থাকে, তাহলে ঠিক সেটাই বলো — "4 ঘণ্টা" বা অন্য কিছু বলো না।`;
+10. **Delivery সময় ও fee**: "## Delivery & Payment" section-এ যা **হুবহু** লেখা আছে তাই বলো। নিজে কোনো unit (ঘণ্টা/দিন/কার্যদিবস), সংখ্যা, বা estimate যোগ করবে না, বাদ দেবে না, পরিবর্তন করবে না। যদি delivery সময় "৩-৪ কার্যদিবস" লেখা থাকে, তাহলে ঠিক সেটাই বলো — "4 ঘণ্টা" বা অন্য কিছু বলো না।
+11. **Order status**: Customer "কবে পাবো / order কোথায় / cancel হয়েছে কিনা / status কী" জিজ্ঞেস করলে "## Customer-এর সর্বশেষ Order (DB থেকে)" section দেখো এবং সেই **DB status** অনুযায়ী reply দাও। নিজে কোনো status অনুমান করবে না। যদি CANCELLED হয় তাহলে বলো অর্ডার বাতিল হয়েছে; PACKED হলে বলো প্যাক হয়ে গেছে; SHIPPED হলে বলো কুরিয়ারে গেছে।`;
 
     return `তুমি ${shop}-এর Facebook Messenger AI sales assistant।${deliveryCtx}${paymentCtx}${productCtx}${knowledgeCtx}${catalogCtx}${draftCtx}${orderTrackCtx}${taskRules}`;
   }
