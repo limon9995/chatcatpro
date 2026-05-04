@@ -8,7 +8,7 @@ import type { PrintPagePreset } from './PrintPage';
 import type { FollowUpPagePreset } from './FollowUpPage';
 import type { AccountingPagePreset } from './AccountingPage';
 
-type SettingsTabKey = 'PAGE' | 'NEGOTIATION' | 'CALL' | 'VOICE';
+type SettingsTabKey = 'PAGE' | 'NEGOTIATION';
 
 interface OrderItem {
   productCode: string;
@@ -289,44 +289,6 @@ export function AgentTasksPage({ th, pageId, onToast, onOpenOrders, onOpenPrint,
               : 0,
           preset: { label: 'Complete Payment Setup' },
           settingsTab: 'PAGE' as const,
-          openTarget: 'settings' as const,
-        },
-        {
-          key: 'setup_call',
-          section: 'Setup',
-          bn: 'Call confirm setup করুন',
-          en: 'Complete Call Setup',
-          descBn: 'Call confirm on থাকলে provider ar call mode set করা দরকার।',
-          descEn: 'If call confirmation is enabled, choose the provider and call mode.',
-          color: '#d97706',
-          orders: [],
-          count:
-            callModeActive &&
-            (!settings.callSettings.callProvider.trim() ||
-              !settings.callSettings.callMode.trim())
-              ? 1
-              : 0,
-          preset: { label: 'Complete Call Setup' },
-          settingsTab: 'CALL' as const,
-          openTarget: 'settings' as const,
-        },
-        {
-          key: 'setup_voice',
-          section: 'Setup',
-          bn: 'Voice setup complete করুন',
-          en: 'Complete Voice Setup',
-          descBn: 'Call confirm use করলে কমপক্ষে একটি Bangla বা English voice ready রাখা দরকার।',
-          descEn: 'If call confirmation is enabled, keep at least one Bangla or English voice ready.',
-          color: '#7c3aed',
-          orders: [],
-          count:
-            callModeActive &&
-            !settings.voiceSettings.banglaVoiceFileUrl.trim() &&
-            !settings.voiceSettings.englishVoiceFileUrl.trim()
-              ? 1
-              : 0,
-          preset: { label: 'Complete Voice Setup' },
-          settingsTab: 'VOICE' as const,
           openTarget: 'settings' as const,
         },
       ].filter((task) => task.count > 0)
