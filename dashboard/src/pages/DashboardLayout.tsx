@@ -54,7 +54,7 @@ class PageErrorBoundary extends Component<{ children: any; name: string }, { err
 type NavKey = 'OVERVIEW' | 'ORDERS' | 'PRODUCTS' | 'ACCOUNTING' | 'ANALYTICS' |
   'BOT_KNOWLEDGE' | 'PRINT' | 'MEMO_TEMPLATE' |
   'CRM' | 'COURIER' | 'BROADCAST' | 'FOLLOWUP' | 'CATALOG' | 'AGENT_TASKS' |
-  'PAGE' | 'NEGOTIATION' | 'WALLET' | 'FRAUD_CHECKER';
+  'PAGE' | 'NEGOTIATION' | 'CALL' | 'VOICE' | 'WALLET' | 'FRAUD_CHECKER';
 
 interface NavItem {
   key:   NavKey;
@@ -84,6 +84,8 @@ const NAV: NavItem[] = [
   { key: 'WALLET',         bn: 'ওয়ালেট',            en: 'Wallet',          icon: '💰', group: 'settings' },
   { key: 'PAGE',           bn: 'পেজ সেটিংস',        en: 'Page Settings',   icon: '⚙', group: 'settings' },
   { key: 'NEGOTIATION',    bn: 'নেগোশিয়েশন',        en: 'Negotiation',     icon: '🤝', group: 'settings' },
+  { key: 'CALL',           bn: 'কল কনফার্ম',        en: 'Call Confirm',    icon: '📞', group: 'settings' },
+  { key: 'VOICE',          bn: 'ভয়েস ও TTS',        en: 'Voice & TTS',     icon: '🎙', group: 'settings' },
 ];
 
 const GROUPS = [
@@ -388,7 +390,7 @@ export function DashboardLayout({
     setNav('ACCOUNTING');
   }, []);
 
-  const openSettingsTab = useCallback((tab: 'PAGE' | 'NEGOTIATION') => {
+  const openSettingsTab = useCallback((tab: 'PAGE' | 'NEGOTIATION' | 'CALL' | 'VOICE') => {
     setNav(tab);
   }, []);
 
@@ -403,8 +405,8 @@ export function DashboardLayout({
 
   const renderPage = () => {
     // Settings-like tabs share SettingsPage with tab prop
-    if (nav === 'PAGE' || nav === 'NEGOTIATION') {
-      const tabMap: Record<string, string> = { PAGE: 'PAGE', NEGOTIATION: 'NEGOTIATION' };
+    if (nav === 'PAGE' || nav === 'NEGOTIATION' || nav === 'CALL' || nav === 'VOICE') {
+      const tabMap: Record<string, string> = { PAGE: 'PAGE', NEGOTIATION: 'NEGOTIATION', CALL: 'CALL', VOICE: 'VOICE' };
       return (
         <PageErrorBoundary name="SettingsPage">
           <Suspense fallback={pageFallback}>
