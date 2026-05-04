@@ -655,6 +655,7 @@ export class AdminService {
     costPerImageBdt?: number;
     costPerImageLocalBdt?: number;
     costPerAnalyzeBdt?: number;
+    costPerAiGenerateBdt?: number;
   }) {
     const data: any = {};
     if (pricing.costPerTextMsgBdt !== undefined) data.costPerTextMsgBdt = pricing.costPerTextMsgBdt;
@@ -662,6 +663,7 @@ export class AdminService {
     if (pricing.costPerImageBdt !== undefined) data.costPerImageBdt = pricing.costPerImageBdt;
     if (pricing.costPerImageLocalBdt !== undefined) data.costPerImageLocalBdt = pricing.costPerImageLocalBdt;
     if (pricing.costPerAnalyzeBdt !== undefined) data.costPerAnalyzeBdt = pricing.costPerAnalyzeBdt;
+    if (pricing.costPerAiGenerateBdt !== undefined) data.costPerAiGenerateBdt = pricing.costPerAiGenerateBdt;
     if (!Object.keys(data).length) return { success: false, updated: 0 };
     const result = await this.prisma.page.updateMany({ data });
     return { success: true, updated: result.count };

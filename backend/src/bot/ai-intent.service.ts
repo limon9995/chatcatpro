@@ -70,6 +70,8 @@ const STEP_LABELS: Record<string, string> = {
 export class AiIntentService {
   private readonly logger = new Logger(AiIntentService.name);
   private readonly apiKey: string;
+  private readonly geminiApiKey: string;
+  private readonly provider: 'openai' | 'gemini';
   private readonly model: string;
   private readonly ollamaBaseUrl: string;
   private readonly ollamaModel: string;
@@ -84,19 +86,30 @@ export class AiIntentService {
     private readonly globalSettings: GlobalSettingsService,
   ) {
     this.apiKey = process.env.OPENAI_API_KEY ?? '';
-    this.model = process.env.AI_INTENT_MODEL ?? 'gpt-4o-mini';
+    this.geminiApiKey = process.env.GEMINI_API_KEY ?? '';
     this.ollamaBaseUrl = (process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434').replace(/\/$/, '');
     this.ollamaModel = process.env.OLLAMA_CHAT_MODEL ?? 'qwen2:1.5b';
 
-    if (this.apiKey) {
-      this.logger.log(`[AiIntent] Enabled — model=${this.model}`);
+    const providerEnv = (process.env.AI_INTENT_PROVIDER ?? '').toLowerCase();
+    if (providerEnv === 'gemini' || (!providerEnv && this.geminiApiKey)) {
+      this.provider = 'gemini';
+      this.model = process.env.AI_INTENT_MODEL ?? 'gemini-2.0-flash';
     } else {
-      this.logger.warn('[AiIntent] OPENAI_API_KEY not set — keyword fallback only');
+      this.provider = 'openai';
+      this.model = process.env.AI_INTENT_MODEL ?? 'gpt-4o-mini';
+    }
+
+    const activeKey = this.provider === 'gemini' ? this.geminiApiKey : this.apiKey;
+    if (activeKey) {
+      this.logger.log(`[AiIntent] Enabled — provider=${this.provider} model=${this.model}`);
+    } else {
+      this.logger.warn(`[AiIntent] No API key for provider=${this.provider} — keyword fallback only`);
     }
   }
 
   isAvailable(): boolean {
-    return !!this.apiKey && Date.now() > this.cooldownUntil;
+    const activeKey = this.provider === 'gemini' ? this.geminiApiKey : this.apiKey;
+    return !!activeKey && Date.now() > this.cooldownUntil;
   }
 
   private async attemptOllama(
@@ -179,6 +192,52 @@ export class AiIntentService {
     }
   }
 
+  private async attemptGemini(
+    messages: { role: string; content: string }[],
+    maxTokens: number,
+    temperature: number,
+  ): Promise<string | null> {
+    if (!this.geminiApiKey) return null;
+    try {
+      const systemMsg = messages.find((m) => m.role === 'system');
+      const rest = messages.filter((m) => m.role !== 'system');
+      const contents = rest.map((m) => ({
+        role: m.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: m.content }],
+      }));
+      const body: any = {
+        contents,
+        generationConfig: { temperature, maxOutputTokens: maxTokens, responseMimeType: 'application/json' },
+      };
+      if (systemMsg) body.systemInstruction = { parts: [{ text: systemMsg.content }] };
+
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent?key=${this.geminiApiKey}`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(8_000),
+      });
+      if (res.status === 429 || res.status === 402) {
+        this.logger.warn(`[AiIntent] Gemini quota/limit (${res.status}) — keyword fallback`);
+        this.enterCooldown();
+        return null;
+      }
+      if (!res.ok) {
+        const errText = await res.text();
+        this.logger.error(`[AiIntent] Gemini error ${res.status}: ${errText.slice(0, 100)}`);
+        this.recordFailure();
+        return null;
+      }
+      const data = await res.json() as any;
+      return (data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '').trim() || null;
+    } catch (err: any) {
+      this.logger.warn(`[AiIntent] Gemini network error: ${err?.message ?? err}`);
+      this.recordFailure();
+      return null;
+    }
+  }
+
   private async resolveProvider(
     messages: { role: string; content: string }[],
     maxTokens: number,
@@ -197,7 +256,17 @@ export class AiIntentService {
       }
     }
 
-    // Fall back to OpenAI
+    if (this.provider === 'gemini') {
+      if (!this.geminiApiKey) {
+        this.logger.warn(`[AiIntent] No Gemini key — keyword fallback`);
+        return null;
+      }
+      this.logger.log(`[AiIntent] ${label} — Gemini (${this.model})`);
+      const raw = await this.attemptGemini(messages, maxTokens, temperature);
+      if (!raw) return null;
+      return { raw };
+    }
+
     if (!this.apiKey) {
       this.logger.warn(`[AiIntent] No OpenAI key — keyword fallback`);
       return null;
@@ -255,15 +324,16 @@ export class AiIntentService {
       let reply = (parsed?.reply ?? '').trim() || null;
 
       // Ollama compact prompt always returns reply=null.
-      // When intent needs a reply (greeting, negotiation, delivery, etc.),
-      // call OpenAI with the full business-context prompt to get the actual reply.
-      if (!reply && AI_REPLY_INTENTS.has(intent) && this.apiKey && Date.now() > this.cooldownUntil) {
-        this.logger.log(`[AiIntent] ${intent} needs reply — OpenAI for reply generation`);
-        const openaiRaw = await this.attemptOpenAI(messages, 250, 0.5);
-        if (openaiRaw) {
+      // When intent needs a reply, call the configured AI provider for the actual reply.
+      if (!reply && AI_REPLY_INTENTS.has(intent) && Date.now() > this.cooldownUntil) {
+        this.logger.log(`[AiIntent] ${intent} needs reply — ${this.provider} for reply generation`);
+        const providerRaw = this.provider === 'gemini'
+          ? await this.attemptGemini(messages, 250, 0.5)
+          : await this.attemptOpenAI(messages, 250, 0.5);
+        if (providerRaw) {
           try {
-            const oai = JSON.parse(openaiRaw);
-            reply = (oai?.reply ?? '').trim() || null;
+            const parsed2 = JSON.parse(providerRaw);
+            reply = (parsed2?.reply ?? '').trim() || null;
           } catch { /* ignore */ }
         }
       }

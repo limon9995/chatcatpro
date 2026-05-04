@@ -54,7 +54,7 @@ export class WalletService {
           description = 'AI Customer Image (Vision API) Processed';
           break;
         case 'IMAGE_LOCAL':
-          amountToDeduct = (page as any).costPerImageLocalBdt ?? 1.20;
+          amountToDeduct = (page as any).costPerImageLocalBdt ?? 0.10;
           description = 'AI Customer Image (Local CLIP) Processed';
           break;
         case 'IMAGE_OCR':
@@ -76,13 +76,13 @@ export class WalletService {
           break;
         case 'DUAL_PHOTO_AI': {
           const photoCount = options?.photoCount ?? 3;
-          amountToDeduct = (page.costPerAnalyzeBdt ?? 0.50) * photoCount;
+          amountToDeduct = (page.costPerAnalyzeBdt ?? 0.20) * photoCount;
           description = `Dual Photo AI Identification (${photoCount} images × GPT-4o)`;
           break;
         }
         case 'SMART_BOT':
           // SmartBot sends large context (history + catalog) — charge 2× TEXT rate
-          amountToDeduct = (page.costPerTextMsgBdt ?? 0.05) * 2;
+          amountToDeduct = (page.costPerTextMsgBdt ?? 0.04) * 2;
           description = 'SmartBot AI Response';
           break;
       }
