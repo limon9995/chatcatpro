@@ -539,33 +539,50 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
 
     <!-- Bar chart comparison -->
     <div style="background:rgba(255,255,255,.025);border:1px solid rgba(255,255,255,.07);border-radius:24px;padding:36px 32px;margin-bottom:22px">
-      <div style="display:flex;gap:28px;align-items:flex-end;justify-content:center;min-height:160px;margin-bottom:32px">
+
+      <!-- Top labels -->
+      <div style="display:flex;gap:28px;justify-content:center;margin-bottom:10px">
+        <div style="flex:1;max-width:160px;text-align:center;font-size:11px;font-weight:800;color:#f87171;text-transform:uppercase;letter-spacing:.08em">❌ অন্য platform</div>
+        <div style="flex-shrink:0;width:36px"></div>
+        <div style="flex:1;max-width:160px;text-align:center;font-size:11px;font-weight:800;color:#34d399;text-transform:uppercase;letter-spacing:.08em">✓ Chatcat</div>
+      </div>
+
+      <!-- Bars — bottom aligned -->
+      <div style="display:flex;gap:28px;align-items:flex-end;justify-content:center;height:170px">
 
         <!-- Others bar -->
-        <div style="text-align:center;flex:1;max-width:160px">
-          <div style="font-size:11px;font-weight:800;color:#f87171;text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px">❌ অন্য platform</div>
-          <div style="height:140px;background:linear-gradient(180deg,rgba(239,68,68,.8),rgba(239,68,68,.35));border-radius:10px 10px 0 0;position:relative;overflow:hidden;border:1px solid rgba(239,68,68,.25)">
-            <div style="position:absolute;inset:0;background:repeating-linear-gradient(135deg,transparent,transparent 6px,rgba(0,0,0,.12) 6px,rgba(0,0,0,.12) 12px)"></div>
-            <div style="position:absolute;top:12px;left:0;right:0;text-align:center;font-size:20px;font-weight:900;color:rgba(255,255,255,.9)">৳১০</div>
-          </div>
-          <div style="padding:12px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);border-top:none;border-radius:0 0 10px 10px">
-            <div style="font-size:13px;color:rgba(248,113,113,.55)">গড়ে প্রতি customer</div>
-          </div>
+        <div style="flex:1;max-width:160px;height:160px;background:linear-gradient(180deg,rgba(239,68,68,.85),rgba(239,68,68,.4));border-radius:10px 10px 0 0;position:relative;overflow:hidden;border:1px solid rgba(239,68,68,.28)">
+          <div style="position:absolute;inset:0;background:repeating-linear-gradient(135deg,transparent,transparent 6px,rgba(0,0,0,.1) 6px,rgba(0,0,0,.1) 12px)"></div>
+          <div style="position:absolute;top:14px;left:0;right:0;text-align:center;font-size:26px;font-weight:900;color:rgba(255,255,255,.95)">৳১০</div>
+          <div style="position:absolute;bottom:10px;left:0;right:0;text-align:center;font-size:11px;color:rgba(255,200,200,.6)">গড় প্রতি customer</div>
         </div>
 
         <!-- VS -->
-        <div style="font-size:13px;font-weight:800;color:var(--muted);padding-bottom:28px;flex-shrink:0;letter-spacing:.06em">VS</div>
+        <div style="flex-shrink:0;width:36px;text-align:center;font-size:12px;font-weight:800;color:var(--muted);padding-bottom:16px">VS</div>
 
-        <!-- Chatcat bar -->
-        <div style="text-align:center;flex:1;max-width:160px">
-          <div style="font-size:11px;font-weight:800;color:#34d399;text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px">✓ Chatcat</div>
-          <div style="position:relative">
-            <div style="position:absolute;bottom:100%;left:50%;transform:translateX(-50%);margin-bottom:8px;white-space:nowrap;background:rgba(16,185,129,.18);border:1px solid rgba(16,185,129,.4);border-radius:8px;padding:4px 12px;font-size:12px;font-weight:800;color:#34d399">৯৪% সস্তা! 🔥</div>
-            <div style="height:10px;background:linear-gradient(180deg,#34d399,#10b981);border-radius:10px 10px 0 0;border:1px solid rgba(16,185,129,.4)"></div>
+        <!-- Chatcat bar wrapper — full height column, bar grows from bottom -->
+        <div style="flex:1;max-width:160px;height:170px;display:flex;flex-direction:column;justify-content:flex-end;position:relative">
+          <!-- Badge floating above bar -->
+          <div style="position:absolute;top:0;left:0;right:0;text-align:center">
+            <span style="display:inline-block;background:rgba(16,185,129,.2);border:1px solid rgba(16,185,129,.45);border-radius:8px;padding:5px 14px;font-size:12px;font-weight:800;color:#34d399;white-space:nowrap">৯৪% সস্তা! 🔥</span>
           </div>
-          <div style="padding:12px;background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.28);border-top:none;border-radius:0 0 10px 10px">
-            <div style="font-size:13px;font-weight:800;color:#34d399">মাত্র ৯০p</div>
+          <!-- The actual short bar -->
+          <div style="height:12px;background:linear-gradient(180deg,#34d399,#10b981);border-radius:10px 10px 0 0;border:1px solid rgba(16,185,129,.4);position:relative">
+            <div style="position:absolute;top:-22px;left:0;right:0;text-align:center;font-size:11px;font-weight:700;color:#34d399">মাত্র ৯০p</div>
           </div>
+        </div>
+      </div>
+
+      <!-- Bottom value labels -->
+      <div style="display:flex;gap:28px;justify-content:center;margin-bottom:28px">
+        <div style="flex:1;max-width:160px;padding:10px 12px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);border-top:none;border-radius:0 0 10px 10px;text-align:center">
+          <div style="font-size:13px;font-weight:700;color:#f87171">৳৫,০০০–১৫,০০০/মাস</div>
+          <div style="font-size:11px;color:rgba(248,113,113,.5);margin-top:2px">১,০০০ customer-এ</div>
+        </div>
+        <div style="flex-shrink:0;width:36px"></div>
+        <div style="flex:1;max-width:160px;padding:10px 12px;background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.3);border-top:none;border-radius:0 0 10px 10px;text-align:center">
+          <div style="font-size:13px;font-weight:700;color:#34d399">মাত্র ৳৯০০/মাস</div>
+          <div style="font-size:11px;color:rgba(52,211,153,.5);margin-top:2px">১,০০০ customer-এ</div>
         </div>
       </div>
 
