@@ -592,9 +592,14 @@ export class ClientDashboardController {
     @Req() r: any,
     @Res() res: any,
   ) {
+    const pageId = this.pid(r, p);
+    const ids: number[] = b?.ids || [];
+
+    await this.svc.chargeMemoDownload(pageId, ids);
+
     const html = await this.svc.getMemoHtml(
-      this.pid(r, p),
-      b?.ids || [],
+      pageId,
+      ids,
       b?.memosPerPage ? Number(b.memosPerPage) : undefined,
     );
     const pdf = await this.svc.htmlToPdf(html);

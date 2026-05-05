@@ -1450,4 +1450,25 @@ Return ONLY valid JSON (no markdown):
       take: 30,
     });
   }
+
+  async chargeMemoDownload(pageId: number, ids: number[]): Promise<number> {
+    if (!ids?.length) return 0;
+
+    const newOrders = await this.prisma.order.findMany({
+      where: { pageIdRef: pageId, id: { in: ids }, printedAt: null },
+      select: { id: true },
+    });
+
+    const newCount = newOrders.length;
+    if (newCount === 0) return 0;
+
+    await this.walletService.deductUsage(pageId, 'MEMO_PRINT', { memoCount: newCount });
+
+    await this.prisma.order.updateMany({
+      where: { pageIdRef: pageId, id: { in: newOrders.map((o) => o.id) } },
+      data: { printedAt: new Date() },
+    });
+
+    return newCount;
+  }
 }

@@ -213,6 +213,8 @@ model Page {
   // Live sessions (new dual photo system)
   liveSessions LiveSession[]
 
+  costPerMemoPrintBdt  Float @default(0.10)
+
   @@index([masterPageId])
 }
 
