@@ -35,7 +35,13 @@ export class BotIntentService {
       'হ্যাঁ',
       'জি',
       'confirm',
+      'done',
+      'ok',
+      'okay',
+      'okey',
+      'okk',
       'thik ase',
+      'thik ache',
       'hobe confirm',
       'order confirm',
       'ok confirm',
@@ -51,6 +57,8 @@ export class BotIntentService {
       'all ok',
       'all good',
       'ঠিক আছে হ্যাঁ',
+      'ঠিক আছে',
+      'আচ্ছা',
     ],
     // Weak confirm — only checked when awaitingConfirm=true (order summary shown)
     confirmWeak: [

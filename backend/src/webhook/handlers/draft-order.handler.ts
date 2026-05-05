@@ -207,8 +207,10 @@ export class DraftOrderHandler {
     if (step === 'confirm') {
       const intent = this.botIntent.detectIntent(workingText, true);
       if (intent === 'CONFIRM') {
-        // Check subscription before accepting order
-        if (page.ownerId) {
+        // Wallet-based check (primary): page must be ACTIVE with positive balance
+        const walletOk = (page as any).subscriptionStatus === 'ACTIVE' && (page as any).walletBalanceBdt > 0;
+        // Legacy billing check (fallback): only block if wallet check also fails
+        if (!walletOk && page.ownerId) {
           const billingStatus = await this.billing.getStatus(page.ownerId);
           if (!billingStatus.canTakeOrders) {
             await this.ctx.clearDraft(pageId, psid);
