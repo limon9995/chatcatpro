@@ -157,12 +157,13 @@ model Page {
   walletBalanceBdt Float @default(0.0) // Core currency balance for usage
 
   // -- PRICING CONFIG --
-  costPerTextMsgBdt    Float @default(0.04)
-  costPerVoiceMsgBdt   Float @default(0.50)  // For processing audio voice notes
-  costPerImageBdt      Float @default(0.20)  // Customer image — Gemini Vision API path
-  costPerImageLocalBdt Float @default(0.10)  // Customer image — local Ollama path (no API)
-  costPerAnalyzeBdt    Float @default(0.20)  // Admin uploading product
-  costPerAiGenerateBdt Float @default(0.10)  // AI text generation (description/broadcast draft)
+  costPerTextMsgBdt       Float @default(0.04)
+  costPerVoiceMsgBdt      Float @default(0.50)  // For processing audio voice notes
+  costPerImageBdt         Float @default(0.20)  // Customer image — Gemini Vision API path
+  costPerImageLocalBdt    Float @default(0.10)  // Customer image — local Ollama path (no API)
+  costPerAnalyzeBdt       Float @default(0.20)  // Admin uploading product
+  costPerAiGenerateBdt    Float @default(0.10)  // AI text generation (description/broadcast draft)
+  costPerKeywordReplyBdt  Float @default(0.02)  // Pure keyword/template bot reply (no AI call)
 
   // -- DUAL PHOTO MODE (legacy single-pair, kept for backward compat) --
   dualPhotoMode        Boolean  @default(false)

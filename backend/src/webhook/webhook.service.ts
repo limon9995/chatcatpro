@@ -302,6 +302,10 @@ export class WebhookService {
 
     const isStrongKeyword = !!keywordIntent && ['CATALOG_REQUEST', 'CANCEL', 'ORDER_REMOVE_ITEM', 'MULTI_CONFIRM'].includes(keywordIntent);
 
+    if (isStrongKeyword) {
+      void this.walletService.deductUsage(pageId, 'KEYWORD_REPLY');
+    }
+
     if (!isStrongKeyword && aiAllowed) {
       const businessContext = await this.botContext.buildBusinessContext(pageId);
       if (businessContext) {
@@ -429,6 +433,7 @@ export class WebhookService {
           psid,
         );
         if (learned?.reply) {
+          void this.walletService.deductUsage(pageId, 'KEYWORD_REPLY');
           await this.safeSend(
             token,
             psid,
@@ -758,6 +763,7 @@ export class WebhookService {
           psid,
         );
         if (learned?.reply) {
+          void this.walletService.deductUsage(pageId, 'KEYWORD_REPLY');
           const reply = draft
             ? `${learned.reply}\n\n${this.draftHandler.reminder(draft)}`
             : learned.reply;
