@@ -229,7 +229,7 @@ export default function WalletPage({
                        : <span style={{ fontSize: 18 }}>🏦</span>}
                     </span>
                     <div style={{ textAlign: 'left' }}>
-                      <div style={{ fontWeight: 800, fontSize: 14, color: isSelected ? m.color : th.fg }}>{m.label}</div>
+                      <div style={{ fontWeight: 800, fontSize: 14, color: isSelected ? m.color : th.text }}>{m.label}</div>
                       <div style={{ fontSize: 10, color: th.muted, marginTop: 1 }}>
                         {m.key === 'bank' ? 'NRBC Bank' : 'Send Money'}
                       </div>
