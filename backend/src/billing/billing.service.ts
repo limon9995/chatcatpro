@@ -511,23 +511,29 @@ export class BillingService {
       if (fs.existsSync(this.globalConfigFile)) {
         const cfg = JSON.parse(fs.readFileSync(this.globalConfigFile, 'utf8'));
         const support = cfg?.billingSupport || {};
+        const s = (v: any) => String(v || '').trim();
         return {
-          label: String(support.label || 'Admin Support').trim(),
-          phone: String(support.phone || '').trim(),
-          whatsappUrl: String(support.whatsappUrl || '').trim(),
-          messengerUrl: String(support.messengerUrl || '').trim(),
-          email: String(support.email || '').trim(),
-          note: String(support.note || '').trim(),
+          label:       s(support.label) || 'Admin Support',
+          phone:       s(support.phone),
+          whatsappUrl: s(support.whatsappUrl),
+          messengerUrl:s(support.messengerUrl),
+          email:       s(support.email),
+          note:        s(support.note),
+          bkash:       s(support.bkash),
+          nagad:       s(support.nagad),
+          rocket:      s(support.rocket),
+          bankAccount: s(support.bankAccount),
+          bankName:    s(support.bankName),
+          bankBranch:  s(support.bankBranch),
+          bankHolder:  s(support.bankHolder),
         };
       }
     } catch {}
     return {
       label: 'Admin Support',
-      phone: '',
-      whatsappUrl: '',
-      messengerUrl: '',
-      email: '',
-      note: '',
+      phone: '', whatsappUrl: '', messengerUrl: '', email: '', note: '',
+      bkash: '', nagad: '', rocket: '',
+      bankAccount: '', bankName: '', bankBranch: '', bankHolder: '',
     };
   }
 }

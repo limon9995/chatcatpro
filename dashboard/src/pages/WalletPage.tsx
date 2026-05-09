@@ -276,11 +276,16 @@ export default function WalletPage({
               );
             };
 
+            const mobileNum =
+              m.key === 'bkash'  ? (adminContact?.bkash  || adminContact?.phone || '—')
+              : m.key === 'nagad'  ? (adminContact?.nagad  || '—')
+              : (adminContact?.rocket || '—');
+
             return (
               <div style={{
                 ...card,
-                border: `2px solid ${m.color}40`,
-                background: m.light,
+                border: `2px solid ${m.color}50`,
+                background: (th.card as any).background,
               }}>
                 <div style={{ fontSize: 12, color: m.color, fontWeight: 700, marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5 }}>
                   ধাপ ২ — {m.label} এ টাকা পাঠান
@@ -289,29 +294,22 @@ export default function WalletPage({
                 {m.key !== 'bank' ? (
                   /* Mobile Banking */
                   <div>
-                    <div style={{ fontSize: 12, color: '#555', marginBottom: 10 }}>
-                      নিচের নম্বরে <b>Send Money</b> করুন:
+                    <div style={{ fontSize: 12, color: th.muted, marginBottom: 10 }}>
+                      নিচের নম্বরে <b style={{ color: th.text }}>Send Money</b> করুন:
                     </div>
                     <div style={{
                       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                      background: '#fff', borderRadius: 12, padding: '14px 16px',
-                      border: `1px solid ${m.color}30`,
-                      boxShadow: `0 2px 8px ${m.color}15`,
+                      background: m.color + '12',
+                      borderRadius: 12, padding: '14px 16px',
+                      border: `2px solid ${m.color}40`,
                     }}>
                       <div>
-                        <div style={{ fontSize: 11, color: '#888', marginBottom: 3 }}>{m.label} নম্বর</div>
-                        <div style={{ fontWeight: 900, fontSize: 22, color: '#111', letterSpacing: 2 }}>
-                          {m.key === 'bkash'  ? (adminContact?.bkash  || adminContact?.phone || '—')
-                           : m.key === 'nagad'  ? (adminContact?.nagad  || '—')
-                           : (adminContact?.rocket || '—')}
+                        <div style={{ fontSize: 11, color: m.color, marginBottom: 4, fontWeight: 600 }}>{m.label} নম্বর</div>
+                        <div style={{ fontWeight: 900, fontSize: 24, color: th.text, letterSpacing: 2 }}>
+                          {mobileNum}
                         </div>
                       </div>
-                      {copyBtn(
-                        'mobile',
-                        m.key === 'bkash'  ? (adminContact?.bkash  || adminContact?.phone || '')
-                        : m.key === 'nagad'  ? (adminContact?.nagad  || '')
-                        : (adminContact?.rocket || '')
-                      )}
+                      {copyBtn('mobile', mobileNum === '—' ? '' : mobileNum)}
                     </div>
 
                     {/* Contact links */}
@@ -335,37 +333,37 @@ export default function WalletPage({
                 ) : (
                   /* Bank Transfer */
                   <div>
-                    <div style={{ fontSize: 12, color: '#555', marginBottom: 10 }}>
-                      নিচের account এ <b>Bank Transfer</b> করুন:
+                    <div style={{ fontSize: 12, color: th.muted, marginBottom: 10 }}>
+                      নিচের account এ <b style={{ color: th.text }}>Bank Transfer</b> করুন:
                     </div>
                     <div style={{
-                      background: '#fff', borderRadius: 12, overflow: 'hidden',
-                      border: `1px solid ${m.color}30`,
-                      boxShadow: `0 2px 8px ${m.color}15`,
+                      borderRadius: 12, overflow: 'hidden',
+                      border: `2px solid ${m.color}40`,
                     }}>
                       {[
-                        { key: 'acc',    label: 'Account Number', value: adminContact?.bankAccount || '518131400000385' },
-                        { key: 'bname',  label: 'Bank Name',       value: adminContact?.bankName    || 'NRB Commercial Bank' },
-                        { key: 'branch', label: 'Branch',          value: adminContact?.bankBranch  || 'Tangail / Kalihati' },
-                        { key: 'holder', label: 'Account Name',    value: adminContact?.bankHolder  || 'Md. Emon Hossain' },
+                        { key: 'acc',    label: 'Account Number', value: adminContact?.bankAccount || '518131400000385', copy: true },
+                        { key: 'bname',  label: 'Bank Name',       value: adminContact?.bankName    || 'NRB Commercial Bank', copy: false },
+                        { key: 'branch', label: 'Branch',          value: adminContact?.bankBranch  || 'Tangail / Kalihati', copy: false },
+                        { key: 'holder', label: 'Account Name',    value: adminContact?.bankHolder  || 'Md. Emon Hossain', copy: true },
                       ].map((row, i) => (
                         <div key={row.key} style={{
                           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                           padding: '11px 16px',
-                          borderBottom: i < 3 ? `1px solid ${m.color}15` : 'none',
+                          background: i % 2 === 0 ? m.color + '08' : (th.card as any).background,
+                          borderBottom: i < 3 ? `1px solid ${m.color}20` : 'none',
                         }}>
                           <div>
-                            <div style={{ fontSize: 10, color: '#888', marginBottom: 2 }}>{row.label}</div>
-                            <div style={{ fontWeight: 800, fontSize: 14, color: '#111' }}>{row.value}</div>
+                            <div style={{ fontSize: 10, color: m.color, marginBottom: 3, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.3 }}>{row.label}</div>
+                            <div style={{ fontWeight: 800, fontSize: 14, color: th.text }}>{row.value}</div>
                           </div>
-                          {(i === 0 || i === 3) && copyBtn(row.key, row.value)}
+                          {row.copy && copyBtn(row.key, row.value)}
                         </div>
                       ))}
                     </div>
                     <div style={{
                       marginTop: 10, padding: '9px 13px', borderRadius: 10,
-                      background: '#fef9c3', border: '1px solid #fde047',
-                      fontSize: 12, color: '#854d0e',
+                      background: 'rgba(234,179,8,0.10)', border: '1px solid rgba(234,179,8,0.35)',
+                      fontSize: 12, color: th.text,
                     }}>
                       ⚠️ Transfer করার পর Bank reference/transaction number নিচে Transaction ID তে দিন।
                     </div>
