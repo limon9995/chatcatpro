@@ -88,9 +88,15 @@ export class PageService {
     if (typeof body.textFallbackAiOn === 'boolean')
       data.textFallbackAiOn = body.textFallbackAiOn;
     if (body.imageHighConfidence !== undefined)
-      data.imageHighConfidence = Math.min(1, Math.max(0, Number(body.imageHighConfidence) || 0.75));
+      data.imageHighConfidence = Math.min(
+        1,
+        Math.max(0, Number(body.imageHighConfidence) || 0.75),
+      );
     if (body.imageMediumConfidence !== undefined)
-      data.imageMediumConfidence = Math.min(1, Math.max(0, Number(body.imageMediumConfidence) || 0.45));
+      data.imageMediumConfidence = Math.min(
+        1,
+        Math.max(0, Number(body.imageMediumConfidence) || 0.45),
+      );
 
     if (typeof body.businessName === 'string')
       data.businessName = body.businessName.trim();
@@ -123,11 +129,16 @@ export class PageService {
       data.deliveryFeeOutsideDhaka = Number(body.deliveryFeeOutsideDhaka) || 0;
 
     // Dual Photo Mode
-    if (typeof body.dualPhotoMode === 'boolean') data.dualPhotoMode = body.dualPhotoMode;
+    if (typeof body.dualPhotoMode === 'boolean')
+      data.dualPhotoMode = body.dualPhotoMode;
     if ('dualWearingProductId' in body)
-      data.dualWearingProductId = body.dualWearingProductId ? Number(body.dualWearingProductId) : null;
+      data.dualWearingProductId = body.dualWearingProductId
+        ? Number(body.dualWearingProductId)
+        : null;
     if ('dualHoldingProductId' in body)
-      data.dualHoldingProductId = body.dualHoldingProductId ? Number(body.dualHoldingProductId) : null;
+      data.dualHoldingProductId = body.dualHoldingProductId
+        ? Number(body.dualHoldingProductId)
+        : null;
 
     if (Object.keys(data).length === 0) return this.getById(id);
 
@@ -260,11 +271,16 @@ export class PageService {
       const text = html
         .replace(/<script[\s\S]*?<\/script>/gi, '')
         .replace(/<style[\s\S]*?<\/style>/gi, '')
-        .replace(/<(h[1-3]|p|li|td|th)[^>]*>([\s\S]*?)<\/\1>/gi, (_m: string, _tag: string, content: string) =>
-          content.replace(/<[^>]+>/g, ' ').trim() + '\n',
+        .replace(
+          /<(h[1-3]|p|li|td|th)[^>]*>([\s\S]*?)<\/\1>/gi,
+          (_m: string, _tag: string, content: string) =>
+            content.replace(/<[^>]+>/g, ' ').trim() + '\n',
         )
         .replace(/<[^>]+>/g, ' ')
-        .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&nbsp;/g, ' ')
         .replace(/\s{2,}/g, ' ')
         .replace(/\n{3,}/g, '\n\n')
         .trim()

@@ -187,39 +187,106 @@ export default function WalletPage({
       {/* ── Recharge Tab ────────────────────────────────────────────────── */}
       {activeTab === 'recharge' && (
         <div>
-          {/* Admin WhatsApp contact */}
-          {(waUrl || adminContact?.phone) && (
+          {/* Payment numbers */}
+          {(adminContact?.bkash || adminContact?.nagad || adminContact?.rocket || adminContact?.phone) && (
             <div style={{
               ...card, border: `1px solid #22c55e40`,
               background: (th.card as any).background,
             }}>
-              <div style={{ fontWeight: 700, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={{ fontWeight: 700, marginBottom: 10, fontSize: 15 }}>
                 📲 Payment করুন
               </div>
-              <div style={{ fontSize: 13, color: th.muted, marginBottom: 12 }}>
-                {adminContact?.note || 'নিচের নম্বরে bKash / Nagad পাঠান, তারপর নিচে Transaction ID জমা দিন।'}
+              <div style={{ fontSize: 13, color: th.muted, marginBottom: 14 }}>
+                নিচের যেকোনো নম্বরে <b>Send Money</b> করুন, তারপর নিচে Transaction ID জমা দিন।
               </div>
-              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-                {adminContact?.phone && (
+
+              {/* Payment method cards */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
+                {(adminContact?.bkash || adminContact?.phone) && (
                   <div style={{
-                    background: th.accent + '22', borderRadius: 10, padding: '8px 14px',
-                    fontWeight: 800, fontSize: 16, letterSpacing: 1,
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    background: '#e5f7ec', borderRadius: 10, padding: '10px 14px',
                   }}>
-                    📞 {adminContact.phone}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{
+                        background: '#E2136E', color: '#fff', borderRadius: 8,
+                        padding: '3px 10px', fontWeight: 800, fontSize: 12,
+                      }}>bKash</span>
+                      <span style={{ fontWeight: 800, fontSize: 16, color: '#111', letterSpacing: 1 }}>
+                        {adminContact.bkash || adminContact.phone}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => { navigator.clipboard.writeText(adminContact.bkash || adminContact.phone); }}
+                      style={{
+                        background: '#E2136E22', border: 'none', borderRadius: 7,
+                        padding: '5px 10px', cursor: 'pointer', fontSize: 11, color: '#E2136E', fontWeight: 600,
+                      }}
+                    >Copy</button>
                   </div>
                 )}
+                {adminContact?.nagad && (
+                  <div style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    background: '#fff4e5', borderRadius: 10, padding: '10px 14px',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{
+                        background: '#F7941D', color: '#fff', borderRadius: 8,
+                        padding: '3px 10px', fontWeight: 800, fontSize: 12,
+                      }}>Nagad</span>
+                      <span style={{ fontWeight: 800, fontSize: 16, color: '#111', letterSpacing: 1 }}>
+                        {adminContact.nagad}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => { navigator.clipboard.writeText(adminContact.nagad); }}
+                      style={{
+                        background: '#F7941D22', border: 'none', borderRadius: 7,
+                        padding: '5px 10px', cursor: 'pointer', fontSize: 11, color: '#F7941D', fontWeight: 600,
+                      }}
+                    >Copy</button>
+                  </div>
+                )}
+                {adminContact?.rocket && (
+                  <div style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    background: '#f3eeff', borderRadius: 10, padding: '10px 14px',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{
+                        background: '#8B3FC7', color: '#fff', borderRadius: 8,
+                        padding: '3px 10px', fontWeight: 800, fontSize: 12,
+                      }}>Rocket</span>
+                      <span style={{ fontWeight: 800, fontSize: 16, color: '#111', letterSpacing: 1 }}>
+                        {adminContact.rocket}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => { navigator.clipboard.writeText(adminContact.rocket); }}
+                      style={{
+                        background: '#8B3FC722', border: 'none', borderRadius: 7,
+                        padding: '5px 10px', cursor: 'pointer', fontSize: 11, color: '#8B3FC7', fontWeight: 600,
+                      }}
+                    >Copy</button>
+                  </div>
+                )}
+              </div>
+
+              {/* Contact buttons */}
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 {waUrl && (
                   <a href={waUrl} target="_blank" rel="noreferrer" style={{
-                    ...th.btnPrimary, textDecoration: 'none', padding: '9px 18px',
+                    ...th.btnPrimary, textDecoration: 'none', padding: '8px 16px',
                     background: '#25D366', fontSize: 13, borderRadius: 10,
                     display: 'inline-flex', alignItems: 'center', gap: 6,
                   }}>
-                    <span>WhatsApp করুন</span>
+                    WhatsApp করুন
                   </a>
                 )}
                 {adminContact?.messengerUrl && (
                   <a href={adminContact.messengerUrl} target="_blank" rel="noreferrer" style={{
-                    ...th.btn, textDecoration: 'none', padding: '9px 18px', fontSize: 13, borderRadius: 10,
+                    ...th.btn, textDecoration: 'none', padding: '8px 16px', fontSize: 13, borderRadius: 10,
                     display: 'inline-flex', alignItems: 'center', gap: 6,
                   }}>
                     Messenger

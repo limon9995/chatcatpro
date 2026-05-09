@@ -23,7 +23,10 @@ import { SmartBotService } from '../bot/smart-bot.service';
 import { DraftOrderHandler } from './handlers/draft-order.handler';
 import { ProductInfoHandler } from './handlers/product-info.handler';
 import { NegotiationHandler } from './handlers/negotiation.handler';
-import { MessageWorker, WEBHOOK_SERVICE_TOKEN } from '../message-queue/message.worker';
+import {
+  MessageWorker,
+  WEBHOOK_SERVICE_TOKEN,
+} from '../message-queue/message.worker';
 
 @Module({
   imports: [

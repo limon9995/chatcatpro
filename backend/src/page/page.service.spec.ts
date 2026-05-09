@@ -11,7 +11,10 @@ describe('PageService', () => {
       providers: [
         PageService,
         { provide: PrismaService, useValue: { page: {} } },
-        { provide: EncryptionService, useValue: { encryptIfNeeded: jest.fn((v) => v) } },
+        {
+          provide: EncryptionService,
+          useValue: { encryptIfNeeded: jest.fn((v) => v) },
+        },
       ],
     }).compile();
 

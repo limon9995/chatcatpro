@@ -1,7 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { readFile } from 'fs/promises';
 import { join, extname } from 'path';
-import { VisionAnalysisProvider, VisionAttributes } from '../vision-analysis.interface';
+import {
+  VisionAnalysisProvider,
+  VisionAttributes,
+} from '../vision-analysis.interface';
 
 @Injectable()
 export class OllamaVisionProvider implements VisionAnalysisProvider {
@@ -10,12 +13,22 @@ export class OllamaVisionProvider implements VisionAnalysisProvider {
   private readonly model: string;
 
   constructor() {
-    this.baseUrl = (process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434').replace(/\/$/, '');
+    this.baseUrl = (
+      process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434'
+    ).replace(/\/$/, '');
     this.model = process.env.OLLAMA_VISION_MODEL ?? 'moondream';
   }
 
   private empty(reason: string): VisionAttributes {
-    return { category: null, color: null, pattern: null, sleeveType: null, gender: null, confidence: 0, rawDescription: reason };
+    return {
+      category: null,
+      color: null,
+      pattern: null,
+      sleeveType: null,
+      gender: null,
+      confidence: 0,
+      rawDescription: reason,
+    };
   }
 
   private async toBase64(url: string): Promise<{ data: string; mime: string }> {
@@ -25,14 +38,26 @@ export class OllamaVisionProvider implements VisionAnalysisProvider {
         const abs = join(process.cwd(), 'storage', storagePath);
         const buffer = await readFile(abs);
         const ext = extname(abs).toLowerCase();
-        const mime = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
+        const mime =
+          ext === '.png'
+            ? 'image/png'
+            : ext === '.webp'
+              ? 'image/webp'
+              : 'image/jpeg';
         return { data: buffer.toString('base64'), mime };
-      } catch { /* fall through to HTTP */ }
+      } catch {
+        /* fall through to HTTP */
+      }
     }
     const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
     const buffer = Buffer.from(await res.arrayBuffer());
-    const mime = String(res.headers.get('content-type') ?? 'image/jpeg').split(';')[0].trim();
-    return { data: buffer.toString('base64'), mime: mime.startsWith('image/') ? mime : 'image/jpeg' };
+    const mime = String(res.headers.get('content-type') ?? 'image/jpeg')
+      .split(';')[0]
+      .trim();
+    return {
+      data: buffer.toString('base64'),
+      mime: mime.startsWith('image/') ? mime : 'image/jpeg',
+    };
   }
 
   async analyze(imageUrl: string): Promise<VisionAttributes> {
@@ -58,8 +83,16 @@ Rules:
 
       const res = await fetch(`${this.baseUrl}/api/generate`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
-        body: JSON.stringify({ model: this.model, prompt, images: [data], stream: false }),
+        headers: {
+          'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true',
+        },
+        body: JSON.stringify({
+          model: this.model,
+          prompt,
+          images: [data],
+          stream: false,
+        }),
         signal: AbortSignal.timeout(90_000),
       });
 
@@ -68,12 +101,13 @@ Rules:
         return this.empty(`Ollama API error ${res.status}`);
       }
 
-      const result = await res.json() as any;
+      const result = await res.json();
       const content: string = result?.response ?? '';
       this.logger.log(`[OllamaVision] Response: ${content.slice(0, 200)}`);
 
       const jsonMatch = content.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) return this.empty(`No JSON in response: ${content.slice(0, 80)}`);
+      if (!jsonMatch)
+        return this.empty(`No JSON in response: ${content.slice(0, 80)}`);
 
       const parsed = JSON.parse(jsonMatch[0]) as Partial<VisionAttributes>;
       return {
@@ -82,7 +116,10 @@ Rules:
         pattern: parsed.pattern ?? null,
         sleeveType: parsed.sleeveType ?? null,
         gender: parsed.gender ?? null,
-        confidence: typeof parsed.confidence === 'number' ? Math.min(1, Math.max(0, parsed.confidence)) : 0.5,
+        confidence:
+          typeof parsed.confidence === 'number'
+            ? Math.min(1, Math.max(0, parsed.confidence))
+            : 0.5,
         rawDescription: parsed.rawDescription ?? content.slice(0, 200),
       };
     } catch (err: any) {

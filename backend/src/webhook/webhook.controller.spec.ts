@@ -11,7 +11,10 @@ describe('WebhookController', () => {
       controllers: [WebhookController],
       providers: [
         { provide: WebhookService, useValue: { handle: jest.fn() } },
-        { provide: PrismaService, useValue: { page: { findFirst: jest.fn() } } },
+        {
+          provide: PrismaService,
+          useValue: { page: { findFirst: jest.fn() } },
+        },
       ],
     }).compile();
 

@@ -30,7 +30,7 @@ describe('AdminController', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    controller = new AdminController(svc as any);
+    controller = new AdminController(svc as any, {} as any);
   });
 
   it('rejects invalid page ids for settings routes', () => {

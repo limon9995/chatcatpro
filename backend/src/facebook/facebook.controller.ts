@@ -86,4 +86,23 @@ export class FacebookController {
   disconnect(@Req() req: any, @Param('pageId') pageId: string) {
     return this.fb.disconnectPage(req.authUser.id, Number(pageId));
   }
+
+  // POST /facebook/page-request  → client submits page access request
+  @Post('page-request')
+  @UseGuards(AuthGuard)
+  submitPageRequest(@Req() req: any, @Body() body: any) {
+    return this.fb.submitPageRequest(
+      req.authUser.id,
+      String(body.pageUrl || ''),
+      String(body.fbProfile || ''),
+      body.note ? String(body.note) : undefined,
+    );
+  }
+
+  // GET /facebook/page-request/my  → client sees their own requests
+  @Get('page-request/my')
+  @UseGuards(AuthGuard)
+  myPageRequests(@Req() req: any) {
+    return this.fb.getMyPageRequests(req.authUser.id);
+  }
 }

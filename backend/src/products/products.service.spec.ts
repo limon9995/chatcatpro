@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ProductsService } from './products.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { PageService } from '../page/page.service';
 
 describe('ProductsService', () => {
   let service: ProductsService;
@@ -10,6 +11,7 @@ describe('ProductsService', () => {
       providers: [
         ProductsService,
         { provide: PrismaService, useValue: { product: {} } },
+        { provide: PageService, useValue: { getEffectivePageId: jest.fn((id: number) => id) } },
       ],
     }).compile();
 

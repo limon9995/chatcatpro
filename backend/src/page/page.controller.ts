@@ -87,13 +87,24 @@ export class PageController {
     const pageId = this.pid(req, id);
     const rawToken = String(body.newPageToken || '').trim();
     const verified = await this.facebookService.verifyPageToken(rawToken);
-    const pageName = String(body.newPageName || verified.pageName || '').trim() || verified.pageName;
-    return this.pageService.reconnectFbPage(pageId, verified.pageId, pageName, rawToken);
+    const pageName =
+      String(body.newPageName || verified.pageName || '').trim() ||
+      verified.pageName;
+    return this.pageService.reconnectFbPage(
+      pageId,
+      verified.pageId,
+      pageName,
+      rawToken,
+    );
   }
 
   /** POST /page/:id/knowledge/scrape — scrape website URL and return extracted text preview */
   @Post(':id/knowledge/scrape')
-  async scrapeKnowledge(@Param('id') id: string, @Body() body: any, @Req() req: any) {
+  async scrapeKnowledge(
+    @Param('id') id: string,
+    @Body() body: any,
+    @Req() req: any,
+  ) {
     this.pid(req, id); // access check
     const url = String(body?.url ?? '').trim();
     return this.pageService.scrapeWebsiteKnowledge(url);

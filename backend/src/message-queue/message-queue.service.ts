@@ -22,9 +22,13 @@ export class MessageQueueService implements OnModuleDestroy {
   }
 
   async add(page: any, psid: string, message: any): Promise<void> {
-    await this.queue.add('process', { page, psid, message }, {
-      jobId: `${page.id}-${psid}-${Date.now()}`,
-    });
+    await this.queue.add(
+      'process',
+      { page, psid, message },
+      {
+        jobId: `${page.id}-${psid}-${Date.now()}`,
+      },
+    );
   }
 
   async onModuleDestroy() {

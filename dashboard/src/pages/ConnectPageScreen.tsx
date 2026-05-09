@@ -5,6 +5,7 @@ import { useLanguage } from '../i18n';
 
 type ConnectedPage = { id: number; pageId: string; pageName: string; isActive: boolean; masterPageId?: number | null };
 type OAuthPage = { pageId: string; pageName: string; pageToken: string };
+type PageRequest = { id: number; pageUrl: string; fbProfile: string; note?: string; status: string; adminNote?: string; createdAt: string };
 
 interface Props {
   dark: boolean; userId: string;
@@ -23,12 +24,20 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
   const [manualToken, setManualToken]       = useState('');
   const [manualBusy, setManualBusy]         = useState(false);
   const [manualSuccess, setManualSuccess]   = useState(false);
-  const [tab, setTab] = useState<'oauth' | 'manual'>('oauth');
+  const [tab, setTab] = useState<'oauth' | 'manual' | 'request'>('oauth');
   const [oauthBusy, setOauthBusy] = useState(false);
   const [oauthPages, setOauthPages] = useState<OAuthPage[]>([]);
   const [oauthConnectingPageId, setOauthConnectingPageId] = useState<string | null>(null);
   // Linked page: optional master page to share settings from
   const [selectedMasterId, setSelectedMasterId] = useState<number | ''>('');
+
+  // Request Access tab state
+  const [reqPageUrl, setReqPageUrl] = useState('');
+  const [reqFbProfile, setReqFbProfile] = useState('');
+  const [reqNote, setReqNote] = useState('');
+  const [reqBusy, setReqBusy] = useState(false);
+  const [reqSubmitted, setReqSubmitted] = useState(false);
+  const [myRequests, setMyRequests] = useState<PageRequest[]>([]);
 
   const bg     = dark ? '#080e1c' : '#f1f3fa';
   const panel  = dark ? '#0d1526' : '#fff';
@@ -63,6 +72,33 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
       .catch((e: any) => setError(e?.message || copy('Facebook page list load করা যায়নি', 'Could not load Facebook pages')))
       .finally(() => setOauthBusy(false));
   }, [copy, request]);
+
+  useEffect(() => {
+    if (tab === 'request') {
+      request<PageRequest[]>(`${API_BASE}/facebook/page-request/my`)
+        .then(r => setMyRequests(r || []))
+        .catch(() => {});
+    }
+  }, [tab, request]);
+
+  const submitPageRequest = async () => {
+    if (!reqPageUrl.trim()) { setError(copy('Facebook Page link দিন', 'Enter your Facebook Page link')); return; }
+    if (!reqFbProfile.trim()) { setError(copy('আপনার Facebook profile link দিন', 'Enter your Facebook profile link')); return; }
+    setReqBusy(true); setError('');
+    try {
+      await request(`${API_BASE}/facebook/page-request`, {
+        method: 'POST',
+        body: JSON.stringify({ pageUrl: reqPageUrl.trim(), fbProfile: reqFbProfile.trim(), note: reqNote.trim() || undefined }),
+      });
+      setReqSubmitted(true);
+      const updated = await request<PageRequest[]>(`${API_BASE}/facebook/page-request/my`);
+      setMyRequests(updated || []);
+    } catch (e: any) {
+      setError(e?.message || copy('Submit করা যায়নি', 'Submit failed'));
+    } finally {
+      setReqBusy(false);
+    }
+  };
 
   const connectManual = async () => {
     const pname = manualPageName.trim();
@@ -261,40 +297,108 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
         )}
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            <button
-              onClick={() => setTab('oauth')}
-              style={{
-                padding: '10px 12px',
-                borderRadius: 12,
-                border: `1px solid ${tab === 'oauth' ? '#6366f1' : border}`,
-                background: tab === 'oauth' ? (dark ? 'rgba(99,102,241,0.16)' : 'rgba(99,102,241,0.08)') : 'transparent',
-                color: tab === 'oauth' ? '#6366f1' : text,
-                fontWeight: 800,
-                cursor: 'pointer',
-                fontFamily: 'inherit',
-              }}
-            >
-              {copy('Facebook Login', 'Facebook Login')}
-            </button>
-            <button
-              onClick={() => setTab('manual')}
-              style={{
-                padding: '10px 12px',
-                borderRadius: 12,
-                border: `1px solid ${tab === 'manual' ? '#6366f1' : border}`,
-                background: tab === 'manual' ? (dark ? 'rgba(99,102,241,0.16)' : 'rgba(99,102,241,0.08)') : 'transparent',
-                color: tab === 'manual' ? '#6366f1' : text,
-                fontWeight: 800,
-                cursor: 'pointer',
-                fontFamily: 'inherit',
-              }}
-            >
-              {copy('Manual Token', 'Manual Token')}
-            </button>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
+            {(['oauth', 'request', 'manual'] as const).map((t) => {
+              const labels: Record<string, string> = { oauth: 'Facebook Login', request: '📋 Request', manual: 'Manual Token' };
+              return (
+                <button key={t} onClick={() => { setTab(t); setError(''); }}
+                  style={{
+                    padding: '9px 8px', borderRadius: 12, fontSize: 12,
+                    border: `1px solid ${tab === t ? '#6366f1' : border}`,
+                    background: tab === t ? (dark ? 'rgba(99,102,241,0.16)' : 'rgba(99,102,241,0.08)') : 'transparent',
+                    color: tab === t ? '#6366f1' : text, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit',
+                  }}
+                >{labels[t]}</button>
+              );
+            })}
           </div>
 
-          {tab === 'oauth' ? (
+          {tab === 'request' ? (
+            <>
+              {/* Info box */}
+              <div style={{ background: dark ? 'rgba(251,191,36,0.08)' : 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.28)', borderRadius: 12, padding: '12px 15px', fontSize: 12.5, color: text, lineHeight: 1.9 }}>
+                📋 <strong>{copy('কীভাবে কাজ করে?', 'How does this work?')}</strong><br />
+                <span style={{ color: muted }}>
+                  {copy('১. নিচের form পূরণ করুন — আপনার Facebook page link ও profile link দিন', '1. Fill the form below with your Facebook page & profile links')}<br />
+                  {copy('২. Admin আপনাকে Facebook App-এ Tester হিসেবে add করবে', '2. Admin will add you as a Tester in the Facebook App')}<br />
+                  {copy('৩. Facebook থেকে invite notification আসবে — Accept করুন', '3. You will get an invite notification on Facebook — Accept it')}<br />
+                  {copy('৪. Accepted হলে "Facebook Login" tab থেকে page connect করুন', '4. After accepting, use the "Facebook Login" tab to connect your page')}
+                </span>
+              </div>
+
+              {/* Existing requests */}
+              {myRequests.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ fontSize: 11, color: muted, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                    {copy('আপনার Requests', 'Your Requests')}
+                  </div>
+                  {myRequests.map(r => {
+                    const statusColor = r.status === 'approved' ? '#16a34a' : r.status === 'rejected' ? '#ef4444' : '#f59e0b';
+                    const statusLabel = r.status === 'approved' ? copy('✅ Approved', '✅ Approved') : r.status === 'rejected' ? copy('❌ Rejected', '❌ Rejected') : copy('⏳ Pending', '⏳ Pending');
+                    return (
+                      <div key={r.id} style={{ border: `1px solid ${border}`, borderRadius: 10, padding: '10px 13px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                          <div style={{ fontSize: 12.5, fontWeight: 700, color: text }}>{r.pageUrl}</div>
+                          <span style={{ fontSize: 11, fontWeight: 800, color: statusColor }}>{statusLabel}</span>
+                        </div>
+                        {r.adminNote && (
+                          <div style={{ fontSize: 11.5, color: muted, marginTop: 3 }}>💬 {r.adminNote}</div>
+                        )}
+                        {r.status === 'approved' && (
+                          <div style={{ marginTop: 8, padding: '8px 10px', background: 'rgba(34,197,94,0.08)', borderRadius: 8, fontSize: 12, color: '#16a34a', fontWeight: 600 }}>
+                            🎉 {copy('Approved! এখন "Facebook Login" tab-এ গিয়ে page connect করুন।', 'Approved! Now go to "Facebook Login" tab to connect your page.')}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                  <div style={{ height: 1, background: border }} />
+                </div>
+              )}
+
+              {/* Submit form */}
+              {!reqSubmitted ? (
+                <>
+                  <div>
+                    <label style={{ fontSize: 12, color: muted, fontWeight: 600, display: 'block', marginBottom: 5 }}>
+                      {copy('Facebook Page Link *', 'Facebook Page Link *')}
+                    </label>
+                    <input style={inp} value={reqPageUrl} onChange={e => setReqPageUrl(e.target.value)}
+                      placeholder="https://facebook.com/yourpage বা yourpage" />
+                    <div style={{ fontSize: 11, color: muted, marginTop: 4 }}>
+                      {copy('আপনার Facebook Page এর link বা username', 'Your Facebook Page link or username')}
+                    </div>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 12, color: muted, fontWeight: 600, display: 'block', marginBottom: 5 }}>
+                      {copy('আপনার Facebook Profile Link *', 'Your Facebook Profile Link *')}
+                    </label>
+                    <input style={inp} value={reqFbProfile} onChange={e => setReqFbProfile(e.target.value)}
+                      placeholder="https://facebook.com/yourprofile" />
+                    <div style={{ fontSize: 11, color: muted, marginTop: 4 }}>
+                      {copy('Admin এই link দিয়ে আপনাকে Tester হিসেবে add করবে', 'Admin will use this to add you as Tester')}
+                    </div>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 12, color: muted, fontWeight: 600, display: 'block', marginBottom: 5 }}>
+                      {copy('Note (optional)', 'Note (optional)')}
+                    </label>
+                    <textarea style={{ ...inp, resize: 'vertical', minHeight: 60, lineHeight: 1.5 }}
+                      value={reqNote} onChange={e => setReqNote(e.target.value)}
+                      placeholder={copy('অতিরিক্ত কিছু জানাতে চাইলে লিখুন...', 'Any additional info for the admin...')} />
+                  </div>
+                  <button onClick={submitPageRequest} disabled={reqBusy}
+                    style={{ width: '100%', padding: '13px', borderRadius: 13, border: 'none', background: reqBusy ? 'rgba(99,102,241,0.5)' : '#6366f1', color: '#fff', fontWeight: 800, fontSize: 15, cursor: reqBusy ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, fontFamily: 'inherit' }}>
+                    {reqBusy ? <><Spinner size={15} /> {copy('Submitting...', 'Submitting...')}</> : copy('📤 Request Submit করুন', 'Submit Request')}
+                  </button>
+                </>
+              ) : (
+                <div style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.3)', borderRadius: 12, padding: '14px 16px', fontSize: 13, color: '#16a34a', fontWeight: 700, textAlign: 'center' }}>
+                  ✅ {copy('Request submit হয়েছে! Admin review করে approve করবে।', 'Request submitted! Admin will review and approve.')}
+                </div>
+              )}
+            </>
+          ) : tab === 'oauth' ? (
             <>
               <div style={{ background: dark ? 'rgba(99,102,241,0.08)' : 'rgba(99,102,241,0.05)', border: '1px solid rgba(99,102,241,0.18)', borderRadius: 12, padding: '12px 15px', fontSize: 12.5, color: text, lineHeight: 1.85 }}>
                 📘 <strong>{copy('সবচেয়ে সহজ উপায়', 'The easiest way')}</strong><br />

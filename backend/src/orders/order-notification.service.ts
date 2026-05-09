@@ -43,6 +43,16 @@ export class OrderNotificationService {
     });
   }
 
+  /** Send delivery-done message to customer. */
+  async notifyDelivered(pageId: number, orderId: number): Promise<void> {
+    await this.send(pageId, orderId, 'order_delivered', {});
+  }
+
+  /** Send delivery-cancelled message to customer. */
+  async notifyDeliveryCancelled(pageId: number, orderId: number): Promise<void> {
+    await this.send(pageId, orderId, 'order_delivery_cancelled', {});
+  }
+
   // ── Private ───────────────────────────────────────────────────────────────
 
   private async send(

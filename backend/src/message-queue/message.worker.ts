@@ -1,4 +1,11 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit, Inject, forwardRef } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+  Inject,
+  forwardRef,
+} from '@nestjs/common';
 import { Worker, Job } from 'bullmq';
 
 const REDIS_URL = process.env.REDIS_URL || 'redis://127.0.0.1:6379';
@@ -25,7 +32,9 @@ export class MessageWorker implements OnModuleInit, OnModuleDestroy {
       'incoming-messages',
       async (job: Job) => {
         const { page, psid, message } = job.data;
-        this.logger.debug(`[MessageWorker] job=${job.id} page=${page?.pageId} psid=${psid}`);
+        this.logger.debug(
+          `[MessageWorker] job=${job.id} page=${page?.pageId} psid=${psid}`,
+        );
         await this.webhookService.processMessage(page, psid, message);
       },
       {
@@ -35,19 +44,23 @@ export class MessageWorker implements OnModuleInit, OnModuleDestroy {
       },
     );
 
-    this.worker.on('completed', job => {
+    this.worker.on('completed', (job) => {
       this.logger.debug(`[MessageWorker] completed job=${job.id}`);
     });
 
     this.worker.on('failed', (job, err) => {
-      this.logger.error(`[MessageWorker] failed job=${job?.id} attempts=${job?.attemptsMade} err=${err.message}`);
+      this.logger.error(
+        `[MessageWorker] failed job=${job?.id} attempts=${job?.attemptsMade} err=${err.message}`,
+      );
     });
 
-    this.worker.on('error', err => {
+    this.worker.on('error', (err) => {
       this.logger.error(`[MessageWorker] worker error: ${err.message}`);
     });
 
-    this.logger.log('[MessageWorker] Started — listening on "incoming-messages"');
+    this.logger.log(
+      '[MessageWorker] Started — listening on "incoming-messages"',
+    );
   }
 
   async onModuleDestroy() {

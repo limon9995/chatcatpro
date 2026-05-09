@@ -9,7 +9,10 @@ describe('MessengerService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         MessengerService,
-        { provide: EncryptionService, useValue: { decrypt: jest.fn((v) => v) } },
+        {
+          provide: EncryptionService,
+          useValue: { decrypt: jest.fn((v) => v) },
+        },
       ],
     }).compile();
 

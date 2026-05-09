@@ -28,7 +28,8 @@ export class OpenAIFallbackProvider implements BotFallbackProvider {
     phone: 'ফোন নম্বর চাওয়া হচ্ছিল',
     address: 'ঠিকানা চাওয়া হচ্ছিল',
     confirm: 'order confirm করতে বলা হচ্ছিল',
-    advance_payment: 'advance payment-এর transaction ID বা screenshot চাওয়া হচ্ছিল',
+    advance_payment:
+      'advance payment-এর transaction ID বা screenshot চাওয়া হচ্ছিল',
   };
 
   constructor() {
@@ -39,7 +40,9 @@ export class OpenAIFallbackProvider implements BotFallbackProvider {
 
   async generateReply(context: FallbackContext): Promise<FallbackResponse> {
     if (!this.apiKey) {
-      this.logger.warn('[OpenAIFallback] OPENAI_API_KEY not set — escalating to agent');
+      this.logger.warn(
+        '[OpenAIFallback] OPENAI_API_KEY not set — escalating to agent',
+      );
       return { reply: null, escalateToAgent: true };
     }
 
@@ -50,7 +53,9 @@ export class OpenAIFallbackProvider implements BotFallbackProvider {
     // Build a clear situation description for OpenAI
     let situationCtx = '';
     if (context.draftStep) {
-      const stepLabel = OpenAIFallbackProvider.STEP_LABELS[context.draftStep] ?? `"${context.draftStep}" step চলছিল`;
+      const stepLabel =
+        OpenAIFallbackProvider.STEP_LABELS[context.draftStep] ??
+        `"${context.draftStep}" step চলছিল`;
       situationCtx = `\nBot এর current situation: ${stepLabel}।`;
       if (context.draftSummary) {
         situationCtx += ` (${context.draftSummary})`;
@@ -77,34 +82,39 @@ export class OpenAIFallbackProvider implements BotFallbackProvider {
         : context.customerMessage;
 
     try {
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${this.apiKey}`,
+      const response = await fetch(
+        'https://api.openai.com/v1/chat/completions',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${this.apiKey}`,
+          },
+          body: JSON.stringify({
+            model: this.model,
+            max_tokens: 120,
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: userMsg },
+            ],
+          }),
+          signal: AbortSignal.timeout(15_000),
         },
-        body: JSON.stringify({
-          model: this.model,
-          max_tokens: 120,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userMsg },
-          ],
-        }),
-        signal: AbortSignal.timeout(15_000),
-      });
+      );
 
       if (!response.ok) {
         this.logger.error(`[OpenAIFallback] API error ${response.status}`);
         return { reply: null, escalateToAgent: true };
       }
 
-      const data = await response.json() as any;
+      const data = await response.json();
       const reply: string = (data?.choices?.[0]?.message?.content ?? '').trim();
 
       if (!reply) return { reply: null, escalateToAgent: true };
 
-      this.logger.log(`[OpenAIFallback] Generated reply: ${reply.slice(0, 100)}`);
+      this.logger.log(
+        `[OpenAIFallback] Generated reply: ${reply.slice(0, 100)}`,
+      );
       return { reply, escalateToAgent: false };
     } catch (err: any) {
       this.logger.error(`[OpenAIFallback] Failed: ${err?.message ?? err}`);

@@ -288,13 +288,17 @@ export class CourierService {
       trackingUrl: input?.trackingUrl?.trim() || null,
       status: existing?.status || 'booked',
       codAmount:
-        input?.codAmount !== undefined ? Number(input.codAmount) || 0 : existing?.codAmount || subtotal,
+        input?.codAmount !== undefined
+          ? Number(input.codAmount) || 0
+          : existing?.codAmount || subtotal,
       weight:
-        input?.weight !== undefined ? Number(input.weight) || 0.5 : existing?.weight || 0.5,
+        input?.weight !== undefined
+          ? Number(input.weight) || 0.5
+          : existing?.weight || 0.5,
       courierFee:
         input?.courierFee !== undefined && input?.courierFee !== null
           ? Number(input.courierFee) || 0
-          : existing?.courierFee ?? null,
+          : (existing?.courierFee ?? null),
       bookedAt,
     };
 

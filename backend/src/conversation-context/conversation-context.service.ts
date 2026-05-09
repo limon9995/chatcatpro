@@ -33,7 +33,7 @@ export interface DraftSession {
   // V17: advance payment proof (transaction ID / "screenshot sent")
   paymentProof?: string;
   paymentScreenshotUrl?: string; // URL of screenshot customer sent
-  paymentIssueNote?: string;    // Customer's problem message — marks order for agent review
+  paymentIssueNote?: string; // Customer's problem message — marks order for agent review
 }
 
 @Injectable()
@@ -87,10 +87,15 @@ export class ConversationContextService {
     const lastStep = session?.lastDraftStep ?? null;
     const prevCount = session?.loopCount ?? 0;
 
-    const sameMessage = lastMsg !== null && lastMsg.toLowerCase().trim() === currentMsg.toLowerCase().trim();
-    const sameStep = currentDraftStep !== null && lastStep !== null && lastStep === currentDraftStep;
+    const sameMessage =
+      lastMsg !== null &&
+      lastMsg.toLowerCase().trim() === currentMsg.toLowerCase().trim();
+    const sameStep =
+      currentDraftStep !== null &&
+      lastStep !== null &&
+      lastStep === currentDraftStep;
 
-    const newCount = (sameMessage || sameStep) ? prevCount + 1 : 0;
+    const newCount = sameMessage || sameStep ? prevCount + 1 : 0;
     await this.upsertSession(pageIdRef, customerPsid, {
       lastCustomerMsg: currentMsg,
       loopCount: newCount,
@@ -113,7 +118,10 @@ export class ConversationContextService {
 
   /** Reset loop counter (call when meaningful progress is made). */
   async resetLoop(pageIdRef: number, customerPsid: string): Promise<void> {
-    await this.upsertSession(pageIdRef, customerPsid, { loopCount: 0, lastDraftStep: null });
+    await this.upsertSession(pageIdRef, customerPsid, {
+      loopCount: 0,
+      lastDraftStep: null,
+    });
   }
 
   async getActiveDraft(

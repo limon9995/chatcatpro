@@ -335,7 +335,11 @@ body{font-family:"Courier New",Courier,monospace;background:#f5f5f5;padding:10px
 <div class="grid">${cards}</div></body></html>`;
   }
 
-  async generateInvoicePDF(ids: number[], style: PrintStyle = 'classic', pageId?: number) {
+  async generateInvoicePDF(
+    ids: number[],
+    style: PrintStyle = 'classic',
+    pageId?: number,
+  ) {
     const orders = await this.getOrders(ids, pageId);
     if (!orders.length) throw new NotFoundException('No orders found');
     return this.generatePdfFromHtml(this.buildPrintHTML(orders, style));

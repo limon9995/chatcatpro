@@ -17,7 +17,10 @@ import { NegotiationHandler } from './handlers/negotiation.handler';
 import { CrmService } from '../crm/crm.service';
 // V18: Image recognition imports
 import { VisionAnalysisService } from '../vision-analysis/vision-analysis.service';
-import { ProductMatchService, ProductMatchResult } from '../product-match/product-match.service';
+import {
+  ProductMatchService,
+  ProductMatchResult,
+} from '../product-match/product-match.service';
 import { FallbackAiService } from '../fallback-ai/fallback-ai.service';
 import { AiIntentService } from '../bot/ai-intent.service';
 import { BotContextService } from '../bot/bot-context.service';
@@ -32,12 +35,15 @@ export class WebhookService {
   private readonly logger = new Logger(WebhookService.name);
 
   // Per-psid image buffer: collects photos sent in quick succession into one batch
-  private readonly imageBuffer = new Map<string, {
-    page: any;
-    urls: string[];
-    caption?: string;
-    timer: ReturnType<typeof setTimeout>;
-  }>();
+  private readonly imageBuffer = new Map<
+    string,
+    {
+      page: any;
+      urls: string[];
+      caption?: string;
+      timer: ReturnType<typeof setTimeout>;
+    }
+  >();
   private readonly IMAGE_BUFFER_MS = 4_000; // 4-second window
 
   // Tracks the last reply sent per psid during a processMessage call
@@ -95,12 +101,19 @@ export class WebhookService {
 
       // ── Subscription gate ────────────────────────────────────────────────
       if (page.subscriptionStatus === 'SUSPENDED') {
-        this.logger.log(`[Webhook] Page ${page.pageId} subscription SUSPENDED — skipping`);
+        this.logger.log(
+          `[Webhook] Page ${page.pageId} subscription SUSPENDED — skipping`,
+        );
         continue;
       }
       if (page.nextBillingDate && new Date(page.nextBillingDate) < new Date()) {
-        this.logger.log(`[Webhook] Page ${page.pageId} subscription expired (${page.nextBillingDate}) — suspending`);
-        await this.prisma.page.update({ where: { id: page.id }, data: { subscriptionStatus: 'SUSPENDED' } });
+        this.logger.log(
+          `[Webhook] Page ${page.pageId} subscription expired (${page.nextBillingDate}) — suspending`,
+        );
+        await this.prisma.page.update({
+          where: { id: page.id },
+          data: { subscriptionStatus: 'SUSPENDED' },
+        });
         continue;
       }
 
@@ -129,7 +142,7 @@ export class WebhookService {
         if (event.message?.is_echo) {
           const customerPsid: string = event?.recipient?.id;
           if (customerPsid) {
-            this.handleAgentEcho(resolvedPage as any, customerPsid).catch(() => {});
+            this.handleAgentEcho(resolvedPage, customerPsid).catch(() => {});
           }
           continue;
         }
@@ -139,22 +152,20 @@ export class WebhookService {
         if (!event.message) continue;
 
         // Push to persistent queue — returns immediately, worker processes async
-        await this.messageQueue.add(resolvedPage, psid, event.message).catch((err) =>
-          this.logger.error(
-            `[Webhook] page=${resolvedPage.pageId} psid=${psid} queue error: ${err}`,
-          ),
-        );
+        await this.messageQueue
+          .add(resolvedPage, psid, event.message)
+          .catch((err) =>
+            this.logger.error(
+              `[Webhook] page=${resolvedPage.pageId} psid=${psid} queue error: ${err}`,
+            ),
+          );
       }
     }
   }
 
   // ── Message router ─────────────────────────────────────────────────────────
 
-  async processMessage(
-    page: any,
-    psid: string,
-    message: any,
-  ): Promise<void> {
+  async processMessage(page: any, psid: string, message: any): Promise<void> {
     const pageId = page.id as number;
     const customerText = (message.text || '').trim();
 
@@ -167,14 +178,20 @@ export class WebhookService {
     if (customerText) {
       const botReply = this.inFlightReply.get(psid) ?? null;
       if (botReply) {
-        await this.ctx.appendToHistory(pageId, psid, customerText, botReply).catch(() => {});
+        await this.ctx
+          .appendToHistory(pageId, psid, customerText, botReply)
+          .catch(() => {});
       }
       this.inFlightReply.delete(psid);
     }
 
     // Record the current draft step after processing so loop detection can compare next time
     const updatedDraft = await this.ctx.getActiveDraft(pageId, psid);
-    await this.ctx.recordDraftStepAfterProcessing(pageId, psid, updatedDraft?.currentStep ?? null);
+    await this.ctx.recordDraftStepAfterProcessing(
+      pageId,
+      psid,
+      updatedDraft?.currentStep ?? null,
+    );
   }
 
   private async _processMessageInner(
@@ -227,10 +244,17 @@ export class WebhookService {
       // Send "processing" only on the first photo of this burst
       const bufKey = `${page.id}:${psid}`;
       if (!this.imageBuffer.has(bufKey)) {
-        const processingMsg = await this.botKnowledge.resolveSystemReply(pageId, 'ocr_processing');
+        const processingMsg = await this.botKnowledge.resolveSystemReply(
+          pageId,
+          'ocr_processing',
+        );
         await this.messenger
           .sendText(token, psid, processingMsg)
-          .catch((e) => this.logger.error(`[Webhook] sendText(ocr_processing) failed psid=${psid}: ${e}`));
+          .catch((e) =>
+            this.logger.error(
+              `[Webhook] sendText(ocr_processing) failed psid=${psid}: ${e}`,
+            ),
+          );
       }
 
       // V8: pass caption text alongside image URL for combined detection
@@ -272,7 +296,9 @@ export class WebhookService {
       if (hoursSince > 24) {
         await this.ctx.clearDraft(pageId, psid);
         draft = null;
-        this.logger.log(`[Draft] Expired (${Math.floor(hoursSince)}h old) for psid=${psid}`);
+        this.logger.log(
+          `[Draft] Expired (${Math.floor(hoursSince)}h old) for psid=${psid}`,
+        );
       }
     }
     const awaitingConfirm =
@@ -284,7 +310,13 @@ export class WebhookService {
 
     // ── SMART BOT (V19) — single AI call replaces keyword pipeline ────────
     if (page.smartBotOn && aiAllowed && this.smartBot.isAvailable()) {
-      const reply = await this.smartBot.handle(page, psid, text, draft, this.draftHandler);
+      const reply = await this.smartBot.handle(
+        page,
+        psid,
+        text,
+        draft,
+        this.draftHandler,
+      );
       if (reply !== false) {
         // Use WebhookService.safeSend so inFlightReply is updated → history gets saved
         await this.safeSend(token, psid, reply);
@@ -298,16 +330,27 @@ export class WebhookService {
     // If keyword matched a strong intent (GREETING/CATALOG/CANCEL/CODES), skip AI to save cost.
     // Otherwise, or for nuanced intents (NEGOTIATION/SIDE QUESTIONS), use AI brain.
     let intent = keywordIntent;
-    let aiResult = { intent: null as string | null, reply: null as string | null };
+    let aiResult = {
+      intent: null as string | null,
+      reply: null as string | null,
+    };
 
-    const isStrongKeyword = !!keywordIntent && ['CATALOG_REQUEST', 'CANCEL', 'ORDER_REMOVE_ITEM', 'MULTI_CONFIRM'].includes(keywordIntent);
+    const isStrongKeyword =
+      !!keywordIntent &&
+      [
+        'CATALOG_REQUEST',
+        'CANCEL',
+        'ORDER_REMOVE_ITEM',
+        'MULTI_CONFIRM',
+      ].includes(keywordIntent);
 
     if (isStrongKeyword) {
       void this.walletService.deductUsage(pageId, 'KEYWORD_REPLY');
     }
 
     if (!isStrongKeyword && aiAllowed) {
-      const businessContext = await this.botContext.buildBusinessContext(pageId);
+      const businessContext =
+        await this.botContext.buildBusinessContext(pageId);
       if (businessContext) {
         // Pass conversation history only when the message is ambiguous (no keyword match)
         // or for intents that need contextual replies. Skipping history for clear keywords
@@ -335,12 +378,17 @@ export class WebhookService {
     const aiEnabled = page.textFallbackAiOn || this.fallbackAi.isAvailable();
     if (aiEnabled) {
       const loopCount = await this.ctx.checkAndUpdateLoop(
-        pageId, psid, text, draft?.currentStep ?? null,
+        pageId,
+        psid,
+        text,
+        draft?.currentStep ?? null,
       );
       // Only intercept when intent is truly unresolved — never block a recognised intent
       // (e.g. customer sending "ki ki products" twice must still get the catalog link)
       if (loopCount >= 2 && !intent) {
-        this.logger.warn(`[Loop] Detected loop (count=${loopCount}) for psid=${psid} step=${draft?.currentStep ?? 'none'} text="${text.slice(0, 60)}"`);
+        this.logger.warn(
+          `[Loop] Detected loop (count=${loopCount}) for psid=${psid} step=${draft?.currentStep ?? 'none'} text="${text.slice(0, 60)}"`,
+        );
         const draftSummary = draft
           ? `Customer has an active order draft (step: ${draft.currentStep ?? 'unknown'}, products: ${(draft.items ?? []).map((i: any) => i.code).join(', ') || 'none'})`
           : null;
@@ -374,14 +422,22 @@ export class WebhookService {
 
     // ── CANCEL — only when there's something to cancel ────────────────────
     if (intent === 'CANCEL') {
-      const hasOpenOrder = !draft && !!(await this.prisma.order.findFirst({
-        where: { pageIdRef: page.id, customerPsid: psid, status: { in: ['RECEIVED', 'PENDING'] } },
-        select: { id: true },
-      }));
+      const hasOpenOrder =
+        !draft &&
+        !!(await this.prisma.order.findFirst({
+          where: {
+            pageIdRef: page.id,
+            customerPsid: psid,
+            status: { in: ['RECEIVED', 'PENDING'] },
+          },
+          select: { id: true },
+        }));
       if (draft || hasOpenOrder) {
         await this.handleCancel(page, psid, draft, aiResult.reply ?? undefined);
       } else {
-        const msg = aiResult.reply ?? 'ঠিক আছে 💖 কোনো সমস্যা নেই। কিছু জানার থাকলে বলুন।';
+        const msg =
+          aiResult.reply ??
+          'ঠিক আছে 💖 কোনো সমস্যা নেই। কিছু জানার থাকলে বলুন।';
         await this.safeSend(token, psid, msg);
       }
       return;
@@ -400,13 +456,15 @@ export class WebhookService {
 
     // ── NEGOTIATION ────────────────────────────────────────────────────────
     if (intent === 'NEGOTIATION') {
-      const reply = aiResult.reply ?? await this.negotiationHandler.handle(
-        pageId,
-        psid,
-        text,
-        draft,
-        message?.reply_to?.text,
-      );
+      const reply =
+        aiResult.reply ??
+        (await this.negotiationHandler.handle(
+          pageId,
+          psid,
+          text,
+          draft,
+          message?.reply_to?.text,
+        ));
       const reminder = draft ? `\n\n${this.draftHandler.reminder(draft)}` : '';
       await this.safeSend(token, psid, reply + reminder);
       return;
@@ -443,7 +501,11 @@ export class WebhookService {
         }
       } catch {}
       if (aiResult.reply) {
-        await this.safeSend(token, psid, `${aiResult.reply}\n\n${this.draftHandler.reminder(draft)}`);
+        await this.safeSend(
+          token,
+          psid,
+          `${aiResult.reply}\n\n${this.draftHandler.reminder(draft)}`,
+        );
         return;
       }
     }
@@ -480,7 +542,13 @@ export class WebhookService {
 
     // ── DRAFT: OpenAI/intent may decide the customer left the order flow ──
     // In that case clear the draft and let the normal routing below handle it.
-    if (draft && page.orderModeOn && (intent === 'GREETING' || intent === 'CATALOG_REQUEST' || intent === 'SOFT_HESITATION')) {
+    if (
+      draft &&
+      page.orderModeOn &&
+      (intent === 'GREETING' ||
+        intent === 'CATALOG_REQUEST' ||
+        intent === 'SOFT_HESITATION')
+    ) {
       await this.ctx.clearDraft(pageId, psid);
       draft = null;
     }
@@ -547,7 +615,8 @@ export class WebhookService {
 
     if (recentOrder && intent === 'CONFIRM') {
       // V20: Only trigger if order is very recent (last 2 hours) to avoid false "Ok" triggers on old orders
-      const orderAgeHours = (Date.now() - new Date(recentOrder.createdAt).getTime()) / 3_600_000;
+      const orderAgeHours =
+        (Date.now() - new Date(recentOrder.createdAt).getTime()) / 3_600_000;
       if (orderAgeHours < 2) {
         await this.safeSend(
           token,
@@ -589,11 +658,19 @@ export class WebhookService {
               [product as any],
               variantOptions,
             );
-            const crmCust = await this.prefillDraftFromCrm(pageId, psid, newDraft);
+            const crmCust = await this.prefillDraftFromCrm(
+              pageId,
+              psid,
+              newDraft,
+            );
             if (crmCust?.name && crmCust?.phone && crmCust?.address) {
               newDraft.currentStep = 'confirm_address';
               await this.ctx.saveDraft(pageId, psid, newDraft);
-              await this.safeSend(token, psid, `স্বাগতম ফিরে ${crmCust.name}! 🎉\n\nআগের ঠিকানায় পাঠাব?\n📍 *${crmCust.address}*\n\n"হ্যাঁ" বললে যাবে, অথবা নতুন ঠিকানা দিন 💖`);
+              await this.safeSend(
+                token,
+                psid,
+                `স্বাগতম ফিরে ${crmCust.name}! 🎉\n\nআগের ঠিকানায় পাঠাব?\n📍 *${crmCust.address}*\n\n"হ্যাঁ" বললে যাবে, অথবা নতুন ঠিকানা দিন 💖`,
+              );
               return;
             }
             await this.ctx.saveDraft(pageId, psid, newDraft);
@@ -622,12 +699,24 @@ export class WebhookService {
     // ── DUAL PHOTO MODE ────────────────────────────────────────────────────
     if (intent === 'DUAL_WEARING' || intent === 'DUAL_HOLDING') {
       if (!page.dualPhotoMode) {
-        await this.safeSend(token, psid, aiResult.reply ?? 'Dual Photo Mode চালু নেই। Product code বা screenshot দিন 😊');
+        await this.safeSend(
+          token,
+          psid,
+          aiResult.reply ??
+            'Dual Photo Mode চালু নেই। Product code বা screenshot দিন 😊',
+        );
         return;
       }
-      const productId = intent === 'DUAL_WEARING' ? page.dualWearingProductId : page.dualHoldingProductId;
+      const productId =
+        intent === 'DUAL_WEARING'
+          ? page.dualWearingProductId
+          : page.dualHoldingProductId;
       if (!productId) {
-        await this.safeSend(token, psid, aiResult.reply ?? 'Product এখনো set হয়নি।');
+        await this.safeSend(
+          token,
+          psid,
+          aiResult.reply ?? 'Product এখনো set হয়নি।',
+        );
         return;
       }
       const dualProduct = await this.prisma.product.findFirst({
@@ -638,7 +727,9 @@ export class WebhookService {
         return;
       }
       if (aiResult.reply) await this.safeSend(token, psid, aiResult.reply);
-      await this.ctx.setLastPresentedProducts(pageId, psid, [{ code: dualProduct.code, price: Number(dualProduct.price) }]);
+      await this.ctx.setLastPresentedProducts(pageId, psid, [
+        { code: dualProduct.code, price: Number(dualProduct.price) },
+      ]);
       return;
     }
 
@@ -669,11 +760,19 @@ export class WebhookService {
             [product as any],
             variantOptions,
           );
-          const crmFill = await this.prefillDraftFromCrm(pageId, psid, newDraft);
+          const crmFill = await this.prefillDraftFromCrm(
+            pageId,
+            psid,
+            newDraft,
+          );
           if (crmFill?.name && crmFill?.phone && crmFill?.address) {
             newDraft.currentStep = 'confirm_address';
             await this.ctx.saveDraft(pageId, psid, newDraft);
-            await this.safeSend(token, psid, `স্বাগতম ফিরে ${crmFill.name}! 🎉\n\nআগের ঠিকানায় পাঠাব?\n📍 *${crmFill.address}*\n\n"হ্যাঁ" বললে যাবে, অথবা নতুন ঠিকানা দিন 💖`);
+            await this.safeSend(
+              token,
+              psid,
+              `স্বাগতম ফিরে ${crmFill.name}! 🎉\n\nআগের ঠিকানায় পাঠাব?\n📍 *${crmFill.address}*\n\n"হ্যাঁ" বললে যাবে, অথবা নতুন ঠিকানা দিন 💖`,
+            );
             return;
           }
           await this.ctx.saveDraft(pageId, psid, newDraft);
@@ -709,7 +808,8 @@ export class WebhookService {
 
     // ── GREETING ───────────────────────────────────────────────────────────
     if (intent === 'GREETING') {
-      const greetReply = aiResult.reply ?? 'জি বলুন 😊 কীভাবে সাহায্য করতে পারি?';
+      const greetReply =
+        aiResult.reply ?? 'জি বলুন 😊 কীভাবে সাহায্য করতে পারি?';
       await this.safeSend(token, psid, greetReply);
       return;
     }
@@ -718,13 +818,19 @@ export class WebhookService {
     if (intent === 'CATALOG_REQUEST') {
       const businessName = page.businessName || page.pageName || 'আমাদের';
       const websiteUrl = String(page.websiteUrl || '').trim();
-      const catalogBaseUrl = (process.env.CATALOG_BASE_URL || 'https://chatcat.pro').replace(/\/$/, '');
+      const catalogBaseUrl = (
+        process.env.CATALOG_BASE_URL || 'https://chatcat.pro'
+      ).replace(/\/$/, '');
       const slug = page.catalogSlug || String(page.id);
       const catalogUrl = websiteUrl || `${catalogBaseUrl}/catalog/${slug}`;
 
       if (aiResult.reply) {
         // AI listed products from context — append catalog URL
-        await this.safeSend(token, psid, `${aiResult.reply}\n\n🛍️ সব product দেখতে:\n${catalogUrl}`);
+        await this.safeSend(
+          token,
+          psid,
+          `${aiResult.reply}\n\n🛍️ সব product দেখতে:\n${catalogUrl}`,
+        );
         return;
       }
 
@@ -738,7 +844,9 @@ export class WebhookService {
 
       let catalogMsg: string;
       if (topProducts.length > 0) {
-        const list = topProducts.map(p => `• ${p.name} — ৳${p.price}`).join('\n');
+        const list = topProducts
+          .map((p) => `• ${p.name} — ৳${p.price}`)
+          .join('\n');
         catalogMsg = `${businessName}-এর কিছু popular product:\n\n${list}\n\n🛍️ সব দেখতে:\n${catalogUrl}\n\nপছন্দের product-এর code বা screenshot দিন, order নেব 💖`;
       } else {
         catalogMsg = `${businessName}-এর সব product দেখতে:\n\n${catalogUrl}\n\nপছন্দের product-এর code বা screenshot দিন 💖`;
@@ -847,7 +955,9 @@ export class WebhookService {
       }
     }
     // Use AI-generated cancel reply if available, else knowledge base
-    const reply = aiReply ?? await this.botKnowledge.resolveSystemReply(page.id, 'order_cancelled');
+    const reply =
+      aiReply ??
+      (await this.botKnowledge.resolveSystemReply(page.id, 'order_cancelled'));
     await this.safeSend(page.pageToken, psid, reply);
   }
 
@@ -871,14 +981,26 @@ export class WebhookService {
         codes,
         products as any[],
       );
-      const crmCustomer = await this.prefillDraftFromCrm(pageId, psid, newDraft);
+      const crmCustomer = await this.prefillDraftFromCrm(
+        pageId,
+        psid,
+        newDraft,
+      );
       await this.ctx.saveDraft(pageId, psid, newDraft);
       if (crmCustomer?.name && crmCustomer?.phone && crmCustomer?.address) {
         newDraft.currentStep = 'confirm_address';
         await this.ctx.saveDraft(pageId, psid, newDraft);
-        await this.safeSend(token, psid, `স্বাগতম ফিরে ${crmCustomer.name}! 🎉\n\nআগের ঠিকানায় পাঠাব?\n📍 *${crmCustomer.address}*\n\n"হ্যাঁ" বললে যাবে, অথবা নতুন ঠিকানা দিন 💖`);
+        await this.safeSend(
+          token,
+          psid,
+          `স্বাগতম ফিরে ${crmCustomer.name}! 🎉\n\nআগের ঠিকানায় পাঠাব?\n📍 *${crmCustomer.address}*\n\n"হ্যাঁ" বললে যাবে, অথবা নতুন ঠিকানা দিন 💖`,
+        );
       } else {
-        await this.safeSend(token, psid, `${crmCustomer?.totalOrders ? `স্বাগতম ফিরে! 🎉 ` : ''}ঠিক আছে 💖 আপনার নাম দিন।`);
+        await this.safeSend(
+          token,
+          psid,
+          `${crmCustomer?.totalOrders ? `স্বাগতম ফিরে! 🎉 ` : ''}ঠিক আছে 💖 আপনার নাম দিন।`,
+        );
       }
     } else {
       await this.safeSend(
@@ -1034,10 +1156,9 @@ export class WebhookService {
   }
 
   private buildVisionShortlistUrl(page: any, codes: string[]): string {
-    const base = (process.env.CATALOG_BASE_URL || 'https://chatcat.pro').replace(
-      /\/$/,
-      '',
-    );
+    const base = (
+      process.env.CATALOG_BASE_URL || 'https://chatcat.pro'
+    ).replace(/\/$/, '');
     const pageKey = page.catalogSlug || page.pageId || page.id;
     return `${base}/catalog/${encodeURIComponent(String(pageKey))}?select=1&codes=${encodeURIComponent(codes.join(','))}`;
   }
@@ -1124,7 +1245,11 @@ export class WebhookService {
             psid,
             `${returnGreet}ঠিক আছে 💖 ${code} এর জন্য order নিচ্ছি।\n\n${firstField.label} কোনটা নেবেন?${opts}`,
           );
-        } else if (crmCustomer?.name && crmCustomer?.phone && crmCustomer?.address) {
+        } else if (
+          crmCustomer?.name &&
+          crmCustomer?.phone &&
+          crmCustomer?.address
+        ) {
           // All info prefilled — confirm address before going to summary
           // Customer may want to deliver to a different address this time
           newDraft.currentStep = 'confirm_address';
@@ -1460,7 +1585,12 @@ export class WebhookService {
 
   // ── V19: Image buffer — groups photos sent in quick succession ────────────
 
-  private bufferCustomerImage(page: any, psid: string, imageUrl: string, caption?: string): void {
+  private bufferCustomerImage(
+    page: any,
+    psid: string,
+    imageUrl: string,
+    caption?: string,
+  ): void {
     const key = `${page.id}:${psid}`;
     const existing = this.imageBuffer.get(key);
 
@@ -1469,10 +1599,21 @@ export class WebhookService {
       if (!entry) return;
       this.imageBuffer.delete(key);
       if (entry.urls.length === 1) {
-        this.ocrQueue.add(() => this.handleImageAttachment(entry.page, psid, entry.urls[0], entry.caption));
+        this.ocrQueue.add(() =>
+          this.handleImageAttachment(
+            entry.page,
+            psid,
+            entry.urls[0],
+            entry.caption,
+          ),
+        );
       } else {
-        this.logger.log(`[ImageBuffer] Flushing ${entry.urls.length} images for psid=${psid} page=${page.pageId}`);
-        this.ocrQueue.add(() => this.handleBatchImages(entry.page, psid, entry.urls, entry.caption));
+        this.logger.log(
+          `[ImageBuffer] Flushing ${entry.urls.length} images for psid=${psid} page=${page.pageId}`,
+        );
+        this.ocrQueue.add(() =>
+          this.handleBatchImages(entry.page, psid, entry.urls, entry.caption),
+        );
       }
     };
 
@@ -1492,43 +1633,73 @@ export class WebhookService {
   }
 
   /** Handles 2+ images sent together: tries OCR on each, then falls back to batch Vision */
-  private async handleBatchImages(page: any, psid: string, imageUrls: string[], customerText?: string): Promise<void> {
+  private async handleBatchImages(
+    page: any,
+    psid: string,
+    imageUrls: string[],
+    customerText?: string,
+  ): Promise<void> {
     const pageId = page.id as number;
     const token = page.pageToken as string;
 
     await this.ctx.clearPendingVisionMatches(pageId, psid);
-    this.logger.log(`[BatchImages] Processing ${imageUrls.length} images — page=${page.pageId} psid=${psid}`);
+    this.logger.log(
+      `[BatchImages] Processing ${imageUrls.length} images — page=${page.pageId} psid=${psid}`,
+    );
 
     try {
       const pageProducts = await this.prisma.product.findMany({
         where: { pageId, isActive: true },
-        select: { code: true, postCaption: true, visionSearchable: true, detectionMode: true },
+        select: {
+          code: true,
+          postCaption: true,
+          visionSearchable: true,
+          detectionMode: true,
+        },
       });
 
-      const hasOcrProducts = pageProducts.some((p) => p.detectionMode === 'OCR' || !p.visionSearchable);
-      const customPrefix = (page.productCodePrefix as string | undefined) || 'DF';
+      const hasOcrProducts = pageProducts.some(
+        (p) => p.detectionMode === 'OCR' || !p.visionSearchable,
+      );
+      const customPrefix =
+        (page.productCodePrefix as string | undefined) || 'DF';
 
       // Try OCR on each image sequentially — stop on first match
       if (hasOcrProducts) {
         for (const url of imageUrls) {
-          const ocrResult = await this.ocr.extractFull(url, customerText, pageProducts, customPrefix);
+          const ocrResult = await this.ocr.extractFull(
+            url,
+            customerText,
+            pageProducts,
+            customPrefix,
+          );
           const highMedium = ocrResult.verifiedCodes
             .filter((v) => v.confidence === 'HIGH' || v.confidence === 'MEDIUM')
             .map((v) => v.code);
-          const lowOnly = ocrResult.verifiedCodes.filter((v) => v.confidence === 'LOW').map((v) => v.code);
+          const lowOnly = ocrResult.verifiedCodes
+            .filter((v) => v.confidence === 'LOW')
+            .map((v) => v.code);
           const codes = highMedium.length > 0 ? highMedium : lowOnly;
 
           if (codes.length > 0) {
-            this.logger.log(`[BatchImages] OCR matched codes [${codes.join(',')}] from url=${url}`);
+            this.logger.log(
+              `[BatchImages] OCR matched codes [${codes.join(',')}] from url=${url}`,
+            );
             await this.walletService.deductUsage(pageId, 'IMAGE_OCR');
             if (codes.length === 1) {
-              await this.ctx.setLastPresentedProducts(pageId, psid, [{ code: codes[0], price: 0 }]);
+              await this.ctx.setLastPresentedProducts(pageId, psid, [
+                { code: codes[0], price: 0 },
+              ]);
               await this.productHandler.sendProductInfo(page, psid, codes[0]);
             } else {
               const newDraft = this.draftHandler.emptyDraft();
               newDraft.pendingMultiPreview = codes;
               await this.ctx.saveDraft(pageId, psid, newDraft);
-              await this.productHandler.sendMultiProductPreview(page, psid, codes);
+              await this.productHandler.sendMultiProductPreview(
+                page,
+                psid,
+                codes,
+              );
             }
             return;
           }
@@ -1537,17 +1708,25 @@ export class WebhookService {
 
       // No OCR codes in any image — use batch Vision (one AI call for all angles)
       if (!page.imageRecognitionOn) {
-        const reply = await this.botKnowledge.resolveSystemReply(pageId, 'ocr_fail');
+        const reply = await this.botKnowledge.resolveSystemReply(
+          pageId,
+          'ocr_fail',
+        );
         await this.safeSend(token, psid, reply);
         return;
       }
 
-      this.logger.log(`[BatchImages] OCR found nothing — falling back to batch Vision with ${imageUrls.length} angles`);
+      this.logger.log(
+        `[BatchImages] OCR found nothing — falling back to batch Vision with ${imageUrls.length} angles`,
+      );
       await this.visionProductRecognition(page, psid, imageUrls[0], imageUrls);
-
     } catch (err: any) {
-      this.logger.error(`[BatchImages] Uncaught error page=${page.pageId} psid=${psid}: ${err?.message ?? err}`);
-      const reply = await this.botKnowledge.resolveSystemReply(pageId, 'ocr_fail').catch(() => 'Sorry, something went wrong.');
+      this.logger.error(
+        `[BatchImages] Uncaught error page=${page.pageId} psid=${psid}: ${err?.message ?? err}`,
+      );
+      const reply = await this.botKnowledge
+        .resolveSystemReply(pageId, 'ocr_fail')
+        .catch(() => 'Sorry, something went wrong.');
       await this.safeSend(token, psid, reply);
     }
   }
@@ -1567,11 +1746,21 @@ export class WebhookService {
     // ── Live Session matching (new Dual Photo system) ──────────────────────
     const liveMatch = await this.matchLiveSession(pageId, imageUrl);
     if (liveMatch) {
-      this.logger.log(`[LiveSession] Matched product=${liveMatch.product.code} slot=${liveMatch.slot} conf=${liveMatch.confidence}`);
-      await this.ctx.setLastPresentedProducts(pageId, psid, [{ code: liveMatch.product.code, price: Number(liveMatch.product.price) }]);
-      const slotLabel = liveMatch.slot === 'worn' ? 'পরা পোশাক' : 'হাতে ধরা পোশাক';
-      await this.safeSend(token, psid,
-        `👗 ${slotLabel}: *${liveMatch.product.name}*\n💰 দাম: ৳${Number(liveMatch.product.price).toLocaleString()}\n\nOrder করতে চাইলে বলুন 😊`
+      this.logger.log(
+        `[LiveSession] Matched product=${liveMatch.product.code} slot=${liveMatch.slot} conf=${liveMatch.confidence}`,
+      );
+      await this.ctx.setLastPresentedProducts(pageId, psid, [
+        {
+          code: liveMatch.product.code,
+          price: Number(liveMatch.product.price),
+        },
+      ]);
+      const slotLabel =
+        liveMatch.slot === 'worn' ? 'পরা পোশাক' : 'হাতে ধরা পোশাক';
+      await this.safeSend(
+        token,
+        psid,
+        `👗 ${slotLabel}: *${liveMatch.product.name}*\n💰 দাম: ৳${Number(liveMatch.product.price).toLocaleString()}\n\nOrder করতে চাইলে বলুন 😊`,
       );
       return;
     }
@@ -1584,14 +1773,23 @@ export class WebhookService {
       // Load all active products with detectionMode
       const pageProducts = await this.prisma.product.findMany({
         where: { pageId, isActive: true },
-        select: { code: true, postCaption: true, visionSearchable: true, detectionMode: true },
+        select: {
+          code: true,
+          postCaption: true,
+          visionSearchable: true,
+          detectionMode: true,
+        },
       });
 
       // If ALL active products are AI_VISION mode (none use OCR/product codes),
       // skip OCR entirely and go straight to vision for faster response
-      const hasOcrProducts = pageProducts.some((p) => p.detectionMode === 'OCR' || !p.visionSearchable);
+      const hasOcrProducts = pageProducts.some(
+        (p) => p.detectionMode === 'OCR' || !p.visionSearchable,
+      );
       if (!hasOcrProducts && page.imageRecognitionOn) {
-        this.logger.log(`[OCR] All products are AI_VISION mode — skipping OCR, going straight to vision`);
+        this.logger.log(
+          `[OCR] All products are AI_VISION mode — skipping OCR, going straight to vision`,
+        );
         await this.visionProductRecognition(page, psid, imageUrl);
         return;
       }
@@ -1703,35 +1901,45 @@ export class WebhookService {
     const token = page.pageToken as string;
 
     // Read per-page thresholds (fall back to safe defaults)
-    const highThreshold: number = typeof page.imageHighConfidence === 'number'
-      ? page.imageHighConfidence
-      : 0.75;
-    const medThreshold: number = typeof page.imageMediumConfidence === 'number'
-      ? page.imageMediumConfidence
-      : 0.45;
+    const highThreshold: number =
+      typeof page.imageHighConfidence === 'number'
+        ? page.imageHighConfidence
+        : 0.75;
+    const medThreshold: number =
+      typeof page.imageMediumConfidence === 'number'
+        ? page.imageMediumConfidence
+        : 0.45;
 
     const isBatch = allImageUrls && allImageUrls.length > 1;
     this.logger.log(
       `[VisionRecog] Starting for page=${page.pageId} psid=${psid} ` +
-        `angles=${isBatch ? allImageUrls!.length : 1} thresholds: high=${highThreshold} med=${medThreshold}`,
+        `angles=${isBatch ? allImageUrls.length : 1} thresholds: high=${highThreshold} med=${medThreshold}`,
     );
 
     try {
       // Step 0: Check wallet balance
       if (!(await this.walletService.canProcessAi(pageId))) {
-        this.logger.warn(`[VisionRecog] pageId=${pageId} suspended or insufficient balance`);
-        const reply = await this.botKnowledge.resolveSystemReply(pageId, 'ocr_fail');
+        this.logger.warn(
+          `[VisionRecog] pageId=${pageId} suspended or insufficient balance`,
+        );
+        const reply = await this.botKnowledge.resolveSystemReply(
+          pageId,
+          'ocr_fail',
+        );
         await this.safeSend(token, psid, reply);
         return;
       }
 
       // Step 1: Analyze image(s) — batch if multiple angles, single otherwise
       const attrs = isBatch
-        ? await this.visionAnalysis.analyzeMultiple(allImageUrls!)
+        ? await this.visionAnalysis.analyzeMultiple(allImageUrls)
         : await this.visionAnalysis.analyze(imageUrl);
 
       // Deduct balance — cheaper rate when local CLIP handled it, full rate when OpenAI was used
-      await this.walletService.deductUsage(pageId, attrs.usedApi ? 'IMAGE' : 'IMAGE_LOCAL');
+      await this.walletService.deductUsage(
+        pageId,
+        attrs.usedApi ? 'IMAGE' : 'IMAGE_LOCAL',
+      );
 
       this.logger.log(
         `[VisionRecog] Attributes — cat=${attrs.category} color=${attrs.color} ` +
@@ -1740,7 +1948,9 @@ export class WebhookService {
 
       // If vision provider itself has zero confidence (mock or bad image)
       if (attrs.confidence <= 0 || !attrs.category) {
-        this.logger.warn(`[VisionRecog] Zero confidence from vision provider — falling back`);
+        this.logger.warn(
+          `[VisionRecog] Zero confidence from vision provider — falling back`,
+        );
         await this.visionOps.logVisionAttempt({
           pageId,
           psid,
@@ -1785,7 +1995,9 @@ export class WebhookService {
       // Step 3: Route by confidence
       if (topScore >= highThreshold) {
         // HIGH confidence — proceed as if customer sent the product code directly
-        this.logger.log(`[VisionRecog] HIGH confidence (${topScore.toFixed(2)}) — auto-proceed with ${topMatch.productCode}`);
+        this.logger.log(
+          `[VisionRecog] HIGH confidence (${topScore.toFixed(2)}) — auto-proceed with ${topMatch.productCode}`,
+        );
         await this.visionOps.logVisionAttempt({
           pageId,
           psid,
@@ -1803,8 +2015,11 @@ export class WebhookService {
           psid,
           this.buildVisionHighConfidenceMsg(attrs, topMatch),
         );
-        await this.productHandler.sendProductInfo(page, psid, topMatch.productCode);
-
+        await this.productHandler.sendProductInfo(
+          page,
+          psid,
+          topMatch.productCode,
+        );
       } else if (topScore >= medThreshold) {
         // MEDIUM confidence — show 2–4 options, ask customer to pick
         this.logger.log(
@@ -1840,10 +2055,11 @@ export class WebhookService {
           psid,
           this.buildVisionMediumConfidenceMsg(page, attrs, matches),
         );
-
       } else {
         // LOW confidence
-        this.logger.warn(`[VisionRecog] LOW confidence (${topScore.toFixed(2)}) — triggering fallback`);
+        this.logger.warn(
+          `[VisionRecog] LOW confidence (${topScore.toFixed(2)}) — triggering fallback`,
+        );
         await this.visionOps.logVisionAttempt({
           pageId,
           psid,
@@ -1857,9 +2073,10 @@ export class WebhookService {
         });
         await this.visionLowConfidenceFallback(page, psid, attrs, matches);
       }
-
     } catch (err: any) {
-      this.logger.error(`[VisionRecog] Uncaught error page=${page.pageId} psid=${psid}: ${err?.message ?? err}`);
+      this.logger.error(
+        `[VisionRecog] Uncaught error page=${page.pageId} psid=${psid}: ${err?.message ?? err}`,
+      );
       // Fail gracefully — send a generic helpful reply
       await this.safeSend(
         token,
@@ -1876,7 +2093,8 @@ export class WebhookService {
   ): string {
     const catLabel = attrs.category ?? 'পণ্য';
     const colorLabel = attrs.color ? ` ${attrs.color}` : '';
-    const patternLabel = attrs.pattern && attrs.pattern !== 'plain' ? ` ${attrs.pattern}` : '';
+    const patternLabel =
+      attrs.pattern && attrs.pattern !== 'plain' ? ` ${attrs.pattern}` : '';
     return (
       `আপনার ছবিটা দেখে মনে হচ্ছে এটা${colorLabel}${patternLabel} ${catLabel} টাইপের। ` +
       `এই পণ্যটি পেয়েছি:\n\nযদি এটা ঠিক না হয়, আরেকটা clear photo বা product code পাঠান 💖`
@@ -1891,7 +2109,8 @@ export class WebhookService {
   ): string {
     const catLabel = attrs.category ?? 'পণ্য';
     const colorLabel = attrs.color ? ` ${attrs.color}` : '';
-    const patternLabel = attrs.pattern && attrs.pattern !== 'plain' ? ` ${attrs.pattern}` : '';
+    const patternLabel =
+      attrs.pattern && attrs.pattern !== 'plain' ? ` ${attrs.pattern}` : '';
 
     const header =
       `আপনার ছবিটা দেখে মনে হচ্ছে এটা${colorLabel}${patternLabel} ${catLabel} টাইপের। ` +
@@ -1971,14 +2190,19 @@ export class WebhookService {
   /** Detect when customer wants 2 products sent to 2 different addresses */
   private isMultiAddressIntent(text: string): boolean {
     const t = text.toLowerCase();
-    return /2\s*t[ai]\s*address|2\s*t[ai]\s*jaga|alag\s*address|alada\s*address|আলাদা\s*ঠিকানা|দুই\s*ঠিকানা|2\s*ঠিকানা|different\s*address|split.*order|2.*order.*address|address.*2.*jaga/i.test(t);
+    return /2\s*t[ai]\s*address|2\s*t[ai]\s*jaga|alag\s*address|alada\s*address|আলাদা\s*ঠিকানা|দুই\s*ঠিকানা|2\s*ঠিকানা|different\s*address|split.*order|2.*order.*address|address.*2.*jaga/i.test(
+      t,
+    );
   }
 
   /**
    * Called when Facebook sends an echo (page sent a message to a customer).
    * If that customer has an agent_required order, auto-mute the bot.
    */
-  private async handleAgentEcho(page: any, customerPsid: string): Promise<void> {
+  private async handleAgentEcho(
+    page: any,
+    customerPsid: string,
+  ): Promise<void> {
     const pageId = page.id as number;
     // Agent manually replied → mute the bot for this customer until dashboard resume
     await this.ctx.setAgentHandling(pageId, customerPsid, true);
@@ -2003,17 +2227,25 @@ export class WebhookService {
 
   // ── Voice message handler (Whisper STT) ────────────────────────────────────
 
-  private async handleAudioMessage(page: any, psid: string, audioUrl: string): Promise<void> {
+  private async handleAudioMessage(
+    page: any,
+    psid: string,
+    audioUrl: string,
+  ): Promise<void> {
     const pageId = page.id as number;
     const token = page.pageToken as string;
 
-    this.logger.log(`[Whisper] Audio message from psid=${psid} page=${page.pageId}`);
+    this.logger.log(
+      `[Whisper] Audio message from psid=${psid} page=${page.pageId}`,
+    );
 
     // Guard: automation must be on and wallet must have balance
     if (!page.automationOn) return;
 
     if (!(await this.walletService.canProcessAi(pageId))) {
-      this.logger.warn(`[Whisper] pageId=${pageId} insufficient balance — skipping audio`);
+      this.logger.warn(
+        `[Whisper] pageId=${pageId} insufficient balance — skipping audio`,
+      );
       return;
     }
 
@@ -2023,7 +2255,8 @@ export class WebhookService {
     }
 
     // Acknowledge the voice message while transcribing
-    const processingMsg = await this.botKnowledge.resolveSystemReply(pageId, 'voice_processing')
+    const processingMsg = await this.botKnowledge
+      .resolveSystemReply(pageId, 'voice_processing')
       .catch(() => 'আপনার voice message শুনছি... ⏳');
     await this.safeSend(token, psid, processingMsg);
 
@@ -2031,8 +2264,11 @@ export class WebhookService {
 
     if (!transcribed) {
       this.logger.warn(`[Whisper] Transcription failed for psid=${psid}`);
-      const failMsg = await this.botKnowledge.resolveSystemReply(pageId, 'voice_fail')
-        .catch(() => 'দুঃখিত, আপনার voice message বুঝতে পারিনি। Text-এ লিখে জানান।');
+      const failMsg = await this.botKnowledge
+        .resolveSystemReply(pageId, 'voice_fail')
+        .catch(
+          () => 'দুঃখিত, আপনার voice message বুঝতে পারিনি। Text-এ লিখে জানান।',
+        );
       await this.safeSend(token, psid, failMsg);
       return;
     }
@@ -2040,7 +2276,9 @@ export class WebhookService {
     // Deduct VOICE cost after successful transcription
     await this.walletService.deductUsage(pageId, 'VOICE');
 
-    this.logger.log(`[Whisper] Routing transcribed text to bot pipeline: "${transcribed.slice(0, 80)}"`);
+    this.logger.log(
+      `[Whisper] Routing transcribed text to bot pipeline: "${transcribed.slice(0, 80)}"`,
+    );
 
     // Route the transcribed text through the normal message pipeline by
     // constructing a synthetic message object and re-calling processMessage
@@ -2056,7 +2294,12 @@ export class WebhookService {
     pageId: number,
     psid: string,
     draft: DraftSession,
-  ): Promise<{ name: string | null; phone: string | null; address: string | null; totalOrders: number } | null> {
+  ): Promise<{
+    name: string | null;
+    phone: string | null;
+    address: string | null;
+    totalOrders: number;
+  } | null> {
     try {
       const crm = await this.prisma.customer.findUnique({
         where: { pageId_psid: { pageId, psid } },
@@ -2077,7 +2320,10 @@ export class WebhookService {
    * sends the customer's image to GPT-4o to match against stored visual profiles.
    * Returns the matched product or null (→ falls through to OCR pipeline).
    */
-  private async matchLiveSession(pageId: number, imageUrl: string): Promise<{
+  private async matchLiveSession(
+    pageId: number,
+    imageUrl: string,
+  ): Promise<{
     sessionId: number;
     slot: 'worn' | 'held';
     product: { id: number; code: string; name: string; price: number };
@@ -2091,8 +2337,12 @@ export class WebhookService {
       const sessions = await this.prisma.liveSession.findMany({
         where: { pageId, isActive: true, aiMemo: { not: null } },
         include: {
-          wornProduct: { select: { id: true, code: true, name: true, price: true } },
-          heldProduct: { select: { id: true, code: true, name: true, price: true } },
+          wornProduct: {
+            select: { id: true, code: true, name: true, price: true },
+          },
+          heldProduct: {
+            select: { id: true, code: true, name: true, price: true },
+          },
         },
         take: 5,
       });
@@ -2101,16 +2351,28 @@ export class WebhookService {
       // Check wallet before making the GPT-4o call
       if (!(await this.walletService.canProcessAi(pageId))) return null;
 
-      const sessionDescs = sessions.map(s => {
-        let memo: any = {};
-        try { memo = JSON.parse(s.aiMemo!); } catch { /* skip */ }
-        const wornDesc = memo.worn?.description ?? (s.wornProduct ? `${s.wornProduct.name} — worn by model` : null);
-        const heldDesc = memo.held?.description ?? (s.heldProduct ? `${s.heldProduct.name} — held in hand` : null);
-        const parts: string[] = [];
-        if (wornDesc && s.wornProduct) parts.push(`  - WORN (${s.wornProduct.code}): ${wornDesc}`);
-        if (heldDesc && s.heldProduct) parts.push(`  - HELD (${s.heldProduct.code}): ${heldDesc}`);
-        return `Session ${s.id}${s.label ? ` "${s.label}"` : ''}:\n${parts.join('\n')}`;
-      }).join('\n\n');
+      const sessionDescs = sessions
+        .map((s) => {
+          let memo: any = {};
+          try {
+            memo = JSON.parse(s.aiMemo!);
+          } catch {
+            /* skip */
+          }
+          const wornDesc =
+            memo.worn?.description ??
+            (s.wornProduct ? `${s.wornProduct.name} — worn by model` : null);
+          const heldDesc =
+            memo.held?.description ??
+            (s.heldProduct ? `${s.heldProduct.name} — held in hand` : null);
+          const parts: string[] = [];
+          if (wornDesc && s.wornProduct)
+            parts.push(`  - WORN (${s.wornProduct.code}): ${wornDesc}`);
+          if (heldDesc && s.heldProduct)
+            parts.push(`  - HELD (${s.heldProduct.code}): ${heldDesc}`);
+          return `Session ${s.id}${s.label ? ` "${s.label}"` : ''}:\n${parts.join('\n')}`;
+        })
+        .join('\n\n');
 
       const prompt = `A customer sent this screenshot from a Bangladeshi clothing live sale.
 
@@ -2133,46 +2395,64 @@ If you cannot match any product with confidence > 0.5, return:
 
       const res = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+        },
         body: JSON.stringify({
           model: 'gpt-4o',
           max_tokens: 200,
           temperature: 0.1,
-          messages: [{
-            role: 'user',
-            content: [
-              { type: 'text', text: prompt },
-              { type: 'image_url', image_url: { url: imageUrl, detail: 'high' } },
-            ],
-          }],
+          messages: [
+            {
+              role: 'user',
+              content: [
+                { type: 'text', text: prompt },
+                {
+                  type: 'image_url',
+                  image_url: { url: imageUrl, detail: 'high' },
+                },
+              ],
+            },
+          ],
         }),
         signal: AbortSignal.timeout(15_000),
       });
 
       if (!res.ok) return null;
-      const data = await res.json() as any;
+      const data = await res.json();
       const text: string = data.choices?.[0]?.message?.content ?? '';
       let ai: any = {};
       try {
         const m = text.match(/\{[\s\S]*\}/);
         if (m) ai = JSON.parse(m[0]);
-      } catch { return null; }
+      } catch {
+        return null;
+      }
 
       if (!ai.matched || ai.confidence < 0.5) return null;
 
-      const session = sessions.find(s => s.id === ai.sessionId);
+      const session = sessions.find((s) => s.id === ai.sessionId);
       if (!session) return null;
 
       const slot: 'worn' | 'held' = ai.slot === 'held' ? 'held' : 'worn';
-      const product = slot === 'worn' ? session.wornProduct : session.heldProduct;
+      const product =
+        slot === 'worn' ? session.wornProduct : session.heldProduct;
       if (!product) return null;
 
-      void this.walletService.deductUsage(pageId, 'DUAL_PHOTO_AI', { photoCount: 1 });
+      void this.walletService.deductUsage(pageId, 'DUAL_PHOTO_AI', {
+        photoCount: 1,
+      });
 
       return {
         sessionId: session.id,
         slot,
-        product: { id: product.id, code: product.code, name: product.name ?? '', price: Number(product.price) },
+        product: {
+          id: product.id,
+          code: product.code,
+          name: product.name ?? '',
+          price: Number(product.price),
+        },
         confidence: ai.confidence ?? 0,
       };
     } catch (err: any) {

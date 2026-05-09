@@ -393,7 +393,9 @@ export class BillingService {
       periodDays?: number;
       ordersLimit?: number;
       note?: string;
-      featureAccess?: Partial<Record<(typeof PAGE_FEATURE_FIELDS)[number], boolean>>;
+      featureAccess?: Partial<
+        Record<(typeof PAGE_FEATURE_FIELDS)[number], boolean>
+      >;
     },
   ) {
     const plan = await this.prisma.plan.findFirst({
@@ -479,7 +481,9 @@ export class BillingService {
     if (sub.status === 'trial' && daysLeft <= 7)
       w.push(`Trial ${daysLeft} দিন বাকি`);
     if (sub.status === 'active' && daysLeft <= 2)
-      w.push(`⚠️ Subscription ${daysLeft} দিনের মধ্যে শেষ হবে — admin এর সাথে কথা বলুন`);
+      w.push(
+        `⚠️ Subscription ${daysLeft} দিনের মধ্যে শেষ হবে — admin এর সাথে কথা বলুন`,
+      );
     if (sub.status === 'expired')
       w.push('❌ Subscription expired — payment করুন');
     if (sub.status === 'grace') w.push('⚠️ Grace period চলছে — payment করুন');
@@ -496,7 +500,7 @@ export class BillingService {
     const patch: Record<string, boolean> = {};
     for (const field of PAGE_FEATURE_FIELDS) {
       if (typeof input?.[field] === 'boolean') {
-        patch[field] = input[field] as boolean;
+        patch[field] = input[field];
       }
     }
     return patch;

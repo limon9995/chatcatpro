@@ -125,9 +125,15 @@ export class VisionOpsService {
       this.eventsFile(params.pageId),
     );
     events.unshift(event);
-    await this.writeJsonArray(this.eventsFile(params.pageId), events.slice(0, 500));
+    await this.writeJsonArray(
+      this.eventsFile(params.pageId),
+      events.slice(0, 500),
+    );
 
-    if (params.type === 'medium_confidence' || params.type === 'low_confidence') {
+    if (
+      params.type === 'medium_confidence' ||
+      params.type === 'low_confidence'
+    ) {
       const reviewItems = await this.readJsonArray<VisionReviewQueueItem>(
         this.reviewFile(params.pageId),
       );
@@ -146,7 +152,10 @@ export class VisionOpsService {
         attrs: params.attrs ?? null,
         matches: this.normalizeMatches(params.matches),
       });
-      await this.writeJsonArray(this.reviewFile(params.pageId), reviewItems.slice(0, 300));
+      await this.writeJsonArray(
+        this.reviewFile(params.pageId),
+        reviewItems.slice(0, 300),
+      );
     }
 
     return event.id;
@@ -159,7 +168,9 @@ export class VisionOpsService {
     note?: string,
   ) {
     const now = new Date().toISOString();
-    const events = await this.readJsonArray<VisionEvent>(this.eventsFile(pageId));
+    const events = await this.readJsonArray<VisionEvent>(
+      this.eventsFile(pageId),
+    );
     events.unshift({
       id: randomUUID(),
       pageId,
@@ -190,7 +201,9 @@ export class VisionOpsService {
   }
 
   async logSelectionRetry(pageId: number, psid: string, note: string) {
-    const events = await this.readJsonArray<VisionEvent>(this.eventsFile(pageId));
+    const events = await this.readJsonArray<VisionEvent>(
+      this.eventsFile(pageId),
+    );
     events.unshift({
       id: randomUUID(),
       pageId,
@@ -204,7 +217,9 @@ export class VisionOpsService {
 
   async logHumanHandoff(pageId: number, psid: string, note: string) {
     const now = new Date().toISOString();
-    const events = await this.readJsonArray<VisionEvent>(this.eventsFile(pageId));
+    const events = await this.readJsonArray<VisionEvent>(
+      this.eventsFile(pageId),
+    );
     events.unshift({
       id: randomUUID(),
       pageId,
@@ -256,12 +271,12 @@ export class VisionOpsService {
 
   async getSummary(pageId: number, days = 30) {
     const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
-    const events = (await this.readJsonArray<VisionEvent>(this.eventsFile(pageId))).filter(
-      (event) => new Date(event.createdAt).getTime() >= cutoff,
-    );
-    const queue = (await this.readJsonArray<VisionReviewQueueItem>(
-      this.reviewFile(pageId),
-    )).filter((item) => new Date(item.createdAt).getTime() >= cutoff);
+    const events = (
+      await this.readJsonArray<VisionEvent>(this.eventsFile(pageId))
+    ).filter((event) => new Date(event.createdAt).getTime() >= cutoff);
+    const queue = (
+      await this.readJsonArray<VisionReviewQueueItem>(this.reviewFile(pageId))
+    ).filter((item) => new Date(item.createdAt).getTime() >= cutoff);
 
     const attempts = events.filter((event) =>
       ['high_confidence', 'medium_confidence', 'low_confidence'].includes(
@@ -280,13 +295,21 @@ export class VisionOpsService {
       days,
       totals: {
         imageInquiries: attempts.length,
-        highConfidence: attempts.filter((e) => e.type === 'high_confidence').length,
-        shortlistShown: attempts.filter((e) => e.type === 'medium_confidence').length,
-        lowConfidence: attempts.filter((e) => e.type === 'low_confidence').length,
-        selectionsConfirmed: events.filter((e) => e.type === 'selection_confirmed').length,
-        selectionRetries: events.filter((e) => e.type === 'selection_retry').length,
+        highConfidence: attempts.filter((e) => e.type === 'high_confidence')
+          .length,
+        shortlistShown: attempts.filter((e) => e.type === 'medium_confidence')
+          .length,
+        lowConfidence: attempts.filter((e) => e.type === 'low_confidence')
+          .length,
+        selectionsConfirmed: events.filter(
+          (e) => e.type === 'selection_confirmed',
+        ).length,
+        selectionRetries: events.filter((e) => e.type === 'selection_retry')
+          .length,
         humanHandoffs: events.filter((e) => e.type === 'human_handoff').length,
-        unresolvedQueue: queue.filter((item) => item.status !== 'resolved' && item.status !== 'dismissed').length,
+        unresolvedQueue: queue.filter(
+          (item) => item.status !== 'resolved' && item.status !== 'dismissed',
+        ).length,
       },
       reviewQueue: queue.slice(0, 12),
       recentEvents: events.slice(0, 18),
@@ -306,8 +329,11 @@ export class VisionOpsService {
       throw new Error('Only image uploads are supported');
     }
 
-    const ext = extname(String(file.originalname || '')).toLowerCase() || '.jpg';
-    const safeExt = ['.jpg', '.jpeg', '.png', '.webp'].includes(ext) ? ext : '.jpg';
+    const ext =
+      extname(String(file.originalname || '')).toLowerCase() || '.jpg';
+    const safeExt = ['.jpg', '.jpeg', '.png', '.webp'].includes(ext)
+      ? ext
+      : '.jpg';
     const dir = join(this.uploadsDir, String(pageId));
     await this.ensureDir(dir);
     const filename = `${Date.now()}-${randomUUID().slice(0, 8)}${safeExt}`;
@@ -330,7 +356,8 @@ export class VisionOpsService {
       .filter(Boolean)
       .map((value: any) => String(value).trim().toLowerCase());
     const uniqTokens = tokens.filter(
-      (value: string, index: number, all: string[]) => all.indexOf(value) === index,
+      (value: string, index: number, all: string[]) =>
+        all.indexOf(value) === index,
     );
     return {
       category: attrs.category || '',
@@ -342,9 +369,16 @@ export class VisionOpsService {
     };
   }
 
-  async analyzeProductImage(pageId: number, imageUrl: string, excludeCode?: string) {
+  async analyzeProductImage(
+    pageId: number,
+    imageUrl: string,
+    excludeCode?: string,
+  ) {
     if (!(await this.walletService.canProcessAi(pageId))) {
-      throw new HttpException('Insufficient wallet balance to analyze image', HttpStatus.PAYMENT_REQUIRED);
+      throw new HttpException(
+        'Insufficient wallet balance to analyze image',
+        HttpStatus.PAYMENT_REQUIRED,
+      );
     }
 
     const attrs = await this.visionAnalysis.analyze(imageUrl);
@@ -357,26 +391,45 @@ export class VisionOpsService {
     }
 
     if (attrs.fromCache) {
-      this.logger.log(`[VisionOps] Cache hit — skipping wallet deduction for pageId=${pageId}`);
+      this.logger.log(
+        `[VisionOps] Cache hit — skipping wallet deduction for pageId=${pageId}`,
+      );
     } else {
       await this.walletService.deductUsage(pageId, 'ADMIN_VISION');
     }
 
-    const uniqueness = await this.productMatch.checkUniqueness(pageId, attrs, excludeCode);
+    const uniqueness = await this.productMatch.checkUniqueness(
+      pageId,
+      attrs,
+      excludeCode,
+    );
 
     if (!attrs.fromCache) {
       await this.walletService.deductUsage(pageId, 'IMAGE_UNIQUENESS');
     }
 
-    return { attrs, suggested: this.buildSuggested(attrs), uniqueness, fromCache: attrs.fromCache ?? false };
+    return {
+      attrs,
+      suggested: this.buildSuggested(attrs),
+      uniqueness,
+      fromCache: attrs.fromCache ?? false,
+    };
   }
 
   /** Analyze 2-5 reference images of the same product in one AI call for richer description */
-  async batchAnalyzeReferenceImages(pageId: number, imageUrls: string[], excludeCode?: string) {
-    if (!imageUrls.length) throw new HttpException('No image URLs provided', HttpStatus.BAD_REQUEST);
+  async batchAnalyzeReferenceImages(
+    pageId: number,
+    imageUrls: string[],
+    excludeCode?: string,
+  ) {
+    if (!imageUrls.length)
+      throw new HttpException('No image URLs provided', HttpStatus.BAD_REQUEST);
 
     if (!(await this.walletService.canProcessAi(pageId))) {
-      throw new HttpException('Insufficient wallet balance', HttpStatus.PAYMENT_REQUIRED);
+      throw new HttpException(
+        'Insufficient wallet balance',
+        HttpStatus.PAYMENT_REQUIRED,
+      );
     }
 
     const urls = imageUrls.slice(0, 5);
@@ -390,18 +443,30 @@ export class VisionOpsService {
     }
 
     if (attrs.fromCache) {
-      this.logger.log(`[VisionOps] Batch cache hit — skipping wallet deduction for pageId=${pageId}`);
+      this.logger.log(
+        `[VisionOps] Batch cache hit — skipping wallet deduction for pageId=${pageId}`,
+      );
     } else {
       await this.walletService.deductUsage(pageId, 'ADMIN_VISION');
     }
 
-    const uniqueness = await this.productMatch.checkUniqueness(pageId, attrs, excludeCode);
+    const uniqueness = await this.productMatch.checkUniqueness(
+      pageId,
+      attrs,
+      excludeCode,
+    );
 
     if (!attrs.fromCache) {
       await this.walletService.deductUsage(pageId, 'IMAGE_UNIQUENESS');
     }
 
-    return { attrs, imageCount: urls.length, suggested: this.buildSuggested(attrs), uniqueness, fromCache: attrs.fromCache ?? false };
+    return {
+      attrs,
+      imageCount: urls.length,
+      suggested: this.buildSuggested(attrs),
+      uniqueness,
+      fromCache: attrs.fromCache ?? false,
+    };
   }
 
   async buildVideoCaptureGuide(videoUrl: string, existingImages = 0) {

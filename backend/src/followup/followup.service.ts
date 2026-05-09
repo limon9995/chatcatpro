@@ -148,14 +148,23 @@ export class FollowUpService {
       const parsed = JSON.parse(raw || '{}');
       return {
         orderReceivedEnabled: Boolean(parsed.orderReceivedEnabled),
-        orderReceivedDelay: Number(parsed.orderReceivedDelay) || defaults.orderReceivedDelay,
-        orderReceivedMsg: String(parsed.orderReceivedMsg || defaults.orderReceivedMsg),
+        orderReceivedDelay:
+          Number(parsed.orderReceivedDelay) || defaults.orderReceivedDelay,
+        orderReceivedMsg: String(
+          parsed.orderReceivedMsg || defaults.orderReceivedMsg,
+        ),
         orderDeliveredEnabled: Boolean(parsed.orderDeliveredEnabled),
-        orderDeliveredDelay: Number(parsed.orderDeliveredDelay) || defaults.orderDeliveredDelay,
-        orderDeliveredMsg: String(parsed.orderDeliveredMsg || defaults.orderDeliveredMsg),
+        orderDeliveredDelay:
+          Number(parsed.orderDeliveredDelay) || defaults.orderDeliveredDelay,
+        orderDeliveredMsg: String(
+          parsed.orderDeliveredMsg || defaults.orderDeliveredMsg,
+        ),
         abandonedCartEnabled: Boolean(parsed.abandonedCartEnabled),
-        abandonedCartDelay: Number(parsed.abandonedCartDelay) || defaults.abandonedCartDelay,
-        abandonedCartMsg: String(parsed.abandonedCartMsg || defaults.abandonedCartMsg),
+        abandonedCartDelay:
+          Number(parsed.abandonedCartDelay) || defaults.abandonedCartDelay,
+        abandonedCartMsg: String(
+          parsed.abandonedCartMsg || defaults.abandonedCartMsg,
+        ),
       };
     } catch {
       return defaults;

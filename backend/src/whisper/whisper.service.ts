@@ -26,7 +26,9 @@ export class WhisperService {
     if (this.apiKey) {
       this.logger.log('[Whisper] Enabled — model=whisper-1');
     } else {
-      this.logger.warn('[Whisper] OPENAI_API_KEY not set — voice transcription disabled');
+      this.logger.warn(
+        '[Whisper] OPENAI_API_KEY not set — voice transcription disabled',
+      );
     }
   }
 
@@ -43,9 +45,13 @@ export class WhisperService {
 
     try {
       // 1. Download audio (FB pre-signed CDN URLs are publicly accessible)
-      const audioRes = await fetch(audioUrl, { signal: AbortSignal.timeout(15_000) });
+      const audioRes = await fetch(audioUrl, {
+        signal: AbortSignal.timeout(15_000),
+      });
       if (!audioRes.ok) {
-        this.logger.warn(`[Whisper] Audio download failed status=${audioRes.status}`);
+        this.logger.warn(
+          `[Whisper] Audio download failed status=${audioRes.status}`,
+        );
         this.recordFailure();
         return null;
       }
@@ -72,22 +78,29 @@ export class WhisperService {
       );
 
       // 4. Call Whisper API
-      const whisperRes = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${this.apiKey}` },
-        body: formData,
-        signal: AbortSignal.timeout(30_000),
-      });
+      const whisperRes = await fetch(
+        'https://api.openai.com/v1/audio/transcriptions',
+        {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${this.apiKey}` },
+          body: formData,
+          signal: AbortSignal.timeout(30_000),
+        },
+      );
 
       if (whisperRes.status === 429 || whisperRes.status === 402) {
-        this.logger.warn(`[Whisper] Quota/rate-limit hit (${whisperRes.status}) — cooldown`);
+        this.logger.warn(
+          `[Whisper] Quota/rate-limit hit (${whisperRes.status}) — cooldown`,
+        );
         this.enterCooldown();
         return null;
       }
 
       if (!whisperRes.ok) {
         const errText = await whisperRes.text().catch(() => '');
-        this.logger.error(`[Whisper] API error ${whisperRes.status}: ${errText.slice(0, 120)}`);
+        this.logger.error(
+          `[Whisper] API error ${whisperRes.status}: ${errText.slice(0, 120)}`,
+        );
         this.recordFailure();
         return null;
       }
@@ -101,7 +114,9 @@ export class WhisperService {
       }
 
       this.failCount = 0;
-      this.logger.log(`[Whisper] Transcribed (${audioBuffer.length}B): "${transcribed.slice(0, 100)}"`);
+      this.logger.log(
+        `[Whisper] Transcribed (${audioBuffer.length}B): "${transcribed.slice(0, 100)}"`,
+      );
       return transcribed;
     } catch (err: any) {
       this.logger.error(`[Whisper] Request failed: ${err?.message ?? err}`);
@@ -112,8 +127,10 @@ export class WhisperService {
 
   private extFromContentType(contentType: string): string {
     if (contentType.includes('ogg')) return '.ogg';
-    if (contentType.includes('mpeg') || contentType.includes('mp3')) return '.mp3';
-    if (contentType.includes('mp4') || contentType.includes('m4a')) return '.m4a';
+    if (contentType.includes('mpeg') || contentType.includes('mp3'))
+      return '.mp3';
+    if (contentType.includes('mp4') || contentType.includes('m4a'))
+      return '.m4a';
     if (contentType.includes('wav')) return '.wav';
     if (contentType.includes('webm')) return '.webm';
     return '.ogg'; // FB Messenger default for voice

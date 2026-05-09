@@ -26,7 +26,9 @@ export class FallbackAiService {
     private readonly mockProvider: MockFallbackProvider,
     private readonly openaiProvider: OpenAIFallbackProvider,
   ) {
-    const configured = (process.env.FALLBACK_AI_PROVIDER ?? '').toLowerCase().trim();
+    const configured = (process.env.FALLBACK_AI_PROVIDER ?? '')
+      .toLowerCase()
+      .trim();
     if (configured === 'openai') {
       this.provider = this.openaiProvider;
       this.logger.log('[FallbackAI] Using OpenAI fallback provider');

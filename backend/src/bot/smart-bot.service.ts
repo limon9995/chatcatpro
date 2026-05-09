@@ -1,12 +1,20 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConversationContextService, DraftSession } from '../conversation-context/conversation-context.service';
+import {
+  ConversationContextService,
+  DraftSession,
+} from '../conversation-context/conversation-context.service';
 import { BotContextService, BusinessContext } from './bot-context.service';
 import { BotKnowledgeService } from '../bot-knowledge/bot-knowledge.service';
 import { WalletService } from '../wallet/wallet.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 export interface IDraftOrderHandler {
-  finalizeDraftOrder(pageId: number, psid: string, draft: DraftSession, page: any): Promise<number>;
+  finalizeDraftOrder(
+    pageId: number,
+    psid: string,
+    draft: DraftSession,
+    page: any,
+  ): Promise<number>;
 }
 
 export interface SmartBotCollected {
@@ -24,7 +32,13 @@ export interface SmartBotResponse {
   collected: SmartBotCollected;
 }
 
-const VALID_ACTIONS = new Set(['CHAT', 'COLLECT', 'CONFIRM_ORDER', 'CANCEL_ORDER', 'AGENT']);
+const VALID_ACTIONS = new Set([
+  'CHAT',
+  'COLLECT',
+  'CONFIRM_ORDER',
+  'CANCEL_ORDER',
+  'AGENT',
+]);
 
 @Injectable()
 export class SmartBotService {
@@ -43,7 +57,8 @@ export class SmartBotService {
     private readonly walletService: WalletService,
     private readonly prisma: PrismaService,
   ) {
-    this.apiKey = process.env.GEMINI_API_KEY ?? process.env.OPENAI_API_KEY ?? '';
+    this.apiKey =
+      process.env.GEMINI_API_KEY ?? process.env.OPENAI_API_KEY ?? '';
     this.model = process.env.AI_INTENT_MODEL ?? 'gemini-2.0-flash';
   }
 
@@ -80,10 +95,21 @@ export class SmartBotService {
     const lastOrder = await this.prisma.order.findFirst({
       where: { pageIdRef: pageId, customerPsid: psid },
       orderBy: { createdAt: 'desc' },
-      select: { id: true, status: true, createdAt: true, address: true, items: { select: { productCode: true, qty: true } } },
+      select: {
+        id: true,
+        status: true,
+        createdAt: true,
+        address: true,
+        items: { select: { productCode: true, qty: true } },
+      },
     });
 
-    const systemPrompt = this.buildSystemPrompt(businessContext, draft, page, lastOrder);
+    const systemPrompt = this.buildSystemPrompt(
+      businessContext,
+      draft,
+      page,
+      lastOrder,
+    );
     const messages: { role: string; content: string }[] = [
       { role: 'system', content: systemPrompt },
       ...history,
@@ -99,30 +125,47 @@ export class SmartBotService {
     this.failCount = 0;
     await this.walletService.deductUsage(pageId, 'SMART_BOT');
 
-    this.logger.log(`[SmartBot] action=${parsed.action} reply="${parsed.reply.slice(0, 60)}"`);
+    this.logger.log(
+      `[SmartBot] action=${parsed.action} reply="${parsed.reply.slice(0, 60)}"`,
+    );
 
     // Merge collected fields into draft and persist
-    const updatedDraft = await this.mergeAndSave(pageId, psid, draft, parsed.collected, businessContext);
+    const updatedDraft = await this.mergeAndSave(
+      pageId,
+      psid,
+      draft,
+      parsed.collected,
+      businessContext,
+    );
 
     // Execute side-effects (state changes), return reply string to caller for sending
     switch (parsed.action) {
       case 'CONFIRM_ORDER': {
         const d = updatedDraft;
-        const canFinalize = d && d.items.length > 0 && d.customerName && d.phone && d.address
-          && (!this.requiresAdvancePayment(d, page) || d.paymentProof);
+        const canFinalize =
+          d &&
+          d.items.length > 0 &&
+          d.customerName &&
+          d.phone &&
+          d.address &&
+          (!this.requiresAdvancePayment(d, page) || d.paymentProof);
 
         if (!canFinalize) {
           // Fields still missing — AI reply already asks for them
           return parsed.reply;
         }
         try {
-          await draftHandler.finalizeDraftOrder(pageId, psid, d!, page);
-          const orderReply = await this.botKnowledge.resolveSystemReply(pageId, 'order_received').catch(() => parsed.reply);
+          await draftHandler.finalizeDraftOrder(pageId, psid, d, page);
+          const orderReply = await this.botKnowledge
+            .resolveSystemReply(pageId, 'order_received')
+            .catch(() => parsed.reply);
           await this.ctx.clearDraft(pageId, psid);
           await this.ctx.clearHistory(pageId, psid);
           return orderReply;
         } catch (err: any) {
-          this.logger.error(`[SmartBot] finalizeDraftOrder failed: ${err?.message}`);
+          this.logger.error(
+            `[SmartBot] finalizeDraftOrder failed: ${err?.message}`,
+          );
           return parsed.reply;
         }
       }
@@ -145,23 +188,35 @@ export class SmartBotService {
   private buildCatalogUrl(page: any): string {
     const website = String(page.websiteUrl || '').trim();
     if (website) return website;
-    const base = (process.env.CATALOG_BASE_URL || 'https://chatcat.pro').replace(/\/$/, '');
+    const base = (
+      process.env.CATALOG_BASE_URL || 'https://chatcat.pro'
+    ).replace(/\/$/, '');
     const slug = page.catalogSlug || String(page.id);
     return `${base}/catalog/${slug}`;
   }
 
-  private buildSystemPrompt(ctx: BusinessContext, draft: DraftSession | null, page: any, lastOrder?: any): string {
+  private buildSystemPrompt(
+    ctx: BusinessContext,
+    draft: DraftSession | null,
+    page: any,
+    lastOrder?: any,
+  ): string {
     const shop = ctx.businessName
       ? `"${ctx.businessName}" নামের Bangladeshi e-commerce shop`
       : 'একটি Bangladeshi fashion e-commerce shop';
 
     // Product catalog (max 30)
-    const productLines = ctx.products.slice(0, 30).map(p =>
-      `[${p.code}] ${p.name} — ৳${p.price} | ${p.stockQty > 0 ? `${p.stockQty} পিস আছে` : 'Stock শেষ'}`
-    ).join('\n');
-    const productCtx = ctx.products.length > 0
-      ? `\n\n## Product Catalog\n${productLines}`
-      : '\n\n## Product Catalog\n(কোনো product নেই)';
+    const productLines = ctx.products
+      .slice(0, 30)
+      .map(
+        (p) =>
+          `[${p.code}] ${p.name} — ৳${p.price} | ${p.stockQty > 0 ? `${p.stockQty} পিস আছে` : 'Stock শেষ'}`,
+      )
+      .join('\n');
+    const productCtx =
+      ctx.products.length > 0
+        ? `\n\n## Product Catalog\n${productLines}`
+        : '\n\n## Product Catalog\n(কোনো product নেই)';
 
     // Delivery & payment
     const deliveryCtx = `\n\n## Delivery & Payment
@@ -172,7 +227,10 @@ export class SmartBotService {
     const paymentRules = ctx.paymentRules as any;
     let paymentCtx = '';
     if (paymentRules) {
-      const codLine = paymentRules.codEnabled !== false ? '✅ Cash on Delivery আছে' : '❌ COD নেই';
+      const codLine =
+        paymentRules.codEnabled !== false
+          ? '✅ Cash on Delivery আছে'
+          : '❌ COD নেই';
       const insideAdv = paymentRules.insideDhakaAdvanceEnabled
         ? `⚠️ ঢাকার ভিতরে: Advance payment লাগবে ৳${paymentRules.insideDhakaAdvanceAmount ?? 100}`
         : '✅ ঢাকার ভিতরে: Cash on Delivery (advance লাগে না)';
@@ -198,17 +256,25 @@ export class SmartBotService {
     const stillNeeded: string[] = [];
 
     if (draft) {
-      const items = draft.items.length > 0
-        ? draft.items.map(i => `[${i.productCode}] x${i.qty} — ৳${i.unitPrice}`).join(', ')
-        : null;
+      const items =
+        draft.items.length > 0
+          ? draft.items
+              .map((i) => `[${i.productCode}] x${i.qty} — ৳${i.unitPrice}`)
+              .join(', ')
+          : null;
 
       const collected: string[] = [];
-      if (items) collected.push(`✅ Products: ${items}`); else stillNeeded.push('product code');
-      if (draft.customerName) collected.push(`✅ নাম: ${draft.customerName}`); else stillNeeded.push('নাম');
-      if (draft.phone) collected.push(`✅ ফোন: ${draft.phone}`); else stillNeeded.push('ফোন নম্বর');
-      if (draft.address) collected.push(`✅ ঠিকানা: ${draft.address}`); else stillNeeded.push('পূর্ণ ঠিকানা');
+      if (items) collected.push(`✅ Products: ${items}`);
+      else stillNeeded.push('product code');
+      if (draft.customerName) collected.push(`✅ নাম: ${draft.customerName}`);
+      else stillNeeded.push('নাম');
+      if (draft.phone) collected.push(`✅ ফোন: ${draft.phone}`);
+      else stillNeeded.push('ফোন নম্বর');
+      if (draft.address) collected.push(`✅ ঠিকানা: ${draft.address}`);
+      else stillNeeded.push('পূর্ণ ঠিকানা');
       if (this.requiresAdvancePayment(draft, page)) {
-        if (draft.paymentProof) collected.push(`✅ Payment: ${draft.paymentProof}`);
+        if (draft.paymentProof)
+          collected.push(`✅ Payment: ${draft.paymentProof}`);
         else stillNeeded.push('advance payment proof');
       }
 
@@ -232,7 +298,9 @@ export class SmartBotService {
         CANCELLED: '❌ অর্ডারটি বাতিল হয়েছে',
       };
       const statusBn = statusMap[lastOrder.status] ?? lastOrder.status;
-      const products = lastOrder.items.map((i: any) => `${i.productCode} x${i.qty}`).join(', ');
+      const products = lastOrder.items
+        .map((i: any) => `${i.productCode} x${i.qty}`)
+        .join(', ');
       const date = new Date(lastOrder.createdAt).toLocaleDateString('bn-BD');
       orderTrackCtx = `\n\n## Customer-এর সর্বশেষ Order (DB থেকে)\nOrder #${lastOrder.id} — ${date}\nProducts: ${products || '?'}\nStatus: **${statusBn}**\n\n⚠️ Customer "কবে পাবো / কোথায় আছে / status / order কী হলো / cancel হয়েছে" ইত্যাদি জিজ্ঞেস করলে এই DB status দেখে CHAT action দিয়ে reply করো। অনুমান করবে না।`;
     }
@@ -319,15 +387,21 @@ Customer-এর message দেখে **strictly valid JSON** return করো:
       }
       if (!res.ok) {
         const errText = await res.text();
-        this.logger.error(`[SmartBot] Gemini error ${res.status}: ${errText.slice(0, 200)}`);
+        this.logger.error(
+          `[SmartBot] Gemini error ${res.status}: ${errText.slice(0, 200)}`,
+        );
         this.recordFailure();
         return null;
       }
 
-      const data = await res.json() as any;
-      return (data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '').trim() || null;
+      const data = await res.json();
+      return (
+        (data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '').trim() || null
+      );
     } catch (err: any) {
-      this.logger.warn(`[SmartBot] Gemini network error: ${err?.message ?? err}`);
+      this.logger.warn(
+        `[SmartBot] Gemini network error: ${err?.message ?? err}`,
+      );
       this.recordFailure();
       return null;
     }
@@ -337,9 +411,13 @@ Customer-এর message দেখে **strictly valid JSON** return করো:
     try {
       const parsed = JSON.parse(raw);
       const reply = String(parsed?.reply ?? '').trim();
-      const action = String(parsed?.action ?? '').toUpperCase().trim();
+      const action = String(parsed?.action ?? '')
+        .toUpperCase()
+        .trim();
       if (!reply || !VALID_ACTIONS.has(action)) {
-        this.logger.warn(`[SmartBot] Invalid response: action="${action}" reply="${reply.slice(0, 60)}"`);
+        this.logger.warn(
+          `[SmartBot] Invalid response: action="${action}" reply="${reply.slice(0, 60)}"`,
+        );
         return null;
       }
       const c = parsed?.collected ?? {};
@@ -347,12 +425,26 @@ Customer-এর message দেখে **strictly valid JSON** return করো:
         reply,
         action: action as SmartBotResponse['action'],
         collected: {
-          productCodes: Array.isArray(c.productCodes) ? c.productCodes.filter((x: any) => typeof x === 'string') : [],
-          qty: (c.qty && typeof c.qty === 'object') ? c.qty : {},
-          customerName: typeof c.customerName === 'string' && c.customerName.trim() ? c.customerName.trim() : null,
-          phone: typeof c.phone === 'string' && c.phone.trim() ? c.phone.trim() : null,
-          address: typeof c.address === 'string' && c.address.trim() ? c.address.trim() : null,
-          paymentProof: typeof c.paymentProof === 'string' && c.paymentProof.trim() ? c.paymentProof.trim() : null,
+          productCodes: Array.isArray(c.productCodes)
+            ? c.productCodes.filter((x: any) => typeof x === 'string')
+            : [],
+          qty: c.qty && typeof c.qty === 'object' ? c.qty : {},
+          customerName:
+            typeof c.customerName === 'string' && c.customerName.trim()
+              ? c.customerName.trim()
+              : null,
+          phone:
+            typeof c.phone === 'string' && c.phone.trim()
+              ? c.phone.trim()
+              : null,
+          address:
+            typeof c.address === 'string' && c.address.trim()
+              ? c.address.trim()
+              : null,
+          paymentProof:
+            typeof c.paymentProof === 'string' && c.paymentProof.trim()
+              ? c.paymentProof.trim()
+              : null,
         },
       };
     } catch (err: any) {
@@ -371,12 +463,17 @@ Customer-এর message দেখে **strictly valid JSON** return করো:
   ): Promise<DraftSession | null> {
     const codes = collected.productCodes ?? [];
     const hasNewProducts = codes.length > 0;
-    const hasNewInfo = !!(collected.customerName || collected.phone || collected.address || collected.paymentProof);
+    const hasNewInfo = !!(
+      collected.customerName ||
+      collected.phone ||
+      collected.address ||
+      collected.paymentProof
+    );
 
     // Always work with an existing or fresh draft if we have anything to do
     if (!hasNewProducts && !hasNewInfo && !draft) return null;
 
-    let base: DraftSession = draft ?? this.ctx.emptyDraft();
+    const base: DraftSession = draft ?? this.ctx.emptyDraft();
 
     // CRM pre-fill only when starting a brand new draft with a product
     if (!draft && hasNewProducts) {
@@ -388,18 +485,25 @@ Customer-এর message দেখে **strictly valid JSON** return করো:
         if (crm?.name) base.customerName = crm.name;
         if (crm?.phone) base.phone = crm.phone;
         if (crm?.address) base.address = crm.address;
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
 
     // Merge products
     if (hasNewProducts) {
-      const priceMap = new Map(ctx.products.map(p => [p.code, p.price]));
+      const priceMap = new Map(ctx.products.map((p) => [p.code, p.price]));
       for (const code of codes) {
         if (!priceMap.has(code)) continue;
         const qty = (collected.qty ?? {})[code] ?? 1;
-        const existing = base.items.find(i => i.productCode === code);
+        const existing = base.items.find((i) => i.productCode === code);
         if (existing) existing.qty = qty;
-        else base.items.push({ productCode: code, qty, unitPrice: priceMap.get(code) ?? 0 });
+        else
+          base.items.push({
+            productCode: code,
+            qty,
+            unitPrice: priceMap.get(code) ?? 0,
+          });
       }
     }
 
@@ -413,11 +517,17 @@ Customer-এর message দেখে **strictly valid JSON** return করো:
     if (!base.customerName) base.currentStep = 'name';
     else if (!base.phone) base.currentStep = 'phone';
     else if (!base.address) base.currentStep = 'address';
-    else if (this.requiresAdvancePayment(base, null) && !base.paymentProof) base.currentStep = 'advance_payment';
+    else if (this.requiresAdvancePayment(base, null) && !base.paymentProof)
+      base.currentStep = 'advance_payment';
     else base.currentStep = 'confirm';
 
     // FIX: save whenever we have any collected info, not just when items exist
-    const hasAnything = base.items.length > 0 || base.customerName || base.phone || base.address || base.paymentProof;
+    const hasAnything =
+      base.items.length > 0 ||
+      base.customerName ||
+      base.phone ||
+      base.address ||
+      base.paymentProof;
     if (hasAnything) {
       await this.ctx.saveDraft(pageId, psid, base);
       return base;
@@ -427,14 +537,20 @@ Customer-এর message দেখে **strictly valid JSON** return করো:
 
   requiresAdvancePayment(draft: DraftSession, page: any): boolean {
     if (!page) return false;
-    const paymentRules = page.paymentRules as any;
+    const paymentRules = page.paymentRules;
     if (paymentRules) {
       const addr = (draft?.address || '').toLowerCase();
-      const insideDhaka = /dhaka|ঢাকা|mirpur|gulshan|dhanmondi|uttara|mohammadpur|badda|rampura|khilgaon|motijheel|pallabi|shyamoli|banani|bashundhara/.test(addr);
+      const insideDhaka =
+        /dhaka|ঢাকা|mirpur|gulshan|dhanmondi|uttara|mohammadpur|badda|rampura|khilgaon|motijheel|pallabi|shyamoli|banani|bashundhara/.test(
+          addr,
+        );
       if (insideDhaka) return !!paymentRules.insideDhakaAdvanceEnabled;
       if (addr) return !!paymentRules.outsideDhakaAdvanceEnabled;
       // address unknown: require advance if either zone needs it
-      return !!(paymentRules.insideDhakaAdvanceEnabled || paymentRules.outsideDhakaAdvanceEnabled);
+      return !!(
+        paymentRules.insideDhakaAdvanceEnabled ||
+        paymentRules.outsideDhakaAdvanceEnabled
+      );
     }
     const paymentMode = (page.paymentMode as string) || 'cod';
     if (paymentMode === 'full_advance') return true;
@@ -442,7 +558,10 @@ Customer-এর message দেখে **strictly valid JSON** return করো:
       // Only outside-Dhaka orders need advance in this mode
       const addr = (draft?.address || '').toLowerCase();
       if (!addr) return true;
-      const insideDhaka = /dhaka|ঢাকা|mirpur|gulshan|dhanmondi|uttara|mohammadpur|badda|rampura|khilgaon|motijheel|pallabi|shyamoli|banani|bashundhara/.test(addr);
+      const insideDhaka =
+        /dhaka|ঢাকা|mirpur|gulshan|dhanmondi|uttara|mohammadpur|badda|rampura|khilgaon|motijheel|pallabi|shyamoli|banani|bashundhara/.test(
+          addr,
+        );
       return !insideDhaka;
     }
     return false;

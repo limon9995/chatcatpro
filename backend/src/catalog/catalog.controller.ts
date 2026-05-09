@@ -76,7 +76,10 @@ function isWhatsAppUrl(url?: string | null): boolean {
   return value.includes('wa.me/') || value.includes('whatsapp.com/');
 }
 
-function buildFacebookPageUrl(pageId?: string | null, messengerUrl?: string | null) {
+function buildFacebookPageUrl(
+  pageId?: string | null,
+  messengerUrl?: string | null,
+) {
   const customUrl = String(messengerUrl ?? '').trim();
   if (customUrl && !isWhatsAppUrl(customUrl)) return customUrl;
   const cleanPageId = String(pageId ?? '').trim();
@@ -262,7 +265,11 @@ export class CatalogController {
   }
 
   // ── Data builder ────────────────────────────────────────────────────────
-  private async buildData(pageId: string, search?: string, codeFilterRaw?: string) {
+  private async buildData(
+    pageId: string,
+    search?: string,
+    codeFilterRaw?: string,
+  ) {
     const page = await this.prisma.page.findFirst({
       where: pageWhere(pageId),
       select: {
@@ -447,9 +454,13 @@ export class CatalogController {
 <meta property="og:site_name" content="${esc(page.name)}"/>
 <meta property="og:title" content="${esc(p.name || p.code)} — ${esc(page.name)}"/>
 <meta property="og:description" content="${productDesc}"/>
-${primaryImage ? `<meta property="og:image" content="${esc(primaryImage)}"/>
+${
+  primaryImage
+    ? `<meta property="og:image" content="${esc(primaryImage)}"/>
 <meta property="og:image:width" content="800"/>
-<meta property="og:image:height" content="800"/>` : ''}
+<meta property="og:image:height" content="800"/>`
+    : ''
+}
 <meta property="og:locale" content="bn_BD"/>
 <meta property="product:price:amount" content="${Number(p.price)}"/>
 <meta property="product:price:currency" content="BDT"/>
@@ -921,7 +932,7 @@ ${poweredByBadge()}
       <div class="empty">
         <div class="empty-icon">🔍</div>
         <div class="empty-title">${search ? `"${esc(search)}" পাওয়া যায়নি` : selectionMode ? 'ম্যাচ করা shortlist এ কোনো product নেই' : 'কোনো product নেই'}</div>
-        ${(search || selectionMode) ? `<a href="/catalog/${esc(page.id)}" class="empty-btn">সব product দেখুন</a>` : ''}
+        ${search || selectionMode ? `<a href="/catalog/${esc(page.id)}" class="empty-btn">সব product দেখুন</a>` : ''}
       </div>`
         : '';
 

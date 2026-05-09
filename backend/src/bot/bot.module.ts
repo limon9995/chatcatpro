@@ -9,7 +9,17 @@ import { CommonModule } from '../common/common.module';
 
 @Module({
   imports: [PrismaModule, BotKnowledgeModule, CommonModule],
-  providers: [BotIntentService, ReplyTemplateService, AiIntentService, BotContextService],
-  exports: [BotIntentService, ReplyTemplateService, AiIntentService, BotContextService],
+  providers: [
+    BotIntentService,
+    ReplyTemplateService,
+    AiIntentService,
+    BotContextService,
+  ],
+  exports: [
+    BotIntentService,
+    ReplyTemplateService,
+    AiIntentService,
+    BotContextService,
+  ],
 })
 export class BotModule {}

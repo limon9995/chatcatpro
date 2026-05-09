@@ -45,12 +45,20 @@ export class ProductsController {
   }
 
   @Get()
-  list(@Req() req: any, @Query('pageId') pageId: string, @Query('q') q?: string) {
+  list(
+    @Req() req: any,
+    @Query('pageId') pageId: string,
+    @Query('q') q?: string,
+  ) {
     return this.products.listByPage(this.pid(req, pageId), q);
   }
 
   @Get(':code')
-  get(@Req() req: any, @Param('code') code: string, @Query('pageId') pageId: string) {
+  get(
+    @Req() req: any,
+    @Param('code') code: string,
+    @Query('pageId') pageId: string,
+  ) {
     return this.products.findByCode(this.pid(req, pageId), code);
   }
 

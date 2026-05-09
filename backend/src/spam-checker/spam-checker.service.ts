@@ -5,17 +5,28 @@ import { normalizePhone } from '../crm/phone.util';
 
 export interface SpamResult {
   risk: 'safe' | 'low' | 'medium' | 'high' | 'new' | 'unknown';
-  score: number;        // 0–100 (higher = riskier)
+  score: number; // 0–100 (higher = riskier)
   totalOrders: number;
   delivered: number;
   cancelled: number;
-  successRate: number;  // 0–100
-  source: string;       // which site(s) provided data
-  courierBreakdown?: { name: string; total: number; delivered: number; successRate: number }[];
+  successRate: number; // 0–100
+  source: string; // which site(s) provided data
+  courierBreakdown?: {
+    name: string;
+    total: number;
+    delivered: number;
+    successRate: number;
+  }[];
 }
 
 const UNKNOWN: SpamResult = {
-  risk: 'unknown', score: 0, totalOrders: 0, delivered: 0, cancelled: 0, successRate: 0, source: 'none',
+  risk: 'unknown',
+  score: 0,
+  totalOrders: 0,
+  delivered: 0,
+  cancelled: 0,
+  successRate: 0,
+  source: 'none',
 };
 
 @Injectable()
@@ -35,7 +46,10 @@ export class SpamCheckerService {
     // External: waterfall — stop at first success
     const externalPromise = this.checkExternalWaterfall(normalized);
 
-    const [internal, external] = await Promise.all([internalPromise, externalPromise]);
+    const [internal, external] = await Promise.all([
+      internalPromise,
+      externalPromise,
+    ]);
 
     const result = this.combineResults(external, internal);
 
@@ -86,16 +100,28 @@ export class SpamCheckerService {
       const successRate = total > 0 ? (delivered / total) * 100 : 0;
       const { risk, score } = this.riskFromRate(successRate, total);
 
-      return { risk, score, totalOrders: total, delivered, cancelled, successRate, source: 'internal' };
+      return {
+        risk,
+        score,
+        totalOrders: total,
+        delivered,
+        cancelled,
+        successRate,
+        source: 'internal',
+      };
     } catch (err: any) {
-      this.logger.warn(`[SpamChecker] Internal DB check failed: ${err?.message}`);
+      this.logger.warn(
+        `[SpamChecker] Internal DB check failed: ${err?.message}`,
+      );
       return null;
     }
   }
 
   // ── External waterfall ─────────────────────────────────────────────────────
 
-  private async checkExternalWaterfall(phone: string): Promise<SpamResult | null> {
+  private async checkExternalWaterfall(
+    phone: string,
+  ): Promise<SpamResult | null> {
     const scrapers = [
       () => this.checkElitemart(phone),
       () => this.checkFraudshield(phone),
@@ -127,7 +153,9 @@ export class SpamCheckerService {
       });
 
       const html: string = getRes.data;
-      const tokenMatch = html.match(/name=["']_token["']\s+value=["']([^"']+)["']/);
+      const tokenMatch = html.match(
+        /name=["']_token["']\s+value=["']([^"']+)["']/,
+      );
       if (!tokenMatch) return null;
       const token = tokenMatch[1];
 
@@ -168,9 +196,20 @@ export class SpamCheckerService {
 
       const { risk, score } = this.riskFromRate(successRate, totalOrders);
 
-      this.logger.log(`[SpamChecker] elitemart OK — phone=${phone} rate=${successRate.toFixed(1)}% total=${totalOrders}`);
+      this.logger.log(
+        `[SpamChecker] elitemart OK — phone=${phone} rate=${successRate.toFixed(1)}% total=${totalOrders}`,
+      );
 
-      return { risk, score, totalOrders, delivered, cancelled, successRate, source: 'elitemart', courierBreakdown };
+      return {
+        risk,
+        score,
+        totalOrders,
+        delivered,
+        cancelled,
+        successRate,
+        source: 'elitemart',
+        courierBreakdown,
+      };
     } catch (err: any) {
       this.logger.debug(`[SpamChecker] elitemart failed: ${err?.message}`);
       return null;
@@ -188,8 +227,9 @@ export class SpamCheckerService {
       });
 
       const html: string = getRes.data;
-      const tokenMatch = html.match(/name=["']csrf-token["']\s+content=["']([^"']+)["']/) ||
-                         html.match(/content=["']([^"']+)["']\s+name=["']csrf-token["']/);
+      const tokenMatch =
+        html.match(/name=["']csrf-token["']\s+content=["']([^"']+)["']/) ||
+        html.match(/content=["']([^"']+)["']\s+name=["']csrf-token["']/);
       if (!tokenMatch) return null;
       const csrfToken = tokenMatch[1];
 
@@ -198,7 +238,12 @@ export class SpamCheckerService {
         .join('; ');
 
       // Try common Inertia/Laravel POST endpoints
-      const endpoints = ['/check', '/fraud-check', '/customer/check', '/api/check'];
+      const endpoints = [
+        '/check',
+        '/fraud-check',
+        '/customer/check',
+        '/api/check',
+      ];
       for (const ep of endpoints) {
         try {
           const postRes = await axios.post(
@@ -220,7 +265,9 @@ export class SpamCheckerService {
           if (postRes.status === 200 && postRes.data) {
             return this.parseFraudshieldResponse(postRes.data, phone);
           }
-        } catch { /* try next endpoint */ }
+        } catch {
+          /* try next endpoint */
+        }
       }
       return null;
     } catch (err: any) {
@@ -229,32 +276,61 @@ export class SpamCheckerService {
     }
   }
 
-  private parseFraudshieldResponse(data: any, phone: string): SpamResult | null {
+  private parseFraudshieldResponse(
+    data: any,
+    phone: string,
+  ): SpamResult | null {
     try {
       // Handle JSON response
       if (typeof data === 'object') {
-        const total = Number(data.total_orders ?? data.totalOrders ?? data.total ?? 0);
-        const delivered = Number(data.successful_deliveries ?? data.delivered ?? data.success ?? 0);
-        const cancelled = Number(data.returns ?? data.cancelled ?? data.returned ?? 0);
+        const total = Number(
+          data.total_orders ?? data.totalOrders ?? data.total ?? 0,
+        );
+        const delivered = Number(
+          data.successful_deliveries ?? data.delivered ?? data.success ?? 0,
+        );
+        const cancelled = Number(
+          data.returns ?? data.cancelled ?? data.returned ?? 0,
+        );
         const successRate = total > 0 ? (delivered / total) * 100 : 0;
         const { risk, score } = this.riskFromRate(successRate, total);
-        this.logger.log(`[SpamChecker] fraudshield OK — phone=${phone} rate=${successRate.toFixed(1)}%`);
-        return { risk, score, totalOrders: total, delivered, cancelled, successRate, source: 'fraudshield' };
+        this.logger.log(
+          `[SpamChecker] fraudshield OK — phone=${phone} rate=${successRate.toFixed(1)}%`,
+        );
+        return {
+          risk,
+          score,
+          totalOrders: total,
+          delivered,
+          cancelled,
+          successRate,
+          source: 'fraudshield',
+        };
       }
       // Handle HTML response
       if (typeof data === 'string') {
-        const totalMatch = (data as string).match(/total[^0-9]*([0-9]+)/i);
-        const rateMatch = (data as string).match(/([0-9.]+)\s*%/);
+        const totalMatch = data.match(/total[^0-9]*([0-9]+)/i);
+        const rateMatch = data.match(/([0-9.]+)\s*%/);
         if (totalMatch && rateMatch) {
           const total = parseInt(totalMatch[1], 10);
           const successRate = parseFloat(rateMatch[1]);
           const delivered = Math.round((successRate / 100) * total);
           const cancelled = total - delivered;
           const { risk, score } = this.riskFromRate(successRate, total);
-          return { risk, score, totalOrders: total, delivered, cancelled, successRate, source: 'fraudshield' };
+          return {
+            risk,
+            score,
+            totalOrders: total,
+            delivered,
+            cancelled,
+            successRate,
+            source: 'fraudshield',
+          };
         }
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     return null;
   }
 
@@ -262,11 +338,14 @@ export class SpamCheckerService {
 
   private async checkBdcommerce(phone: string): Promise<SpamResult | null> {
     try {
-      const getRes = await axios.get('https://www.bdcommerce.app/tools/delivery-fraud-check', {
-        timeout: 7000,
-        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; ChatcatBot/1.0)' },
-        maxRedirects: 5,
-      });
+      const getRes = await axios.get(
+        'https://www.bdcommerce.app/tools/delivery-fraud-check',
+        {
+          timeout: 7000,
+          headers: { 'User-Agent': 'Mozilla/5.0 (compatible; ChatcatBot/1.0)' },
+          maxRedirects: 5,
+        },
+      );
 
       const html: string = getRes.data;
       const cookieHeader = (getRes.headers['set-cookie'] ?? [])
@@ -281,7 +360,9 @@ export class SpamCheckerService {
         '/api/delivery-fraud-check',
         '/api/fraud-check',
         '/api/check',
-        buildId ? `/_next/data/${buildId}/tools/delivery-fraud-check.json?userNumber=${encodeURIComponent(phone)}` : null,
+        buildId
+          ? `/_next/data/${buildId}/tools/delivery-fraud-check.json?userNumber=${encodeURIComponent(phone)}`
+          : null,
       ].filter(Boolean) as string[];
 
       for (const ep of endpoints) {
@@ -304,7 +385,9 @@ export class SpamCheckerService {
             const parsed = this.parseBdcommerceResponse(res.data, phone);
             if (parsed) return parsed;
           }
-        } catch { /* try next */ }
+        } catch {
+          /* try next */
+        }
       }
       return null;
     } catch (err: any) {
@@ -317,30 +400,54 @@ export class SpamCheckerService {
     try {
       const d = typeof data === 'string' ? JSON.parse(data) : data;
       const pageProps = d?.pageProps ?? d;
-      const total = Number(pageProps?.total ?? pageProps?.totalOrders ?? pageProps?.total_orders ?? 0);
+      const total = Number(
+        pageProps?.total ??
+          pageProps?.totalOrders ??
+          pageProps?.total_orders ??
+          0,
+      );
       const delivered = Number(pageProps?.delivered ?? pageProps?.success ?? 0);
-      const cancelled = Number(pageProps?.cancelled ?? pageProps?.returned ?? pageProps?.returns ?? 0);
+      const cancelled = Number(
+        pageProps?.cancelled ?? pageProps?.returned ?? pageProps?.returns ?? 0,
+      );
       if (total === 0 && delivered === 0) return null;
       const successRate = total > 0 ? (delivered / total) * 100 : 0;
       const { risk, score } = this.riskFromRate(successRate, total);
-      this.logger.log(`[SpamChecker] bdcommerce OK — phone=${phone} rate=${successRate.toFixed(1)}%`);
-      return { risk, score, totalOrders: total, delivered, cancelled, successRate, source: 'bdcommerce' };
-    } catch { return null; }
+      this.logger.log(
+        `[SpamChecker] bdcommerce OK — phone=${phone} rate=${successRate.toFixed(1)}%`,
+      );
+      return {
+        risk,
+        score,
+        totalOrders: total,
+        delivered,
+        cancelled,
+        successRate,
+        source: 'bdcommerce',
+      };
+    } catch {
+      return null;
+    }
   }
 
   // ── Combine results ────────────────────────────────────────────────────────
 
-  private combineResults(external: SpamResult | null, internal: SpamResult | null): SpamResult {
+  private combineResults(
+    external: SpamResult | null,
+    internal: SpamResult | null,
+  ): SpamResult {
     if (!external && !internal) return UNKNOWN;
     if (!external) return internal!;
     if (!internal) return external;
 
     // Both available — weight 70% external (larger dataset), 30% internal
-    const extWeight = external.totalOrders >= 5 ? 0.70 : 0.50;
+    const extWeight = external.totalOrders >= 5 ? 0.7 : 0.5;
     const intWeight = 1 - extWeight;
 
-    const combinedScore = external.score * extWeight + internal.score * intWeight;
-    const combinedRate = external.successRate * extWeight + internal.successRate * intWeight;
+    const combinedScore =
+      external.score * extWeight + internal.score * intWeight;
+    const combinedRate =
+      external.successRate * extWeight + internal.successRate * intWeight;
     const totalOrders = external.totalOrders + internal.totalOrders;
     const delivered = external.delivered + internal.delivered;
     const cancelled = external.cancelled + internal.cancelled;
@@ -361,19 +468,30 @@ export class SpamCheckerService {
 
   // ── Risk calculation ───────────────────────────────────────────────────────
 
-  private riskFromRate(successRate: number, total: number): { risk: SpamResult['risk']; score: number } {
+  private riskFromRate(
+    successRate: number,
+    total: number,
+  ): { risk: SpamResult['risk']; score: number } {
     if (total === 0) return { risk: 'new', score: 50 };
-    if (successRate >= 76) return { risk: 'safe',   score: Math.round((100 - successRate) * 0.4) };
-    if (successRate >= 51) return { risk: 'low',    score: Math.round(30 + (75 - successRate)) };
-    if (successRate >= 26) return { risk: 'medium', score: Math.round(55 + (50 - successRate)) };
-    return                        { risk: 'high',   score: Math.min(100, Math.round(80 + (25 - successRate))) };
+    if (successRate >= 76)
+      return { risk: 'safe', score: Math.round((100 - successRate) * 0.4) };
+    if (successRate >= 51)
+      return { risk: 'low', score: Math.round(30 + (75 - successRate)) };
+    if (successRate >= 26)
+      return { risk: 'medium', score: Math.round(55 + (50 - successRate)) };
+    return {
+      risk: 'high',
+      score: Math.min(100, Math.round(80 + (25 - successRate))),
+    };
   }
 
   // ── HTML helpers ───────────────────────────────────────────────────────────
 
   private parseCourierTable(html: string): SpamResult['courierBreakdown'] {
     const rows: SpamResult['courierBreakdown'] = [];
-    const tableMatch = html.match(/<table[^>]*class=["'][^"']*courier_table[^"']*["'][^>]*>([\s\S]*?)<\/table>/i);
+    const tableMatch = html.match(
+      /<table[^>]*class=["'][^"']*courier_table[^"']*["'][^>]*>([\s\S]*?)<\/table>/i,
+    );
     if (!tableMatch) return rows;
 
     const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
@@ -381,15 +499,25 @@ export class SpamCheckerService {
     let isFirst = true;
 
     while ((rowMatch = rowRegex.exec(tableMatch[1])) !== null) {
-      if (isFirst) { isFirst = false; continue; } // skip header
-      const cells = [...rowMatch[1].matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi)]
-        .map(m => m[1].replace(/<[^>]+>/g, '').trim());
+      if (isFirst) {
+        isFirst = false;
+        continue;
+      } // skip header
+      const cells = [
+        ...rowMatch[1].matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi),
+      ].map((m) => m[1].replace(/<[^>]+>/g, '').trim());
       if (cells.length >= 4) {
         const name = cells[0];
         const total = parseInt(cells[1], 10) || 0;
         const delivered = parseInt(cells[2], 10) || 0;
         const successRate = total > 0 ? (delivered / total) * 100 : 0;
-        if (name && total > 0) rows.push({ name, total, delivered, successRate: Math.round(successRate * 10) / 10 });
+        if (name && total > 0)
+          rows.push({
+            name,
+            total,
+            delivered,
+            successRate: Math.round(successRate * 10) / 10,
+          });
       }
     }
     return rows;

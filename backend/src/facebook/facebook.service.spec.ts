@@ -6,6 +6,7 @@ describe('FacebookService', () => {
   let prisma: any;
   let authService: any;
   let encryption: any;
+  let billing: any;
 
   beforeEach(() => {
     prisma = {
@@ -22,7 +23,10 @@ describe('FacebookService', () => {
     encryption = {
       encryptIfNeeded: jest.fn((value: string) => `ENC:${value}`),
     };
-    service = new FacebookService(prisma, authService, encryption);
+    billing = {
+      getOrCreateSubscription: jest.fn().mockResolvedValue({ plan: null }),
+    };
+    service = new FacebookService(prisma, authService, encryption, billing);
     process.env.STORAGE_PUBLIC_URL = 'https://api.chatcat.pro/storage';
   });
 
@@ -106,11 +110,17 @@ describe('FacebookService', () => {
       .spyOn(global, 'fetch')
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ id: '1046542211868208', name: 'Limon Tech Diary' }),
+        json: async () => ({
+          id: '1046542211868208',
+          name: 'Limon Tech Diary',
+        }),
       } as any)
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ id: '1046542211868208', name: 'Limon Tech Diary' }),
+        json: async () => ({
+          id: '1046542211868208',
+          name: 'Limon Tech Diary',
+        }),
       } as any);
 
     const result = await service.resolvePageIdentity(
@@ -124,7 +134,9 @@ describe('FacebookService', () => {
     });
     expect(global.fetch).toHaveBeenNthCalledWith(
       2,
-      expect.stringContaining('/LimonTechDiary?fields=id,name&access_token=token-123'),
+      expect.stringContaining(
+        '/LimonTechDiary?fields=id,name&access_token=token-123',
+      ),
     );
   });
 
@@ -133,7 +145,10 @@ describe('FacebookService', () => {
       .spyOn(global, 'fetch')
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ id: '1046542211868208', name: 'Limon Tech Diary' }),
+        json: async () => ({
+          id: '1046542211868208',
+          name: 'Limon Tech Diary',
+        }),
       } as any)
       .mockResolvedValueOnce({
         ok: true,

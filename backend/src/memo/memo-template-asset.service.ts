@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
 import sharp from 'sharp';
@@ -164,29 +168,58 @@ export class MemoTemplateAssetService {
     }
     // PNG: 89 50 4E 47
     if (mimetype.includes('png')) {
-      if (!(buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47)) {
-        throw new BadRequestException('File content does not match declared PNG type');
+      if (
+        !(
+          buffer[0] === 0x89 &&
+          buffer[1] === 0x50 &&
+          buffer[2] === 0x4e &&
+          buffer[3] === 0x47
+        )
+      ) {
+        throw new BadRequestException(
+          'File content does not match declared PNG type',
+        );
       }
       return;
     }
     // JPEG: FF D8 FF
     if (mimetype.includes('jpeg') || mimetype.includes('jpg')) {
       if (!(buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff)) {
-        throw new BadRequestException('File content does not match declared JPEG type');
+        throw new BadRequestException(
+          'File content does not match declared JPEG type',
+        );
       }
       return;
     }
     // WebP: RIFF....WEBP
     if (mimetype.includes('webp')) {
-      if (!(buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46)) {
-        throw new BadRequestException('File content does not match declared WebP type');
+      if (
+        !(
+          buffer[0] === 0x52 &&
+          buffer[1] === 0x49 &&
+          buffer[2] === 0x46 &&
+          buffer[3] === 0x46
+        )
+      ) {
+        throw new BadRequestException(
+          'File content does not match declared WebP type',
+        );
       }
       return;
     }
     // PDF: %PDF
     if (mimetype.includes('pdf')) {
-      if (!(buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46)) {
-        throw new BadRequestException('File content does not match declared PDF type');
+      if (
+        !(
+          buffer[0] === 0x25 &&
+          buffer[1] === 0x50 &&
+          buffer[2] === 0x44 &&
+          buffer[3] === 0x46
+        )
+      ) {
+        throw new BadRequestException(
+          'File content does not match declared PDF type',
+        );
       }
       return;
     }

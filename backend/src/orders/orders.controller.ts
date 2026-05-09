@@ -24,15 +24,23 @@ export class OrdersController {
     private readonly auth: AuthService,
   ) {}
 
-  private pid(req: any, pageId: string | number | undefined): number | undefined {
-    if (pageId === undefined || pageId === null || pageId === '') return undefined;
+  private pid(
+    req: any,
+    pageId: string | number | undefined,
+  ): number | undefined {
+    if (pageId === undefined || pageId === null || pageId === '')
+      return undefined;
     const n = Number(pageId);
     this.auth.ensurePageAccess(req.user || req.authUser, n);
     return n;
   }
 
   @Get()
-  list(@Req() req: any, @Query('status') status?: string, @Query('pageId') pageId?: string) {
+  list(
+    @Req() req: any,
+    @Query('status') status?: string,
+    @Query('pageId') pageId?: string,
+  ) {
     return this.ordersService.listOrders(this.pid(req, pageId), status);
   }
 

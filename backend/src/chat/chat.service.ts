@@ -15,7 +15,8 @@ const SYSTEM_PROMPT = `তুমি Chatcat-এর customer service assistant।
 
 উত্তর দেবে Bengali বা Banglish-এ — যে ভাষায় customer লিখবে সেই ভাষায়। Concise ও friendly থাকো। না জানলে support-এ যোগাযোগ করতে বলো (info@chatcat.pro)।`;
 
-const FALLBACK_REPLY = 'দুঃখিত, এই মুহূর্তে উত্তর দিতে পারছি না। একটু পরে আবার চেষ্টা করুন 🙏';
+const FALLBACK_REPLY =
+  'দুঃখিত, এই মুহূর্তে উত্তর দিতে পারছি না। একটু পরে আবার চেষ্টা করুন 🙏';
 
 @Injectable()
 export class ChatService {
@@ -27,7 +28,10 @@ export class ChatService {
   }
 
   async chat(message: string, history: ChatMessage[]): Promise<string> {
-    const messages: ChatMessage[] = [...history.slice(-8), { role: 'user', content: message }];
+    const messages: ChatMessage[] = [
+      ...history.slice(-8),
+      { role: 'user', content: message },
+    ];
     try {
       return await this.callOpenAI(messages);
     } catch (err: any) {
@@ -56,7 +60,9 @@ export class ChatService {
     });
 
     if (!res.ok) throw new Error(`OpenAI ${res.status}`);
-    const data = await res.json() as any;
-    return (data?.choices?.[0]?.message?.content ?? '').trim() || FALLBACK_REPLY;
+    const data = await res.json();
+    return (
+      (data?.choices?.[0]?.message?.content ?? '').trim() || FALLBACK_REPLY
+    );
   }
 }

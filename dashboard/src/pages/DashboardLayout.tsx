@@ -773,7 +773,7 @@ export function DashboardLayout({
         </nav>
 
         {/* ── Main Content ─────────────────────────────────────────────── */}
-        <main style={{ ...th.main, ...(isMobile ? { padding: '16px 14px' } : {}) }}>
+        <main style={{ ...th.main, ...(isMobile ? { padding: '16px 14px', overflowY: 'visible', width: '100%' } : {}) }}>
           <div key={nav} className="page-enter" style={{ minHeight: '100%' }}>
             {renderPage()}
           </div>

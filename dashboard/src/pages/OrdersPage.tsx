@@ -27,7 +27,7 @@ export interface OrdersPagePreset {
   label?: string;
 }
 
-const STATUS_OPTIONS = ['ALL','RECEIVED','CONFIRMED','PACKED','CANCELLED','ISSUE'];
+const STATUS_OPTIONS = ['ALL','RECEIVED','CONFIRMED','PACKED','DELIVERED','CANCELLED','ISSUE'];
 
 const PAYMENT_FILTERS: { key: string; label: string; color: string }[] = [
   { key: 'ALL',           label: 'সব Payment',      color: '#6366f1' },
@@ -273,9 +273,22 @@ export function OrdersPage({ th, pageId, onToast, preset }: {
     address: string | null; status: string; createdAt: string;
     items: OrderItem[];
   }
+  interface DeliveryOrder {
+    id: number; customerName: string | null; phone: string | null;
+    address: string | null; status: string; createdAt: string;
+    items: OrderItem[];
+    courierShipment?: {
+      id: number; courierName: string | null; trackingId: string | null;
+      trackingUrl: string | null; status: string; bookedAt: string | null;
+    } | null;
+  }
   const [packingOrders, setPackingOrders] = useState<PackingOrder[]>([]);
   const [packingLoading, setPackingLoading] = useState(false);
   const [packingId, setPackingId] = useState<number | null>(null);
+  const [deliveryOrders, setDeliveryOrders] = useState<DeliveryOrder[]>([]);
+  const [deliveryLoading, setDeliveryLoading] = useState(false);
+  const [deliveryActionId, setDeliveryActionId] = useState<number | null>(null);
+  const [syncing, setSyncing] = useState(false);
 
   const BASE = `${API_BASE}/client-dashboard/${pageId}`;
 
@@ -336,6 +349,47 @@ export function OrdersPage({ th, pageId, onToast, preset }: {
   }, [pageId]);
 
   useEffect(() => { loadPackingOrders(); }, [loadPackingOrders]);
+
+  const loadDeliveryOrders = useCallback(async () => {
+    setDeliveryLoading(true);
+    try {
+      const data = await request<DeliveryOrder[]>(`${BASE}/orders/delivery-zone`);
+      setDeliveryOrders(data);
+    } catch { /* silent */ }
+    finally { setDeliveryLoading(false); }
+  }, [pageId]);
+
+  useEffect(() => { loadDeliveryOrders(); }, [loadDeliveryOrders]);
+
+  const markDelivered = async (orderId: number) => {
+    setDeliveryActionId(orderId);
+    try {
+      await request(`${BASE}/orders/${orderId}/action`, { method: 'POST', body: JSON.stringify({ action: 'deliver' }) });
+      onToast('✅ Delivered! Customer-কে notify করা হয়েছে।', 'success');
+      loadDeliveryOrders(); load();
+    } catch (e: any) { onToast(e.message, 'error'); }
+    finally { setDeliveryActionId(null); }
+  };
+
+  const markDeliveryCancelled = async (orderId: number) => {
+    setDeliveryActionId(orderId);
+    try {
+      await request(`${BASE}/orders/${orderId}/action`, { method: 'POST', body: JSON.stringify({ action: 'cancel-delivery' }) });
+      onToast('❌ Delivery বাতিল। Customer-কে notify করা হয়েছে।', 'success');
+      loadDeliveryOrders(); load();
+    } catch (e: any) { onToast(e.message, 'error'); }
+    finally { setDeliveryActionId(null); }
+  };
+
+  const syncCourierDeliveries = async () => {
+    setSyncing(true);
+    try {
+      const res = await request<{ synced: number; results: any[] }>(`${BASE}/orders/sync-courier-deliveries`, { method: 'POST' });
+      onToast(`🔄 Courier sync সম্পন্ন — ${res.synced}টি update হয়েছে`, 'success');
+      loadDeliveryOrders(); load();
+    } catch (e: any) { onToast(e.message, 'error'); }
+    finally { setSyncing(false); }
+  };
 
   const packOrder = async (orderId: number) => {
     setPackingId(orderId);
@@ -530,7 +584,7 @@ export function OrdersPage({ th, pageId, onToast, preset }: {
   const isPresetView = Boolean(preset?.label);
 
   const STATUS_COLORS: Record<string, string> = {
-    ALL: th.accent, RECEIVED: '#b45309', CONFIRMED: '#16a34a', PACKED: '#7c3aed', CANCELLED: '#dc2626', ISSUE: '#ea580c',
+    ALL: th.accent, RECEIVED: '#b45309', CONFIRMED: '#16a34a', PACKED: '#7c3aed', DELIVERED: '#0891b2', CANCELLED: '#dc2626', ISSUE: '#ea580c',
   };
 
   // Source counts
@@ -873,6 +927,81 @@ export function OrdersPage({ th, pageId, onToast, preset }: {
                     style={{ padding: '8px 18px', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer', border: '1.5px solid #7c3aed', background: '#7c3aed', color: '#fff', boxShadow: '0 1px 4px #7c3aed30' }}>
                     {isPacking ? <Spinner size={11} /> : '📦 Pack Done'}
                   </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── Delivery Zone ──────────────────────────────────────────────────────── */}
+      {!isPresetView && deliveryOrders.length > 0 && (
+        <div style={{ ...th.card, border: `1.5px solid #0891b230`, background: '#0891b206' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 800, color: '#0891b2', display: 'flex', alignItems: 'center', gap: 6 }}>
+                🚚 Delivery Zone
+                <span style={{ background: '#0891b2', color: '#fff', fontSize: 10, borderRadius: 10, padding: '2px 7px', fontWeight: 700 }}>{deliveryOrders.length}</span>
+              </div>
+              <div style={{ fontSize: 11, color: th.muted, marginTop: 2 }}>Packed orders — Delivered বা Cancelled mark করুন। Customer automatically notify পাবে।</div>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button style={{ ...th.btnGhost, fontSize: 12 }} onClick={loadDeliveryOrders}>
+                {deliveryLoading ? <Spinner size={12} /> : '↺'} Refresh
+              </button>
+              <button
+                onClick={syncCourierDeliveries}
+                disabled={syncing}
+                title="Courier API থেকে delivery status auto-sync করুন"
+                style={{ padding: '7px 14px', borderRadius: 8, fontWeight: 700, fontSize: 12, cursor: 'pointer', border: '1.5px solid #0891b2', background: '#0891b218', color: '#0891b2' }}>
+                {syncing ? <Spinner size={11} /> : '🔄 Courier Sync'}
+              </button>
+            </div>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {deliveryOrders.map(o => {
+              const total = o.items.reduce((s, i) => s + i.unitPrice * i.qty, 0);
+              const isActing = deliveryActionId === o.id;
+              const ship = o.courierShipment;
+              return (
+                <div key={o.id} style={{ padding: '12px 14px', borderRadius: 10, background: th.bg, border: `1px solid ${th.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+                  <div style={{ flex: 1, minWidth: 180 }}>
+                    <div style={{ fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      {o.customerName || 'Customer'}
+                      <span style={{ fontSize: 10, color: th.muted, fontWeight: 400 }}>#{o.id}</span>
+                      {ship && (
+                        <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: '#0891b218', color: '#0891b2' }}>
+                          {ship.courierName || 'Courier'}
+                          {ship.trackingId && ` · ${ship.trackingId}`}
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: 11, color: th.muted, marginTop: 2 }}>
+                      {o.phone && <span style={{ marginRight: 10 }}>📞 {o.phone}</span>}
+                      <span>📍 {(o.address || '—').slice(0, 55)}</span>
+                    </div>
+                    <div style={{ fontSize: 11, color: th.muted, marginTop: 2 }}>
+                      {o.items.map((i, idx) => <span key={idx} style={{ marginRight: 8 }}>{i.productCode} ×{i.qty}</span>)}
+                      <span style={{ fontWeight: 700, color: th.text }}>৳{total.toLocaleString()}</span>
+                      {ship?.trackingUrl && (
+                        <a href={ship.trackingUrl} target="_blank" rel="noreferrer" style={{ marginLeft: 8, color: '#0891b2', fontSize: 11 }}>🔗 Track</a>
+                      )}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button
+                      onClick={() => markDeliveryCancelled(o.id)}
+                      disabled={isActing}
+                      style={{ padding: '7px 13px', borderRadius: 8, fontWeight: 700, fontSize: 12, cursor: 'pointer', border: '1.5px solid #dc2626', background: '#dc262618', color: '#dc2626' }}>
+                      {isActing ? <Spinner size={11} /> : '❌ Cancel'}
+                    </button>
+                    <button
+                      onClick={() => markDelivered(o.id)}
+                      disabled={isActing}
+                      style={{ padding: '7px 13px', borderRadius: 8, fontWeight: 700, fontSize: 12, cursor: 'pointer', border: '1.5px solid #0891b2', background: '#0891b2', color: '#fff', boxShadow: '0 1px 4px #0891b230' }}>
+                      {isActing ? <Spinner size={11} /> : '✅ Delivered'}
+                    </button>
+                  </div>
                 </div>
               );
             })}

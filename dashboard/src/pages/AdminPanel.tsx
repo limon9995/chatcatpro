@@ -3,7 +3,7 @@ import { CardHeader, EmptyState, FieldWithInfo, InfoButton, Spinner } from '../c
 import type { Theme } from '../components/ui';
 import { API_BASE, useApi } from '../hooks/useApi';
 
-type AdminTab = 'overview' | 'clients' | 'global-questions' | 'global-replies' | 'learning-log' | 'courier-tutorials' | 'billing' | 'call-servers' | 'wallet' | 'pricing' | 'subscriptions';
+type AdminTab = 'overview' | 'clients' | 'global-questions' | 'global-replies' | 'learning-log' | 'courier-tutorials' | 'billing' | 'call-servers' | 'wallet' | 'pricing' | 'subscriptions' | 'page-requests';
 
 interface TutorialsConfig {
   courier?: { pathao?: string; steadfast?: string; redx?: string; paperfly?: string };
@@ -48,6 +48,7 @@ interface ClientPage {
 
 const ADMIN_TABS: { key: AdminTab; label: string; icon: string; help: string }[] = [
   { key: 'overview',          label: 'Overview',          icon: '📊', help: 'System এর সার্বিক অবস্থা দেখুন' },
+  { key: 'page-requests',     label: 'Page Requests',     icon: '📋', help: 'Client দের page access request গুলো দেখুন এবং approve/reject করুন।' },
   { key: 'clients',           label: 'Clients',           icon: '👥', help: 'সব client এর list এবং তাদের bot knowledge পরিচালনা করুন' },
   { key: 'global-questions',  label: 'Global Questions',  icon: '🌐', help: 'সব client এর জন্য default question bank।' },
   { key: 'global-replies',    label: 'System Replies',    icon: '💬', help: 'সব page এর জন্য default bot reply template।' },
@@ -81,9 +82,12 @@ export function AdminPanel({ th, onToast, onLogout }: {
   const { request } = useApi();
   const [tab, setTab] = useState<AdminTab>(() => {
     const saved = localStorage.getItem('admin_tab') as AdminTab | null;
-    const valid: AdminTab[] = ['overview','clients','global-questions','global-replies','learning-log','courier-tutorials','billing','call-servers','wallet','pricing','subscriptions'];
+    const valid: AdminTab[] = ['overview','clients','global-questions','global-replies','learning-log','courier-tutorials','billing','call-servers','wallet','pricing','subscriptions','page-requests'];
     return saved && valid.includes(saved) ? saved : 'overview';
   });
+  const [pageRequests, setPageRequests] = useState<any[]>([]);
+  const [pageReqFilter, setPageReqFilter] = useState<'all' | 'pending'>('pending');
+  const [pageReqBusy, setPageReqBusy] = useState<number | null>(null);
   const [overview, setOverview] = useState<any>(null);
   const [pages, setPages]       = useState<ClientPage[]>([]);
   const [globalCfg, setGlobalCfg]       = useState<any>(null);
@@ -386,7 +390,26 @@ export function AdminPanel({ th, onToast, onLogout }: {
     if (tab === 'billing')                                         loadBilling();
     if (tab === 'wallet')                                          loadWallet();
     if (tab === 'subscriptions') loadSubscriptions();
+    if (tab === 'page-requests' || tab === 'overview') loadPageRequests();
   }, [tab]);
+
+  const loadPageRequests = async (filter?: 'all' | 'pending') => {
+    const f = filter ?? pageReqFilter;
+    try {
+      const data = await request<any[]>(`${BASE}/page-requests${f === 'pending' ? '?status=pending' : ''}`);
+      setPageRequests(data || []);
+    } catch { /* silent */ }
+  };
+
+  const handlePageReqAction = async (id: number, action: 'approve' | 'reject', note?: string) => {
+    setPageReqBusy(id);
+    try {
+      await request(`${BASE}/page-requests/${id}/${action}`, { method: 'POST', body: JSON.stringify({ adminNote: note || undefined }) });
+      onToast(action === 'approve' ? 'Approved!' : 'Rejected!', 'success');
+      await loadPageRequests();
+    } catch (e: any) { onToast(e.message, 'error'); }
+    finally { setPageReqBusy(null); }
+  };
 
   const loadPageCfg = async (page: ClientPage) => {
     setSelectedPage(page); setClientCfg(null); setClientLoading(true);
@@ -472,17 +495,26 @@ export function AdminPanel({ th, onToast, onLogout }: {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 0, background: th.surface, borderRadius: 14, padding: 4, border: `1px solid ${th.border}` }}>
         <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' as const }}>
-          {ADMIN_TABS.map(t => (
-            <button key={t.key} onClick={() => { setTab(t.key); localStorage.setItem('admin_tab', t.key); }} style={{
-              padding: '8px 16px', borderRadius: 10, border: 'none', cursor: 'pointer',
-              fontSize: 12.5, fontWeight: 700, fontFamily: 'inherit',
-              background: tab === t.key ? th.accent : 'transparent',
-              color: tab === t.key ? '#fff' : th.muted, transition: 'all .15s',
-              display: 'flex', alignItems: 'center', gap: 5,
-            }}>
-              <span>{t.icon}</span>{t.label}
-            </button>
-          ))}
+          {ADMIN_TABS.map(t => {
+            const pendingCount = t.key === 'page-requests' && overview?.pendingPageRequests > 0
+              ? overview.pendingPageRequests : 0;
+            return (
+              <button key={t.key} onClick={() => { setTab(t.key); localStorage.setItem('admin_tab', t.key); }} style={{
+                padding: '8px 16px', borderRadius: 10, border: 'none', cursor: 'pointer',
+                fontSize: 12.5, fontWeight: 700, fontFamily: 'inherit',
+                background: tab === t.key ? th.accent : 'transparent',
+                color: tab === t.key ? '#fff' : th.muted, transition: 'all .15s',
+                display: 'flex', alignItems: 'center', gap: 5, position: 'relative' as const,
+              }}>
+                <span>{t.icon}</span>{t.label}
+                {pendingCount > 0 && (
+                  <span style={{ background: '#ef4444', color: '#fff', borderRadius: 999, fontSize: 10, fontWeight: 900, padding: '1px 6px', minWidth: 18, textAlign: 'center' }}>
+                    {pendingCount}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
         {currentTabHelp && (
           <div style={{ fontSize: 12, color: th.muted, padding: '8px 8px 4px', borderTop: `1px solid ${th.border}`, marginTop: 4 }}>
@@ -514,6 +546,20 @@ export function AdminPanel({ th, onToast, onLogout }: {
           <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 12, padding: '12px 16px', display: 'flex', gap: 10, alignItems: 'center', color: '#166534' }}>
             <span style={{ fontSize: 18 }}>✅</span>
             <div style={{ fontWeight: 700, fontSize: 13 }}>Bot সব question বুঝতে পারছে</div>
+          </div>
+        )}
+
+        {/* Pending page requests banner */}
+        {overview.pendingPageRequests > 0 && (
+          <div style={{ background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 12, padding: '12px 16px', display: 'flex', gap: 10, alignItems: 'center', color: '#92400e' }}>
+            <span style={{ fontSize: 18 }}>📋</span>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 13 }}>{overview.pendingPageRequests}টি Page Access Request Pending</div>
+              <div style={{ fontSize: 12, marginTop: 2 }}>Client রা page connect করার জন্য request করেছে — review করুন</div>
+            </div>
+            <button onClick={() => { setTab('page-requests'); localStorage.setItem('admin_tab', 'page-requests'); }} style={{ ...th.btnGhost, marginLeft: 'auto', fontSize: 12, color: '#92400e', borderColor: '#fcd34d' }}>
+              Review →
+            </button>
           </div>
         )}
 
@@ -1408,7 +1454,114 @@ export function AdminPanel({ th, onToast, onLogout }: {
             onReload={loadSubscriptions}
           />
         )}
+        {tab === 'page-requests' && (
+          <PageRequestsTab
+            th={th}
+            requests={pageRequests}
+            filter={pageReqFilter}
+            busy={pageReqBusy}
+            onFilterChange={(f) => { setPageReqFilter(f); loadPageRequests(f); }}
+            onApprove={(id) => {
+              const note = window.prompt('Admin note (optional):') ?? '';
+              handlePageReqAction(id, 'approve', note);
+            }}
+            onReject={(id) => {
+              const note = window.prompt('কেন reject করছেন? (optional):') ?? '';
+              handlePageReqAction(id, 'reject', note);
+            }}
+          />
+        )}
       </div>
+    </div>
+  );
+}
+
+// ── Page Requests Tab ─────────────────────────────────────────────────────────
+function PageRequestsTab({ th, requests, filter, busy, onFilterChange, onApprove, onReject }: {
+  th: Theme;
+  requests: any[];
+  filter: 'all' | 'pending';
+  busy: number | null;
+  onFilterChange: (f: 'all' | 'pending') => void;
+  onApprove: (id: number) => void;
+  onReject: (id: number) => void;
+}) {
+  const statusColor = (s: string) => s === 'approved' ? '#16a34a' : s === 'rejected' ? '#ef4444' : '#f59e0b';
+  const statusLabel = (s: string) => s === 'approved' ? '✅ Approved' : s === 'rejected' ? '❌ Rejected' : '⏳ Pending';
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        <div style={{ fontWeight: 800, fontSize: 15, color: th.text }}>📋 Page Access Requests</div>
+        <div style={{ display: 'flex', gap: 6 }}>
+          {(['pending', 'all'] as const).map(f => (
+            <button key={f} onClick={() => onFilterChange(f)} style={{
+              padding: '6px 14px', borderRadius: 8, border: `1px solid ${filter === f ? th.accent : th.border}`,
+              background: filter === f ? th.accent : 'transparent', color: filter === f ? '#fff' : th.muted,
+              fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+            }}>{f === 'pending' ? '⏳ Pending' : '📋 All'}</button>
+          ))}
+        </div>
+      </div>
+
+      {requests.length === 0 ? (
+        <div style={{ ...th.card, textAlign: 'center', padding: '32px', color: th.muted, fontSize: 13 }}>
+          কোনো request নেই
+        </div>
+      ) : requests.map((r) => (
+        <div key={r.id} style={{ ...th.card, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                <span style={{ fontSize: 11, fontWeight: 900, color: statusColor(r.status), background: `${statusColor(r.status)}18`, padding: '2px 8px', borderRadius: 6 }}>
+                  {statusLabel(r.status)}
+                </span>
+                <span style={{ fontSize: 11, color: th.muted }}>#{r.id} · {new Date(r.createdAt).toLocaleDateString('bn-BD')}</span>
+              </div>
+              <div style={{ fontWeight: 800, fontSize: 13.5, color: th.text, marginBottom: 4 }}>
+                👤 {r.user?.name || r.user?.username} ({r.user?.email || r.user?.username})
+              </div>
+              <div style={{ fontSize: 12.5, color: th.muted, marginBottom: 3 }}>
+                📄 Page: <a href={r.pageUrl} target="_blank" rel="noreferrer" style={{ color: th.accent }}>{r.pageUrl}</a>
+              </div>
+              <div style={{ fontSize: 12.5, color: th.muted, marginBottom: r.note ? 3 : 0 }}>
+                🧑 FB Profile: <a href={r.fbProfile} target="_blank" rel="noreferrer" style={{ color: th.accent }}>{r.fbProfile}</a>
+              </div>
+              {r.note && (
+                <div style={{ fontSize: 12, color: th.muted, marginTop: 4, fontStyle: 'italic' }}>💬 "{r.note}"</div>
+              )}
+              {r.adminNote && (
+                <div style={{ fontSize: 12, color: statusColor(r.status), marginTop: 4, fontWeight: 600 }}>
+                  Admin note: {r.adminNote}
+                </div>
+              )}
+            </div>
+
+            {r.status === 'pending' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 100 }}>
+                <button disabled={busy === r.id} onClick={() => onApprove(r.id)} style={{
+                  padding: '8px 12px', borderRadius: 8, border: 'none', background: '#16a34a', color: '#fff',
+                  fontWeight: 800, fontSize: 12, cursor: busy === r.id ? 'default' : 'pointer', fontFamily: 'inherit',
+                }}>
+                  {busy === r.id ? <Spinner size={12} /> : '✅ Approve'}
+                </button>
+                <button disabled={busy === r.id} onClick={() => onReject(r.id)} style={{
+                  padding: '8px 12px', borderRadius: 8, border: 'none', background: 'rgba(239,68,68,0.12)', color: '#ef4444',
+                  fontWeight: 800, fontSize: 12, cursor: busy === r.id ? 'default' : 'pointer', fontFamily: 'inherit',
+                }}>
+                  ❌ Reject
+                </button>
+              </div>
+            )}
+          </div>
+
+          {r.status === 'approved' && (
+            <div style={{ background: 'rgba(34,197,94,0.07)', borderRadius: 8, padding: '8px 12px', fontSize: 12, color: '#15803d' }}>
+              ✅ Approved — এখন Facebook Developer Console এ গিয়ে <strong>{r.fbProfile}</strong> কে Tester হিসেবে add করুন। তারপর client FB Login দিয়ে page connect করতে পারবে।
+            </div>
+          )}
+        </div>
+      ))}
     </div>
   );
 }
@@ -2600,3 +2753,4 @@ function AdminSubscriptionsTab({ th, loading, pages, onRefresh, BASE, request, o
     </div>
   );
 }
+

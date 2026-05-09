@@ -73,8 +73,10 @@ export class FacebookService {
 
   consumePendingOAuthResult(userId: string, id: string) {
     const item = this.pendingOAuthResults.get(id);
-    if (!item) throw new BadRequestException('OAuth result not found or expired');
-    if (item.userId !== userId) throw new ForbiddenException('OAuth result does not belong to this user');
+    if (!item)
+      throw new BadRequestException('OAuth result not found or expired');
+    if (item.userId !== userId)
+      throw new ForbiddenException('OAuth result does not belong to this user');
     this.pendingOAuthResults.delete(id);
     return { pages: item.pages };
   }
@@ -121,7 +123,9 @@ export class FacebookService {
       const sub = await this.billing.getOrCreateSubscription(userId);
       const plan = (sub as any).plan;
       if (plan && plan.pagesLimit !== -1) {
-        const pageCount = await this.prisma.page.count({ where: { ownerId: userId } });
+        const pageCount = await this.prisma.page.count({
+          where: { ownerId: userId },
+        });
         if (pageCount >= plan.pagesLimit) {
           throw new ForbiddenException(
             `আপনার ${plan.displayName} plan-এ সর্বোচ্চ ${plan.pagesLimit}টি page সংযুক্ত করা যাবে। আরও page যোগ করতে plan upgrade করুন।`,
@@ -137,7 +141,9 @@ export class FacebookService {
     }
 
     // Validate masterPageId if provided
-    const masterPageId = pageInfo.masterPageId ? Number(pageInfo.masterPageId) : undefined;
+    const masterPageId = pageInfo.masterPageId
+      ? Number(pageInfo.masterPageId)
+      : undefined;
     if (masterPageId) {
       const master = await this.prisma.page.findUnique({
         where: { id: masterPageId },
@@ -146,7 +152,9 @@ export class FacebookService {
       if (!master || master.ownerId !== userId)
         throw new BadRequestException('Master page not found or not yours');
       if (master.masterPageId !== null)
-        throw new BadRequestException('Target page is itself a linked page — only standalone pages can be masters');
+        throw new BadRequestException(
+          'Target page is itself a linked page — only standalone pages can be masters',
+        );
     }
 
     const page = existing
@@ -193,7 +201,10 @@ export class FacebookService {
     };
   }
 
-  async resolvePageIdentity(pageUrl: string, pageToken: string): Promise<{
+  async resolvePageIdentity(
+    pageUrl: string,
+    pageToken: string,
+  ): Promise<{
     pageId: string;
     pageName: string;
   }> {
@@ -284,7 +295,8 @@ export class FacebookService {
     if (landingUrl) return landingUrl.replace(/\/+$/, '');
 
     const storageUrl = String(process.env.STORAGE_PUBLIC_URL || '').trim();
-    if (storageUrl) return storageUrl.replace(/\/storage\/?$/, '').replace(/\/+$/, '');
+    if (storageUrl)
+      return storageUrl.replace(/\/storage\/?$/, '').replace(/\/+$/, '');
 
     try {
       return new URL(this.redirectUri).origin;
@@ -335,7 +347,9 @@ export class FacebookService {
         data?.error?.message ||
         data?.message ||
         'Failed to verify Facebook page token';
-      throw new BadRequestException(`Facebook page token verification failed: ${msg}`);
+      throw new BadRequestException(
+        `Facebook page token verification failed: ${msg}`,
+      );
     }
 
     return {
@@ -358,7 +372,9 @@ export class FacebookService {
         data?.error?.message ||
         data?.message ||
         'Failed to resolve Facebook page link';
-      throw new BadRequestException(`Facebook page link resolution failed: ${msg}`);
+      throw new BadRequestException(
+        `Facebook page link resolution failed: ${msg}`,
+      );
     }
 
     return {
@@ -401,7 +417,9 @@ export class FacebookService {
     if (segments.length === 0) return null;
 
     if (segments[0] === 'pages' || segments[0] === 'people') {
-      const numericTail = [...segments].reverse().find((segment) => /^\d+$/.test(segment));
+      const numericTail = [...segments]
+        .reverse()
+        .find((segment) => /^\d+$/.test(segment));
       if (numericTail) return numericTail;
     }
 
@@ -461,6 +479,40 @@ export class FacebookService {
     }
 
     return { userId, ts };
+  }
+
+  // ── Page Access Request (client submits, admin approves) ──────────────────
+
+  async submitPageRequest(
+    userId: string,
+    pageUrl: string,
+    fbProfile: string,
+    note?: string,
+  ) {
+    const url = pageUrl.trim();
+    const profile = fbProfile.trim();
+    if (!url) throw new BadRequestException('Facebook page link দিন');
+    if (!profile) throw new BadRequestException('আপনার Facebook profile link দিন');
+
+    const existing = await this.prisma.pageRequest.findFirst({
+      where: { userId, pageUrl: url, status: 'pending' },
+    });
+    if (existing) {
+      return { success: true, request: existing, alreadyPending: true };
+    }
+
+    const req = await this.prisma.pageRequest.create({
+      data: { userId, pageUrl: url, fbProfile: profile, note: note?.trim() || null },
+    });
+    this.logger.log(`[PageRequest] New request #${req.id} from user ${userId}: ${url}`);
+    return { success: true, request: req };
+  }
+
+  async getMyPageRequests(userId: string) {
+    return this.prisma.pageRequest.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+    });
   }
 }
 

@@ -4,18 +4,12 @@ import { WalletService } from '../wallet/wallet.service';
 import { BusinessContext } from './bot-context.service';
 
 export interface AiIntentResult {
-  intent: string | null;   // null = use keyword fallback
-  reply: string | null;    // AI-generated natural reply (always set when AI succeeds)
+  intent: string | null; // null = use keyword fallback
+  reply: string | null; // AI-generated natural reply (always set when AI succeeds)
 }
 
 export interface DraftStepReviewResult {
-  action:
-    | 'CAPTURE'
-    | 'RETRY'
-    | 'EXIT_DRAFT'
-    | 'CONFIRM'
-    | 'CANCEL'
-    | 'EDIT';
+  action: 'CAPTURE' | 'RETRY' | 'EXIT_DRAFT' | 'CONFIRM' | 'CANCEL' | 'EDIT';
   reply: string | null;
   normalizedValue: string | null;
 }
@@ -48,14 +42,14 @@ const AI_REPLY_INTENTS = new Set([
   'SOFT_HESITATION',
   'NEGOTIATION',
   'UNKNOWN',
-  'SIZE_REQUEST',      // AI answers from knowledgeText
-  'DELIVERY_TIME',     // AI uses real deliveryTime from DB
-  'DELIVERY_FEE',      // AI uses real inside/outside fee from DB
-  'FABRIC_TYPE',       // AI answers from knowledgeText
-  'CATALOG_REQUEST',   // AI lists real products from DB
-  'PHOTO_REQUEST',     // AI explains photo process
-  'DUAL_WEARING',      // AI describes the dress model is wearing
-  'DUAL_HOLDING',      // AI describes the dress model is holding
+  'SIZE_REQUEST', // AI answers from knowledgeText
+  'DELIVERY_TIME', // AI uses real deliveryTime from DB
+  'DELIVERY_FEE', // AI uses real inside/outside fee from DB
+  'FABRIC_TYPE', // AI answers from knowledgeText
+  'CATALOG_REQUEST', // AI lists real products from DB
+  'PHOTO_REQUEST', // AI explains photo process
+  'DUAL_WEARING', // AI describes the dress model is wearing
+  'DUAL_HOLDING', // AI describes the dress model is holding
 ]);
 
 const STEP_LABELS: Record<string, string> = {
@@ -87,7 +81,9 @@ export class AiIntentService {
   ) {
     this.apiKey = process.env.OPENAI_API_KEY ?? '';
     this.geminiApiKey = process.env.GEMINI_API_KEY ?? '';
-    this.ollamaBaseUrl = (process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434').replace(/\/$/, '');
+    this.ollamaBaseUrl = (
+      process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434'
+    ).replace(/\/$/, '');
     this.ollamaModel = process.env.OLLAMA_CHAT_MODEL ?? 'qwen2:1.5b';
 
     const providerEnv = (process.env.AI_INTENT_PROVIDER ?? '').toLowerCase();
@@ -99,16 +95,22 @@ export class AiIntentService {
       this.model = process.env.AI_INTENT_MODEL ?? 'gpt-4o-mini';
     }
 
-    const activeKey = this.provider === 'gemini' ? this.geminiApiKey : this.apiKey;
+    const activeKey =
+      this.provider === 'gemini' ? this.geminiApiKey : this.apiKey;
     if (activeKey) {
-      this.logger.log(`[AiIntent] Enabled — provider=${this.provider} model=${this.model}`);
+      this.logger.log(
+        `[AiIntent] Enabled — provider=${this.provider} model=${this.model}`,
+      );
     } else {
-      this.logger.warn(`[AiIntent] No API key for provider=${this.provider} — keyword fallback only`);
+      this.logger.warn(
+        `[AiIntent] No API key for provider=${this.provider} — keyword fallback only`,
+      );
     }
   }
 
   isAvailable(): boolean {
-    const activeKey = this.provider === 'gemini' ? this.geminiApiKey : this.apiKey;
+    const activeKey =
+      this.provider === 'gemini' ? this.geminiApiKey : this.apiKey;
     return !!activeKey && Date.now() > this.cooldownUntil;
   }
 
@@ -126,7 +128,10 @@ export class AiIntentService {
     try {
       this.logger.log(`[AiIntent] Ollama (${this.ollamaModel})`);
       const ollamaMessages = [
-        { role: 'system', content: this.buildOllamaPrompt(draftStep, awaitingConfirm, context) },
+        {
+          role: 'system',
+          content: this.buildOllamaPrompt(draftStep, awaitingConfirm, context),
+        },
         { role: 'user', content: `Customer: "${userText}"` },
       ];
       const res = await fetch(`${this.ollamaBaseUrl}/api/chat`, {
@@ -141,12 +146,14 @@ export class AiIntentService {
         signal: AbortSignal.timeout(6_000),
       });
       if (!res.ok) throw new Error(`Ollama HTTP ${res.status}`);
-      const data = await res.json() as any;
+      const data = await res.json();
       const content = (data?.message?.content ?? '').trim();
       // Extract JSON object from response (Ollama may add extra text)
       const match = content.match(/\{[\s\S]*\}/);
       if (!match) {
-        this.logger.warn(`[AiIntent] Ollama no JSON in response: ${content.slice(0, 80)}`);
+        this.logger.warn(
+          `[AiIntent] Ollama no JSON in response: ${content.slice(0, 80)}`,
+        );
         return null;
       }
       JSON.parse(match[0]); // validate parseable
@@ -169,12 +176,23 @@ export class AiIntentService {
     try {
       const res = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${this.apiKey}` },
-        body: JSON.stringify({ model: this.model, max_tokens: maxTokens, temperature, response_format: { type: 'json_object' }, messages }),
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.apiKey}`,
+        },
+        body: JSON.stringify({
+          model: this.model,
+          max_tokens: maxTokens,
+          temperature,
+          response_format: { type: 'json_object' },
+          messages,
+        }),
         signal: AbortSignal.timeout(8_000),
       });
       if (res.status === 429 || res.status === 402) {
-        this.logger.warn(`[AiIntent] OpenAI quota/limit (${res.status}) — keyword fallback`);
+        this.logger.warn(
+          `[AiIntent] OpenAI quota/limit (${res.status}) — keyword fallback`,
+        );
         this.enterCooldown();
         return null;
       }
@@ -183,10 +201,12 @@ export class AiIntentService {
         this.recordFailure();
         return null;
       }
-      const data = await res.json() as any;
+      const data = await res.json();
       return (data?.choices?.[0]?.message?.content ?? '').trim() || null;
     } catch (err: any) {
-      this.logger.warn(`[AiIntent] OpenAI network error: ${err?.message ?? err}`);
+      this.logger.warn(
+        `[AiIntent] OpenAI network error: ${err?.message ?? err}`,
+      );
       this.recordFailure();
       return null;
     }
@@ -207,9 +227,14 @@ export class AiIntentService {
       }));
       const body: any = {
         contents,
-        generationConfig: { temperature, maxOutputTokens: maxTokens, responseMimeType: 'application/json' },
+        generationConfig: {
+          temperature,
+          maxOutputTokens: maxTokens,
+          responseMimeType: 'application/json',
+        },
       };
-      if (systemMsg) body.systemInstruction = { parts: [{ text: systemMsg.content }] };
+      if (systemMsg)
+        body.systemInstruction = { parts: [{ text: systemMsg.content }] };
 
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent?key=${this.geminiApiKey}`;
       const res = await fetch(url, {
@@ -219,20 +244,28 @@ export class AiIntentService {
         signal: AbortSignal.timeout(8_000),
       });
       if (res.status === 429 || res.status === 402) {
-        this.logger.warn(`[AiIntent] Gemini quota/limit (${res.status}) — keyword fallback`);
+        this.logger.warn(
+          `[AiIntent] Gemini quota/limit (${res.status}) — keyword fallback`,
+        );
         this.enterCooldown();
         return null;
       }
       if (!res.ok) {
         const errText = await res.text();
-        this.logger.error(`[AiIntent] Gemini error ${res.status}: ${errText.slice(0, 100)}`);
+        this.logger.error(
+          `[AiIntent] Gemini error ${res.status}: ${errText.slice(0, 100)}`,
+        );
         this.recordFailure();
         return null;
       }
-      const data = await res.json() as any;
-      return (data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '').trim() || null;
+      const data = await res.json();
+      return (
+        (data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '').trim() || null
+      );
     } catch (err: any) {
-      this.logger.warn(`[AiIntent] Gemini network error: ${err?.message ?? err}`);
+      this.logger.warn(
+        `[AiIntent] Gemini network error: ${err?.message ?? err}`,
+      );
       this.recordFailure();
       return null;
     }
@@ -243,13 +276,23 @@ export class AiIntentService {
     maxTokens: number,
     temperature: number,
     label: string,
-    ollamaCtx?: { userText: string; draftStep: string | null; awaitingConfirm: boolean; context?: BusinessContext },
+    ollamaCtx?: {
+      userText: string;
+      draftStep: string | null;
+      awaitingConfirm: boolean;
+      context?: BusinessContext;
+    },
   ): Promise<{ raw: string } | null> {
     const { localAiMode } = await this.globalSettings.get();
 
     // Try Ollama for bot only when mode is 'all' (generate_only skips bot)
     if (localAiMode === 'all' && this.ollamaBaseUrl && ollamaCtx) {
-      const ollamaRaw = await this.attemptOllama(ollamaCtx.userText, ollamaCtx.draftStep, ollamaCtx.awaitingConfirm, ollamaCtx.context);
+      const ollamaRaw = await this.attemptOllama(
+        ollamaCtx.userText,
+        ollamaCtx.draftStep,
+        ollamaCtx.awaitingConfirm,
+        ollamaCtx.context,
+      );
       if (ollamaRaw) {
         this.logger.log(`[AiIntent] ${label} — Ollama OK`);
         return { raw: ollamaRaw };
@@ -287,7 +330,9 @@ export class AiIntentService {
   ): Promise<AiIntentResult> {
     if (!this.isAvailable()) return { intent: null, reply: null };
     if (!(await this.walletService.canProcessAi(pageId))) {
-      this.logger.warn(`[AiIntent] pageId=${pageId} suspended or insufficient balance`);
+      this.logger.warn(
+        `[AiIntent] pageId=${pageId} suspended or insufficient balance`,
+      );
       return { intent: null, reply: null };
     }
 
@@ -300,16 +345,29 @@ export class AiIntentService {
     const messages = [
       { role: 'system', content: this.buildSystemPrompt(context, draftStep) },
       ...historyMessages,
-      { role: 'user', content: this.buildUserMessage(text, awaitingConfirm, draftStep) },
+      {
+        role: 'user',
+        content: this.buildUserMessage(text, awaitingConfirm, draftStep),
+      },
     ];
 
-    const resolved = await this.resolveProvider(messages, 300, 0.4, 'detectIntent', { userText: text, draftStep, awaitingConfirm, context });
+    const resolved = await this.resolveProvider(
+      messages,
+      300,
+      0.4,
+      'detectIntent',
+      { userText: text, draftStep, awaitingConfirm, context },
+    );
     if (!resolved) return { intent: null, reply: null };
 
     try {
       let parsed: any;
-      try { parsed = JSON.parse(resolved.raw); } catch {
-        this.logger.warn(`[AiIntent] JSON parse failed: ${resolved.raw.slice(0, 80)}`);
+      try {
+        parsed = JSON.parse(resolved.raw);
+      } catch {
+        this.logger.warn(
+          `[AiIntent] JSON parse failed: ${resolved.raw.slice(0, 80)}`,
+        );
         this.recordFailure();
         return { intent: null, reply: null };
       }
@@ -325,24 +383,37 @@ export class AiIntentService {
 
       // Ollama compact prompt always returns reply=null.
       // When intent needs a reply, call the configured AI provider for the actual reply.
-      if (!reply && AI_REPLY_INTENTS.has(intent) && Date.now() > this.cooldownUntil) {
-        this.logger.log(`[AiIntent] ${intent} needs reply — ${this.provider} for reply generation`);
-        const providerRaw = this.provider === 'gemini'
-          ? await this.attemptGemini(messages, 250, 0.5)
-          : await this.attemptOpenAI(messages, 250, 0.5);
+      if (
+        !reply &&
+        AI_REPLY_INTENTS.has(intent) &&
+        Date.now() > this.cooldownUntil
+      ) {
+        this.logger.log(
+          `[AiIntent] ${intent} needs reply — ${this.provider} for reply generation`,
+        );
+        const providerRaw =
+          this.provider === 'gemini'
+            ? await this.attemptGemini(messages, 250, 0.5)
+            : await this.attemptOpenAI(messages, 250, 0.5);
         if (providerRaw) {
           try {
             const parsed2 = JSON.parse(providerRaw);
             reply = (parsed2?.reply ?? '').trim() || null;
-          } catch { /* ignore */ }
+          } catch {
+            /* ignore */
+          }
         }
       }
 
       await this.walletService.deductUsage(pageId, 'TEXT');
-      this.logger.log(`[AiIntent] intent=${intent} reply="${reply?.slice(0, 60) ?? 'none'}"`);
+      this.logger.log(
+        `[AiIntent] intent=${intent} reply="${reply?.slice(0, 60) ?? 'none'}"`,
+      );
       return { intent, reply };
     } catch (err: any) {
-      this.logger.error(`[AiIntent] detectIntent parse error: ${err?.message ?? err}`);
+      this.logger.error(
+        `[AiIntent] detectIntent parse error: ${err?.message ?? err}`,
+      );
       this.recordFailure();
       return { intent: null, reply: null };
     }
@@ -356,28 +427,53 @@ export class AiIntentService {
   ): Promise<DraftStepReviewResult | null> {
     if (!this.isAvailable()) return null;
     if (!(await this.walletService.canProcessAi(pageId))) {
-      this.logger.warn(`[AiIntent] pageId=${pageId} suspended or insufficient balance for draft review`);
+      this.logger.warn(
+        `[AiIntent] pageId=${pageId} suspended or insufficient balance for draft review`,
+      );
       return null;
     }
 
     const messages = [
-      { role: 'system', content: this.buildDraftReviewPrompt(businessName, draftStep) },
+      {
+        role: 'system',
+        content: this.buildDraftReviewPrompt(businessName, draftStep),
+      },
       { role: 'user', content: `Customer message: "${text}"` },
     ];
 
-    const resolved = await this.resolveProvider(messages, 180, 0.2, 'reviewDraftStep');
+    const resolved = await this.resolveProvider(
+      messages,
+      180,
+      0.2,
+      'reviewDraftStep',
+    );
     if (!resolved) return null;
 
     try {
       let parsed: any;
-      try { parsed = JSON.parse(resolved.raw); } catch {
-        this.logger.warn(`[AiIntent] Draft review JSON parse failed: ${resolved.raw.slice(0, 80)}`);
+      try {
+        parsed = JSON.parse(resolved.raw);
+      } catch {
+        this.logger.warn(
+          `[AiIntent] Draft review JSON parse failed: ${resolved.raw.slice(0, 80)}`,
+        );
         this.recordFailure();
         return null;
       }
 
-      const action = String(parsed?.action ?? '').toUpperCase().trim();
-      if (!['CAPTURE', 'RETRY', 'EXIT_DRAFT', 'CONFIRM', 'CANCEL', 'EDIT'].includes(action)) {
+      const action = String(parsed?.action ?? '')
+        .toUpperCase()
+        .trim();
+      if (
+        ![
+          'CAPTURE',
+          'RETRY',
+          'EXIT_DRAFT',
+          'CONFIRM',
+          'CANCEL',
+          'EDIT',
+        ].includes(action)
+      ) {
         this.logger.warn(`[AiIntent] Invalid draft action: "${action}"`);
         return null;
       }
@@ -391,7 +487,9 @@ export class AiIntentService {
         normalizedValue: (parsed?.normalizedValue ?? '').trim() || null,
       };
     } catch (err: any) {
-      this.logger.error(`[AiIntent] reviewDraftStep parse error: ${err?.message ?? err}`);
+      this.logger.error(
+        `[AiIntent] reviewDraftStep parse error: ${err?.message ?? err}`,
+      );
       this.recordFailure();
       return null;
     }
@@ -401,13 +499,23 @@ export class AiIntentService {
     return AI_REPLY_INTENTS.has(intent);
   }
 
-  private buildOllamaPrompt(draftStep: string | null, awaitingConfirm: boolean, context?: BusinessContext): string {
-    const stepNote = draftStep ? `\nCurrent step: collecting "${STEP_LABELS[draftStep] ?? draftStep}".` : '';
-    const confirmNote = awaitingConfirm ? '\nawaitingConfirm=true means "ok/haa/yes" → CONFIRM.' : '';
+  private buildOllamaPrompt(
+    draftStep: string | null,
+    awaitingConfirm: boolean,
+    context?: BusinessContext,
+  ): string {
+    const stepNote = draftStep
+      ? `\nCurrent step: collecting "${STEP_LABELS[draftStep] ?? draftStep}".`
+      : '';
+    const confirmNote = awaitingConfirm
+      ? '\nawaitingConfirm=true means "ok/haa/yes" → CONFIRM.'
+      : '';
     const dualNote = context?.dualPhotoMode
       ? `\nDUAL PHOTO MODE active: "hate thaka/holding/hand dress" → DUAL_HOLDING; "pore ache/gaye/wearing dress" → DUAL_WEARING.`
       : '';
-    const dualIntents = context?.dualPhotoMode ? ', DUAL_WEARING, DUAL_HOLDING' : '';
+    const dualIntents = context?.dualPhotoMode
+      ? ', DUAL_WEARING, DUAL_HOLDING'
+      : '';
     return `You are a Bangladeshi e-commerce chatbot. Classify the customer message.
 Return ONLY valid JSON: {"intent":"INTENT","reply":null}${stepNote}${confirmNote}${dualNote}
 
@@ -422,7 +530,10 @@ Rules:
 - Always set reply=null`;
   }
 
-  private buildSystemPrompt(context: BusinessContext, draftStep: string | null): string {
+  private buildSystemPrompt(
+    context: BusinessContext,
+    draftStep: string | null,
+  ): string {
     const shop = context.businessName
       ? `"${context.businessName}" নামের Bangladeshi e-commerce shop`
       : 'একটি Bangladeshi fashion e-commerce shop';
@@ -432,12 +543,17 @@ Rules:
       : '';
 
     // Build product catalog context (max 25 products)
-    const productLines = context.products.slice(0, 25).map(p =>
-      `- ${p.name}: ৳${p.price} | ${p.stockQty > 0 ? `${p.stockQty} পিস আছে` : 'Stock নেই'}`
-    ).join('\n');
-    const productCtx = context.products.length > 0
-      ? `\n\nProducts (${context.products.length} টি):\n${productLines}`
-      : '';
+    const productLines = context.products
+      .slice(0, 25)
+      .map(
+        (p) =>
+          `- ${p.name}: ৳${p.price} | ${p.stockQty > 0 ? `${p.stockQty} পিস আছে` : 'Stock নেই'}`,
+      )
+      .join('\n');
+    const productCtx =
+      context.products.length > 0
+        ? `\n\nProducts (${context.products.length} টি):\n${productLines}`
+        : '';
 
     // Delivery and payment context
     const deliveryCtx = `\n\nDelivery:
@@ -446,17 +562,22 @@ Rules:
 - সময়: ${context.deliveryTime}`;
 
     const paymentRules = context.paymentRules as any;
-    const paymentCtx = paymentRules ? `\n\nPayment:
+    const paymentCtx = paymentRules
+      ? `\n\nPayment:
 - COD: ${paymentRules.codEnabled !== false ? 'আছে' : 'নেই'}
 - Advance (inside Dhaka): ${paymentRules.insideDhakaAdvanceEnabled ? `৳${paymentRules.insideDhakaAdvanceAmount ?? 100}` : 'লাগবে না'}
-- Advance (outside Dhaka): ${paymentRules.outsideDhakaAdvanceEnabled ? `৳${paymentRules.outsideDhakaAdvanceAmount ?? 100}` : 'লাগবে না'}` : '';
+- Advance (outside Dhaka): ${paymentRules.outsideDhakaAdvanceEnabled ? `৳${paymentRules.outsideDhakaAdvanceAmount ?? 100}` : 'লাগবে না'}`
+      : '';
 
     const knowledgeCtx = context.knowledgeText
       ? `\n\nBusiness Knowledge (FAQ/Policy):\n${context.knowledgeText}`
       : '';
 
     let dualCtx = '';
-    if (context.dualPhotoMode && (context.dualWearingProduct || context.dualHoldingProduct)) {
+    if (
+      context.dualPhotoMode &&
+      (context.dualWearingProduct || context.dualHoldingProduct)
+    ) {
       dualCtx = `\n\n## DUAL PHOTO MODE চালু আছে\nএই মুহূর্তে দুটো product active:\n`;
       if (context.dualWearingProduct)
         dualCtx += `- মডেল **পরে আছে** (গায়ে): ${context.dualWearingProduct.name} — code: ${context.dualWearingProduct.code}, ৳${context.dualWearingProduct.price}\n`;

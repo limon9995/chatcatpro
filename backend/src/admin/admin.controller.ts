@@ -29,7 +29,9 @@ export class AdminController {
   ) {}
 
   @Get('laptop-ai')
-  getLaptopAi() { return this.globalSettings.get(); }
+  getLaptopAi() {
+    return this.globalSettings.get();
+  }
 
   @Patch('laptop-ai')
   setLaptopAi(@Body() b: any) {
@@ -185,11 +187,26 @@ export class AdminController {
   @Post('wallet/pricing/apply-all')
   applyPricingToAll(@Body() b: any) {
     return this.svc.applyPricingToAll({
-      costPerTextMsgBdt: b?.costPerTextMsgBdt !== undefined ? Number(b.costPerTextMsgBdt) : undefined,
-      costPerVoiceMsgBdt: b?.costPerVoiceMsgBdt !== undefined ? Number(b.costPerVoiceMsgBdt) : undefined,
-      costPerImageBdt: b?.costPerImageBdt !== undefined ? Number(b.costPerImageBdt) : undefined,
-      costPerImageLocalBdt: b?.costPerImageLocalBdt !== undefined ? Number(b.costPerImageLocalBdt) : undefined,
-      costPerAnalyzeBdt: b?.costPerAnalyzeBdt !== undefined ? Number(b.costPerAnalyzeBdt) : undefined,
+      costPerTextMsgBdt:
+        b?.costPerTextMsgBdt !== undefined
+          ? Number(b.costPerTextMsgBdt)
+          : undefined,
+      costPerVoiceMsgBdt:
+        b?.costPerVoiceMsgBdt !== undefined
+          ? Number(b.costPerVoiceMsgBdt)
+          : undefined,
+      costPerImageBdt:
+        b?.costPerImageBdt !== undefined
+          ? Number(b.costPerImageBdt)
+          : undefined,
+      costPerImageLocalBdt:
+        b?.costPerImageLocalBdt !== undefined
+          ? Number(b.costPerImageLocalBdt)
+          : undefined,
+      costPerAnalyzeBdt:
+        b?.costPerAnalyzeBdt !== undefined
+          ? Number(b.costPerAnalyzeBdt)
+          : undefined,
     });
   }
 
@@ -204,21 +221,39 @@ export class AdminController {
     @Body() b: any,
   ) {
     const amount = Number(b?.amountBdt);
-    if (!amount || amount <= 0) throw new BadRequestException('amountBdt must be positive');
-    return this.svc.rechargePageWallet(pageId, amount, b?.transactionId || 'MANUAL', b?.note);
+    if (!amount || amount <= 0)
+      throw new BadRequestException('amountBdt must be positive');
+    return this.svc.rechargePageWallet(
+      pageId,
+      amount,
+      b?.transactionId || 'MANUAL',
+      b?.note,
+    );
   }
 
   @Patch('wallet/:pageId/pricing')
-  updatePricing(
-    @Param('pageId', ParseIntPipe) pageId: number,
-    @Body() b: any,
-  ) {
+  updatePricing(@Param('pageId', ParseIntPipe) pageId: number, @Body() b: any) {
     return this.svc.updatePagePricing(pageId, {
-      costPerTextMsgBdt: b?.costPerTextMsgBdt !== undefined ? Number(b.costPerTextMsgBdt) : undefined,
-      costPerVoiceMsgBdt: b?.costPerVoiceMsgBdt !== undefined ? Number(b.costPerVoiceMsgBdt) : undefined,
-      costPerImageBdt: b?.costPerImageBdt !== undefined ? Number(b.costPerImageBdt) : undefined,
-      costPerImageLocalBdt: b?.costPerImageLocalBdt !== undefined ? Number(b.costPerImageLocalBdt) : undefined,
-      costPerAnalyzeBdt: b?.costPerAnalyzeBdt !== undefined ? Number(b.costPerAnalyzeBdt) : undefined,
+      costPerTextMsgBdt:
+        b?.costPerTextMsgBdt !== undefined
+          ? Number(b.costPerTextMsgBdt)
+          : undefined,
+      costPerVoiceMsgBdt:
+        b?.costPerVoiceMsgBdt !== undefined
+          ? Number(b.costPerVoiceMsgBdt)
+          : undefined,
+      costPerImageBdt:
+        b?.costPerImageBdt !== undefined
+          ? Number(b.costPerImageBdt)
+          : undefined,
+      costPerImageLocalBdt:
+        b?.costPerImageLocalBdt !== undefined
+          ? Number(b.costPerImageLocalBdt)
+          : undefined,
+      costPerAnalyzeBdt:
+        b?.costPerAnalyzeBdt !== undefined
+          ? Number(b.costPerAnalyzeBdt)
+          : undefined,
     });
   }
 
@@ -227,15 +262,13 @@ export class AdminController {
     @Param('id', ParseIntPipe) id: number,
     @Req() req: any,
   ) {
-    const adminUsername = req.authUser?.username || req.user?.username || 'admin';
+    const adminUsername =
+      req.authUser?.username || req.user?.username || 'admin';
     return this.svc.approveRechargeRequest(id, adminUsername);
   }
 
   @Post('wallet/requests/:id/reject')
-  rejectRechargeRequest(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() b: any,
-  ) {
+  rejectRechargeRequest(@Param('id', ParseIntPipe) id: number, @Body() b: any) {
     return this.svc.rejectRechargeRequest(id, b?.reason);
   }
 
@@ -253,8 +286,27 @@ export class AdminController {
   ) {
     return this.svc.updatePageSubscription(pageId, {
       subscriptionStatus: b?.subscriptionStatus,
-      nextBillingDate: b?.nextBillingDate ? new Date(b.nextBillingDate) : b?.nextBillingDate,
+      nextBillingDate: b?.nextBillingDate
+        ? new Date(b.nextBillingDate)
+        : b?.nextBillingDate,
       daysToAdd: b?.daysToAdd !== undefined ? Number(b.daysToAdd) : undefined,
     });
+  }
+
+  // ── Page Access Requests ────────────────────────────────────────────────
+
+  @Get('page-requests')
+  getPageRequests(@Query('status') status?: string) {
+    return this.svc.getPageRequests(status);
+  }
+
+  @Post('page-requests/:id/approve')
+  approvePageRequest(@Param('id', ParseIntPipe) id: number, @Body() b: any) {
+    return this.svc.approvePageRequest(id, b?.adminNote);
+  }
+
+  @Post('page-requests/:id/reject')
+  rejectPageRequest(@Param('id', ParseIntPipe) id: number, @Body() b: any) {
+    return this.svc.rejectPageRequest(id, b?.adminNote);
   }
 }

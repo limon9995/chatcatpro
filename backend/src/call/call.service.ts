@@ -283,11 +283,11 @@ export class CallService {
       const usedProvider = await this.dispatchCallWithFallback(
         preferredProvider,
         {
-        phone: order.phone,
-        voiceUrl: voiceUrl ?? null,
-        callAttemptId: attempt.id,
-        page,
-        order,
+          phone: order.phone,
+          voiceUrl: voiceUrl ?? null,
+          callAttemptId: attempt.id,
+          page,
+          order,
         },
       );
 
@@ -608,10 +608,7 @@ export class CallService {
     );
   }
 
-  private enqueueFairAutoCall(
-    pageId: number,
-    task: () => Promise<void>,
-  ): void {
+  private enqueueFairAutoCall(pageId: number, task: () => Promise<void>): void {
     const queue = pageFairQueues.get(pageId) || [];
     queue.push(task);
     pageFairQueues.set(pageId, queue);

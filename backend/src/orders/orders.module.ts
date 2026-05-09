@@ -9,7 +9,13 @@ import { ConversationContextModule } from '../conversation-context/conversation-
 import { AuthModule } from '../auth/auth.module';
 
 @Module({
-  imports: [PrismaModule, MessengerModule, BotKnowledgeModule, ConversationContextModule, AuthModule],
+  imports: [
+    PrismaModule,
+    MessengerModule,
+    BotKnowledgeModule,
+    ConversationContextModule,
+    AuthModule,
+  ],
   controllers: [OrdersController],
   providers: [OrdersService, OrderNotificationService],
   exports: [OrdersService, OrderNotificationService],

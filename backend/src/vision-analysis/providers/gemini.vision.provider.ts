@@ -20,9 +20,10 @@ export class GeminiVisionProvider implements VisionAnalysisProvider {
 
   private buildPrompt(multi: boolean): string {
     return `You are an expert fashion product analyzer for a Bangladeshi e-commerce store.
-${multi
-  ? 'You are given multiple photos of the SAME product from different angles. Analyze ALL images together and provide a comprehensive description that captures every visible detail.'
-  : 'Analyze this product image.'
+${
+  multi
+    ? 'You are given multiple photos of the SAME product from different angles. Analyze ALL images together and provide a comprehensive description that captures every visible detail.'
+    : 'Analyze this product image.'
 }
 Respond ONLY with a valid JSON object (no markdown, no explanation).
 
@@ -34,9 +35,10 @@ Required JSON format:
   "sleeveType": "<one of: full, half, three_quarter, sleeveless, null if not visible>",
   "gender": "<one of: women, men, unisex, null if uncertain>",
   "confidence": <number 0.0 to 1.0 — your overall certainty>,
-  "rawDescription": "<${multi
-    ? 'comprehensive 2-3 sentence description covering all visible angles, fabric texture, design details, embellishments, and distinctive visual features'
-    : 'one sentence natural description'
+  "rawDescription": "<${
+    multi
+      ? 'comprehensive 2-3 sentence description covering all visible angles, fabric texture, design details, embellishments, and distinctive visual features'
+      : 'one sentence natural description'
   } in English>"
 }
 
@@ -67,15 +69,20 @@ Rules:
       pattern: parsed.pattern ?? null,
       sleeveType: parsed.sleeveType ?? null,
       gender: parsed.gender ?? null,
-      confidence: typeof parsed.confidence === 'number'
-        ? Math.min(1, Math.max(0, parsed.confidence))
-        : 0,
+      confidence:
+        typeof parsed.confidence === 'number'
+          ? Math.min(1, Math.max(0, parsed.confidence))
+          : 0,
       rawDescription: parsed.rawDescription ?? content,
     };
   }
 
   private extToMime(ext: string): string {
-    const map: Record<string, string> = { '.png': 'image/png', '.webp': 'image/webp', '.gif': 'image/gif' };
+    const map: Record<string, string> = {
+      '.png': 'image/png',
+      '.webp': 'image/webp',
+      '.gif': 'image/gif',
+    };
     return map[ext.toLowerCase()] ?? 'image/jpeg';
   }
 
@@ -89,7 +96,9 @@ Rules:
         this.logger.log(`[GeminiVision] Read local file: ${abs}`);
         return `data:${mime};base64,${buffer.toString('base64')}`;
       } catch (e: any) {
-        this.logger.warn(`[GeminiVision] Local read failed (${e?.message}), falling back to HTTP`);
+        this.logger.warn(
+          `[GeminiVision] Local read failed (${e?.message}), falling back to HTTP`,
+        );
       }
     }
 
@@ -97,14 +106,18 @@ Rules:
       responseType: 'arraybuffer',
       timeout: 15_000,
     });
-    const mimeRaw = String(response.headers['content-type'] ?? 'image/jpeg').split(';')[0].trim();
+    const mimeRaw = String(response.headers['content-type'] ?? 'image/jpeg')
+      .split(';')[0]
+      .trim();
     const mime = mimeRaw.startsWith('image/') ? mimeRaw : 'image/jpeg';
     return `data:${mime};base64,${Buffer.from(response.data).toString('base64')}`;
   }
 
   private async callAPI(imageUrls: string[]): Promise<VisionAttributes> {
     const isMulti = imageUrls.length > 1;
-    const dataUrls = await Promise.all(imageUrls.map((u) => this.toBase64DataUrl(u)));
+    const dataUrls = await Promise.all(
+      imageUrls.map((u) => this.toBase64DataUrl(u)),
+    );
 
     // Gemini uses inlineData with raw base64 (no data URL prefix)
     const imageParts = dataUrls.map((dataUrl) => {
@@ -119,13 +132,12 @@ Rules:
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        contents: [{
-          role: 'user',
-          parts: [
-            { text: this.buildPrompt(isMulti) },
-            ...imageParts,
-          ],
-        }],
+        contents: [
+          {
+            role: 'user',
+            parts: [{ text: this.buildPrompt(isMulti) }, ...imageParts],
+          },
+        ],
         generationConfig: {
           maxOutputTokens: isMulti ? 500 : 300,
           responseMimeType: 'application/json',
@@ -135,33 +147,37 @@ Rules:
     });
 
     if (!response.ok) {
-      const err = await response.text();
-      this.logger.error(`[GeminiVision] API error ${response.status}: ${err.slice(0, 200)}`);
-      return this.emptyResult(`API error ${response.status}`);
+      const errText = await response.text();
+      const msg = `Gemini API error ${response.status}: ${errText.slice(0, 200)}`;
+      this.logger.error(`[GeminiVision] ${msg}`);
+      throw new Error(msg);
     }
 
-    const data = await response.json() as any;
-    const content: string = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
-    this.logger.log(`[GeminiVision] Response (${imageUrls.length} imgs): ${content.slice(0, 300)}`);
+    const data = await response.json();
+    const content: string =
+      data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+    this.logger.log(
+      `[GeminiVision] Response (${imageUrls.length} imgs): ${content.slice(0, 300)}`,
+    );
     return this.parseResponse(content);
   }
 
   async analyze(imageUrl: string): Promise<VisionAttributes> {
     if (!this.apiKey) {
-      this.logger.warn('[GeminiVision] GEMINI_API_KEY not set — returning zero confidence');
+      this.logger.warn(
+        '[GeminiVision] GEMINI_API_KEY not set — returning zero confidence',
+      );
       return this.emptyResult('GEMINI_API_KEY not configured');
     }
-    try {
-      return await this.callAPI([imageUrl]);
-    } catch (err: any) {
-      this.logger.error(`[GeminiVision] analyze failed: ${err?.message ?? err}`);
-      return this.emptyResult(String(err?.message ?? 'unknown error'));
-    }
+    // Let errors propagate so callers can fall back to another provider
+    return this.callAPI([imageUrl]);
   }
 
   async analyzeMultiple(imageUrls: string[]): Promise<VisionAttributes> {
     if (!this.apiKey) {
-      this.logger.warn('[GeminiVision] GEMINI_API_KEY not set — returning zero confidence');
+      this.logger.warn(
+        '[GeminiVision] GEMINI_API_KEY not set — returning zero confidence',
+      );
       return this.emptyResult('GEMINI_API_KEY not configured');
     }
     if (!imageUrls.length) return this.emptyResult('No images provided');
@@ -169,12 +185,8 @@ Rules:
 
     const urls = imageUrls.slice(0, 5);
     this.logger.log(`[GeminiVision] Multi-angle: ${urls.length} images`);
-    try {
-      return await this.callAPI(urls);
-    } catch (err: any) {
-      this.logger.error(`[GeminiVision] analyzeMultiple failed: ${err?.message ?? err}`);
-      return this.emptyResult(String(err?.message ?? 'unknown error'));
-    }
+    // Let errors propagate so callers can fall back to another provider
+    return this.callAPI(urls);
   }
 
   private emptyResult(reason: string): VisionAttributes {

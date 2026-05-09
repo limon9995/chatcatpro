@@ -11,7 +11,10 @@ export class PrintController {
   @Get('preview')
   preview(@Query('ids') idsRaw?: string, @Query('pageId') pageId?: string) {
     const ids = this.parseIds(idsRaw);
-    return this.printService.getPrintPreview(ids, pageId ? Number(pageId) : undefined);
+    return this.printService.getPrintPreview(
+      ids,
+      pageId ? Number(pageId) : undefined,
+    );
   }
 
   // ── HTML preview of any print style ───────────────────────────────────────
@@ -23,7 +26,10 @@ export class PrintController {
     @Res() res: Response,
   ) {
     const ids = this.parseIds(idsRaw);
-    const orders = await this.printService.getOrders(ids, pageId ? Number(pageId) : undefined);
+    const orders = await this.printService.getOrders(
+      ids,
+      pageId ? Number(pageId) : undefined,
+    );
     const validStyle = (
       ['classic', 'modern', 'minimal', 'colorful'].includes(style)
         ? style
@@ -47,7 +53,11 @@ export class PrintController {
         ? style
         : 'classic'
     ) as PrintStyle;
-    const pdf = await this.printService.generateInvoicePDF(ids, validStyle, pageId ? Number(pageId) : undefined);
+    const pdf = await this.printService.generateInvoicePDF(
+      ids,
+      validStyle,
+      pageId ? Number(pageId) : undefined,
+    );
     res.set({
       'Content-Type': 'application/pdf',
       'Content-Disposition': 'inline; filename="invoice.pdf"',

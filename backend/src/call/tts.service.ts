@@ -110,7 +110,9 @@ export class TtsService {
     const fname = this.filename(language);
     fs.writeFileSync(path.join(pageDir, fname), file.buffer);
     const url = this.toPublicUrl(pageId, fname);
-    this.logger.log(`[TTS] Uploaded manual ${language} voice for page #${pageId} -> ${url}`);
+    this.logger.log(
+      `[TTS] Uploaded manual ${language} voice for page #${pageId} -> ${url}`,
+    );
     return { success: true, url, message: 'Voice uploaded!' };
   }
 

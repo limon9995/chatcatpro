@@ -8,14 +8,13 @@ export class CallController {
   constructor(private readonly callService: CallService) {}
 
   @Post('dtmf/:attemptId')
-  handleDtmf(
-    @Param('attemptId') attemptId: string,
-    @Body() body: any,
-  ) {
+  handleDtmf(@Param('attemptId') attemptId: string, @Body() body: any) {
     return this.callService.handleDtmfCallback(
       Number(attemptId),
       body?.dtmfInput ?? body?.dtmf ?? body?.Digits,
-      Number(body?.durationSeconds ?? body?.duration ?? body?.CallDuration ?? 0),
+      Number(
+        body?.durationSeconds ?? body?.duration ?? body?.CallDuration ?? 0,
+      ),
     );
   }
 

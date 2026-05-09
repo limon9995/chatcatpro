@@ -487,7 +487,10 @@ export class BotKnowledgeService {
 
     try {
       if (!psid) return null;
-      const lastPresented = await this.ctx.getLastPresentedProducts(pageId, psid);
+      const lastPresented = await this.ctx.getLastPresentedProducts(
+        pageId,
+        psid,
+      );
       if (lastPresented.length !== 1 || !lastPresented[0]?.code) return null;
       return await this.prisma.product.findUnique({
         where: {
@@ -1582,8 +1585,10 @@ export class BotKnowledgeService {
         fallback: 'আপনার voice message শুনছি... ⏳',
       },
       voice_fail: {
-        template: 'দুঃখিত, voice message বুঝতে পারিনি 😔 Text-এ লিখে জানালে সাহায্য করতে পারবো।',
-        fallback: 'দুঃখিত, voice message বুঝতে পারিনি 😔 Text-এ লিখে জানালে সাহায্য করতে পারবো।',
+        template:
+          'দুঃখিত, voice message বুঝতে পারিনি 😔 Text-এ লিখে জানালে সাহায্য করতে পারবো।',
+        fallback:
+          'দুঃখিত, voice message বুঝতে পারিনি 😔 Text-এ লিখে জানালে সাহায্য করতে পারবো।',
       },
       ocr_processing: {
         template:

@@ -56,7 +56,13 @@ export class BotContextService {
       }),
       this.prisma.product.findMany({
         where: { pageId, isActive: true },
-        select: { code: true, name: true, price: true, stockQty: true, category: true },
+        select: {
+          code: true,
+          name: true,
+          price: true,
+          stockQty: true,
+          category: true,
+        },
         orderBy: { createdAt: 'desc' },
         take: 30,
       }),
@@ -71,14 +77,32 @@ export class BotContextService {
       const holdingId = (page as any)?.dualHoldingProductId;
       const [wearing, holding] = await Promise.all([
         wearingId
-          ? this.prisma.product.findUnique({ where: { id: wearingId }, select: { name: true, code: true, price: true } })
+          ? this.prisma.product.findUnique({
+              where: { id: wearingId },
+              select: { name: true, code: true, price: true },
+            })
           : Promise.resolve(null),
         holdingId
-          ? this.prisma.product.findUnique({ where: { id: holdingId }, select: { name: true, code: true, price: true } })
+          ? this.prisma.product.findUnique({
+              where: { id: holdingId },
+              select: { name: true, code: true, price: true },
+            })
           : Promise.resolve(null),
       ]);
-      dualWearingProduct = wearing ? { name: wearing.name ?? '', code: wearing.code, price: Number(wearing.price) } : null;
-      dualHoldingProduct = holding ? { name: holding.name ?? '', code: holding.code, price: Number(holding.price) } : null;
+      dualWearingProduct = wearing
+        ? {
+            name: wearing.name ?? '',
+            code: wearing.code,
+            price: Number(wearing.price),
+          }
+        : null;
+      dualHoldingProduct = holding
+        ? {
+            name: holding.name ?? '',
+            code: holding.code,
+            price: Number(holding.price),
+          }
+        : null;
     }
 
     return {

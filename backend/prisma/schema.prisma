@@ -26,6 +26,7 @@ model User {
   pages         Page[]
   sessions      Session[]
   subscriptions Subscription[]
+  pageRequests  PageRequest[]
 
   @@index([username])
   @@index([email])
@@ -298,6 +299,7 @@ model Order {
   printedAt            DateTime?
 
   confirmedAt DateTime?
+  deliveredAt DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -731,6 +733,25 @@ model SpamCheckLog {
 }
 
 // ── LIVE SESSION (new Dual Photo system) ─────────────────────────────────────
+
+// ── PAGE ACCESS REQUEST ───────────────────────────────────────────────────────
+// Client submits page URL + their FB profile so admin can add them as Tester
+
+model PageRequest {
+  id          Int      @id @default(autoincrement())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pageUrl     String   // Facebook page link/username submitted by client
+  fbProfile   String   // Client's Facebook profile link (admin uses this to add as Tester)
+  note        String?  // Optional note from client
+  status      String   @default("pending") // pending | approved | rejected
+  adminNote   String?  // Admin's response note
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+}
 
 model LiveSession {
   id            Int       @id @default(autoincrement())

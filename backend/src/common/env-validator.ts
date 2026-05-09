@@ -82,14 +82,22 @@ export function validateEnv(): void {
 
   const databaseUrl = String(process.env.DATABASE_URL || '').trim();
   const webhookSecret = String(process.env.FB_WEBHOOK_SECRET || '').trim();
-  const defaultVerifyToken = String(process.env.DEFAULT_VERIFY_TOKEN || '').trim();
+  const defaultVerifyToken = String(
+    process.env.DEFAULT_VERIFY_TOKEN || '',
+  ).trim();
   const landingUrl = String(process.env.LANDING_PAGE_URL || '').trim();
   const redirectUri = String(process.env.FB_REDIRECT_URI || '').trim();
   const storagePublicUrl = String(process.env.STORAGE_PUBLIC_URL || '').trim();
-  const oauthStateSecret = String(process.env.FB_OAUTH_STATE_SECRET || '').trim();
+  const oauthStateSecret = String(
+    process.env.FB_OAUTH_STATE_SECRET || '',
+  ).trim();
   const openAiApiKey = String(process.env.OPENAI_API_KEY || '').trim();
-  const fallbackProvider = String(process.env.FALLBACK_AI_PROVIDER || '').trim().toLowerCase();
-  const visionProvider = String(process.env.VISION_PROVIDER || '').trim().toLowerCase();
+  const fallbackProvider = String(process.env.FALLBACK_AI_PROVIDER || '')
+    .trim()
+    .toLowerCase();
+  const visionProvider = String(process.env.VISION_PROVIDER || '')
+    .trim()
+    .toLowerCase();
   const fallbackModel = String(process.env.FALLBACK_AI_MODEL || '').trim();
   const visionModel = String(process.env.VISION_MODEL || '').trim();
 
@@ -123,7 +131,10 @@ export function validateEnv(): void {
     );
   }
 
-  if ((fallbackProvider === 'openai' || visionProvider === 'openai') && !openAiApiKey) {
+  if (
+    (fallbackProvider === 'openai' || visionProvider === 'openai') &&
+    !openAiApiKey
+  ) {
     warnings.push(
       '  ⚠️  OPENAI_API_KEY not set\n     → Required when FALLBACK_AI_PROVIDER=openai or VISION_PROVIDER=openai.',
     );

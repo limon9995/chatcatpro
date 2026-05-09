@@ -1,5 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { VisionAttributes, VisionAnalysisProvider } from './vision-analysis.interface';
+import {
+  VisionAttributes,
+  VisionAnalysisProvider,
+} from './vision-analysis.interface';
 import { MockVisionProvider } from './providers/mock.vision.provider';
 import { OpenAIVisionProvider } from './providers/openai.vision.provider';
 import { LocalVisionProvider } from './providers/local.vision.provider';
@@ -7,7 +10,15 @@ import { OllamaVisionProvider } from './providers/ollama.vision.provider';
 import { GeminiVisionProvider } from './providers/gemini.vision.provider';
 import { GlobalSettingsService } from '../common/global-settings.service';
 
-type VisionMode = 'gemini' | 'gemini-with-fallback' | 'openai' | 'local' | 'local-with-fallback' | 'ollama' | 'ollama-with-fallback' | 'mock';
+type VisionMode =
+  | 'gemini'
+  | 'gemini-with-openai-fallback'
+  | 'openai'
+  | 'local'
+  | 'local-with-fallback'
+  | 'ollama'
+  | 'ollama-with-fallback'
+  | 'mock';
 
 @Injectable()
 export class VisionAnalysisService {
@@ -27,26 +38,39 @@ export class VisionAnalysisService {
     private readonly globalSettings: GlobalSettingsService,
   ) {
     const raw = (process.env.VISION_PROVIDER ?? '').toLowerCase().trim();
-    this.confidenceThreshold = Number(process.env.VISION_CONFIDENCE_THRESHOLD ?? 0.15);
+    this.confidenceThreshold = Number(
+      process.env.VISION_CONFIDENCE_THRESHOLD ?? 0.15,
+    );
 
-    if (raw === 'gemini' || raw === 'gemini-with-fallback') this.mode = 'gemini';
+    if (raw === 'gemini') this.mode = 'gemini';
+    else if (raw === 'gemini-with-fallback' || raw === 'gemini-with-openai-fallback')
+      this.mode = 'gemini-with-openai-fallback';
     else if (raw === 'openai') this.mode = 'openai';
     else if (raw === 'local') this.mode = 'local';
     else if (raw === 'local-with-fallback') this.mode = 'local-with-fallback';
     else if (raw === 'ollama') this.mode = 'ollama';
     else if (raw === 'ollama-with-fallback') this.mode = 'ollama-with-fallback';
-    else if (process.env.GEMINI_API_KEY) this.mode = 'gemini'; // auto-detect Gemini
-    else if (process.env.OLLAMA_BASE_URL) this.mode = 'ollama-with-fallback'; // auto-detect Ollama
-    else if (process.env.OPENAI_API_KEY) this.mode = 'openai'; // auto-detect OpenAI
+    else if (process.env.GEMINI_API_KEY)
+      // Auto-detect: prefer fallback mode when OpenAI key is also available
+      this.mode = process.env.OPENAI_API_KEY
+        ? 'gemini-with-openai-fallback'
+        : 'gemini';
+    else if (process.env.OLLAMA_BASE_URL)
+      this.mode = 'ollama-with-fallback'; // auto-detect Ollama
+    else if (process.env.OPENAI_API_KEY)
+      this.mode = 'openai'; // auto-detect OpenAI
     else this.mode = 'mock';
 
-    if (this.mode === 'gemini') this.provider = this.geminiProvider;
+    if (this.mode === 'gemini' || this.mode === 'gemini-with-openai-fallback')
+      this.provider = this.geminiProvider;
     else if (this.mode === 'openai') this.provider = this.openaiProvider;
     else if (this.mode === 'local') this.provider = this.localProvider;
     else if (this.mode === 'ollama') this.provider = this.ollamaProvider;
     else this.provider = this.mockProvider;
 
-    this.logger.log(`[VisionAnalysis] Mode: ${this.mode} | threshold: ${this.confidenceThreshold}`);
+    this.logger.log(
+      `[VisionAnalysis] Mode: ${this.mode} | threshold: ${this.confidenceThreshold}`,
+    );
   }
 
   /** Whether admin product analysis should skip the ADMIN_VISION wallet charge */
@@ -60,7 +84,15 @@ export class VisionAnalysisService {
   }
 
   private fallback(): VisionAttributes {
-    return { category: null, color: null, pattern: null, sleeveType: null, gender: null, confidence: 0, rawDescription: 'Analysis failed' };
+    return {
+      category: null,
+      color: null,
+      pattern: null,
+      sleeveType: null,
+      gender: null,
+      confidence: 0,
+      rawDescription: 'Analysis failed',
+    };
   }
 
   private cacheKey(url: string): string {
@@ -79,14 +111,41 @@ export class VisionAnalysisService {
     try {
       let result: VisionAttributes;
 
-      if (this.mode === 'local-with-fallback') {
+      if (this.mode === 'gemini-with-openai-fallback') {
+        try {
+          const gemini = await this.geminiProvider.analyze(imageUrl);
+          if (gemini.confidence > 0) {
+            this.logger.log(
+              `[VisionAnalysis] Gemini OK — cat=${gemini.category} conf=${gemini.confidence.toFixed(2)}`,
+            );
+            result = { ...gemini, usedApi: true };
+          } else {
+            this.logger.warn(
+              '[VisionAnalysis] Gemini returned 0 confidence → OpenAI fallback',
+            );
+            result = { ...(await this.openaiProvider.analyze(imageUrl)), usedApi: true };
+          }
+        } catch (geminiErr: any) {
+          this.logger.warn(
+            `[VisionAnalysis] Gemini failed (${geminiErr?.message ?? geminiErr}) → OpenAI fallback`,
+          );
+          result = { ...(await this.openaiProvider.analyze(imageUrl)), usedApi: true };
+        }
+      } else if (this.mode === 'local-with-fallback') {
         const local = await this.localProvider.analyze(imageUrl);
         if (local.confidence >= this.confidenceThreshold) {
-          this.logger.log(`[VisionAnalysis] Local OK — cat=${local.category} conf=${local.confidence.toFixed(2)}`);
+          this.logger.log(
+            `[VisionAnalysis] Local OK — cat=${local.category} conf=${local.confidence.toFixed(2)}`,
+          );
           result = { ...local, usedApi: false };
         } else {
-          this.logger.log(`[VisionAnalysis] Local conf=${local.confidence.toFixed(2)} < ${this.confidenceThreshold} → OpenAI fallback`);
-          result = { ...(await this.openaiProvider.analyze(imageUrl)), usedApi: true };
+          this.logger.log(
+            `[VisionAnalysis] Local conf=${local.confidence.toFixed(2)} < ${this.confidenceThreshold} → OpenAI fallback`,
+          );
+          result = {
+            ...(await this.openaiProvider.analyze(imageUrl)),
+            usedApi: true,
+          };
         }
       } else if (this.mode === 'ollama-with-fallback') {
         const { localAiMode } = await this.globalSettings.get();
@@ -94,28 +153,50 @@ export class VisionAnalysisService {
           try {
             const ollama = await this.ollamaProvider.analyze(imageUrl);
             if (ollama.confidence >= this.confidenceThreshold) {
-              this.logger.log(`[VisionAnalysis] Ollama OK — cat=${ollama.category} conf=${ollama.confidence.toFixed(2)}`);
+              this.logger.log(
+                `[VisionAnalysis] Ollama OK — cat=${ollama.category} conf=${ollama.confidence.toFixed(2)}`,
+              );
               result = { ...ollama, usedApi: false };
             } else {
-              this.logger.log(`[VisionAnalysis] Ollama conf=${ollama.confidence.toFixed(2)} → OpenAI fallback`);
-              result = { ...(await this.openaiProvider.analyze(imageUrl)), usedApi: true };
+              this.logger.log(
+                `[VisionAnalysis] Ollama conf=${ollama.confidence.toFixed(2)} → OpenAI fallback`,
+              );
+              result = {
+                ...(await this.openaiProvider.analyze(imageUrl)),
+                usedApi: true,
+              };
             }
           } catch (ollamaErr: any) {
-            this.logger.warn(`[VisionAnalysis] Ollama unavailable (${ollamaErr?.message}) → OpenAI fallback`);
-            result = { ...(await this.openaiProvider.analyze(imageUrl)), usedApi: true };
+            this.logger.warn(
+              `[VisionAnalysis] Ollama unavailable (${ollamaErr?.message}) → OpenAI fallback`,
+            );
+            result = {
+              ...(await this.openaiProvider.analyze(imageUrl)),
+              usedApi: true,
+            };
           }
         } else {
-          this.logger.log(`[VisionAnalysis] Laptop AI OFF (admin toggle) → OpenAI directly`);
-          result = { ...(await this.openaiProvider.analyze(imageUrl)), usedApi: true };
+          this.logger.log(
+            `[VisionAnalysis] Laptop AI OFF (admin toggle) → OpenAI directly`,
+          );
+          result = {
+            ...(await this.openaiProvider.analyze(imageUrl)),
+            usedApi: true,
+          };
         }
       } else {
-        result = { ...(await this.provider.analyze(imageUrl)), usedApi: this.mode === 'openai' };
+        result = {
+          ...(await this.provider.analyze(imageUrl)),
+          usedApi: this.mode === 'openai',
+        };
       }
 
       // Store in cache only when confidence is meaningful (avoid caching failed analyses)
       if (result.confidence >= 0.05) {
         this.urlCache.set(key, result);
-        this.logger.log(`[VisionAnalysis] Cached result for: ${key.slice(0, 80)}`);
+        this.logger.log(
+          `[VisionAnalysis] Cached result for: ${key.slice(0, 80)}`,
+        );
       }
 
       return result;
@@ -126,26 +207,65 @@ export class VisionAnalysisService {
   }
 
   async analyzeMultiple(imageUrls: string[]): Promise<VisionAttributes> {
-    const multiKey = imageUrls.map((u) => this.cacheKey(u)).sort().join('|');
+    const multiKey = imageUrls
+      .map((u) => this.cacheKey(u))
+      .sort()
+      .join('|');
     const cached = this.urlCache.get(multiKey);
     if (cached) {
-      this.logger.log(`[VisionAnalysis] Cache HIT (multi): ${imageUrls.length} images`);
+      this.logger.log(
+        `[VisionAnalysis] Cache HIT (multi): ${imageUrls.length} images`,
+      );
       return { ...cached, fromCache: true };
     }
 
-    this.logger.log(`[VisionAnalysis] analyzeMultiple: ${imageUrls.length} images`);
+    this.logger.log(
+      `[VisionAnalysis] analyzeMultiple: ${imageUrls.length} images`,
+    );
     try {
       let multiResult: VisionAttributes;
 
-      if (this.mode === 'local-with-fallback') {
+      if (this.mode === 'gemini-with-openai-fallback') {
+        try {
+          const gemini = await this.geminiProvider.analyzeMultiple(imageUrls);
+          if (gemini.confidence > 0) {
+            this.logger.log(
+              `[VisionAnalysis] Gemini multi OK — cat=${gemini.category} conf=${gemini.confidence.toFixed(2)}`,
+            );
+            multiResult = { ...gemini, usedApi: true };
+          } else {
+            this.logger.warn(
+              '[VisionAnalysis] Gemini multi 0 confidence → OpenAI fallback',
+            );
+            multiResult = {
+              ...(await this.openaiProvider.analyzeMultiple(imageUrls)),
+              usedApi: true,
+            };
+          }
+        } catch (geminiErr: any) {
+          this.logger.warn(
+            `[VisionAnalysis] Gemini multi failed (${geminiErr?.message ?? geminiErr}) → OpenAI fallback`,
+          );
+          multiResult = {
+            ...(await this.openaiProvider.analyzeMultiple(imageUrls)),
+            usedApi: true,
+          };
+        }
+      } else if (this.mode === 'local-with-fallback') {
         const local = await this.localProvider.analyzeMultiple(imageUrls);
         if (local.confidence >= this.confidenceThreshold) {
           multiResult = { ...local, usedApi: false };
         } else {
-          this.logger.log(`[VisionAnalysis] Multi local low conf → OpenAI fallback`);
+          this.logger.log(
+            `[VisionAnalysis] Multi local low conf → OpenAI fallback`,
+          );
           let apiResult: VisionAttributes;
-          if (typeof (this.openaiProvider as any).analyzeMultiple === 'function') {
-            apiResult = await (this.openaiProvider as any).analyzeMultiple(imageUrls);
+          if (
+            typeof (this.openaiProvider as any).analyzeMultiple === 'function'
+          ) {
+            apiResult = await (this.openaiProvider as any).analyzeMultiple(
+              imageUrls,
+            );
           } else {
             apiResult = await this.openaiProvider.analyze(imageUrls[0]);
           }
@@ -161,12 +281,18 @@ export class VisionAnalysisService {
               multiResult = { ...ollama, usedApi: false };
               gotResult = true;
             }
-          } catch { /* fall through to OpenAI */ }
+          } catch {
+            /* fall through to OpenAI */
+          }
         }
         if (!gotResult) {
           let apiResult: VisionAttributes;
-          if (typeof (this.openaiProvider as any).analyzeMultiple === 'function') {
-            apiResult = await (this.openaiProvider as any).analyzeMultiple(imageUrls);
+          if (
+            typeof (this.openaiProvider as any).analyzeMultiple === 'function'
+          ) {
+            apiResult = await (this.openaiProvider as any).analyzeMultiple(
+              imageUrls,
+            );
           } else {
             apiResult = await this.openaiProvider.analyze(imageUrls[0]);
           }
@@ -174,7 +300,10 @@ export class VisionAnalysisService {
         }
       } else {
         let raw: VisionAttributes;
-        if ('analyzeMultiple' in this.provider && typeof (this.provider as any).analyzeMultiple === 'function') {
+        if (
+          'analyzeMultiple' in this.provider &&
+          typeof (this.provider as any).analyzeMultiple === 'function'
+        ) {
           raw = await (this.provider as any).analyzeMultiple(imageUrls);
         } else {
           raw = await this.analyze(imageUrls[0]);
@@ -187,7 +316,9 @@ export class VisionAnalysisService {
       }
       return multiResult!;
     } catch (err: any) {
-      this.logger.error(`[VisionAnalysis] Multi-analyze failed: ${err?.message ?? err}`);
+      this.logger.error(
+        `[VisionAnalysis] Multi-analyze failed: ${err?.message ?? err}`,
+      );
       return this.fallback();
     }
   }

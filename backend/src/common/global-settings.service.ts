@@ -20,7 +20,9 @@ export class GlobalSettingsService {
   private loaded = false;
 
   private async ensureDir() {
-    await fs.mkdir(join(process.cwd(), 'storage', 'settings'), { recursive: true });
+    await fs.mkdir(join(process.cwd(), 'storage', 'settings'), {
+      recursive: true,
+    });
   }
 
   async get(): Promise<GlobalSettings> {

@@ -24,7 +24,9 @@ export class WalletService {
 
       return true;
     } catch (error) {
-      this.logger.error(`Failed to check wallet balance for page ${pageId}: ${error}`);
+      this.logger.error(
+        `Failed to check wallet balance for page ${pageId}: ${error}`,
+      );
       return false;
     }
   }
@@ -32,7 +34,23 @@ export class WalletService {
   /**
    * Deducts a specific amount from the page's wallet based on the usage type.
    */
-  async deductUsage(pageId: number, type: 'TEXT' | 'VOICE' | 'IMAGE' | 'IMAGE_LOCAL' | 'IMAGE_OCR' | 'ADMIN_VISION' | 'IMAGE_UNIQUENESS' | 'AI_GENERATE' | 'DUAL_PHOTO_AI' | 'SMART_BOT' | 'MEMO_PRINT' | 'KEYWORD_REPLY', options?: { photoCount?: number; memoCount?: number }): Promise<boolean> {
+  async deductUsage(
+    pageId: number,
+    type:
+      | 'TEXT'
+      | 'VOICE'
+      | 'IMAGE'
+      | 'IMAGE_LOCAL'
+      | 'IMAGE_OCR'
+      | 'ADMIN_VISION'
+      | 'IMAGE_UNIQUENESS'
+      | 'AI_GENERATE'
+      | 'DUAL_PHOTO_AI'
+      | 'SMART_BOT'
+      | 'MEMO_PRINT'
+      | 'KEYWORD_REPLY',
+    options?: { photoCount?: number; memoCount?: number },
+  ): Promise<boolean> {
     try {
       const page = await this.prisma.page.findUnique({ where: { id: pageId } });
       if (!page) return false;
@@ -54,7 +72,7 @@ export class WalletService {
           description = 'AI Customer Image (Vision API) Processed';
           break;
         case 'IMAGE_LOCAL':
-          amountToDeduct = (page as any).costPerImageLocalBdt ?? 0.10;
+          amountToDeduct = (page as any).costPerImageLocalBdt ?? 0.1;
           description = 'AI Customer Image (Local CLIP) Processed';
           break;
         case 'IMAGE_OCR':
@@ -71,12 +89,12 @@ export class WalletService {
           description = 'Product Uniqueness Check';
           break;
         case 'AI_GENERATE':
-          amountToDeduct = (page as any).costPerAiGenerateBdt ?? 0.10;
+          amountToDeduct = (page as any).costPerAiGenerateBdt ?? 0.1;
           description = 'AI Text Generation';
           break;
         case 'DUAL_PHOTO_AI': {
           const photoCount = options?.photoCount ?? 3;
-          amountToDeduct = (page.costPerAnalyzeBdt ?? 0.20) * photoCount;
+          amountToDeduct = (page.costPerAnalyzeBdt ?? 0.2) * photoCount;
           description = `Dual Photo AI Identification (${photoCount} images × GPT-4o)`;
           break;
         }
@@ -87,7 +105,8 @@ export class WalletService {
           break;
         case 'MEMO_PRINT': {
           const memoCount = options?.memoCount ?? 1;
-          amountToDeduct = ((page as any).costPerMemoPrintBdt ?? 0.10) * memoCount;
+          amountToDeduct =
+            ((page as any).costPerMemoPrintBdt ?? 0.1) * memoCount;
           description = `Memo PDF Download (${memoCount} memos)`;
           break;
         }
@@ -122,7 +141,9 @@ export class WalletService {
 
       return true;
     } catch (error) {
-      this.logger.error(`Failed to deduct usage for page ${pageId} (${type}): ${error}`);
+      this.logger.error(
+        `Failed to deduct usage for page ${pageId} (${type}): ${error}`,
+      );
       return false;
     }
   }
@@ -131,7 +152,10 @@ export class WalletService {
    * Deducts the monthly 699 BDT base platform fee.
    * Suspends the page if balance drops to 0 or below after deduction.
    */
-  async deductBaseFee(pageId: number, feeBdt: number): Promise<{ suspended: boolean }> {
+  async deductBaseFee(
+    pageId: number,
+    feeBdt: number,
+  ): Promise<{ suspended: boolean }> {
     try {
       let suspended = false;
       await this.prisma.$transaction(async (tx) => {
@@ -163,7 +187,9 @@ export class WalletService {
       });
       return { suspended };
     } catch (error) {
-      this.logger.error(`Failed to deduct base fee for page ${pageId}: ${error}`);
+      this.logger.error(
+        `Failed to deduct base fee for page ${pageId}: ${error}`,
+      );
       return { suspended: false };
     }
   }
@@ -171,7 +197,11 @@ export class WalletService {
   /**
    * Admin / System recharges a wallet.
    */
-  async rechargeWallet(pageId: number, amountBdt: number, transactionId: string): Promise<boolean> {
+  async rechargeWallet(
+    pageId: number,
+    amountBdt: number,
+    transactionId: string,
+  ): Promise<boolean> {
     try {
       await this.prisma.$transaction(async (tx) => {
         await tx.page.update({
@@ -193,7 +223,9 @@ export class WalletService {
       });
       return true;
     } catch (error) {
-      this.logger.error(`Failed to recharge wallet for page ${pageId}: ${error}`);
+      this.logger.error(
+        `Failed to recharge wallet for page ${pageId}: ${error}`,
+      );
       return false;
     }
   }

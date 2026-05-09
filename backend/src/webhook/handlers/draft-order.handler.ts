@@ -107,7 +107,8 @@ export class DraftOrderHandler {
     products: Array<{ code: string; price: number }>,
     variantOptions: CustomFieldDef[] = [],
   ): DraftSession {
-    const normalizedVariantOptions = this.normalizeVariantOptions(variantOptions);
+    const normalizedVariantOptions =
+      this.normalizeVariantOptions(variantOptions);
     const priceMap = new Map(products.map((p) => [p.code, p.price]));
     const firstStep =
       normalizedVariantOptions.length > 0
@@ -165,9 +166,12 @@ export class DraftOrderHandler {
         if (aiReview.action === 'RETRY') {
           return aiReview.reply ?? this.reminder(draft);
         }
-        if (aiReview.action === 'CONFIRM') workingText = aiReview.normalizedValue ?? 'confirm';
-        if (aiReview.action === 'CANCEL') workingText = aiReview.normalizedValue ?? 'cancel';
-        if (aiReview.action === 'EDIT') workingText = aiReview.normalizedValue ?? 'change';
+        if (aiReview.action === 'CONFIRM')
+          workingText = aiReview.normalizedValue ?? 'confirm';
+        if (aiReview.action === 'CANCEL')
+          workingText = aiReview.normalizedValue ?? 'cancel';
+        if (aiReview.action === 'EDIT')
+          workingText = aiReview.normalizedValue ?? 'change';
         if (aiReview.action === 'CAPTURE' && aiReview.normalizedValue) {
           workingText = aiReview.normalizedValue;
         }
@@ -177,7 +181,10 @@ export class DraftOrderHandler {
     // ── CONFIRM SAVED ADDRESS (returning customer) ────────────────────────────
     if (step === 'confirm_address') {
       const confirmIntent = this.botIntent.detectIntent(workingText, true);
-      if (confirmIntent === 'CONFIRM' || /^(ha|haa|hea|yes|ok|হ্যাঁ|জি|ঠিক)/i.test(workingText.trim())) {
+      if (
+        confirmIntent === 'CONFIRM' ||
+        /^(ha|haa|hea|yes|ok|হ্যাঁ|জি|ঠিক)/i.test(workingText.trim())
+      ) {
         // Keep saved address → move to advance_payment check or confirm
         if (this.isAdvanceNeeded(draft, page)) {
           draft.currentStep = 'advance_payment';
@@ -208,7 +215,8 @@ export class DraftOrderHandler {
       const intent = this.botIntent.detectIntent(workingText, true);
       if (intent === 'CONFIRM') {
         // Wallet-based check (primary): page must be ACTIVE with positive balance
-        const walletOk = (page as any).subscriptionStatus === 'ACTIVE' && (page as any).walletBalanceBdt > 0;
+        const walletOk =
+          page.subscriptionStatus === 'ACTIVE' && page.walletBalanceBdt > 0;
         // Legacy billing check (fallback): only block if wallet check also fails
         if (!walletOk && page.ownerId) {
           const billingStatus = await this.billing.getStatus(page.ownerId);
@@ -299,9 +307,14 @@ export class DraftOrderHandler {
     //
     // For phone/address steps, name is already collected — skip multi-field parsing
     // to prevent unrelated text being mis-classified as a name and bypassing validation.
-    const parsed = (step === 'phone' || step === 'address')
-      ? { name: undefined, phone: this.parseCustomerInfo(workingText).phone, address: this.parseCustomerInfo(workingText).address }
-      : this.parseCustomerInfo(workingText);
+    const parsed =
+      step === 'phone' || step === 'address'
+        ? {
+            name: undefined,
+            phone: this.parseCustomerInfo(workingText).phone,
+            address: this.parseCustomerInfo(workingText).address,
+          }
+        : this.parseCustomerInfo(workingText);
 
     if (!draft.customerName && parsed.name) draft.customerName = parsed.name;
     if (!draft.phone && parsed.phone) draft.phone = parsed.phone;
@@ -324,8 +337,11 @@ export class DraftOrderHandler {
         if (!ph) return 'ফোন নাম্বারটা আবার দিন 💖 (01XXXXXXXXX)';
         draft.phone = ph;
         // Async spam check — runs while customer continues to address step
-        this.spamChecker.checkPhone(ph, pageId)
-          .then(r => { (draft as any).spamResult = r; })
+        this.spamChecker
+          .checkPhone(ph, pageId)
+          .then((r) => {
+            (draft as any).spamResult = r;
+          })
           .catch(() => {});
       } else if (step === 'address') {
         if (!this.isAddressLike(workingText))
@@ -413,7 +429,8 @@ export class DraftOrderHandler {
 
   reminder(draft: DraftSession): string {
     const step = draft.currentStep;
-    if (step === 'confirm_address') return 'চলমান order — ঠিকানা confirm করুন 💖';
+    if (step === 'confirm_address')
+      return 'চলমান order — ঠিকানা confirm করুন 💖';
     if (step === 'confirm')
       return `সব ঠিক থাকলে **confirm** লিখুন 💖\nকিছু বদলাতে চাইলে: ${this.buildEditOptions(draft)}`;
     if (step === 'advance_payment')
@@ -451,7 +468,9 @@ export class DraftOrderHandler {
       ? `⚠️ Payment Issue: ${draft.paymentIssueNote}`
       : '';
     const combinedNote =
-      [cfNote, proofNote, issueNote, draft.orderNote].filter(Boolean).join(' | ') || null;
+      [cfNote, proofNote, issueNote, draft.orderNote]
+        .filter(Boolean)
+        .join(' | ') || null;
 
     // Determine payment status and order status
     const paymentMode = (page.paymentMode as string) || 'cod';
@@ -470,7 +489,9 @@ export class DraftOrderHandler {
       }
     }
 
-    const spamResult = (draft as any).spamResult as import('../../spam-checker/spam-checker.service').SpamResult | undefined;
+    const spamResult = (draft as any).spamResult as
+      | import('../../spam-checker/spam-checker.service').SpamResult
+      | undefined;
 
     const order = await this.prisma.order.create({
       data: {
@@ -554,7 +575,9 @@ export class DraftOrderHandler {
 
   private isPaymentProblem(text: string): boolean {
     const t = text.toLowerCase();
-    return /সমস্যা|সমস্যায়|সমস্যাতে|problem|issue|কাজ করছে না|কাজ হচ্ছে না|হচ্ছে না|পারছি না|পরে দেব|পরে করব|পরে পাঠাব|এখন না|এখন পারব না|টাকা নেই|ব্যালেন্স নেই|balance নেই|দিতে পারব না|বুঝতে পারছি না|error|fail|failed|block|blocked|সাহায্য|help|agent|cancel|বাতিল|ঝামেলা|trouble|ভুল|number নাই|নম্বর নেই|কাজ করতেছে না/.test(t);
+    return /সমস্যা|সমস্যায়|সমস্যাতে|problem|issue|কাজ করছে না|কাজ হচ্ছে না|হচ্ছে না|পারছি না|পরে দেব|পরে করব|পরে পাঠাব|এখন না|এখন পারব না|টাকা নেই|ব্যালেন্স নেই|balance নেই|দিতে পারব না|বুঝতে পারছি না|error|fail|failed|block|blocked|সাহায্য|help|agent|cancel|বাতিল|ঝামেলা|trouble|ভুল|number নাই|নম্বর নেই|কাজ করতেছে না/.test(
+      t,
+    );
   }
 
   /**
@@ -567,12 +590,17 @@ export class DraftOrderHandler {
   private isValidTransactionId(text: string): boolean {
     const t = text.trim();
     // Labeled: "TrxID: ABC123XYZ" or "Transaction ID: 1234567890" — label makes any length ok
-    if (/(?:TrxID|Transaction\s*ID|Ref(?:erence)?|Txn)[:\s#]*([A-Za-z0-9]{6,20})/i.test(t))
+    if (
+      /(?:TrxID|Transaction\s*ID|Ref(?:erence)?|Txn)[:\s#]*([A-Za-z0-9]{6,20})/i.test(
+        t,
+      )
+    )
       return true;
     // Bkash/Nagad uppercase+digit block — must be 8+ chars
     if (/^[A-Z0-9]{8,15}$/.test(t)) return true;
     // Mixed alphanumeric — must be 8+ chars with both letters AND digits
-    if (/^[A-Za-z0-9]{8,20}$/.test(t) && /[A-Za-z]/.test(t) && /[0-9]/.test(t)) return true;
+    if (/^[A-Za-z0-9]{8,20}$/.test(t) && /[A-Za-z]/.test(t) && /[0-9]/.test(t))
+      return true;
     // Pure numeric bank reference — must be 10+ digits (4-9 digit numbers rejected)
     if (/^\d{10,15}$/.test(t)) return true;
     return false;
@@ -758,7 +786,10 @@ export class DraftOrderHandler {
    *   string     → clean captured value (use as workingText, skip AI)
    *   null       → inconclusive, let AI decide
    */
-  private tryRegexCapture(step: string, text: string): string | 'CANCEL' | null {
+  private tryRegexCapture(
+    step: string,
+    text: string,
+  ): string | 'CANCEL' | null {
     const t = text.trim();
 
     // Always treat explicit cancel keywords as CANCEL regardless of step
@@ -779,10 +810,18 @@ export class DraftOrderHandler {
     if (step === 'name') {
       // Short text with no phone, no geo keyword, no question mark, no product code → name
       const hasPhone = /\d{7,}/.test(t);
-      const hasQuestion = t.includes('?') || t.includes('।') === false && /কি|কী|কেন|কোন|কত/.test(t);
+      const hasQuestion =
+        t.includes('?') ||
+        (t.includes('।') === false && /কি|কী|কেন|কোন|কত/.test(t));
       const hasCode = /\bDF[-\s]?\d{3,}/i.test(t);
       const isShort = t.length <= 50 && t.split(' ').length <= 6;
-      if (isShort && !hasPhone && !hasQuestion && !hasCode && !this.hasGeoKeyword(t)) {
+      if (
+        isShort &&
+        !hasPhone &&
+        !hasQuestion &&
+        !hasCode &&
+        !this.hasGeoKeyword(t)
+      ) {
         return t;
       }
       return null;

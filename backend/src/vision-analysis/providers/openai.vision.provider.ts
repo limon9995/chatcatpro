@@ -16,15 +16,19 @@ export class OpenAIVisionProvider implements VisionAnalysisProvider {
 
   constructor() {
     this.apiKey = process.env.OPENAI_API_KEY ?? '';
-    this.model = process.env.VISION_MODEL ?? 'gpt-4o';
-    this.confidenceThreshold = Number(process.env.VISION_CONFIDENCE_THRESHOLD ?? 0.15);
+    // Use OPENAI_VISION_MODEL to avoid conflict when VISION_MODEL is set to a Gemini model name
+    this.model = process.env.OPENAI_VISION_MODEL ?? 'gpt-4o';
+    this.confidenceThreshold = Number(
+      process.env.VISION_CONFIDENCE_THRESHOLD ?? 0.15,
+    );
   }
 
   private buildPrompt(multi: boolean): string {
     return `You are an expert fashion product analyzer for a Bangladeshi e-commerce store.
-${multi
-  ? 'You are given multiple photos of the SAME product from different angles. Analyze ALL images together and provide a comprehensive description that captures every visible detail.'
-  : 'Analyze this product image.'
+${
+  multi
+    ? 'You are given multiple photos of the SAME product from different angles. Analyze ALL images together and provide a comprehensive description that captures every visible detail.'
+    : 'Analyze this product image.'
 }
 Respond ONLY with a valid JSON object (no markdown, no explanation).
 
@@ -36,9 +40,10 @@ Required JSON format:
   "sleeveType": "<one of: full, half, three_quarter, sleeveless, null if not visible>",
   "gender": "<one of: women, men, unisex, null if uncertain>",
   "confidence": <number 0.0 to 1.0 — your overall certainty>,
-  "rawDescription": "<${multi
-    ? 'comprehensive 2-3 sentence description covering all visible angles, fabric texture, design details, embellishments, and distinctive visual features that would help identify this product in customer photos'
-    : 'one sentence natural description'
+  "rawDescription": "<${
+    multi
+      ? 'comprehensive 2-3 sentence description covering all visible angles, fabric texture, design details, embellishments, and distinctive visual features that would help identify this product in customer photos'
+      : 'one sentence natural description'
   } in English>"
 }
 
@@ -69,15 +74,20 @@ Rules:
       pattern: parsed.pattern ?? null,
       sleeveType: parsed.sleeveType ?? null,
       gender: parsed.gender ?? null,
-      confidence: typeof parsed.confidence === 'number'
-        ? Math.min(1, Math.max(0, parsed.confidence))
-        : 0,
+      confidence:
+        typeof parsed.confidence === 'number'
+          ? Math.min(1, Math.max(0, parsed.confidence))
+          : 0,
       rawDescription: parsed.rawDescription ?? content,
     };
   }
 
   private extToMime(ext: string): string {
-    const map: Record<string, string> = { '.png': 'image/png', '.webp': 'image/webp', '.gif': 'image/gif' };
+    const map: Record<string, string> = {
+      '.png': 'image/png',
+      '.webp': 'image/webp',
+      '.gif': 'image/gif',
+    };
     return map[ext.toLowerCase()] ?? 'image/jpeg';
   }
 
@@ -94,7 +104,9 @@ Rules:
         this.logger.log(`[OpenAIVision] Read local file: ${abs}`);
         return `data:${mime};base64,${buffer.toString('base64')}`;
       } catch (e: any) {
-        this.logger.warn(`[OpenAIVision] Local read failed (${e?.message}), falling back to HTTP`);
+        this.logger.warn(
+          `[OpenAIVision] Local read failed (${e?.message}), falling back to HTTP`,
+        );
       }
     }
 
@@ -102,7 +114,9 @@ Rules:
       responseType: 'arraybuffer',
       timeout: 15_000,
     });
-    const mimeRaw = String(response.headers['content-type'] ?? 'image/jpeg').split(';')[0].trim();
+    const mimeRaw = String(response.headers['content-type'] ?? 'image/jpeg')
+      .split(';')[0]
+      .trim();
     const mime = mimeRaw.startsWith('image/') ? mimeRaw : 'image/jpeg';
     return `data:${mime};base64,${Buffer.from(response.data).toString('base64')}`;
   }
@@ -111,7 +125,9 @@ Rules:
     const isMulti = imageUrls.length > 1;
 
     // Convert all URLs to base64 data URLs in parallel
-    const dataUrls = await Promise.all(imageUrls.map((u) => this.toBase64DataUrl(u)));
+    const dataUrls = await Promise.all(
+      imageUrls.map((u) => this.toBase64DataUrl(u)),
+    );
 
     const imageContent = dataUrls.map((dataUrl) => ({
       type: 'image_url' as const,
@@ -142,26 +158,34 @@ Rules:
 
     if (!response.ok) {
       const err = await response.text();
-      this.logger.error(`[OpenAIVision] API error ${response.status}: ${err.slice(0, 200)}`);
+      this.logger.error(
+        `[OpenAIVision] API error ${response.status}: ${err.slice(0, 200)}`,
+      );
       return this.emptyResult(`API error ${response.status}`);
     }
 
-    const data = await response.json() as any;
+    const data = await response.json();
     const content: string = data?.choices?.[0]?.message?.content ?? '';
-    this.logger.log(`[OpenAIVision] Response (${imageUrls.length} imgs): ${content.slice(0, 300)}`);
+    this.logger.log(
+      `[OpenAIVision] Response (${imageUrls.length} imgs): ${content.slice(0, 300)}`,
+    );
     return this.parseResponse(content);
   }
 
   /** Analyze a single image */
   async analyze(imageUrl: string): Promise<VisionAttributes> {
     if (!this.apiKey) {
-      this.logger.warn('[OpenAIVision] OPENAI_API_KEY not set — returning zero confidence');
+      this.logger.warn(
+        '[OpenAIVision] OPENAI_API_KEY not set — returning zero confidence',
+      );
       return this.emptyResult('OPENAI_API_KEY not configured');
     }
     try {
       return await this.callAPI([imageUrl]);
     } catch (err: any) {
-      this.logger.error(`[OpenAIVision] analyze failed: ${err?.message ?? err}`);
+      this.logger.error(
+        `[OpenAIVision] analyze failed: ${err?.message ?? err}`,
+      );
       return this.emptyResult(String(err?.message ?? 'unknown error'));
     }
   }
@@ -169,7 +193,9 @@ Rules:
   /** Analyze 2-5 angles of the SAME product in a single API call for richer description */
   async analyzeMultiple(imageUrls: string[]): Promise<VisionAttributes> {
     if (!this.apiKey) {
-      this.logger.warn('[OpenAIVision] OPENAI_API_KEY not set — returning zero confidence');
+      this.logger.warn(
+        '[OpenAIVision] OPENAI_API_KEY not set — returning zero confidence',
+      );
       return this.emptyResult('OPENAI_API_KEY not configured');
     }
     if (!imageUrls.length) return this.emptyResult('No images provided');
@@ -180,7 +206,9 @@ Rules:
     try {
       return await this.callAPI(urls);
     } catch (err: any) {
-      this.logger.error(`[OpenAIVision] analyzeMultiple failed: ${err?.message ?? err}`);
+      this.logger.error(
+        `[OpenAIVision] analyzeMultiple failed: ${err?.message ?? err}`,
+      );
       return this.emptyResult(String(err?.message ?? 'unknown error'));
     }
   }

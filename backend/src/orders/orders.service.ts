@@ -11,6 +11,8 @@ export type OrderStatus =
   | 'RECEIVED'
   | 'PENDING'
   | 'CONFIRMED'
+  | 'PACKED'
+  | 'DELIVERED'
   | 'CANCELLED'
   | 'ISSUE';
 
@@ -185,6 +187,14 @@ export class OrdersService {
     });
   }
 
+  async markDelivered(id: number, pageId?: number) {
+    await this.findOrFail(id, pageId);
+    return this.prisma.order.update({
+      where: { id },
+      data: { status: 'DELIVERED', deliveredAt: new Date() },
+    });
+  }
+
   // ── Agent Issues ───────────────────────────────────────────────────────────
 
   async getAgentIssues(pageId?: number) {
@@ -258,7 +268,11 @@ export class OrdersService {
       order.pageIdRef,
       order.customerPsid,
     );
-    await this.ctx.setAgentHandling(order.pageIdRef, order.customerPsid, !current);
+    await this.ctx.setAgentHandling(
+      order.pageIdRef,
+      order.customerPsid,
+      !current,
+    );
     return { botMuted: !current };
   }
 
@@ -274,7 +288,11 @@ export class OrdersService {
    */
   async dismissAgentIssue(
     pageId: number,
-    body: { issueType: 'payment' | 'unmatched'; orderId?: number; psid?: string },
+    body: {
+      issueType: 'payment' | 'unmatched';
+      orderId?: number;
+      psid?: string;
+    },
   ) {
     if (body.issueType === 'payment' && body.orderId) {
       const order = await this.findOrFail(body.orderId, pageId);

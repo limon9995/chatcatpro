@@ -157,37 +157,43 @@ export class AnalyticsService {
     const since = new Date();
     since.setDate(since.getDate() - days);
 
-    const [orders, expenses, collections, returnEntries, exchangeEntries, deliveredShipments] =
-      await Promise.all([
-        this.prisma.order.findMany({
-          where: {
-            pageIdRef: pageId,
-            status: 'CONFIRMED',
-            confirmedAt: { gte: since },
-          },
-          include: { items: true },
-        }),
-        this.prisma.expense.findMany({
-          where: { pageId, spentAt: { gte: since } },
-        }),
-        this.prisma.collection.findMany({
-          where: { pageId, collectedAt: { gte: since } },
-        }),
-        this.prisma.returnEntry.findMany({
-          where: { pageId, createdAt: { gte: since } },
-        }),
-        this.prisma.exchangeEntry.findMany({
-          where: { pageId, createdAt: { gte: since } },
-        }),
-        this.prisma.courierShipment.findMany({
-          where: {
-            order: { pageIdRef: pageId },
-            status: 'delivered',
-            deliveredAt: { gte: since },
-          },
-          select: { courierFee: true, deliveredAt: true },
-        }),
-      ]);
+    const [
+      orders,
+      expenses,
+      collections,
+      returnEntries,
+      exchangeEntries,
+      deliveredShipments,
+    ] = await Promise.all([
+      this.prisma.order.findMany({
+        where: {
+          pageIdRef: pageId,
+          status: 'CONFIRMED',
+          confirmedAt: { gte: since },
+        },
+        include: { items: true },
+      }),
+      this.prisma.expense.findMany({
+        where: { pageId, spentAt: { gte: since } },
+      }),
+      this.prisma.collection.findMany({
+        where: { pageId, collectedAt: { gte: since } },
+      }),
+      this.prisma.returnEntry.findMany({
+        where: { pageId, createdAt: { gte: since } },
+      }),
+      this.prisma.exchangeEntry.findMany({
+        where: { pageId, createdAt: { gte: since } },
+      }),
+      this.prisma.courierShipment.findMany({
+        where: {
+          order: { pageIdRef: pageId },
+          status: 'delivered',
+          deliveredAt: { gte: since },
+        },
+        select: { courierFee: true, deliveredAt: true },
+      }),
+    ]);
 
     const costMap = await this.accounting.buildCostMap(pageId);
     const fmt = (d: Date) => d.toISOString().slice(0, 10);
@@ -699,7 +705,9 @@ export class AnalyticsService {
 
     const total = attempts.length;
     const answered = attempts.filter((a) => a.status === 'ANSWERED').length;
-    const notAnswered = attempts.filter((a) => a.status === 'NOT_ANSWERED').length;
+    const notAnswered = attempts.filter(
+      (a) => a.status === 'NOT_ANSWERED',
+    ).length;
     const failed = attempts.filter((a) => a.status === 'FAILED').length;
     const inProgress = attempts.filter((a) =>
       ['INITIATED', 'PENDING', 'CALLING'].includes(a.status),
@@ -723,45 +731,53 @@ export class AnalyticsService {
   private async getAutomationSnapshot(
     pageId: number,
   ): Promise<AutomationSnapshot> {
-    const [page, orders, messageHandled, callHandled, courierBooked, followUpPending, memoTemplate, refundPending] =
-      await Promise.all([
-        this.prisma.page.findUnique({
-          where: { id: pageId },
-          select: {
-            printModeOn: true,
-            memoSaveModeOn: true,
-            memoTemplateModeOn: true,
-          },
-        }),
-        this.prisma.order.findMany({
-          where: { pageIdRef: pageId },
-          select: {
-            status: true,
-            callStatus: true,
-            paymentStatus: true,
-            courierShipment: { select: { id: true } },
-          },
-        }),
-        this.prisma.conversationSession.count({
-          where: { pageIdRef: pageId },
-        }),
-        this.prisma.callAttempt.count({
-          where: { pageId },
-        }),
-        this.prisma.courierShipment.count({
-          where: { pageId },
-        }),
-        this.prisma.followUp.count({
-          where: { pageId, status: 'pending' },
-        }),
-        this.prisma.memoTemplate.findUnique({
-          where: { pageIdRef: pageId },
-          select: { status: true },
-        }),
-        this.prisma.returnEntry.count({
-          where: { pageId, refundStatus: 'pending' },
-        }),
-      ]);
+    const [
+      page,
+      orders,
+      messageHandled,
+      callHandled,
+      courierBooked,
+      followUpPending,
+      memoTemplate,
+      refundPending,
+    ] = await Promise.all([
+      this.prisma.page.findUnique({
+        where: { id: pageId },
+        select: {
+          printModeOn: true,
+          memoSaveModeOn: true,
+          memoTemplateModeOn: true,
+        },
+      }),
+      this.prisma.order.findMany({
+        where: { pageIdRef: pageId },
+        select: {
+          status: true,
+          callStatus: true,
+          paymentStatus: true,
+          courierShipment: { select: { id: true } },
+        },
+      }),
+      this.prisma.conversationSession.count({
+        where: { pageIdRef: pageId },
+      }),
+      this.prisma.callAttempt.count({
+        where: { pageId },
+      }),
+      this.prisma.courierShipment.count({
+        where: { pageId },
+      }),
+      this.prisma.followUp.count({
+        where: { pageId, status: 'pending' },
+      }),
+      this.prisma.memoTemplate.findUnique({
+        where: { pageIdRef: pageId },
+        select: { status: true },
+      }),
+      this.prisma.returnEntry.count({
+        where: { pageId, refundStatus: 'pending' },
+      }),
+    ]);
     const printWorkflowEnabled = Boolean(
       page?.printModeOn || page?.memoSaveModeOn || page?.memoTemplateModeOn,
     );

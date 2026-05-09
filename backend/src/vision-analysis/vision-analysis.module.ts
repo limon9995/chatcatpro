@@ -7,7 +7,14 @@ import { OllamaVisionProvider } from './providers/ollama.vision.provider';
 import { GeminiVisionProvider } from './providers/gemini.vision.provider';
 
 @Module({
-  providers: [MockVisionProvider, OpenAIVisionProvider, LocalVisionProvider, OllamaVisionProvider, GeminiVisionProvider, VisionAnalysisService],
+  providers: [
+    MockVisionProvider,
+    OpenAIVisionProvider,
+    LocalVisionProvider,
+    OllamaVisionProvider,
+    GeminiVisionProvider,
+    VisionAnalysisService,
+  ],
   exports: [VisionAnalysisService],
 })
 export class VisionAnalysisModule {}

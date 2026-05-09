@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
 import { PrismaService } from '../prisma/prisma.service';
@@ -25,10 +29,15 @@ export interface GlobalConfig {
 }
 
 const DEFAULT_CALL_SERVERS: CallServerConfig[] = [
-  { id: 'MANUAL',      name: 'Manual Call',             icon: '👤', enabled: true  },
-  { id: 'TWILIO',      name: 'Server 1 (Twilio)',        icon: '📡', enabled: false },
-  { id: 'SSLWIRELESS', name: 'Server 2 (SSLWireless)',   icon: '🇧🇩', enabled: false },
-  { id: 'BDCALLING',   name: 'Server 3 (BDCalling)',     icon: '📲', enabled: false },
+  { id: 'MANUAL', name: 'Manual Call', icon: '👤', enabled: true },
+  { id: 'TWILIO', name: 'Server 1 (Twilio)', icon: '📡', enabled: false },
+  {
+    id: 'SSLWIRELESS',
+    name: 'Server 2 (SSLWireless)',
+    icon: '🇧🇩',
+    enabled: false,
+  },
+  { id: 'BDCALLING', name: 'Server 3 (BDCalling)', icon: '📲', enabled: false },
 ];
 
 export interface TutorialsConfig {
@@ -60,6 +69,7 @@ export class AdminService {
       confirmedOrders,
       totalUsers,
       activeUsers,
+      pendingPageRequests,
     ] = await Promise.all([
       this.prisma.page.count().catch(() => 0),
       this.prisma.page
@@ -84,6 +94,7 @@ export class AdminService {
       this.prisma.user
         .count({ where: { isActive: true, role: 'client' } })
         .catch(() => 0),
+      this.prisma.pageRequest.count({ where: { status: 'pending' } }).catch(() => 0),
     ]);
 
     // Pages with bot ON vs OFF
@@ -110,6 +121,8 @@ export class AdminService {
       confirmedOrders,
       // Bot knowledge health
       unmatchedMessages: unmatchedCount,
+      // Page access requests
+      pendingPageRequests,
       // Meta
       generatedAt: new Date().toISOString(),
     };
@@ -340,7 +353,9 @@ export class AdminService {
   private _readGlobalConfig(): GlobalConfig {
     try {
       if (fs.existsSync(this.globalConfigFile)) {
-        return JSON.parse(fs.readFileSync(this.globalConfigFile, 'utf8')) as GlobalConfig;
+        return JSON.parse(
+          fs.readFileSync(this.globalConfigFile, 'utf8'),
+        ) as GlobalConfig;
       }
     } catch {}
     return {
@@ -359,7 +374,11 @@ export class AdminService {
 
   private _writeGlobalConfig(cfg: GlobalConfig): GlobalConfig {
     fs.mkdirSync(path.dirname(this.globalConfigFile), { recursive: true });
-    fs.writeFileSync(this.globalConfigFile, JSON.stringify(cfg, null, 2), 'utf8');
+    fs.writeFileSync(
+      this.globalConfigFile,
+      JSON.stringify(cfg, null, 2),
+      'utf8',
+    );
     return cfg;
   }
 
@@ -370,23 +389,38 @@ export class AdminService {
   saveGlobalConfig(input: Partial<GlobalConfig>): GlobalConfig {
     const existing = this._readGlobalConfig();
     const merged: GlobalConfig = {
-      callFeatureEnabled: typeof input.callFeatureEnabled === 'boolean'
-        ? input.callFeatureEnabled
-        : existing.callFeatureEnabled,
+      callFeatureEnabled:
+        typeof input.callFeatureEnabled === 'boolean'
+          ? input.callFeatureEnabled
+          : existing.callFeatureEnabled,
       callServers: Array.isArray(input.callServers)
         ? input.callServers
         : existing.callServers,
       billingSupport: {
-        label: String(input.billingSupport?.label ?? existing.billingSupport?.label ?? 'Admin Support').trim(),
-        phone: String(input.billingSupport?.phone ?? existing.billingSupport?.phone ?? '').trim(),
+        label: String(
+          input.billingSupport?.label ??
+            existing.billingSupport?.label ??
+            'Admin Support',
+        ).trim(),
+        phone: String(
+          input.billingSupport?.phone ?? existing.billingSupport?.phone ?? '',
+        ).trim(),
         whatsappUrl: this._sanitizeUrl(
-          input.billingSupport?.whatsappUrl ?? existing.billingSupport?.whatsappUrl ?? '',
+          input.billingSupport?.whatsappUrl ??
+            existing.billingSupport?.whatsappUrl ??
+            '',
         ),
         messengerUrl: this._sanitizeUrl(
-          input.billingSupport?.messengerUrl ?? existing.billingSupport?.messengerUrl ?? '',
+          input.billingSupport?.messengerUrl ??
+            existing.billingSupport?.messengerUrl ??
+            '',
         ),
-        email: String(input.billingSupport?.email ?? existing.billingSupport?.email ?? '').trim(),
-        note: String(input.billingSupport?.note ?? existing.billingSupport?.note ?? '').trim(),
+        email: String(
+          input.billingSupport?.email ?? existing.billingSupport?.email ?? '',
+        ).trim(),
+        note: String(
+          input.billingSupport?.note ?? existing.billingSupport?.note ?? '',
+        ).trim(),
       },
     };
     return this._writeGlobalConfig(merged);
@@ -523,7 +557,10 @@ export class AdminService {
 
   async adminLogManualCall(
     orderId: number,
-    body: { result: 'CONFIRMED' | 'CANCELLED' | 'NOT_ANSWERED' | 'CALLBACK_LATER'; note?: string },
+    body: {
+      result: 'CONFIRMED' | 'CANCELLED' | 'NOT_ANSWERED' | 'CALLBACK_LATER';
+      note?: string;
+    },
   ) {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
@@ -604,9 +641,17 @@ export class AdminService {
     return { page, transactions };
   }
 
-  async rechargePageWallet(pageId: number, amountBdt: number, transactionId: string, note?: string) {
+  async rechargePageWallet(
+    pageId: number,
+    amountBdt: number,
+    transactionId: string,
+    note?: string,
+  ) {
     if (amountBdt <= 0) throw new NotFoundException('Amount must be positive');
-    const page = await this.prisma.page.findUnique({ where: { id: pageId }, select: { id: true } });
+    const page = await this.prisma.page.findUnique({
+      where: { id: pageId },
+      select: { id: true },
+    });
     if (!page) throw new NotFoundException('Page not found');
 
     await this.prisma.$transaction(async (tx) => {
@@ -622,7 +667,9 @@ export class AdminService {
           pageId,
           type: 'RECHARGE',
           amountBdt,
-          description: note ? `${note} (Trx: ${transactionId})` : `Recharge via Trx: ${transactionId}`,
+          description: note
+            ? `${note} (Trx: ${transactionId})`
+            : `Recharge via Trx: ${transactionId}`,
         },
       });
     });
@@ -630,21 +677,32 @@ export class AdminService {
     return { success: true, amountBdt };
   }
 
-  async updatePagePricing(pageId: number, pricing: {
-    costPerTextMsgBdt?: number;
-    costPerVoiceMsgBdt?: number;
-    costPerImageBdt?: number;
-    costPerImageLocalBdt?: number;
-    costPerAnalyzeBdt?: number;
-  }) {
-    const page = await this.prisma.page.findUnique({ where: { id: pageId }, select: { id: true } });
+  async updatePagePricing(
+    pageId: number,
+    pricing: {
+      costPerTextMsgBdt?: number;
+      costPerVoiceMsgBdt?: number;
+      costPerImageBdt?: number;
+      costPerImageLocalBdt?: number;
+      costPerAnalyzeBdt?: number;
+    },
+  ) {
+    const page = await this.prisma.page.findUnique({
+      where: { id: pageId },
+      select: { id: true },
+    });
     if (!page) throw new NotFoundException('Page not found');
     const data: any = {};
-    if (pricing.costPerTextMsgBdt !== undefined) data.costPerTextMsgBdt = pricing.costPerTextMsgBdt;
-    if (pricing.costPerVoiceMsgBdt !== undefined) data.costPerVoiceMsgBdt = pricing.costPerVoiceMsgBdt;
-    if (pricing.costPerImageBdt !== undefined) data.costPerImageBdt = pricing.costPerImageBdt;
-    if (pricing.costPerImageLocalBdt !== undefined) data.costPerImageLocalBdt = pricing.costPerImageLocalBdt;
-    if (pricing.costPerAnalyzeBdt !== undefined) data.costPerAnalyzeBdt = pricing.costPerAnalyzeBdt;
+    if (pricing.costPerTextMsgBdt !== undefined)
+      data.costPerTextMsgBdt = pricing.costPerTextMsgBdt;
+    if (pricing.costPerVoiceMsgBdt !== undefined)
+      data.costPerVoiceMsgBdt = pricing.costPerVoiceMsgBdt;
+    if (pricing.costPerImageBdt !== undefined)
+      data.costPerImageBdt = pricing.costPerImageBdt;
+    if (pricing.costPerImageLocalBdt !== undefined)
+      data.costPerImageLocalBdt = pricing.costPerImageLocalBdt;
+    if (pricing.costPerAnalyzeBdt !== undefined)
+      data.costPerAnalyzeBdt = pricing.costPerAnalyzeBdt;
     await this.prisma.page.update({ where: { id: pageId }, data });
     return { success: true };
   }
@@ -658,12 +716,18 @@ export class AdminService {
     costPerAiGenerateBdt?: number;
   }) {
     const data: any = {};
-    if (pricing.costPerTextMsgBdt !== undefined) data.costPerTextMsgBdt = pricing.costPerTextMsgBdt;
-    if (pricing.costPerVoiceMsgBdt !== undefined) data.costPerVoiceMsgBdt = pricing.costPerVoiceMsgBdt;
-    if (pricing.costPerImageBdt !== undefined) data.costPerImageBdt = pricing.costPerImageBdt;
-    if (pricing.costPerImageLocalBdt !== undefined) data.costPerImageLocalBdt = pricing.costPerImageLocalBdt;
-    if (pricing.costPerAnalyzeBdt !== undefined) data.costPerAnalyzeBdt = pricing.costPerAnalyzeBdt;
-    if (pricing.costPerAiGenerateBdt !== undefined) data.costPerAiGenerateBdt = pricing.costPerAiGenerateBdt;
+    if (pricing.costPerTextMsgBdt !== undefined)
+      data.costPerTextMsgBdt = pricing.costPerTextMsgBdt;
+    if (pricing.costPerVoiceMsgBdt !== undefined)
+      data.costPerVoiceMsgBdt = pricing.costPerVoiceMsgBdt;
+    if (pricing.costPerImageBdt !== undefined)
+      data.costPerImageBdt = pricing.costPerImageBdt;
+    if (pricing.costPerImageLocalBdt !== undefined)
+      data.costPerImageLocalBdt = pricing.costPerImageLocalBdt;
+    if (pricing.costPerAnalyzeBdt !== undefined)
+      data.costPerAnalyzeBdt = pricing.costPerAnalyzeBdt;
+    if (pricing.costPerAiGenerateBdt !== undefined)
+      data.costPerAiGenerateBdt = pricing.costPerAiGenerateBdt;
     if (!Object.keys(data).length) return { success: false, updated: 0 };
     const result = await this.prisma.page.updateMany({ data });
     return { success: true, updated: result.count };
@@ -690,15 +754,25 @@ export class AdminService {
       orderBy: { createdAt: 'desc' },
       take: 100,
       include: {
-        page: { select: { id: true, pageId: true, pageName: true, owner: { select: { username: true, name: true } } } },
+        page: {
+          select: {
+            id: true,
+            pageId: true,
+            pageName: true,
+            owner: { select: { username: true, name: true } },
+          },
+        },
       },
     });
   }
 
   async approveRechargeRequest(requestId: number, adminUsername: string) {
-    const req = await this.prisma.walletRechargeRequest.findUnique({ where: { id: requestId } });
+    const req = await this.prisma.walletRechargeRequest.findUnique({
+      where: { id: requestId },
+    });
     if (!req) throw new NotFoundException('Request not found');
-    if (req.status !== 'pending') throw new BadRequestException('Request is not pending');
+    if (req.status !== 'pending')
+      throw new BadRequestException('Request is not pending');
 
     await this.prisma.$transaction(async (tx) => {
       await tx.page.update({
@@ -718,7 +792,11 @@ export class AdminService {
       });
       await tx.walletRechargeRequest.update({
         where: { id: requestId },
-        data: { status: 'approved', approvedAt: new Date(), approvedBy: adminUsername },
+        data: {
+          status: 'approved',
+          approvedAt: new Date(),
+          approvedBy: adminUsername,
+        },
       });
     });
 
@@ -726,9 +804,12 @@ export class AdminService {
   }
 
   async rejectRechargeRequest(requestId: number, reason?: string) {
-    const req = await this.prisma.walletRechargeRequest.findUnique({ where: { id: requestId } });
+    const req = await this.prisma.walletRechargeRequest.findUnique({
+      where: { id: requestId },
+    });
     if (!req) throw new NotFoundException('Request not found');
-    if (req.status !== 'pending') throw new BadRequestException('Request is not pending');
+    if (req.status !== 'pending')
+      throw new BadRequestException('Request is not pending');
 
     await this.prisma.walletRechargeRequest.update({
       where: { id: requestId },
@@ -755,12 +836,18 @@ export class AdminService {
     });
   }
 
-  async updatePageSubscription(pageId: number, data: {
-    subscriptionStatus?: string;
-    nextBillingDate?: Date | null;
-    daysToAdd?: number;
-  }) {
-    const page = await this.prisma.page.findUnique({ where: { id: pageId }, select: { id: true, nextBillingDate: true, subscriptionStatus: true } });
+  async updatePageSubscription(
+    pageId: number,
+    data: {
+      subscriptionStatus?: string;
+      nextBillingDate?: Date | null;
+      daysToAdd?: number;
+    },
+  ) {
+    const page = await this.prisma.page.findUnique({
+      where: { id: pageId },
+      select: { id: true, nextBillingDate: true, subscriptionStatus: true },
+    });
     if (!page) throw new NotFoundException('Page not found');
 
     const updateData: any = {};
@@ -771,9 +858,10 @@ export class AdminService {
 
     if (data.daysToAdd !== undefined && data.daysToAdd > 0) {
       // Extend from today or from existing nextBillingDate (whichever is later)
-      const base = page.nextBillingDate && page.nextBillingDate > new Date()
-        ? page.nextBillingDate
-        : new Date();
+      const base =
+        page.nextBillingDate && page.nextBillingDate > new Date()
+          ? page.nextBillingDate
+          : new Date();
       const newExpiry = new Date(base);
       newExpiry.setDate(newExpiry.getDate() + data.daysToAdd);
       updateData.nextBillingDate = newExpiry;
@@ -787,5 +875,39 @@ export class AdminService {
 
     await this.prisma.page.update({ where: { id: pageId }, data: updateData });
     return { success: true, pageId };
+  }
+
+  // ── Page Access Requests ──────────────────────────────────────────────────
+
+  async getPageRequests(status?: string) {
+    return this.prisma.pageRequest.findMany({
+      where: status ? { status } : undefined,
+      include: {
+        user: { select: { id: true, username: true, name: true, email: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async approvePageRequest(id: number, adminNote?: string) {
+    const req = await this.prisma.pageRequest.findUnique({ where: { id } });
+    if (!req) throw new NotFoundException('Request not found');
+    if (req.status !== 'pending') throw new BadRequestException('Already processed');
+    await this.prisma.pageRequest.update({
+      where: { id },
+      data: { status: 'approved', adminNote: adminNote?.trim() || null },
+    });
+    return { success: true };
+  }
+
+  async rejectPageRequest(id: number, adminNote?: string) {
+    const req = await this.prisma.pageRequest.findUnique({ where: { id } });
+    if (!req) throw new NotFoundException('Request not found');
+    if (req.status !== 'pending') throw new BadRequestException('Already processed');
+    await this.prisma.pageRequest.update({
+      where: { id },
+      data: { status: 'rejected', adminNote: adminNote?.trim() || null },
+    });
+    return { success: true };
   }
 }

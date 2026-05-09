@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { OrderNotificationService } from '../orders/order-notification.service';
 
 /**
  * V10: Courier → Accounting integration.
@@ -27,29 +28,28 @@ import { PrismaService } from '../prisma/prisma.service';
 export class CourierAccountingService {
   private readonly logger = new Logger(CourierAccountingService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notification: OrderNotificationService,
+  ) {}
 
   /**
-   * Called when courier reports DELIVERED.
-   * Confirms the order if not already confirmed.
+   * Called when courier reports DELIVERED or admin manually marks delivered.
+   * Marks order as DELIVERED and notifies customer.
    */
   async onDelivered(pageId: number, orderId: number): Promise<void> {
-    const order = await this.prisma.order.findUnique({
-      where: { id: orderId },
-      include: { items: true },
-    });
+    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
     if (!order || order.pageIdRef !== pageId) return;
-    if (order.status === 'CONFIRMED') return; // already done
+    if (order.status === 'DELIVERED') return;
 
-    this.logger.log(
-      `[CourierAccounting] Delivered → confirming order #${orderId}`,
-    );
+    this.logger.log(`[CourierAccounting] Delivered → order #${orderId}`);
 
-    // Confirm the order
     await this.prisma.order.update({
       where: { id: orderId },
-      data: { status: 'CONFIRMED', confirmedAt: new Date() },
+      data: { status: 'DELIVERED', deliveredAt: new Date() },
     });
+
+    void this.notification.notifyDelivered(pageId, orderId);
   }
 
   /**
@@ -108,6 +108,8 @@ export class CourierAccountingService {
       where: { id: orderId },
       data: { status: 'CANCELLED' },
     });
+
+    void this.notification.notifyDeliveryCancelled(pageId, orderId);
   }
 
   /**

@@ -23,7 +23,7 @@ type RawProduct = {
   description: string | null;
   category: string | null;
   color: string | null;
-  tags: string | null;          // JSON array string
+  tags: string | null; // JSON array string
   imageKeywords: string | null;
   aiDescription: string | null;
   stockQty: number;
@@ -123,7 +123,7 @@ export class ProductMatchService {
     if (attrs.category && attrs.category !== 'non_clothing') {
       const catScore = this.categoryScore(product, attrs.category);
       if (catScore > 0) {
-        score += catScore * 0.40;
+        score += catScore * 0.4;
         reasons.push(`category~${attrs.category}`);
       } else if (product.category && product.category !== attrs.category) {
         score -= 0.08;
@@ -134,7 +134,7 @@ export class ProductMatchService {
     if (attrs.color) {
       const colorScore = this.colorScore(product, attrs.color);
       if (colorScore > 0) {
-        score += colorScore * 0.30;
+        score += colorScore * 0.3;
         reasons.push(`color~${attrs.color}`);
       } else if (product.color && attrs.color) {
         score -= 0.05;
@@ -148,7 +148,7 @@ export class ProductMatchService {
         attrs.sleeveType ?? '',
       ]);
       if (kwScore > 0) {
-        score += kwScore * 0.20;
+        score += kwScore * 0.2;
         reasons.push(`pattern~${attrs.pattern}`);
       }
     }
@@ -157,7 +157,7 @@ export class ProductMatchService {
     if (attrs.gender && attrs.gender !== 'unisex') {
       const genderScore = this.keywordScore(product, [attrs.gender]);
       if (genderScore > 0) {
-        score += genderScore * 0.10;
+        score += genderScore * 0.1;
         reasons.push(`gender~${attrs.gender}`);
       } else {
         score -= 0.03;
@@ -165,7 +165,10 @@ export class ProductMatchService {
     }
 
     if (attrs.rawDescription) {
-      const descScore = this.keywordScore(product, attrs.rawDescription.split(/\s+/));
+      const descScore = this.keywordScore(
+        product,
+        attrs.rawDescription.split(/\s+/),
+      );
       if (descScore > 0.15) {
         score += Math.min(0.12, descScore * 0.12);
         reasons.push('description_overlap');
@@ -219,17 +222,19 @@ export class ProductMatchService {
     }
 
     // Check name, description, tags, aiDescription, imageKeywords
-    const textCorpus = this.normalizeText([
-      product.name,
-      product.description,
-      product.tags,
-      product.aiDescription,
-      product.imageKeywords,
-      product.productGroup,
-      product.variantLabel,
-    ]
-      .filter(Boolean)
-      .join(' '));
+    const textCorpus = this.normalizeText(
+      [
+        product.name,
+        product.description,
+        product.tags,
+        product.aiDescription,
+        product.imageKeywords,
+        product.productGroup,
+        product.variantLabel,
+      ]
+        .filter(Boolean)
+        .join(' '),
+    );
 
     if (textCorpus.includes(target)) return 0.7;
 
@@ -265,16 +270,18 @@ export class ProductMatchService {
       if (pc.includes(target) || target.includes(pc)) return 0.8;
     }
 
-    const textCorpus = this.normalizeText([
-      product.name,
-      product.description,
-      product.tags,
-      product.aiDescription,
-      product.imageKeywords,
-      product.variantLabel,
-    ]
-      .filter(Boolean)
-      .join(' '));
+    const textCorpus = this.normalizeText(
+      [
+        product.name,
+        product.description,
+        product.tags,
+        product.aiDescription,
+        product.imageKeywords,
+        product.variantLabel,
+      ]
+        .filter(Boolean)
+        .join(' '),
+    );
 
     if (textCorpus.includes(target)) return 0.6;
 
@@ -304,18 +311,20 @@ export class ProductMatchService {
 
   /** Score 0–1 for keyword list against product text */
   private keywordScore(product: RawProduct, keywords: string[]): number {
-    const textCorpus = this.normalizeText([
-      product.name,
-      product.description,
-      product.tags,
-      product.aiDescription,
-      product.imageKeywords,
-      product.category,
-      product.productGroup,
-      product.variantLabel,
-    ]
-      .filter(Boolean)
-      .join(' '));
+    const textCorpus = this.normalizeText(
+      [
+        product.name,
+        product.description,
+        product.tags,
+        product.aiDescription,
+        product.imageKeywords,
+        product.category,
+        product.productGroup,
+        product.variantLabel,
+      ]
+        .filter(Boolean)
+        .join(' '),
+    );
 
     let hits = 0;
     for (const kw of keywords) {
@@ -335,7 +344,12 @@ export class ProductMatchService {
     excludeCode?: string,
   ): Promise<{
     uniquenessPercent: number;
-    topSimilar: { code: string; name: string | null; similarity: number; imageUrl: string | null }[];
+    topSimilar: {
+      code: string;
+      name: string | null;
+      similarity: number;
+      imageUrl: string | null;
+    }[];
     recommendation: 'AI_VISION' | 'OCR';
     reason: string;
     totalProductsChecked: number;
@@ -343,9 +357,18 @@ export class ProductMatchService {
     const allProducts = (await this.prisma.product.findMany({
       where: { pageId, isActive: true },
       select: {
-        id: true, code: true, name: true, price: true, imageUrl: true,
-        description: true, category: true, color: true, tags: true,
-        imageKeywords: true, aiDescription: true, stockQty: true,
+        id: true,
+        code: true,
+        name: true,
+        price: true,
+        imageUrl: true,
+        description: true,
+        category: true,
+        color: true,
+        tags: true,
+        imageKeywords: true,
+        aiDescription: true,
+        stockQty: true,
         visionSearchable: true,
       },
     })) as unknown as RawProduct[];
@@ -398,6 +421,12 @@ export class ProductMatchService {
       `[Uniqueness] pageId=${pageId} checked=${candidates.length} topScore=${topScore.toFixed(2)} unique=${uniquenessPercent}% → ${recommendation}`,
     );
 
-    return { uniquenessPercent, topSimilar, recommendation, reason, totalProductsChecked: candidates.length };
+    return {
+      uniquenessPercent,
+      topSimilar,
+      recommendation,
+      reason,
+      totalProductsChecked: candidates.length,
+    };
   }
 }

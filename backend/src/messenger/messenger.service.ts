@@ -16,7 +16,9 @@ export class MessengerService {
    */
   async sendText(pageToken: string, psid: string, text: string): Promise<void> {
     if (!pageToken || !psid || !text) {
-      this.logger.warn(`[Messenger] sendText called with missing params: psid=${psid}`);
+      this.logger.warn(
+        `[Messenger] sendText called with missing params: psid=${psid}`,
+      );
       return;
     }
 
@@ -40,12 +42,15 @@ export class MessengerService {
         const errText = await res.text().catch(() => '');
 
         // Rate limited or server error — retry with backoff
-        if ((res.status === 429 || res.status >= 500) && attempt < MAX_RETRIES) {
+        if (
+          (res.status === 429 || res.status >= 500) &&
+          attempt < MAX_RETRIES
+        ) {
           const delay = RETRY_DELAY_MS[attempt];
           this.logger.warn(
             `[Messenger] status=${res.status} psid=${psid} — retry ${attempt + 1}/${MAX_RETRIES} in ${delay}ms`,
           );
-          await new Promise(r => setTimeout(r, delay));
+          await new Promise((r) => setTimeout(r, delay));
           continue;
         }
 
@@ -57,10 +62,14 @@ export class MessengerService {
       } catch (err) {
         if (attempt < MAX_RETRIES) {
           const delay = RETRY_DELAY_MS[attempt];
-          this.logger.warn(`[Messenger] Network error psid=${psid} — retry ${attempt + 1}/${MAX_RETRIES} in ${delay}ms`);
-          await new Promise(r => setTimeout(r, delay));
+          this.logger.warn(
+            `[Messenger] Network error psid=${psid} — retry ${attempt + 1}/${MAX_RETRIES} in ${delay}ms`,
+          );
+          await new Promise((r) => setTimeout(r, delay));
         } else {
-          this.logger.error(`[Messenger] Network error psid=${psid} (exhausted retries): ${err}`);
+          this.logger.error(
+            `[Messenger] Network error psid=${psid} (exhausted retries): ${err}`,
+          );
         }
       }
     }

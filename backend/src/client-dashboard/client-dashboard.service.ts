@@ -17,6 +17,9 @@ import { TtsService } from '../call/tts.service';
 import { VisionOpsService } from '../vision-ops/vision-ops.service';
 import { OcrService } from '../ocr/ocr.service';
 import { WalletService } from '../wallet/wallet.service';
+import { CourierService } from '../courier/courier.service';
+import { CourierAccountingService } from '../courier/courier-accounting.service';
+import { OrderNotificationService } from '../orders/order-notification.service';
 
 @Injectable()
 export class ClientDashboardService {
@@ -45,6 +48,9 @@ export class ClientDashboardService {
     private readonly visionOps: VisionOpsService,
     private readonly ocrService: OcrService,
     private readonly walletService: WalletService,
+    private readonly courierService: CourierService,
+    private readonly courierAccounting: CourierAccountingService,
+    private readonly orderNotification: OrderNotificationService,
   ) {}
 
   // ── Summary ────────────────────────────────────────────────────────────────
@@ -241,7 +247,35 @@ export class ClientDashboardService {
     if (a === 'cancel') return this.ordersService.cancelOrder(orderId, pageId);
     if (a === 'issue') return this.ordersService.markIssue(orderId, pageId);
     if (a === 'pack')
-      return this.prisma.order.update({ where: { id: orderId }, data: { status: 'PACKED', updatedAt: new Date() } });
+      return this.prisma.order.update({
+        where: { id: orderId },
+        data: { status: 'PACKED', updatedAt: new Date() },
+      });
+    if (a === 'deliver') {
+      await this.ordersService.markDelivered(orderId, pageId);
+      void this.orderNotification.notifyDelivered(pageId, orderId);
+      // Also sync courier shipment status if exists
+      const shipment = await this.prisma.courierShipment.findUnique({ where: { orderId } });
+      if (shipment && shipment.pageId === pageId && shipment.status !== 'delivered') {
+        await this.prisma.courierShipment.update({
+          where: { orderId },
+          data: { status: 'delivered', deliveredAt: new Date() },
+        });
+      }
+      return { id: orderId, status: 'DELIVERED' };
+    }
+    if (a === 'cancel-delivery') {
+      await this.ordersService.cancelOrder(orderId, pageId);
+      void this.orderNotification.notifyDeliveryCancelled(pageId, orderId);
+      const shipment = await this.prisma.courierShipment.findUnique({ where: { orderId } });
+      if (shipment && shipment.pageId === pageId && shipment.status !== 'cancelled') {
+        await this.prisma.courierShipment.update({
+          where: { orderId },
+          data: { status: 'cancelled' },
+        });
+      }
+      return { id: orderId, status: 'CANCELLED' };
+    }
     throw new BadRequestException(`Unknown action: ${action}`);
   }
 
@@ -256,7 +290,7 @@ export class ClientDashboardService {
     results: any[];
   }> {
     const a = String(action || '').toLowerCase();
-    if (!['confirm', 'cancel', 'issue', 'pack'].includes(a))
+    if (!['confirm', 'cancel', 'issue', 'pack', 'deliver', 'cancel-delivery'].includes(a))
       throw new BadRequestException(`Unknown action: ${action}`);
     let success = 0,
       failed = 0;
@@ -270,7 +304,12 @@ export class ClientDashboardService {
         if (a === 'cancel') await this.ordersService.cancelOrder(id, pageId);
         if (a === 'issue') await this.ordersService.markIssue(id, pageId);
         if (a === 'pack')
-          await this.prisma.order.update({ where: { id }, data: { status: 'PACKED', updatedAt: new Date() } });
+          await this.prisma.order.update({
+            where: { id },
+            data: { status: 'PACKED', updatedAt: new Date() },
+          });
+        if (a === 'deliver') await this.applyOrderAction(pageId, id, 'deliver');
+        if (a === 'cancel-delivery') await this.applyOrderAction(pageId, id, 'cancel-delivery');
         results.push({ id, success: true });
         success++;
       } catch (e: any) {
@@ -279,6 +318,108 @@ export class ClientDashboardService {
       }
     }
     return { success, failed, results };
+  }
+
+  // ── Delivery Zone ──────────────────────────────────────────────────────────
+
+  /** Returns all PACKED orders with courier shipment info for the delivery zone. */
+  async getDeliveryOrders(pageId: number) {
+    return this.prisma.order.findMany({
+      where: { pageIdRef: pageId, status: 'PACKED' },
+      include: {
+        items: true,
+        courierShipment: {
+          select: {
+            id: true,
+            courierName: true,
+            trackingId: true,
+            trackingUrl: true,
+            status: true,
+            bookedAt: true,
+          },
+        },
+      },
+      orderBy: { id: 'asc' },
+    });
+  }
+
+  /**
+   * Sync courier API status for all PACKED orders.
+   * For each shipment that has a courier API (not manual):
+   * - If courier says delivered → mark DELIVERED + notify
+   * - If courier says returned/cancelled → mark CANCELLED + notify
+   */
+  async syncCourierDeliveries(pageId: number) {
+    const shipments = await this.prisma.courierShipment.findMany({
+      where: {
+        pageId,
+        courierName: { not: 'manual' },
+        status: { in: ['booked', 'picked', 'in_transit'] },
+      },
+      include: { order: { select: { id: true, status: true } } },
+    });
+
+    const settingsRaw = await this.courierService.getSettings(pageId);
+    const settings = this.courierService.parseSettings(settingsRaw);
+
+    const results: { orderId: number; newStatus: string; error?: string }[] = [];
+
+    for (const shipment of shipments) {
+      if (!shipment.trackingId || shipment.order.status === 'DELIVERED' || shipment.order.status === 'CANCELLED') continue;
+      try {
+        const apiStatus = await this.fetchCourierStatus(
+          shipment.courierName as any,
+          settings,
+          shipment.trackingId,
+        );
+        if (!apiStatus) continue;
+
+        const normalized = this.normalizeCourierStatus(apiStatus);
+        if (normalized === shipment.status) continue;
+
+        await this.courierAccounting.updateShipmentStatus(pageId, shipment.orderId, normalized);
+        results.push({ orderId: shipment.orderId, newStatus: normalized });
+      } catch (e: any) {
+        results.push({ orderId: shipment.orderId, newStatus: '', error: e.message });
+      }
+    }
+
+    return { synced: results.filter(r => !r.error).length, results };
+  }
+
+  private normalizeCourierStatus(raw: string): string {
+    const s = (raw || '').toLowerCase();
+    if (['delivered', 'deliver', 'success'].includes(s)) return 'delivered';
+    if (['returned', 'return', 'cancelled', 'canceled', 'failed'].includes(s)) return 'returned';
+    if (['picked', 'picked_up', 'in_transit', 'intransit', 'on_the_way'].includes(s)) return 'in_transit';
+    return s;
+  }
+
+  private async fetchCourierStatus(
+    courier: 'steadfast' | 'redx' | 'pathao' | 'paperfly',
+    settings: any,
+    trackingId: string,
+  ): Promise<string | null> {
+    try {
+      const axios = (await import('axios')).default;
+      if (courier === 'steadfast') {
+        const res = await axios.get(
+          `https://portal.steadfast.com.bd/api/v1/status/by-cid/${trackingId}`,
+          { headers: { 'Api-Key': settings.steadfast?.apiKey, 'Secret-Key': settings.steadfast?.secretKey }, timeout: 10000 },
+        );
+        return (res.data as any)?.delivery_status ?? null;
+      }
+      if (courier === 'redx') {
+        const res = await axios.get(
+          `https://openapi.redx.com.bd/v1.0.0-beta/parcel/track/${trackingId}`,
+          { headers: { 'API-ACCESS-TOKEN': `Bearer ${settings.redx?.apiKey}` }, timeout: 10000 },
+        );
+        return (res.data as any)?.info?.status ?? null;
+      }
+      return null;
+    } catch {
+      return null;
+    }
   }
 
   // ── Manual Call Queue ──────────────────────────────────────────────────────
@@ -298,7 +439,10 @@ export class ClientDashboardService {
   async logManualCall(
     pageId: number,
     orderId: number,
-    body: { result: 'CONFIRMED' | 'CANCELLED' | 'NOT_ANSWERED' | 'CALLBACK_LATER'; note?: string },
+    body: {
+      result: 'CONFIRMED' | 'CANCELLED' | 'NOT_ANSWERED' | 'CALLBACK_LATER';
+      note?: string;
+    },
   ) {
     await this.ensureOrder(pageId, orderId);
     const now = new Date();
@@ -332,7 +476,12 @@ export class ClientDashboardService {
           pageId,
           phone: order?.phone || '',
           callProvider: 'manual',
-          status: body.result === 'CONFIRMED' ? 'ANSWERED' : body.result === 'NOT_ANSWERED' ? 'NOT_ANSWERED' : 'ANSWERED',
+          status:
+            body.result === 'CONFIRMED'
+              ? 'ANSWERED'
+              : body.result === 'NOT_ANSWERED'
+                ? 'NOT_ANSWERED'
+                : 'ANSWERED',
           errorMsg: body.note || null,
         },
       });
@@ -453,11 +602,18 @@ export class ClientDashboardService {
           ? this.parseVariantOptionsText(body.variantOptions)
           : undefined,
       // V18: Image recognition metadata
-      category: body?.category !== undefined ? String(body.category || '') : undefined,
+      category:
+        body?.category !== undefined ? String(body.category || '') : undefined,
       color: body?.color !== undefined ? String(body.color || '') : undefined,
       tags: body?.tags !== undefined ? String(body.tags || '') : undefined,
-      imageKeywords: body?.imageKeywords !== undefined ? String(body.imageKeywords || '') : undefined,
-      aiDescription: body?.aiDescription !== undefined ? String(body.aiDescription || '') : undefined,
+      imageKeywords:
+        body?.imageKeywords !== undefined
+          ? String(body.imageKeywords || '')
+          : undefined,
+      aiDescription:
+        body?.aiDescription !== undefined
+          ? String(body.aiDescription || '')
+          : undefined,
       visionSearchable:
         body?.visionSearchable !== undefined
           ? Boolean(body.visionSearchable)
@@ -498,24 +654,41 @@ export class ClientDashboardService {
     if (!imageUrl) throw new BadRequestException('imageUrl required');
     const products = await this.prisma.product.findMany({
       where: { pageId, isActive: true },
-      select: { id: true, code: true, name: true, price: true, postCaption: true },
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        price: true,
+        postCaption: true,
+      },
     });
     const ocrResult = await this.ocrService.extractFull(
       imageUrl,
       undefined,
-      products.map(p => ({ code: p.code, postCaption: p.postCaption })),
+      products.map((p) => ({ code: p.code, postCaption: p.postCaption })),
     );
     const matchedProducts = products
-      .filter(p => ocrResult.allCodes.includes(p.code))
-      .map(p => ({ id: p.id, code: p.code, name: p.name, price: Number(p.price) }));
+      .filter((p) => ocrResult.allCodes.includes(p.code))
+      .map((p) => ({
+        id: p.id,
+        code: p.code,
+        name: p.name,
+        price: Number(p.price),
+      }));
     return { codes: ocrResult.allCodes, products: matchedProducts };
   }
 
   async analyzeProductImage(pageId: number, body: any) {
     const imageUrl = String(body?.imageUrl || '').trim();
-    const excludeCode = body?.excludeCode ? String(body.excludeCode).trim() : undefined;
+    const excludeCode = body?.excludeCode
+      ? String(body.excludeCode).trim()
+      : undefined;
     if (!imageUrl) throw new BadRequestException('Image URL required');
-    const result = await this.visionOps.analyzeProductImage(pageId, imageUrl, excludeCode);
+    const result = await this.visionOps.analyzeProductImage(
+      pageId,
+      imageUrl,
+      excludeCode,
+    );
     await this.visionOps.logVisionAttempt({
       pageId,
       type: 'product_analyze',
@@ -531,9 +704,16 @@ export class ClientDashboardService {
     const imageUrls: string[] = Array.isArray(body?.imageUrls)
       ? body.imageUrls.map((u: any) => String(u).trim()).filter(Boolean)
       : [];
-    const excludeCode = body?.excludeCode ? String(body.excludeCode).trim() : undefined;
-    if (!imageUrls.length) throw new BadRequestException('imageUrls array required');
-    const result = await this.visionOps.batchAnalyzeReferenceImages(pageId, imageUrls, excludeCode);
+    const excludeCode = body?.excludeCode
+      ? String(body.excludeCode).trim()
+      : undefined;
+    if (!imageUrls.length)
+      throw new BadRequestException('imageUrls array required');
+    const result = await this.visionOps.batchAnalyzeReferenceImages(
+      pageId,
+      imageUrls,
+      excludeCode,
+    );
     await this.visionOps.logVisionAttempt({
       pageId,
       type: 'product_analyze',
@@ -553,19 +733,24 @@ export class ClientDashboardService {
   ) {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) throw new BadRequestException('OpenAI API key not configured');
-    if (!holdingRefUrl || !wearingRefUrl) throw new BadRequestException('Both reference images required');
+    if (!holdingRefUrl || !wearingRefUrl)
+      throw new BadRequestException('Both reference images required');
 
     // Balance check
     const hasBalance = await this.walletService.canProcessAi(pageId);
-    if (!hasBalance) throw new BadRequestException('Wallet balance শেষ — recharge করুন');
+    if (!hasBalance)
+      throw new BadRequestException('Wallet balance শেষ — recharge করুন');
 
     const liveCount = livePhotoUrls.length;
     const totalImages = 2 + liveCount;
     const hasLive = liveCount > 0;
 
-    const liveDescLines = livePhotoUrls.map((_, i) =>
-      `- Image ${3 + i}: Live video screenshot #${i + 1} showing BOTH dresses at the same time`
-    ).join('\n');
+    const liveDescLines = livePhotoUrls
+      .map(
+        (_, i) =>
+          `- Image ${3 + i}: Live video screenshot #${i + 1} showing BOTH dresses at the same time`,
+      )
+      .join('\n');
 
     const prompt = `You are analyzing dress products for a Bangladeshi clothing live-video seller.
 
@@ -575,10 +760,14 @@ You have ${totalImages} images:
 
 Your tasks:
 1. Extract the product code from Image 1 if visible (codes look like: DF-0042, SK-001, LT-100, printed on tag/label/sticker/paper/cloth)
-2. Extract the product code from Image 2 if visible (same)${hasLive ? `
+2. Extract the product code from Image 2 if visible (same)${
+      hasLive
+        ? `
 3. Using ALL live screenshots (Images 3+), identify which dress is being HELD in hand and which is being WORN on the model's body. Multiple frames improve accuracy.
 4. Match each dress in the live photos to its reference image (Image 1 or Image 2)
-5. If the live photos show Image 1's dress is actually WORN (not held), set swapped=true` : ''}
+5. If the live photos show Image 1's dress is actually WORN (not held), set swapped=true`
+        : ''
+    }
 
 Return ONLY a single valid JSON object with NO markdown:
 {
@@ -603,15 +792,24 @@ Rules:
 - If no live photo, set swapped=false always`;
 
     const content: any[] = [{ type: 'text', text: prompt }];
-    content.push({ type: 'image_url', image_url: { url: holdingRefUrl, detail: 'high' } });
-    content.push({ type: 'image_url', image_url: { url: wearingRefUrl, detail: 'high' } });
+    content.push({
+      type: 'image_url',
+      image_url: { url: holdingRefUrl, detail: 'high' },
+    });
+    content.push({
+      type: 'image_url',
+      image_url: { url: wearingRefUrl, detail: 'high' },
+    });
     for (const url of livePhotoUrls) {
       content.push({ type: 'image_url', image_url: { url, detail: 'high' } });
     }
 
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
       body: JSON.stringify({
         model: 'gpt-4o',
         max_tokens: 400,
@@ -621,41 +819,73 @@ Rules:
       signal: AbortSignal.timeout(60_000),
     });
 
-    if (!res.ok) throw new BadRequestException(`OpenAI vision error: ${res.status}`);
-    const data = await res.json() as any;
+    if (!res.ok)
+      throw new BadRequestException(`OpenAI vision error: ${res.status}`);
+    const data = await res.json();
     const text: string = data.choices?.[0]?.message?.content ?? '';
 
     let ai: any = {};
     try {
       const match = text.match(/\{[\s\S]*\}/);
       if (match) ai = JSON.parse(match[0]);
-    } catch { /* use empty */ }
+    } catch {
+      /* use empty */
+    }
 
     const swapped = Boolean(ai.swapped);
-    const holdingCode: string | null = swapped ? (ai.wearing?.productCode ?? null) : (ai.holding?.productCode ?? null);
-    const wearingCode: string | null = swapped ? (ai.holding?.productCode ?? null) : (ai.wearing?.productCode ?? null);
-    const holdingConf: number = swapped ? (ai.wearing?.confidence ?? 0) : (ai.holding?.confidence ?? 0);
-    const wearingConf: number = swapped ? (ai.holding?.confidence ?? 0) : (ai.wearing?.confidence ?? 0);
+    const holdingCode: string | null = swapped
+      ? (ai.wearing?.productCode ?? null)
+      : (ai.holding?.productCode ?? null);
+    const wearingCode: string | null = swapped
+      ? (ai.holding?.productCode ?? null)
+      : (ai.wearing?.productCode ?? null);
+    const holdingConf: number = swapped
+      ? (ai.wearing?.confidence ?? 0)
+      : (ai.holding?.confidence ?? 0);
+    const wearingConf: number = swapped
+      ? (ai.holding?.confidence ?? 0)
+      : (ai.wearing?.confidence ?? 0);
 
     // Find products by code (case-insensitive)
     const lookup = async (code: string | null) => {
       if (!code) return null;
       const p = await this.prisma.product.findFirst({
-        where: { pageId, isActive: true, code: { equals: code, mode: 'insensitive' } as any },
+        where: {
+          pageId,
+          isActive: true,
+          code: { equals: code, mode: 'insensitive' } as any,
+        },
         select: { id: true, code: true, name: true, price: true },
       });
-      return p ? { id: p.id, code: p.code, name: p.name ?? '', price: Number(p.price) } : null;
+      return p
+        ? { id: p.id, code: p.code, name: p.name ?? '', price: Number(p.price) }
+        : null;
     };
-    const [holdingProduct, wearingProduct] = await Promise.all([lookup(holdingCode), lookup(wearingCode)]);
+    const [holdingProduct, wearingProduct] = await Promise.all([
+      lookup(holdingCode),
+      lookup(wearingCode),
+    ]);
 
     // Deduct wallet: 2 reference + N live photos = totalImages × costPerAnalyzeBdt
-    void this.walletService.deductUsage(pageId, 'DUAL_PHOTO_AI', { photoCount: totalImages });
+    void this.walletService.deductUsage(pageId, 'DUAL_PHOTO_AI', {
+      photoCount: totalImages,
+    });
 
     return {
       swapped,
       totalImages,
-      holding: { code: holdingCode, confidence: holdingConf, codeFound: Boolean(holdingCode), product: holdingProduct },
-      wearing: { code: wearingCode, confidence: wearingConf, codeFound: Boolean(wearingCode), product: wearingProduct },
+      holding: {
+        code: holdingCode,
+        confidence: holdingConf,
+        codeFound: Boolean(holdingCode),
+        product: holdingProduct,
+      },
+      wearing: {
+        code: wearingCode,
+        confidence: wearingConf,
+        codeFound: Boolean(wearingCode),
+        product: wearingProduct,
+      },
       note: ai.note ?? '',
     };
   }
@@ -669,11 +899,15 @@ Rules:
   // ── LIVE SESSION (new Dual Photo system) ────────────────────────────────────
 
   private readonly PRODUCT_SELECT = {
-    id: true, code: true, name: true, price: true, imageUrl: true,
+    id: true,
+    code: true,
+    name: true,
+    price: true,
+    imageUrl: true,
   } as const;
 
   private parseSessions(sessions: any[]) {
-    return sessions.map(s => ({
+    return sessions.map((s) => ({
       ...s,
       screenshots: this.parseJson(s.screenshots, []),
       aiMemo: s.aiMemo ? this.parseJson(s.aiMemo, null) : null,
@@ -682,7 +916,11 @@ Rules:
 
   private parseJson(raw: string | null | undefined, fallback: any) {
     if (!raw) return fallback;
-    try { return JSON.parse(raw); } catch { return fallback; }
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return fallback;
+    }
   }
 
   async getLiveSessions(pageId: number) {
@@ -697,12 +935,15 @@ Rules:
     return this.parseSessions(rows);
   }
 
-  async createLiveSession(pageId: number, body: {
-    label?: string;
-    screenshots?: string[];
-    wornProductId?: number | null;
-    heldProductId?: number | null;
-  }) {
+  async createLiveSession(
+    pageId: number,
+    body: {
+      label?: string;
+      screenshots?: string[];
+      wornProductId?: number | null;
+      heldProductId?: number | null;
+    },
+  ) {
     const row = await this.prisma.liveSession.create({
       data: {
         pageId,
@@ -719,18 +960,25 @@ Rules:
     return this.parseSessions([row])[0];
   }
 
-  async updateLiveSession(pageId: number, sessionId: number, body: {
-    label?: string;
-    screenshots?: string[];
-    wornProductId?: number | null;
-    heldProductId?: number | null;
-    isActive?: boolean;
-  }) {
+  async updateLiveSession(
+    pageId: number,
+    sessionId: number,
+    body: {
+      label?: string;
+      screenshots?: string[];
+      wornProductId?: number | null;
+      heldProductId?: number | null;
+      isActive?: boolean;
+    },
+  ) {
     const data: any = {};
     if (body.label !== undefined) data.label = body.label?.trim() || null;
-    if (body.screenshots !== undefined) data.screenshots = JSON.stringify(body.screenshots);
-    if ('wornProductId' in body) data.wornProductId = body.wornProductId ?? null;
-    if ('heldProductId' in body) data.heldProductId = body.heldProductId ?? null;
+    if (body.screenshots !== undefined)
+      data.screenshots = JSON.stringify(body.screenshots);
+    if ('wornProductId' in body)
+      data.wornProductId = body.wornProductId ?? null;
+    if ('heldProductId' in body)
+      data.heldProductId = body.heldProductId ?? null;
     if (body.isActive !== undefined) data.isActive = body.isActive;
     data.updatedAt = new Date();
 
@@ -751,7 +999,9 @@ Rules:
   }
 
   async deleteLiveSession(pageId: number, sessionId: number) {
-    await this.prisma.liveSession.deleteMany({ where: { id: sessionId, pageId } });
+    await this.prisma.liveSession.deleteMany({
+      where: { id: sessionId, pageId },
+    });
     return { ok: true };
   }
 
@@ -769,17 +1019,24 @@ Rules:
     if (!session) throw new NotFoundException('Session not found');
 
     const screenshots: string[] = this.parseJson(session.screenshots, []);
-    if (!screenshots.length) throw new BadRequestException('No screenshots uploaded yet');
+    if (!screenshots.length)
+      throw new BadRequestException('No screenshots uploaded yet');
     if (!session.wornProductId && !session.heldProductId) {
-      throw new BadRequestException('Assign at least one product (worn or held) before analyzing');
+      throw new BadRequestException(
+        'Assign at least one product (worn or held) before analyzing',
+      );
     }
 
     if (!(await this.walletService.canProcessAi(pageId))) {
       throw new BadRequestException('Wallet balance শেষ — recharge করুন');
     }
 
-    const wornName = session.wornProduct ? `${session.wornProduct.name} (Code: ${session.wornProduct.code})` : 'Not assigned';
-    const heldName = session.heldProduct ? `${session.heldProduct.name} (Code: ${session.heldProduct.code})` : 'Not assigned';
+    const wornName = session.wornProduct
+      ? `${session.wornProduct.name} (Code: ${session.wornProduct.code})`
+      : 'Not assigned';
+    const heldName = session.heldProduct
+      ? `${session.heldProduct.name} (Code: ${session.heldProduct.code})`
+      : 'Not assigned';
 
     const prompt = `You are helping a Bangladeshi clothing seller identify products from live video screenshots.
 
@@ -814,7 +1071,10 @@ Return ONLY valid JSON (no markdown):
 
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
       body: JSON.stringify({
         model: 'gpt-4o',
         max_tokens: 600,
@@ -825,17 +1085,21 @@ Return ONLY valid JSON (no markdown):
     });
 
     if (!res.ok) throw new BadRequestException(`OpenAI error: ${res.status}`);
-    const data = await res.json() as any;
+    const data = await res.json();
     const text: string = data.choices?.[0]?.message?.content ?? '';
 
     let memo: any = {};
     try {
       const match = text.match(/\{[\s\S]*\}/);
       if (match) memo = JSON.parse(match[0]);
-    } catch { /* use empty */ }
+    } catch {
+      /* use empty */
+    }
 
     const photoCount = screenshots.length;
-    void this.walletService.deductUsage(pageId, 'DUAL_PHOTO_AI', { photoCount });
+    void this.walletService.deductUsage(pageId, 'DUAL_PHOTO_AI', {
+      photoCount,
+    });
 
     const updated = await this.prisma.liveSession.update({
       where: { id: sessionId },
@@ -920,10 +1184,20 @@ Return ONLY valid JSON (no markdown):
       dualWearingProductId: page.dualWearingProductId ?? null,
       dualHoldingProductId: page.dualHoldingProductId ?? null,
       dualWearingProduct: page.dualWearingProductId
-        ? await this.prisma.product.findUnique({ where: { id: page.dualWearingProductId }, select: { code: true, name: true } }).catch(() => null)
+        ? await this.prisma.product
+            .findUnique({
+              where: { id: page.dualWearingProductId },
+              select: { code: true, name: true },
+            })
+            .catch(() => null)
         : null,
       dualHoldingProduct: page.dualHoldingProductId
-        ? await this.prisma.product.findUnique({ where: { id: page.dualHoldingProductId }, select: { code: true, name: true } }).catch(() => null)
+        ? await this.prisma.product
+            .findUnique({
+              where: { id: page.dualHoldingProductId },
+              select: { code: true, name: true },
+            })
+            .catch(() => null)
         : null,
       // Pricing (from bot-knowledge config)
       pricingPolicy: cfg?.pricingPolicy || {},
@@ -1002,11 +1276,7 @@ Return ONLY valid JSON (no markdown):
       if (!(k in pageFields)) continue;
       const nextVal = pageFields[k];
       const accessKey = this.modeAccessMap[k];
-      if (
-        accessKey &&
-        Boolean(nextVal) &&
-        pageFields[k] !== undefined
-      ) {
+      if (accessKey && Boolean(nextVal) && pageFields[k] !== undefined) {
         const page: any = await this.pageService.getById(pageId);
         if (page?.[accessKey] === false) {
           throw new BadRequestException(
@@ -1039,7 +1309,10 @@ Return ONLY valid JSON (no markdown):
         if (k in callSettings) {
           if (k === 'callConfirmModeOn') {
             const page: any = await this.pageService.getById(pageId);
-            if (Boolean(callSettings[k]) && page?.callConfirmModeAllowed === false) {
+            if (
+              Boolean(callSettings[k]) &&
+              page?.callConfirmModeAllowed === false
+            ) {
               throw new BadRequestException(
                 'callConfirmModeOn is not available on your current plan. Please contact admin to upgrade.',
               );
@@ -1161,7 +1434,9 @@ Return ONLY valid JSON (no markdown):
   }
 
   async uploadVoice(pageId: number, language: 'BN' | 'EN', file: any) {
-    const page: any = await this.prisma.page.findUnique({ where: { id: pageId } });
+    const page: any = await this.prisma.page.findUnique({
+      where: { id: pageId },
+    });
     if (!page) throw new NotFoundException('Page not found');
     if (!file?.buffer) throw new BadRequestException('Audio file required');
 
@@ -1182,7 +1457,9 @@ Return ONLY valid JSON (no markdown):
       name.endsWith(ext),
     );
     if (!allowedMimes.has(mime) && !extOk) {
-      throw new BadRequestException('Only audio files (.mp3, .wav, .m4a, .aac, .ogg) are allowed');
+      throw new BadRequestException(
+        'Only audio files (.mp3, .wav, .m4a, .aac, .ogg) are allowed',
+      );
     }
 
     const result = await this.ttsService.uploadVoice(pageId, language, file);
@@ -1415,20 +1692,31 @@ Return ONLY valid JSON (no markdown):
 
   async submitRechargeRequest(
     pageId: number,
-    body: { amountBdt: number; method: string; transactionId: string; note?: string },
+    body: {
+      amountBdt: number;
+      method: string;
+      transactionId: string;
+      note?: string;
+    },
   ) {
     const { amountBdt, method, transactionId, note } = body;
-    if (!amountBdt || amountBdt <= 0) throw new BadRequestException('Amount must be positive');
-    if (!transactionId?.trim()) throw new BadRequestException('Transaction ID required');
+    if (!amountBdt || amountBdt <= 0)
+      throw new BadRequestException('Amount must be positive');
+    if (!transactionId?.trim())
+      throw new BadRequestException('Transaction ID required');
 
     const allowed = ['bkash', 'nagad', 'bank', 'manual'];
-    if (!allowed.includes(method)) throw new BadRequestException('Invalid payment method');
+    if (!allowed.includes(method))
+      throw new BadRequestException('Invalid payment method');
 
     // Prevent duplicate pending request for same TrxID + page
     const existing = await this.prisma.walletRechargeRequest.findFirst({
       where: { pageId, transactionId: transactionId.trim(), status: 'pending' },
     });
-    if (existing) throw new BadRequestException('এই Transaction ID দিয়ে ইতিমধ্যে একটি request pending আছে।');
+    if (existing)
+      throw new BadRequestException(
+        'এই Transaction ID দিয়ে ইতিমধ্যে একটি request pending আছে।',
+      );
 
     const req = await this.prisma.walletRechargeRequest.create({
       data: {
@@ -1462,7 +1750,9 @@ Return ONLY valid JSON (no markdown):
     const newCount = newOrders.length;
     if (newCount === 0) return 0;
 
-    await this.walletService.deductUsage(pageId, 'MEMO_PRINT', { memoCount: newCount });
+    await this.walletService.deductUsage(pageId, 'MEMO_PRINT', {
+      memoCount: newCount,
+    });
 
     await this.prisma.order.updateMany({
       where: { pageIdRef: pageId, id: { in: newOrders.map((o) => o.id) } },

@@ -60,7 +60,10 @@ export class BroadcastService {
       throw new BadRequestException('Message required');
 
     // Basic plan does not include Broadcast
-    const page = await this.prisma.page.findUnique({ where: { id: pageId }, select: { ownerId: true } });
+    const page = await this.prisma.page.findUnique({
+      where: { id: pageId },
+      select: { ownerId: true },
+    });
     if (page?.ownerId) {
       const sub = await this.billing.getOrCreateSubscription(page.ownerId);
       const planName = (sub as any).plan?.name ?? 'starter';

@@ -93,7 +93,9 @@ export class AuthService {
     // Auto-start 7-day trial for new client accounts
     if (role === 'client') {
       try {
-        const plan = await this.prisma.plan.findFirst({ where: { name: 'starter' } });
+        const plan = await this.prisma.plan.findFirst({
+          where: { name: 'starter' },
+        });
         if (plan) {
           const now = new Date();
           const trialEnd = new Date(now.getTime() + 7 * 86_400_000);
@@ -113,7 +115,9 @@ export class AuthService {
           this.logger.log(`[Auth] 7-day trial started for user ${user.id}`);
         }
       } catch (e: any) {
-        this.logger.warn(`[Auth] Could not create trial subscription: ${e.message}`);
+        this.logger.warn(
+          `[Auth] Could not create trial subscription: ${e.message}`,
+        );
       }
     }
 

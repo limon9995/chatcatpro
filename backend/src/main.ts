@@ -31,9 +31,13 @@ async function bootstrap() {
         directives: {
           defaultSrc: ["'self'"],
           scriptSrc: ["'self'", "'unsafe-inline'"],
-          styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-          fontSrc: ["'self'", "https://fonts.gstatic.com"],
-          imgSrc: ["'self'", "data:", "https:"],
+          styleSrc: [
+            "'self'",
+            "'unsafe-inline'",
+            'https://fonts.googleapis.com',
+          ],
+          fontSrc: ["'self'", 'https://fonts.gstatic.com'],
+          imgSrc: ["'self'", 'data:', 'https:'],
         },
       },
     }),
@@ -42,7 +46,7 @@ async function bootstrap() {
   // ── Global validation pipe ────────────────────────────────────────────────
   app.useGlobalPipes(
     new ValidationPipe({
-      whitelist: true,         // strip unknown properties
+      whitelist: true, // strip unknown properties
       forbidNonWhitelisted: false, // don't throw on extra props (lenient for legacy payloads)
       transform: true,
     }),
@@ -87,7 +91,8 @@ async function bootstrap() {
     origin: (origin, cb) => {
       if (!origin || origin === 'null') return cb(null, true);
       if (!allowedOrigins) {
-        if (isProduction) return cb(new Error(`CORS blocked: ${origin} — set CORS_ORIGINS`));
+        if (isProduction)
+          return cb(new Error(`CORS blocked: ${origin} — set CORS_ORIGINS`));
         return cb(null, true);
       }
       if (allowedOrigins.includes(origin)) return cb(null, true);

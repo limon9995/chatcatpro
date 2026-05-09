@@ -122,17 +122,23 @@ export class ClientDashboardController {
       String(action || ''),
     );
   }
+  @Get(':pageId/orders/delivery-zone')
+  deliveryZone(@Param('pageId') p: string, @Req() r: any) {
+    return this.svc.getDeliveryOrders(this.pid(r, p));
+  }
+
+  @Post(':pageId/orders/sync-courier-deliveries')
+  syncCourierDeliveries(@Param('pageId') p: string, @Req() r: any) {
+    return this.svc.syncCourierDeliveries(this.pid(r, p));
+  }
+
   @Get(':pageId/orders/agent-issues')
   getAgentIssues(@Param('pageId') p: string, @Req() r: any) {
     return this.svc.getAgentIssues(this.pid(r, p));
   }
 
   @Post(':pageId/orders/agent-issues/dismiss')
-  dismissAgentIssue(
-    @Param('pageId') p: string,
-    @Body() b: any,
-    @Req() r: any,
-  ) {
+  dismissAgentIssue(@Param('pageId') p: string, @Body() b: any, @Req() r: any) {
     return this.svc.dismissAgentIssue(this.pid(r, p), b);
   }
 
@@ -261,7 +267,10 @@ export class ClientDashboardController {
     @Body() b: any,
     @Req() r: any,
   ) {
-    return this.svc.detectProductCodeFromImage(this.pid(r, p), String(b?.imageUrl || '').trim());
+    return this.svc.detectProductCodeFromImage(
+      this.pid(r, p),
+      String(b?.imageUrl || '').trim(),
+    );
   }
   @Post(':pageId/products/analyze-image')
   analyzeProductImage(
@@ -283,7 +292,9 @@ export class ClientDashboardController {
   setupDualPhotoAI(@Param('pageId') p: string, @Body() b: any, @Req() r: any) {
     const livePhotoUrls: string[] = Array.isArray(b?.livePhotoUrls)
       ? b.livePhotoUrls.map((u: any) => String(u).trim()).filter(Boolean)
-      : b?.livePhotoUrl ? [String(b.livePhotoUrl).trim()] : [];
+      : b?.livePhotoUrl
+        ? [String(b.livePhotoUrl).trim()]
+        : [];
     return this.svc.setupDualPhotoAI(
       this.pid(r, p),
       String(b?.holdingRefUrl || '').trim(),
@@ -302,31 +313,59 @@ export class ClientDashboardController {
   createLiveSession(@Param('pageId') p: string, @Body() b: any, @Req() r: any) {
     return this.svc.createLiveSession(this.pid(r, p), {
       label: b?.label,
-      screenshots: Array.isArray(b?.screenshots) ? b.screenshots.map(String) : [],
+      screenshots: Array.isArray(b?.screenshots)
+        ? b.screenshots.map(String)
+        : [],
       wornProductId: b?.wornProductId ? Number(b.wornProductId) : null,
       heldProductId: b?.heldProductId ? Number(b.heldProductId) : null,
     });
   }
 
   @Patch(':pageId/live-sessions/:id')
-  updateLiveSession(@Param('pageId') p: string, @Param('id') id: string, @Body() b: any, @Req() r: any) {
+  updateLiveSession(
+    @Param('pageId') p: string,
+    @Param('id') id: string,
+    @Body() b: any,
+    @Req() r: any,
+  ) {
     const body = b ?? {};
     return this.svc.updateLiveSession(this.pid(r, p), Number(id), {
       label: body.label,
-      screenshots: Array.isArray(body.screenshots) ? body.screenshots.map(String) : undefined,
-      wornProductId: 'wornProductId' in body ? (body.wornProductId ? Number(body.wornProductId) : null) : undefined,
-      heldProductId: 'heldProductId' in body ? (body.heldProductId ? Number(body.heldProductId) : null) : undefined,
-      isActive: body.isActive !== undefined ? Boolean(body.isActive) : undefined,
+      screenshots: Array.isArray(body.screenshots)
+        ? body.screenshots.map(String)
+        : undefined,
+      wornProductId:
+        'wornProductId' in body
+          ? body.wornProductId
+            ? Number(body.wornProductId)
+            : null
+          : undefined,
+      heldProductId:
+        'heldProductId' in body
+          ? body.heldProductId
+            ? Number(body.heldProductId)
+            : null
+          : undefined,
+      isActive:
+        body.isActive !== undefined ? Boolean(body.isActive) : undefined,
     });
   }
 
   @Delete(':pageId/live-sessions/:id')
-  deleteLiveSession(@Param('pageId') p: string, @Param('id') id: string, @Req() r: any) {
+  deleteLiveSession(
+    @Param('pageId') p: string,
+    @Param('id') id: string,
+    @Req() r: any,
+  ) {
     return this.svc.deleteLiveSession(this.pid(r, p), Number(id));
   }
 
   @Post(':pageId/live-sessions/:id/analyze')
-  analyzeLiveSession(@Param('pageId') p: string, @Param('id') id: string, @Req() r: any) {
+  analyzeLiveSession(
+    @Param('pageId') p: string,
+    @Param('id') id: string,
+    @Req() r: any,
+  ) {
     return this.svc.analyzeLiveSession(this.pid(r, p), Number(id));
   }
 
@@ -347,7 +386,10 @@ export class ClientDashboardController {
     return this.svc.getVisionSummary(this.pid(r, p), d ? Number(d) : 30);
   }
   @Get(':pageId/vision/review-queue')
-  getVisionReviewQueue(@Param('pageId') p: string, @Req() r: any): Promise<any[]> {
+  getVisionReviewQueue(
+    @Param('pageId') p: string,
+    @Req() r: any,
+  ): Promise<any[]> {
     return this.svc.getVisionReviewQueue(this.pid(r, p));
   }
   @Patch(':pageId/vision/review-queue/:id')
@@ -989,7 +1031,11 @@ export class ClientDashboardController {
     @Body() b: any,
     @Req() r: any,
   ) {
-    return this.courier.upsertManualShipment(this.pid(r, p), Number(o), b || {});
+    return this.courier.upsertManualShipment(
+      this.pid(r, p),
+      Number(o),
+      b || {},
+    );
   }
   @Post(':pageId/courier/cancel/:orderId') courierCancel(
     @Param('pageId') p: string,
@@ -1126,11 +1172,18 @@ export class ClientDashboardController {
     @Req() r: any,
     @Query('limit') limit?: string,
   ) {
-    return this.svc.getWalletTransactions(this.pid(r, p), limit ? Number(limit) : 50);
+    return this.svc.getWalletTransactions(
+      this.pid(r, p),
+      limit ? Number(limit) : 50,
+    );
   }
 
   @Post(':pageId/wallet/recharge-request')
-  submitRechargeRequest(@Param('pageId') p: string, @Req() r: any, @Body() b: any) {
+  submitRechargeRequest(
+    @Param('pageId') p: string,
+    @Req() r: any,
+    @Body() b: any,
+  ) {
     return this.svc.submitRechargeRequest(this.pid(r, p), {
       amountBdt: Number(b?.amountBdt),
       method: b?.method || 'bkash',
@@ -1146,11 +1199,7 @@ export class ClientDashboardController {
 
   // ── Fraud Checker ─────────────────────────────────────────────────────────
   @Post(':pageId/fraud-check')
-  fraudCheck(
-    @Param('pageId') p: string,
-    @Req() r: any,
-    @Body() b: any,
-  ) {
+  fraudCheck(@Param('pageId') p: string, @Req() r: any, @Body() b: any) {
     const pageId = this.pid(r, p);
     return this.spamChecker.manualCheck(b?.phone ?? '', pageId);
   }
@@ -1161,7 +1210,10 @@ export class ClientDashboardController {
     @Req() r: any,
     @Query('limit') limit?: string,
   ) {
-    return this.spamChecker.getRecentLogs(this.pid(r, p), limit ? Number(limit) : 20);
+    return this.spamChecker.getRecentLogs(
+      this.pid(r, p),
+      limit ? Number(limit) : 20,
+    );
   }
 
   // ── Global AI Settings (Laptop AI toggle) ────────────────────────────────
@@ -1173,7 +1225,11 @@ export class ClientDashboardController {
   @Patch('global-ai')
   updateGlobalAi(@Body() b: any) {
     const valid = ['all', 'generate_only', 'none'];
-    const mode = valid.includes(b?.localAiMode) ? b.localAiMode : (b?.localAiEnabled === true ? 'all' : 'none');
+    const mode = valid.includes(b?.localAiMode)
+      ? b.localAiMode
+      : b?.localAiEnabled === true
+        ? 'all'
+        : 'none';
     return this.globalSettings.set({ localAiMode: mode });
   }
 }

@@ -109,7 +109,9 @@ export class ProductsService {
     return {};
   }
 
-  private async loadReferenceImagesMap(): Promise<Record<string, ProductSidecarMeta>> {
+  private async loadReferenceImagesMap(): Promise<
+    Record<string, ProductSidecarMeta>
+  > {
     try {
       const raw = await fs.readFile(this.referenceImagesFile, 'utf8');
       const parsed = JSON.parse(raw);
@@ -145,7 +147,9 @@ export class ProductsService {
     const all = await this.loadReferenceImagesMap();
     const key = this.productRefKey(pageId, code);
     const nextValue: ProductSidecarMeta = {
-      referenceImagesJson: normalizeReferenceImagesJson(meta.referenceImagesJson),
+      referenceImagesJson: normalizeReferenceImagesJson(
+        meta.referenceImagesJson,
+      ),
       productGroup: String(meta.productGroup || '').trim() || null,
       variantLabel: String(meta.variantLabel || '').trim() || null,
     };
@@ -208,14 +212,17 @@ export class ProductsService {
     return products.map((product) => ({
       ...product,
       referenceImagesJson:
-        this.normalizeSidecarValue(all[this.productRefKey(pageId, product.code)])
-          .referenceImagesJson || null,
+        this.normalizeSidecarValue(
+          all[this.productRefKey(pageId, product.code)],
+        ).referenceImagesJson || null,
       productGroup:
-        this.normalizeSidecarValue(all[this.productRefKey(pageId, product.code)])
-          .productGroup || null,
+        this.normalizeSidecarValue(
+          all[this.productRefKey(pageId, product.code)],
+        ).productGroup || null,
       variantLabel:
-        this.normalizeSidecarValue(all[this.productRefKey(pageId, product.code)])
-          .variantLabel || null,
+        this.normalizeSidecarValue(
+          all[this.productRefKey(pageId, product.code)],
+        ).variantLabel || null,
     }));
   }
 
@@ -276,15 +283,11 @@ export class ProductsService {
         visionSearchable: data.visionSearchable ?? false,
       },
     });
-    await this.setSidecarMetaForProduct(
-      eid,
-      created.code,
-      {
-        referenceImagesJson: data.referenceImagesJson,
-        productGroup: data.productGroup,
-        variantLabel: data.variantLabel,
-      },
-    );
+    await this.setSidecarMetaForProduct(eid, created.code, {
+      referenceImagesJson: data.referenceImagesJson,
+      productGroup: data.productGroup,
+      variantLabel: data.variantLabel,
+    });
     return this.attachReferenceImages(eid, created);
   }
 
@@ -366,9 +369,12 @@ export class ProductsService {
     if (data.category !== undefined) payload.category = data.category || null;
     if (data.color !== undefined) payload.color = data.color || null;
     if (data.tags !== undefined) payload.tags = data.tags || null;
-    if (data.imageKeywords !== undefined) payload.imageKeywords = data.imageKeywords || null;
-    if (data.aiDescription !== undefined) payload.aiDescription = data.aiDescription || null;
-    if (typeof data.visionSearchable === 'boolean') payload.visionSearchable = data.visionSearchable;
+    if (data.imageKeywords !== undefined)
+      payload.imageKeywords = data.imageKeywords || null;
+    if (data.aiDescription !== undefined)
+      payload.aiDescription = data.aiDescription || null;
+    if (typeof data.visionSearchable === 'boolean')
+      payload.visionSearchable = data.visionSearchable;
     const eid = await this.effectiveId(pageId);
     const sidecarOnlyUpdate =
       data.referenceImagesJson !== undefined ||
@@ -390,15 +396,11 @@ export class ProductsService {
       data.productGroup !== undefined ||
       data.variantLabel !== undefined
     ) {
-      await this.setSidecarMetaForProduct(
-        eid,
-        updated.code,
-        {
-          referenceImagesJson: data.referenceImagesJson,
-          productGroup: data.productGroup,
-          variantLabel: data.variantLabel,
-        },
-      );
+      await this.setSidecarMetaForProduct(eid, updated.code, {
+        referenceImagesJson: data.referenceImagesJson,
+        productGroup: data.productGroup,
+        variantLabel: data.variantLabel,
+      });
     }
     return this.attachReferenceImages(eid, updated);
   }

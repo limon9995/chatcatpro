@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { OrdersService } from './orders.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { OrderNotificationService } from './order-notification.service';
+import { ConversationContextService } from '../conversation-context/conversation-context.service';
 
 describe('OrdersService', () => {
   let service: OrdersService;
@@ -11,7 +12,11 @@ describe('OrdersService', () => {
       providers: [
         OrdersService,
         { provide: PrismaService, useValue: { order: {} } },
-        { provide: OrderNotificationService, useValue: { notifyConfirmed: jest.fn() } },
+        {
+          provide: OrderNotificationService,
+          useValue: { notifyConfirmed: jest.fn() },
+        },
+        { provide: ConversationContextService, useValue: {} },
       ],
     }).compile();
 
