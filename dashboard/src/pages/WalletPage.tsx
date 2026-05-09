@@ -18,8 +18,15 @@ function buildWaUrl(raw?: string | null) {
 }
 
 const METHOD_LABELS: Record<string, string> = {
-  bkash: 'bKash', nagad: 'Nagad', bank: 'Bank Transfer', manual: 'Manual',
+  bkash: 'bKash', nagad: 'Nagad', rocket: 'Rocket', bank: 'Bank Transfer', manual: 'Manual',
 };
+
+const METHODS = [
+  { key: 'bkash',  label: 'bKash',  icon: '💚', color: '#E2136E', bg: '#fce7f3', light: '#fdf2f8' },
+  { key: 'nagad',  label: 'Nagad',  icon: '🟠', color: '#F7941D', bg: '#fff7ed', light: '#fffbf5' },
+  { key: 'rocket', label: 'Rocket', icon: '🟣', color: '#8B3FC7', bg: '#f5f3ff', light: '#faf5ff' },
+  { key: 'bank',   label: 'Bank',   icon: '🏦', color: '#1d4ed8', bg: '#eff6ff', light: '#f0f9ff' },
+] as const;
 
 const TYPE_LABELS: Record<string, string> = {
   RECHARGE: '+ Recharge',
@@ -187,161 +194,237 @@ export default function WalletPage({
       {/* ── Recharge Tab ────────────────────────────────────────────────── */}
       {activeTab === 'recharge' && (
         <div>
-          {/* Payment numbers */}
-          {(adminContact?.bkash || adminContact?.nagad || adminContact?.rocket || adminContact?.phone) && (
-            <div style={{
-              ...card, border: `1px solid #22c55e40`,
-              background: (th.card as any).background,
-            }}>
-              <div style={{ fontWeight: 700, marginBottom: 10, fontSize: 15 }}>
-                📲 Payment করুন
-              </div>
-              <div style={{ fontSize: 13, color: th.muted, marginBottom: 14 }}>
-                নিচের যেকোনো নম্বরে <b>Send Money</b> করুন, তারপর নিচে Transaction ID জমা দিন।
-              </div>
-
-              {/* Payment method cards */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
-                {(adminContact?.bkash || adminContact?.phone) && (
-                  <div style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    background: '#e5f7ec', borderRadius: 10, padding: '10px 14px',
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{
-                        background: '#E2136E', color: '#fff', borderRadius: 8,
-                        padding: '3px 10px', fontWeight: 800, fontSize: 12,
-                      }}>bKash</span>
-                      <span style={{ fontWeight: 800, fontSize: 16, color: '#111', letterSpacing: 1 }}>
-                        {adminContact.bkash || adminContact.phone}
-                      </span>
-                    </div>
-                    <button
-                      onClick={() => { navigator.clipboard.writeText(adminContact.bkash || adminContact.phone); }}
-                      style={{
-                        background: '#E2136E22', border: 'none', borderRadius: 7,
-                        padding: '5px 10px', cursor: 'pointer', fontSize: 11, color: '#E2136E', fontWeight: 600,
-                      }}
-                    >Copy</button>
-                  </div>
-                )}
-                {adminContact?.nagad && (
-                  <div style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    background: '#fff4e5', borderRadius: 10, padding: '10px 14px',
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{
-                        background: '#F7941D', color: '#fff', borderRadius: 8,
-                        padding: '3px 10px', fontWeight: 800, fontSize: 12,
-                      }}>Nagad</span>
-                      <span style={{ fontWeight: 800, fontSize: 16, color: '#111', letterSpacing: 1 }}>
-                        {adminContact.nagad}
-                      </span>
-                    </div>
-                    <button
-                      onClick={() => { navigator.clipboard.writeText(adminContact.nagad); }}
-                      style={{
-                        background: '#F7941D22', border: 'none', borderRadius: 7,
-                        padding: '5px 10px', cursor: 'pointer', fontSize: 11, color: '#F7941D', fontWeight: 600,
-                      }}
-                    >Copy</button>
-                  </div>
-                )}
-                {adminContact?.rocket && (
-                  <div style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    background: '#f3eeff', borderRadius: 10, padding: '10px 14px',
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{
-                        background: '#8B3FC7', color: '#fff', borderRadius: 8,
-                        padding: '3px 10px', fontWeight: 800, fontSize: 12,
-                      }}>Rocket</span>
-                      <span style={{ fontWeight: 800, fontSize: 16, color: '#111', letterSpacing: 1 }}>
-                        {adminContact.rocket}
-                      </span>
-                    </div>
-                    <button
-                      onClick={() => { navigator.clipboard.writeText(adminContact.rocket); }}
-                      style={{
-                        background: '#8B3FC722', border: 'none', borderRadius: 7,
-                        padding: '5px 10px', cursor: 'pointer', fontSize: 11, color: '#8B3FC7', fontWeight: 600,
-                      }}
-                    >Copy</button>
-                  </div>
-                )}
-              </div>
-
-              {/* Contact buttons */}
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                {waUrl && (
-                  <a href={waUrl} target="_blank" rel="noreferrer" style={{
-                    ...th.btnPrimary, textDecoration: 'none', padding: '8px 16px',
-                    background: '#25D366', fontSize: 13, borderRadius: 10,
-                    display: 'inline-flex', alignItems: 'center', gap: 6,
-                  }}>
-                    WhatsApp করুন
-                  </a>
-                )}
-                {adminContact?.messengerUrl && (
-                  <a href={adminContact.messengerUrl} target="_blank" rel="noreferrer" style={{
-                    ...th.btn, textDecoration: 'none', padding: '8px 16px', fontSize: 13, borderRadius: 10,
-                    display: 'inline-flex', alignItems: 'center', gap: 6,
-                  }}>
-                    Messenger
-                  </a>
-                )}
-              </div>
+          {/* ── Step 1: Method Selector ───────────────────────────────────── */}
+          <div style={{ ...card, padding: '18px 16px' }}>
+            <div style={{ fontSize: 12, color: th.muted, fontWeight: 600, marginBottom: 10, letterSpacing: 0.5, textTransform: 'uppercase' }}>
+              ধাপ ১ — Payment Method বেছে নিন
             </div>
-          )}
-
-          {/* Recharge request form */}
-          <div style={card}>
-            <CardHeader th={th} title="Recharge Request জমা দিন" sub="Payment করার পর এখানে Transaction ID দিন" />
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 16 }}>
-              <div>
-                <label style={{ fontSize: 12, color: th.muted, display: 'block', marginBottom: 4 }}>Payment Method</label>
-                <select style={inp} value={form.method} onChange={e => setForm(f => ({ ...f, method: e.target.value }))}>
-                  <option value="bkash">bKash</option>
-                  <option value="nagad">Nagad</option>
-                  <option value="bank">Bank Transfer</option>
-                  <option value="manual">অন্যান্য</option>
-                </select>
-              </div>
-              <div>
-                <label style={{ fontSize: 12, color: th.muted, display: 'block', marginBottom: 4 }}>Amount (BDT) *</label>
-                <input
-                  style={inp} type="number" min="10" placeholder="যেমন: 500"
-                  value={form.amountBdt}
-                  onChange={e => setForm(f => ({ ...f, amountBdt: e.target.value }))}
-                />
-              </div>
-              <div>
-                <label style={{ fontSize: 12, color: th.muted, display: 'block', marginBottom: 4 }}>Transaction ID *</label>
-                <input
-                  style={inp} placeholder="bKash / Nagad Transaction ID"
-                  value={form.transactionId}
-                  onChange={e => setForm(f => ({ ...f, transactionId: e.target.value }))}
-                />
-              </div>
-              <div>
-                <label style={{ fontSize: 12, color: th.muted, display: 'block', marginBottom: 4 }}>Note (optional)</label>
-                <input
-                  style={inp} placeholder="যেকোনো extra তথ্য"
-                  value={form.note}
-                  onChange={e => setForm(f => ({ ...f, note: e.target.value }))}
-                />
-              </div>
-              <button
-                style={{ ...th.btnPrimary, padding: '11px 0', borderRadius: 10, fontSize: 14, fontWeight: 700 }}
-                disabled={submitting}
-                onClick={submit}
-              >
-                {submitting ? 'Submitting...' : '📤 Request জমা দিন'}
-              </button>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              {METHODS.map(m => {
+                const isSelected = form.method === m.key;
+                return (
+                  <button
+                    key={m.key}
+                    onClick={() => setForm(f => ({ ...f, method: m.key }))}
+                    style={{
+                      border: `2px solid ${isSelected ? m.color : 'transparent'}`,
+                      borderRadius: 12,
+                      padding: '12px 10px',
+                      cursor: 'pointer',
+                      background: isSelected ? m.bg : (th.card as any).background,
+                      display: 'flex', alignItems: 'center', gap: 8,
+                      transition: 'all 0.15s',
+                      boxShadow: isSelected ? `0 0 0 3px ${m.color}22` : 'none',
+                    }}
+                  >
+                    <span style={{
+                      width: 34, height: 34, borderRadius: 10,
+                      background: isSelected ? m.color : m.color + '22',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 16, flexShrink: 0,
+                    }}>
+                      {m.key === 'bkash'  ? <span style={{ color: isSelected ? '#fff' : m.color, fontWeight: 900, fontSize: 11 }}>bK</span>
+                       : m.key === 'nagad'  ? <span style={{ color: isSelected ? '#fff' : m.color, fontWeight: 900, fontSize: 11 }}>Ng</span>
+                       : m.key === 'rocket' ? <span style={{ color: isSelected ? '#fff' : m.color, fontWeight: 900, fontSize: 11 }}>Rk</span>
+                       : <span style={{ fontSize: 18 }}>🏦</span>}
+                    </span>
+                    <div style={{ textAlign: 'left' }}>
+                      <div style={{ fontWeight: 800, fontSize: 14, color: isSelected ? m.color : th.fg }}>{m.label}</div>
+                      <div style={{ fontSize: 10, color: th.muted, marginTop: 1 }}>
+                        {m.key === 'bank' ? 'NRBC Bank' : 'Send Money'}
+                      </div>
+                    </div>
+                    {isSelected && (
+                      <span style={{
+                        marginLeft: 'auto', width: 18, height: 18, borderRadius: '50%',
+                        background: m.color, display: 'flex', alignItems: 'center',
+                        justifyContent: 'center', fontSize: 11, color: '#fff', flexShrink: 0,
+                      }}>✓</span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </div>
+
+          {/* ── Step 2: Selected Method Details ──────────────────────────── */}
+          {(() => {
+            const m = METHODS.find(x => x.key === form.method);
+            if (!m) return null;
+            const copyBtn = (text: string, label?: string) => (
+              <button
+                onClick={() => { navigator.clipboard.writeText(text); onToast('Copied!', 'success'); }}
+                style={{
+                  background: m.color + '18', border: `1px solid ${m.color}40`,
+                  borderRadius: 8, padding: '5px 12px', cursor: 'pointer',
+                  fontSize: 12, color: m.color, fontWeight: 700, whiteSpace: 'nowrap',
+                }}
+              >{label || 'Copy'}</button>
+            );
+
+            return (
+              <div style={{
+                ...card,
+                border: `2px solid ${m.color}40`,
+                background: m.light,
+              }}>
+                <div style={{ fontSize: 12, color: m.color, fontWeight: 700, marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  ধাপ ২ — {m.label} এ টাকা পাঠান
+                </div>
+
+                {m.key !== 'bank' ? (
+                  /* Mobile Banking */
+                  <div>
+                    <div style={{ fontSize: 12, color: '#555', marginBottom: 10 }}>
+                      নিচের নম্বরে <b>Send Money</b> করুন:
+                    </div>
+                    <div style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      background: '#fff', borderRadius: 12, padding: '14px 16px',
+                      border: `1px solid ${m.color}30`,
+                      boxShadow: `0 2px 8px ${m.color}15`,
+                    }}>
+                      <div>
+                        <div style={{ fontSize: 11, color: '#888', marginBottom: 3 }}>{m.label} নম্বর</div>
+                        <div style={{ fontWeight: 900, fontSize: 22, color: '#111', letterSpacing: 2 }}>
+                          {m.key === 'bkash'  ? (adminContact?.bkash  || adminContact?.phone || '—')
+                           : m.key === 'nagad'  ? (adminContact?.nagad  || '—')
+                           : (adminContact?.rocket || '—')}
+                        </div>
+                      </div>
+                      {copyBtn(
+                        m.key === 'bkash'  ? (adminContact?.bkash  || adminContact?.phone || '')
+                        : m.key === 'nagad'  ? (adminContact?.nagad  || '')
+                        : (adminContact?.rocket || ''),
+                        '📋 Copy'
+                      )}
+                    </div>
+
+                    {/* Contact links */}
+                    <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+                      {waUrl && (
+                        <a href={waUrl} target="_blank" rel="noreferrer" style={{
+                          textDecoration: 'none', padding: '8px 16px', borderRadius: 10,
+                          background: '#25D366', color: '#fff', fontWeight: 700, fontSize: 13,
+                          display: 'inline-flex', alignItems: 'center', gap: 5,
+                        }}>📱 WhatsApp</a>
+                      )}
+                      {adminContact?.messengerUrl && (
+                        <a href={adminContact.messengerUrl} target="_blank" rel="noreferrer" style={{
+                          textDecoration: 'none', padding: '8px 16px', borderRadius: 10,
+                          background: '#0084FF', color: '#fff', fontWeight: 700, fontSize: 13,
+                          display: 'inline-flex', alignItems: 'center', gap: 5,
+                        }}>💬 Messenger</a>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  /* Bank Transfer */
+                  <div>
+                    <div style={{ fontSize: 12, color: '#555', marginBottom: 10 }}>
+                      নিচের account এ <b>Bank Transfer</b> করুন:
+                    </div>
+                    <div style={{
+                      background: '#fff', borderRadius: 12, overflow: 'hidden',
+                      border: `1px solid ${m.color}30`,
+                      boxShadow: `0 2px 8px ${m.color}15`,
+                    }}>
+                      {[
+                        { label: 'Account Number', value: adminContact?.bankAccount || '518131400000385' },
+                        { label: 'Bank Name',       value: adminContact?.bankName    || 'NRB Commercial Bank' },
+                        { label: 'Branch',          value: adminContact?.bankBranch  || 'Tangail / Kalihati' },
+                        { label: 'Account Name',    value: adminContact?.bankHolder  || adminContact?.label || 'Chatcat' },
+                      ].map((row, i) => (
+                        <div key={row.label} style={{
+                          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                          padding: '11px 16px',
+                          borderBottom: i < 3 ? `1px solid ${m.color}15` : 'none',
+                        }}>
+                          <div>
+                            <div style={{ fontSize: 10, color: '#888', marginBottom: 2 }}>{row.label}</div>
+                            <div style={{ fontWeight: 800, fontSize: 14, color: '#111' }}>{row.value}</div>
+                          </div>
+                          {(i === 0 || i === 3) && copyBtn(row.value)}
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{
+                      marginTop: 10, padding: '9px 13px', borderRadius: 10,
+                      background: '#fef9c3', border: '1px solid #fde047',
+                      fontSize: 12, color: '#854d0e',
+                    }}>
+                      ⚠️ Transfer করার পর Bank reference/transaction number নিচে Transaction ID তে দিন।
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* ── Step 3: Submit Form ───────────────────────────────────────── */}
+          {(() => {
+            const m = METHODS.find(x => x.key === form.method)!;
+            return (
+              <div style={{ ...card, border: `1px solid ${th.border}` }}>
+                <div style={{ fontSize: 12, color: th.muted, fontWeight: 700, marginBottom: 14, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  ধাপ ৩ — Request জমা দিন
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div>
+                    <label style={{ fontSize: 12, color: th.muted, display: 'block', marginBottom: 5, fontWeight: 600 }}>
+                      পরিমাণ (BDT) *
+                    </label>
+                    <div style={{ position: 'relative' }}>
+                      <span style={{
+                        position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)',
+                        fontWeight: 800, fontSize: 16, color: th.muted,
+                      }}>৳</span>
+                      <input
+                        style={{ ...inp, paddingLeft: 30 }} type="number" min="10" placeholder="500"
+                        value={form.amountBdt}
+                        onChange={e => setForm(f => ({ ...f, amountBdt: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 12, color: th.muted, display: 'block', marginBottom: 5, fontWeight: 600 }}>
+                      {form.method === 'bank' ? 'Bank Reference / TrxID *' : `${METHOD_LABELS[form.method]} Transaction ID *`}
+                    </label>
+                    <input
+                      style={inp}
+                      placeholder={form.method === 'bank' ? 'Bank transfer reference number' : `${METHOD_LABELS[form.method]} TrxID (যেমন: 8D3KA2F1P)` }
+                      value={form.transactionId}
+                      onChange={e => setForm(f => ({ ...f, transactionId: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 12, color: th.muted, display: 'block', marginBottom: 5, fontWeight: 600 }}>
+                      Note (optional)
+                    </label>
+                    <input
+                      style={inp} placeholder="যেকোনো extra তথ্য"
+                      value={form.note}
+                      onChange={e => setForm(f => ({ ...f, note: e.target.value }))}
+                    />
+                  </div>
+                  <button
+                    style={{
+                      border: 'none', borderRadius: 12, fontSize: 15, fontWeight: 800,
+                      padding: '14px 0', cursor: submitting ? 'not-allowed' : 'pointer',
+                      background: submitting ? '#94a3b8' : `linear-gradient(135deg, ${m.color}, ${m.color}cc)`,
+                      color: '#fff', letterSpacing: 0.3,
+                      boxShadow: submitting ? 'none' : `0 4px 14px ${m.color}55`,
+                      transition: 'all 0.2s',
+                    }}
+                    disabled={submitting}
+                    onClick={submit}
+                  >
+                    {submitting ? '⏳ জমা হচ্ছে...' : `📤 ${METHOD_LABELS[form.method]} Recharge Request জমা দিন`}
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       )}
 
