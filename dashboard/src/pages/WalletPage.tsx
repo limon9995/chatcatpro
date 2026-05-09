@@ -54,6 +54,13 @@ export default function WalletPage({
   const [adminContact, setAdminContact] = useState<any>(null);
   const [loading, setLoading]     = useState(true);
 
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const copyText = (key: string, text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedKey(key);
+    setTimeout(() => setCopiedKey(null), 2000);
+  };
+
   // Recharge form
   const [form, setForm] = useState({
     amountBdt: '', method: 'bkash', transactionId: '', note: '',
@@ -251,16 +258,23 @@ export default function WalletPage({
           {(() => {
             const m = METHODS.find(x => x.key === form.method);
             if (!m) return null;
-            const copyBtn = (text: string, label?: string) => (
-              <button
-                onClick={() => { navigator.clipboard.writeText(text); onToast('Copied!', 'success'); }}
-                style={{
-                  background: m.color + '18', border: `1px solid ${m.color}40`,
-                  borderRadius: 8, padding: '5px 12px', cursor: 'pointer',
-                  fontSize: 12, color: m.color, fontWeight: 700, whiteSpace: 'nowrap',
-                }}
-              >{label || 'Copy'}</button>
-            );
+            const copyBtn = (key: string, text: string) => {
+              const copied = copiedKey === key;
+              return (
+                <button
+                  type="button"
+                  onClick={e => { e.preventDefault(); e.stopPropagation(); copyText(key, text); }}
+                  style={{
+                    background: copied ? '#16a34a18' : m.color + '18',
+                    border: `1px solid ${copied ? '#16a34a40' : m.color + '40'}`,
+                    borderRadius: 8, padding: '5px 12px', cursor: 'pointer',
+                    fontSize: 12, color: copied ? '#16a34a' : m.color,
+                    fontWeight: 700, whiteSpace: 'nowrap',
+                    transition: 'all 0.2s',
+                  }}
+                >{copied ? '✓ Copied' : '📋 Copy'}</button>
+              );
+            };
 
             return (
               <div style={{
@@ -293,10 +307,10 @@ export default function WalletPage({
                         </div>
                       </div>
                       {copyBtn(
+                        'mobile',
                         m.key === 'bkash'  ? (adminContact?.bkash  || adminContact?.phone || '')
                         : m.key === 'nagad'  ? (adminContact?.nagad  || '')
-                        : (adminContact?.rocket || ''),
-                        '📋 Copy'
+                        : (adminContact?.rocket || '')
                       )}
                     </div>
 
@@ -330,12 +344,12 @@ export default function WalletPage({
                       boxShadow: `0 2px 8px ${m.color}15`,
                     }}>
                       {[
-                        { label: 'Account Number', value: adminContact?.bankAccount || '518131400000385' },
-                        { label: 'Bank Name',       value: adminContact?.bankName    || 'NRB Commercial Bank' },
-                        { label: 'Branch',          value: adminContact?.bankBranch  || 'Tangail / Kalihati' },
-                        { label: 'Account Name',    value: adminContact?.bankHolder  || adminContact?.label || 'Chatcat' },
+                        { key: 'acc',    label: 'Account Number', value: adminContact?.bankAccount || '518131400000385' },
+                        { key: 'bname',  label: 'Bank Name',       value: adminContact?.bankName    || 'NRB Commercial Bank' },
+                        { key: 'branch', label: 'Branch',          value: adminContact?.bankBranch  || 'Tangail / Kalihati' },
+                        { key: 'holder', label: 'Account Name',    value: adminContact?.bankHolder  || 'Md. Emon Hossain' },
                       ].map((row, i) => (
-                        <div key={row.label} style={{
+                        <div key={row.key} style={{
                           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                           padding: '11px 16px',
                           borderBottom: i < 3 ? `1px solid ${m.color}15` : 'none',
@@ -344,7 +358,7 @@ export default function WalletPage({
                             <div style={{ fontSize: 10, color: '#888', marginBottom: 2 }}>{row.label}</div>
                             <div style={{ fontWeight: 800, fontSize: 14, color: '#111' }}>{row.value}</div>
                           </div>
-                          {(i === 0 || i === 3) && copyBtn(row.value)}
+                          {(i === 0 || i === 3) && copyBtn(row.key, row.value)}
                         </div>
                       ))}
                     </div>
