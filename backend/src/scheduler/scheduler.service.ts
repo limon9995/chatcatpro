@@ -4,6 +4,7 @@ import { FollowUpService } from '../followup/followup.service';
 import { BillingService } from '../billing/billing.service';
 import { WalletService } from '../wallet/wallet.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { AdminService } from '../admin/admin.service';
 
 const BASE_FEE_BDT = 500;
 
@@ -16,6 +17,7 @@ export class SchedulerService {
     private readonly billing: BillingService,
     private readonly wallet: WalletService,
     private readonly prisma: PrismaService,
+    private readonly admin: AdminService,
   ) {}
 
   // Every 5 minutes — process follow-ups
@@ -76,6 +78,16 @@ export class SchedulerService {
       );
     } catch (e: any) {
       this.logger.error(`[Scheduler] Base fee error: ${e.message}`);
+    }
+  }
+
+  @Cron('30 0 * * *')
+  async syncDailyRegistry() {
+    try {
+      await this.admin.appendDailyRegistry();
+      this.logger.log('[Scheduler] Registry sync done');
+    } catch (e: any) {
+      this.logger.error(`[Scheduler] Registry sync error: ${e.message}`);
     }
   }
 }

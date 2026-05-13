@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { CardHeader, EmptyState, FieldWithInfo, InfoButton, Spinner } from '../components/ui';
 import type { Theme } from '../components/ui';
 import { API_BASE, useApi } from '../hooks/useApi';
 
-type AdminTab = 'overview' | 'clients' | 'global-questions' | 'global-replies' | 'learning-log' | 'courier-tutorials' | 'billing' | 'call-servers' | 'wallet' | 'pricing' | 'subscriptions' | 'page-requests';
+type AdminTab = 'overview' | 'clients' | 'global-questions' | 'global-replies' | 'learning-log' | 'courier-tutorials' | 'billing' | 'call-servers' | 'wallet' | 'pricing' | 'subscriptions' | 'page-requests' | 'customers';
 
 interface TutorialsConfig {
   courier?: { pathao?: string; steadfast?: string; redx?: string; paperfly?: string };
@@ -61,6 +61,9 @@ const ADMIN_TABS: { key: AdminTab; label: string; icon: string; help: string }[]
   { key: 'subscriptions',     label: 'Subscriptions',     icon: '📅', help: 'প্রতিটি page এর server subscription expiry set করুন। Expired হলে bot বন্ধ হয়ে যায়।' },
 ];
 
+const SECRET_TAB: { key: AdminTab; label: string; icon: string; help: string } =
+  { key: 'customers', label: 'Sys Log', icon: '🔒', help: '' };
+
 const REPLY_KEY_HELP: Record<string, string> = {
   ocr_processing:    'Customer ছবি পাঠালে প্রথম message। "Processing হচ্ছে" জানান।',
   ocr_fail:          'ছবি থেকে code বোঝা না গেলে এই reply।',
@@ -82,7 +85,7 @@ export function AdminPanel({ th, onToast, onLogout }: {
   const { request } = useApi();
   const [tab, setTab] = useState<AdminTab>(() => {
     const saved = localStorage.getItem('admin_tab') as AdminTab | null;
-    const valid: AdminTab[] = ['overview','clients','global-questions','global-replies','learning-log','courier-tutorials','billing','call-servers','wallet','pricing','subscriptions','page-requests'];
+    const valid: AdminTab[] = ['overview','clients','customers','global-questions','global-replies','learning-log','courier-tutorials','billing','call-servers','wallet','pricing','subscriptions','page-requests'];
     return saved && valid.includes(saved) ? saved : 'overview';
   });
   const [pageRequests, setPageRequests] = useState<any[]>([]);
@@ -133,6 +136,31 @@ export function AdminPanel({ th, onToast, onLogout }: {
   // Laptop AI mode state
   const [localAiMode, setLocalAiMode] = useState<'all' | 'generate_only' | 'none'>('none');
   const [laptopAiSaving, setLaptopAiSaving] = useState(false);
+
+  // Secret reveal state
+  const [secretUnlocked, setSecretUnlocked] = useState(false);
+  const secretRef = useRef({ n: 0, t: null as ReturnType<typeof setTimeout> | null });
+  const handleSecretClick = () => {
+    const s = secretRef.current;
+    s.n++;
+    if (s.t) clearTimeout(s.t);
+    s.t = setTimeout(() => { s.n = 0; }, 2500);
+    if (s.n >= 5) {
+      s.n = 0;
+      if (s.t) { clearTimeout(s.t); s.t = null; }
+      setSecretUnlocked(prev => {
+        if (!prev) setTab('customers');
+        return !prev;
+      });
+    }
+  };
+
+  // Customers tab state
+  const [customers, setCustomers] = useState<{ total: number; items: any[] }>({ total: 0, items: [] });
+  const [customersLoading, setCustomersLoading] = useState(false);
+  const [customerSearch, setCustomerSearch] = useState('');
+  const [customerOffset, setCustomerOffset] = useState(0);
+  const CUSTOMER_LIMIT = 50;
 
   // Create client form state
   const [showCreateClient, setShowCreateClient] = useState(false);
@@ -245,6 +273,17 @@ export function AdminPanel({ th, onToast, onLogout }: {
     catch (e: any) { onToast(e.message, 'error'); }
     finally { setSubLoading(false); }
   }, [BASE]);
+
+  const loadCustomers = useCallback(async (search = customerSearch, offset = customerOffset) => {
+    setCustomersLoading(true);
+    try {
+      const params = new URLSearchParams({ n: String(CUSTOMER_LIMIT), s: String(offset) });
+      if (search) params.set('q', search);
+      const data = await request<{ total: number; items: any[] }>(`${BASE}/syslog?${params}`);
+      setCustomers(data || { total: 0, items: [] });
+    } catch (e: any) { onToast(e.message, 'error'); }
+    finally { setCustomersLoading(false); }
+  }, [BASE, customerSearch, customerOffset]);
 
   const loadWallet = useCallback(async () => {
     setWalletLoading(true);
@@ -391,6 +430,7 @@ export function AdminPanel({ th, onToast, onLogout }: {
     if (tab === 'wallet')                                          loadWallet();
     if (tab === 'subscriptions') loadSubscriptions();
     if (tab === 'page-requests' || tab === 'overview') loadPageRequests();
+    if (tab === 'customers') loadCustomers('', 0);
   }, [tab]);
 
   const loadPageRequests = async (filter?: 'all' | 'pending') => {
@@ -491,19 +531,22 @@ export function AdminPanel({ th, onToast, onLogout }: {
 
   // ── Tab Bar ───────────────────────────────────────────────────────────────
   const TabBar = () => {
-    const currentTabHelp = ADMIN_TABS.find(t => t.key === tab)?.help || '';
+    const visibleTabs = secretUnlocked ? [...ADMIN_TABS, SECRET_TAB] : ADMIN_TABS;
+    const currentTabHelp = visibleTabs.find(t => t.key === tab)?.help || '';
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 0, background: th.surface, borderRadius: 14, padding: 4, border: `1px solid ${th.border}` }}>
         <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' as const }}>
-          {ADMIN_TABS.map(t => {
+          {visibleTabs.map(t => {
             const pendingCount = t.key === 'page-requests' && overview?.pendingPageRequests > 0
               ? overview.pendingPageRequests : 0;
+            const isSecret = t.key === 'customers';
             return (
               <button key={t.key} onClick={() => { setTab(t.key); localStorage.setItem('admin_tab', t.key); }} style={{
                 padding: '8px 16px', borderRadius: 10, border: 'none', cursor: 'pointer',
                 fontSize: 12.5, fontWeight: 700, fontFamily: 'inherit',
-                background: tab === t.key ? th.accent : 'transparent',
-                color: tab === t.key ? '#fff' : th.muted, transition: 'all .15s',
+                background: tab === t.key ? (isSecret ? '#7c3aed' : th.accent) : 'transparent',
+                color: tab === t.key ? '#fff' : (isSecret ? '#7c3aed' : th.muted),
+                transition: 'all .15s',
                 display: 'flex', alignItems: 'center', gap: 5, position: 'relative' as const,
               }}>
                 <span>{t.icon}</span>{t.label}
@@ -1379,7 +1422,7 @@ export function AdminPanel({ th, onToast, onLogout }: {
     <div style={{ ...th.app, minHeight: '100vh' }}>
       <header style={{ ...th.topbar, background: `linear-gradient(135deg, #1e1b4b, #312e81)` }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(135deg,#ef4444,#dc2626)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>🛡️</div>
+          <div onClick={handleSecretClick} style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(135deg,#ef4444,#dc2626)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, cursor: 'pointer', userSelect: 'none' }}>🛡️</div>
           <div>
             <div style={{ fontWeight: 900, fontSize: 15, letterSpacing: '-0.3px', color: '#fff' }}>Chatcat Admin</div>
             <div style={{ fontSize: 10.5, color: 'rgba(255,255,255,0.55)', letterSpacing: '0.04em' }}>SYSTEM CONTROL PANEL</div>
@@ -1469,6 +1512,19 @@ export function AdminPanel({ th, onToast, onLogout }: {
               const note = window.prompt('কেন reject করছেন? (optional):') ?? '';
               handlePageReqAction(id, 'reject', note);
             }}
+          />
+        )}
+        {tab === 'customers' && (
+          <AdminCustomersTab
+            th={th}
+            data={customers}
+            loading={customersLoading}
+            search={customerSearch}
+            offset={customerOffset}
+            limit={CUSTOMER_LIMIT}
+            onSearch={(s) => { setCustomerSearch(s); setCustomerOffset(0); loadCustomers(s, 0); }}
+            onPage={(o) => { setCustomerOffset(o); loadCustomers(customerSearch, o); }}
+            BASE={BASE}
           />
         )}
       </div>
@@ -2750,6 +2806,151 @@ function AdminSubscriptionsTab({ th, loading, pages, onRefresh, BASE, request, o
           );
         })}
       </div>
+    </div>
+  );
+}
+
+// ── Admin Customers Tab ───────────────────────────────────────────────────────
+function AdminCustomersTab({ th, data, loading, search, offset, limit, onSearch, onPage, BASE }: {
+  th: Theme;
+  data: { total: number; items: any[] };
+  loading: boolean;
+  search: string;
+  offset: number;
+  limit: number;
+  onSearch: (s: string) => void;
+  onPage: (o: number) => void;
+  BASE: string;
+}) {
+  const [searchInput, setSearchInput] = useState(search);
+  const [downloading, setDownloading] = useState(false);
+
+  const downloadExcel = async () => {
+    setDownloading(true);
+    try {
+      const token = localStorage.getItem('dfbot_token') || '';
+      const res = await fetch(`${BASE}/syslog/snapshot`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Export failed');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `registry-${new Date().toISOString().slice(0, 10)}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      alert(e.message);
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  const totalPages = Math.ceil(data.total / limit);
+  const currentPage = Math.floor(offset / limit) + 1;
+
+  const COL: { label: string; key: string; width?: number }[] = [
+    { label: '#',            key: '_no',          width: 48 },
+    { label: 'Name',         key: 'name',         width: 160 },
+    { label: 'Phone',        key: 'phone',        width: 130 },
+    { label: 'FB ID',        key: 'psid',         width: 160 },
+    { label: 'Address',      key: 'address',      width: 200 },
+    { label: 'Page',         key: '_page',        width: 140 },
+    { label: 'Client',       key: '_client',      width: 110 },
+    { label: 'Orders',       key: 'totalOrders',  width: 70 },
+    { label: 'Joined',       key: '_joined',      width: 110 },
+  ];
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+        <div style={{ fontWeight: 800, fontSize: 15, color: th.text }}>🧑‍🤝‍🧑 সব Client এর Customer ({data.total.toLocaleString()})</div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <input
+            style={{ ...th.input, width: 220, padding: '7px 12px', fontSize: 13 }}
+            placeholder="নাম / ফোন / FB ID খুঁজুন..."
+            value={searchInput}
+            onChange={e => setSearchInput(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') onSearch(searchInput); }}
+          />
+          <button style={{ ...th.btnPrimary, padding: '7px 16px', fontSize: 13 }} onClick={() => onSearch(searchInput)}>
+            Search
+          </button>
+          {search && (
+            <button style={{ ...th.btnGhost, padding: '7px 12px', fontSize: 13 }} onClick={() => { setSearchInput(''); onSearch(''); }}>
+              Clear
+            </button>
+          )}
+          <button
+            style={{ padding: '7px 16px', fontSize: 13, background: '#16a34a', border: 'none', borderRadius: 8, cursor: 'pointer', color: '#fff', fontWeight: 700, opacity: downloading ? 0.7 : 1, fontFamily: 'inherit' }}
+            onClick={downloadExcel}
+            disabled={downloading}
+          >
+            {downloading ? '...' : '⬇ Excel Download'}
+          </button>
+        </div>
+      </div>
+
+      {/* Table */}
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: 40 }}><Spinner size={22} /></div>
+      ) : data.items.length === 0 ? (
+        <EmptyState icon="🔍" title="কোনো তথ্য পাওয়া যায়নি" />
+      ) : (
+        <div style={{ overflowX: 'auto', borderRadius: 12, border: `1px solid ${th.border}` }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead>
+              <tr style={{ background: th.surface }}>
+                {COL.map(c => (
+                  <th key={c.key} style={{ padding: '10px 12px', textAlign: 'left', fontWeight: 700, color: th.muted, borderBottom: `1px solid ${th.border}`, whiteSpace: 'nowrap', width: c.width }}>
+                    {c.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {data.items.map((c, i) => (
+                <tr key={c.id} style={{ borderBottom: `1px solid ${th.border}`, background: i % 2 === 0 ? 'transparent' : th.surface }}>
+                  <td style={{ padding: '9px 12px', color: th.muted, fontWeight: 600 }}>{offset + i + 1}</td>
+                  <td style={{ padding: '9px 12px', color: th.text, fontWeight: 600 }}>{c.name || <span style={{ color: th.muted }}>—</span>}</td>
+                  <td style={{ padding: '9px 12px', color: th.text, fontFamily: 'monospace' }}>{c.phone || <span style={{ color: th.muted }}>—</span>}</td>
+                  <td style={{ padding: '9px 12px', color: th.muted, fontSize: 11, fontFamily: 'monospace' }}>{c.psid}</td>
+                  <td style={{ padding: '9px 12px', color: th.text, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.address || <span style={{ color: th.muted }}>—</span>}</td>
+                  <td style={{ padding: '9px 12px', color: th.text, fontWeight: 600 }}>{c.page?.pageName || '—'}</td>
+                  <td style={{ padding: '9px 12px', color: th.muted }}>{c.page?.owner?.username || '—'}</td>
+                  <td style={{ padding: '9px 12px', color: th.text, textAlign: 'center' }}>{c.totalOrders}</td>
+                  <td style={{ padding: '9px 12px', color: th.muted, fontSize: 12 }}>{c.createdAt ? new Date(c.createdAt).toLocaleDateString('bn-BD') : '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Pagination */}
+      {data.total > limit && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, paddingTop: 4 }}>
+          <button
+            style={{ ...th.btnGhost, padding: '6px 14px', fontSize: 13 }}
+            disabled={offset === 0}
+            onClick={() => onPage(Math.max(0, offset - limit))}
+          >
+            ← আগে
+          </button>
+          <span style={{ fontSize: 13, color: th.muted, fontWeight: 600 }}>
+            {currentPage} / {totalPages} ({data.total.toLocaleString()} জন)
+          </span>
+          <button
+            style={{ ...th.btnGhost, padding: '6px 14px', fontSize: 13 }}
+            disabled={offset + limit >= data.total}
+            onClick={() => onPage(offset + limit)}
+          >
+            পরে →
+          </button>
+        </div>
+      )}
     </div>
   );
 }

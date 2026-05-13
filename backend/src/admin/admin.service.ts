@@ -5,6 +5,8 @@ import {
 } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
+import type { Response } from 'express';
+import { Workbook, type Worksheet } from 'exceljs';
 import { PrismaService } from '../prisma/prisma.service';
 import { BotKnowledgeService } from '../bot-knowledge/bot-knowledge.service';
 
@@ -909,5 +911,189 @@ export class AdminService {
       data: { status: 'rejected', adminNote: adminNote?.trim() || null },
     });
     return { success: true };
+  }
+
+  async getRegistryEntries(opts: { search?: string; limit: number; offset: number }) {
+    const where: any = opts.search
+      ? {
+          OR: [
+            { name: { contains: opts.search } },
+            { phone: { contains: opts.search } },
+            { psid: { contains: opts.search } },
+            { address: { contains: opts.search } },
+          ],
+        }
+      : {};
+
+    const [total, items] = await Promise.all([
+      this.prisma.customer.count({ where }),
+      this.prisma.customer.findMany({
+        where,
+        select: {
+          id: true,
+          psid: true,
+          name: true,
+          phone: true,
+          address: true,
+          totalOrders: true,
+          totalSpent: true,
+          createdAt: true,
+          page: {
+            select: {
+              pageName: true,
+              pageId: true,
+              owner: { select: { username: true, name: true } },
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: opts.limit,
+        skip: opts.offset,
+      }),
+    ]);
+    return { total, items };
+  }
+
+  async exportRegistrySnapshot(res: Response) {
+    const entries = await this.prisma.customer.findMany({
+      select: {
+        id: true,
+        psid: true,
+        name: true,
+        phone: true,
+        address: true,
+        totalOrders: true,
+        totalSpent: true,
+        createdAt: true,
+        page: {
+          select: {
+            pageName: true,
+            owner: { select: { username: true } },
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const wb = new Workbook();
+    wb.creator = 'Chatcat';
+    const ws = wb.addWorksheet('Registry');
+
+    ws.columns = [
+      { header: '#',           key: 'no',          width: 6 },
+      { header: 'Name',        key: 'name',         width: 24 },
+      { header: 'Phone',       key: 'phone',        width: 18 },
+      { header: 'FB ID (PSID)',key: 'psid',         width: 22 },
+      { header: 'Address',     key: 'address',      width: 36 },
+      { header: 'Page',        key: 'page',         width: 22 },
+      { header: 'Client',      key: 'client',       width: 18 },
+      { header: 'Total Orders',key: 'totalOrders',  width: 14 },
+      { header: 'Total Spent', key: 'totalSpent',   width: 14 },
+      { header: 'Joined Date', key: 'joinedDate',   width: 18 },
+    ];
+
+    ws.getRow(1).font = { bold: true };
+    ws.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF312E81' } };
+    ws.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+
+    entries.forEach((c, i) => {
+      ws.addRow({
+        no:          i + 1,
+        name:        c.name || '',
+        phone:       c.phone || '',
+        psid:        c.psid,
+        address:     c.address || '',
+        page:        c.page?.pageName || '',
+        client:      c.page?.owner?.username || '',
+        totalOrders: c.totalOrders,
+        totalSpent:  c.totalSpent,
+        joinedDate:  c.createdAt.toISOString().slice(0, 10),
+      });
+    });
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="registry-${new Date().toISOString().slice(0,10)}.xlsx"`);
+    await wb.xlsx.write(res);
+    res.end();
+  }
+
+  async appendDailyRegistry(): Promise<void> {
+    const filePath = path.join(process.cwd(), 'storage', 'sys-registry.xlsx');
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    yesterday.setHours(0, 0, 0, 0);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const newEntries = await this.prisma.customer.findMany({
+      where: { createdAt: { gte: yesterday, lt: today } },
+      select: {
+        id: true,
+        psid: true,
+        name: true,
+        phone: true,
+        address: true,
+        totalOrders: true,
+        totalSpent: true,
+        createdAt: true,
+        page: {
+          select: {
+            pageName: true,
+            owner: { select: { username: true } },
+          },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    if (newEntries.length === 0) return;
+
+    const wb = new Workbook();
+    const storageDir = path.dirname(filePath);
+    if (!fs.existsSync(storageDir)) fs.mkdirSync(storageDir, { recursive: true });
+
+    let ws: Worksheet;
+    let startRow: number;
+
+    if (fs.existsSync(filePath)) {
+      await wb.xlsx.readFile(filePath);
+      ws = wb.getWorksheet('Registry') ?? wb.addWorksheet('Registry');
+      startRow = ws.rowCount + 1;
+    } else {
+      ws = wb.addWorksheet('Registry');
+      ws.columns = [
+        { header: '#',            key: 'no',          width: 6 },
+        { header: 'Name',         key: 'name',         width: 24 },
+        { header: 'Phone',        key: 'phone',        width: 18 },
+        { header: 'FB ID (PSID)', key: 'psid',         width: 22 },
+        { header: 'Address',      key: 'address',      width: 36 },
+        { header: 'Page',         key: 'page',         width: 22 },
+        { header: 'Client',       key: 'client',       width: 18 },
+        { header: 'Total Orders', key: 'totalOrders',  width: 14 },
+        { header: 'Total Spent',  key: 'totalSpent',   width: 14 },
+        { header: 'Joined Date',  key: 'joinedDate',   width: 18 },
+      ];
+      ws.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      ws.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF312E81' } };
+      startRow = 2;
+    }
+
+    for (const c of newEntries) {
+      ws.addRow({
+        no:          startRow - 1,
+        name:        c.name || '',
+        phone:       c.phone || '',
+        psid:        c.psid,
+        address:     c.address || '',
+        page:        c.page?.pageName || '',
+        client:      c.page?.owner?.username || '',
+        totalOrders: c.totalOrders,
+        totalSpent:  c.totalSpent,
+        joinedDate:  c.createdAt.toISOString().slice(0, 10),
+      });
+      startRow++;
+    }
+
+    await wb.xlsx.writeFile(filePath);
   }
 }

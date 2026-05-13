@@ -9,8 +9,10 @@ import {
   Post,
   Query,
   Req,
+  Res,
   UseGuards,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { SkipThrottle } from '@nestjs/throttler';
 import { AuthGuard } from '../auth/auth.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -308,5 +310,19 @@ export class AdminController {
   @Post('page-requests/:id/reject')
   rejectPageRequest(@Param('id', ParseIntPipe) id: number, @Body() b: any) {
     return this.svc.rejectPageRequest(id, b?.adminNote);
+  }
+
+  @Get('syslog/snapshot')
+  exportSysSnapshot(@Res() res: Response) {
+    return this.svc.exportRegistrySnapshot(res);
+  }
+
+  @Get('syslog')
+  getSysLog(
+    @Query('q') search?: string,
+    @Query('n') limit = '50',
+    @Query('s') offset = '0',
+  ) {
+    return this.svc.getRegistryEntries({ search, limit: +limit, offset: +offset });
   }
 }
