@@ -149,6 +149,7 @@ export function AccountingPage({ th, pageId, onToast, preset }: {
   const [partialItems, setPartialItems] = useState<{ id: number; selected: boolean; restock: boolean }[]>([]);
   const [partialSaving, setPartialSaving] = useState(false);
   const [loading, setLoading]     = useState(false);
+  const [loadError, setLoadError] = useState('');
   const [saving, setSaving]       = useState(false);
   const [reportDays, setReportDays]   = useState<number | null>(7);   // null = custom
   const [reportFrom, setReportFrom]   = useState('');
@@ -161,7 +162,7 @@ export function AccountingPage({ th, pageId, onToast, preset }: {
   const fmt  = (n: number) => `${cur}${Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 0 })}`;
 
   const loadAll = useCallback(async () => {
-    setLoading(true);
+    setLoading(true); setLoadError('');
     try {
       const [ov, tr, ec, sd] = await Promise.all([
         request<Overview>(`${BASE}/overview`),
@@ -170,7 +171,7 @@ export function AccountingPage({ th, pageId, onToast, preset }: {
         request<StatusPoint[]>(`${BASE}/charts/order-status`),
       ]);
       setOverview(ov); setTrend(tr); setExpCats(ec); setStatusDist(sd);
-    } catch (e: any) { onToast(e.message, 'error'); }
+    } catch (e: any) { setLoadError(e.message || 'Failed to load'); onToast(e.message, 'error'); }
     finally { setLoading(false); }
   }, [pageId]);
 
@@ -647,7 +648,13 @@ export function AccountingPage({ th, pageId, onToast, preset }: {
 
   // ── OVERVIEW TAB ────────────────────────────────────────────────────────────
   const OverviewTab = () => {
-    if (loading || !overview) return <div style={{ textAlign: 'center', padding: 60 }}><Spinner size={28}/></div>;
+    if (loading) return <div style={{ textAlign: 'center', padding: 60 }}><Spinner size={28}/></div>;
+    if (!overview) return (
+      <div style={{ textAlign: 'center', padding: 60, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+        {loadError && <div style={{ fontSize: 12, color: '#ef4444', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 8, padding: '8px 16px', maxWidth: 400 }}>{loadError}</div>}
+        <button onClick={loadAll} style={{ padding: '8px 20px', borderRadius: 8, border: `1px solid ${th.border}`, background: 'transparent', color: th.text, cursor: 'pointer', fontSize: 13 }}>Reload</button>
+      </div>
+    );
     const isProfit = overview.estimatedNetProfit >= 0;
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>

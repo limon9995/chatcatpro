@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { EmptyState, Spinner } from '../components/ui';
 import type { Theme } from '../components/ui';
 import { API_BASE, useApi } from '../hooks/useApi';
@@ -159,6 +159,8 @@ export function AgentTasksPage({ th, pageId, onToast, onOpenOrders, onOpenPrint,
 }) {
   const { copy } = useLanguage();
   const { request } = useApi();
+  const onToastRef = useRef(onToast);
+  useEffect(() => { onToastRef.current = onToast; }, [onToast]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [followUps, setFollowUps] = useState<FollowUpItem[]>([]);
   const [refundQueue, setRefundQueue] = useState<RefundQueueItem[]>([]);
@@ -184,28 +186,28 @@ export function AgentTasksPage({ th, pageId, onToast, onOpenOrders, onOpenPrint,
         setOrders(ordersResult.value);
       } else {
         setOrders([]);
-        onToast(copy('Orders load করা যায়নি', 'Failed to load orders'), 'error');
+        onToastRef.current(copy('Orders load করা যায়নি', 'Failed to load orders'), 'error');
       }
 
       if (followUpResult.status === 'fulfilled') {
         setFollowUps(followUpResult.value);
       } else {
         setFollowUps([]);
-        onToast(copy('Follow-up data load করা যায়নি', 'Failed to load follow-up data'), 'error');
+        onToastRef.current(copy('Follow-up data load করা যায়নি', 'Failed to load follow-up data'), 'error');
       }
 
       if (refundResult.status === 'fulfilled') {
         setRefundQueue(refundResult.value);
       } else {
         setRefundQueue([]);
-        onToast(copy('Refund queue load করা যায়নি', 'Failed to load refund queue'), 'error');
+        onToastRef.current(copy('Refund queue load করা যায়নি', 'Failed to load refund queue'), 'error');
       }
 
       if (settingsResult.status === 'fulfilled') {
         setSettings(settingsResult.value);
       } else {
         setSettings(null);
-        onToast(copy('Settings load করা যায়নি', 'Failed to load settings'), 'error');
+        onToastRef.current(copy('Settings load করা যায়নি', 'Failed to load settings'), 'error');
       }
 
       if (agentIssuesResult.status === 'fulfilled') {
@@ -214,11 +216,11 @@ export function AgentTasksPage({ th, pageId, onToast, onOpenOrders, onOpenPrint,
         setAgentMuted([]);
       }
     } catch (e: any) {
-      onToast(e.message, 'error');
+      onToastRef.current(e.message, 'error');
     } finally {
       setLoading(false);
     }
-  }, [copy, onToast, pageId, request]);
+  }, [copy, pageId, request]);
 
   useEffect(() => { load(); }, [load]);
 

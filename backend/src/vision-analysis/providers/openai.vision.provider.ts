@@ -23,6 +23,53 @@ export class OpenAIVisionProvider implements VisionAnalysisProvider {
     );
   }
 
+  private buildCodeExtractionPrompt(prefix: string): string {
+    return `Look at this image and find any product code or item code text visible.
+Product codes look like: "${prefix}-001", "${prefix} 123", "${prefix}.456" — letters followed by numbers.
+The prefix is typically "${prefix}" but may vary slightly.
+Return ONLY a valid JSON array of codes found. If none, return [].
+Examples: ["${prefix}-001"] or ["${prefix}-023", "XY-456"] or []
+Respond with ONLY the JSON array — no other text, no markdown.`;
+  }
+
+  async extractProductCodes(imageUrl: string, prefix: string): Promise<string[]> {
+    if (!this.apiKey) throw new Error('OPENAI_API_KEY not configured');
+    const dataUrl = await this.toBase64DataUrl(imageUrl);
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${this.apiKey}`,
+      },
+      body: JSON.stringify({
+        model: this.model,
+        max_tokens: 100,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: this.buildCodeExtractionPrompt(prefix) },
+              { type: 'image_url', image_url: { url: dataUrl, detail: 'auto' as const } },
+            ],
+          },
+        ],
+      }),
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (!response.ok) {
+      const err = await response.text().catch(() => String(response.status));
+      throw new Error(`OpenAI extractCodes error ${response.status}: ${err.slice(0, 100)}`);
+    }
+    const data = await response.json();
+    const content: string = data?.choices?.[0]?.message?.content ?? '[]';
+    try {
+      const arr = JSON.parse(this.extractJson(content));
+      return Array.isArray(arr) ? arr.filter((c: any) => typeof c === 'string') : [];
+    } catch {
+      return [];
+    }
+  }
+
   private buildPrompt(multi: boolean): string {
     return `You are an expert fashion product analyzer for a Bangladeshi e-commerce store.
 ${

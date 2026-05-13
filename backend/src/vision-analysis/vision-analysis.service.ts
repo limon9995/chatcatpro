@@ -322,4 +322,34 @@ export class VisionAnalysisService {
       return this.fallback();
     }
   }
+
+  async extractProductCodes(
+    imageUrl: string,
+    prefix: string,
+  ): Promise<{ codes: string[]; usedApi: boolean }> {
+    // 1. Try Gemini first (throws on API failure, returns [] if no codes found)
+    if (process.env.GEMINI_API_KEY) {
+      try {
+        const codes = await this.geminiProvider.extractProductCodes(imageUrl, prefix);
+        // Gemini worked — trust its result ([] means no codes in image)
+        return { codes, usedApi: true };
+      } catch (e: any) {
+        this.logger.warn(
+          `[ExtractCodes] Gemini failed (${e?.message ?? e}) → trying OpenAI`,
+        );
+      }
+    }
+
+    // 2. OpenAI fallback — only reached if Gemini is not configured or errored
+    if (process.env.OPENAI_API_KEY) {
+      try {
+        const codes = await this.openaiProvider.extractProductCodes(imageUrl, prefix);
+        return { codes, usedApi: true };
+      } catch (e: any) {
+        this.logger.warn(`[ExtractCodes] OpenAI also failed: ${e?.message ?? e}`);
+      }
+    }
+
+    return { codes: [], usedApi: false };
+  }
 }

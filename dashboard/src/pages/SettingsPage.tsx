@@ -15,6 +15,7 @@ interface Settings {
   deliveryTimeText: string;
   paymentMode: string; advanceAmount: number; advanceBkash: string; advanceNagad: string; advancePaymentMessage: string;
   automationOn: boolean; ocrOn: boolean;
+  waEnabled: boolean; waPhoneNumberId: string; waVerifyToken: string; waTokenSet: boolean;
   infoModeOn: boolean; orderModeOn: boolean; printModeOn: boolean;
   callConfirmModeOn: boolean; memoSaveModeOn: boolean; memoTemplateModeOn: boolean;
   smartBotOn: boolean;
@@ -52,6 +53,7 @@ const S0: Settings = {
   paymentMode: 'cod', advanceAmount: 0, advanceBkash: '', advanceNagad: '', advancePaymentMessage: '',
   knowledgeText: '',
   automationOn: false, ocrOn: false,
+  waEnabled: false, waPhoneNumberId: '', waVerifyToken: '', waTokenSet: false,
   infoModeOn: true, orderModeOn: true, printModeOn: false,
   callConfirmModeOn: false, memoSaveModeOn: false, memoTemplateModeOn: false,
   smartBotOn: false,
@@ -206,6 +208,9 @@ export function SettingsPage({ th, pageId, tab, onToast }: {
   const [scrapePreview, setScrapePreview] = useState<string | null>(null);
   const [knowledgeSaving, setKnowledgeSaving] = useState(false);
   const [unlinkingId, setUnlinkingId] = useState<number | null>(null);
+  // WhatsApp settings state
+  const [waToken, setWaToken] = useState('');
+  const [waSaving, setWaSaving] = useState(false);
   const banglaVoiceUploadRef = useRef<HTMLInputElement>(null);
   const englishVoiceUploadRef = useRef<HTMLInputElement>(null);
   const BASE = `${API_BASE}/client-dashboard/${pageId}`;
@@ -289,6 +294,23 @@ export function SettingsPage({ th, pageId, tab, onToast }: {
       load();
     } catch (e: any) { onToast(e.message, 'error'); }
     finally { setReconnectBusy(false); }
+  };
+
+  const saveWhatsApp = async () => {
+    setWaSaving(true);
+    try {
+      const body: any = {
+        waEnabled: s.waEnabled,
+        waPhoneNumberId: s.waPhoneNumberId.trim(),
+        waVerifyToken: s.waVerifyToken.trim(),
+      };
+      if (waToken.trim()) body.waToken = waToken.trim();
+      await request(`${BASE}/settings`, { method: 'PATCH', body: JSON.stringify(body) });
+      onToast('✅ WhatsApp settings saved');
+      setWaToken('');
+      load();
+    } catch (e: any) { onToast(e.message, 'error'); }
+    finally { setWaSaving(false); }
   };
 
   const unlinkPage = async (linkedPageId: number) => {
@@ -587,6 +609,102 @@ export function SettingsPage({ th, pageId, tab, onToast }: {
               </div>
             </div>
           )}
+        </Section>
+
+        {/* ── WhatsApp Connection ── */}
+        <Section title="📱 WhatsApp Connection" desc="WhatsApp Business API দিয়ে automation চালু করুন — bot একইভাবে কাজ করবে">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700 }}>WhatsApp Automation</div>
+              <div style={{ fontSize: 11.5, color: th.muted }}>
+                {s.waTokenSet
+                  ? (s.waPhoneNumberId ? `Phone Number ID: ${s.waPhoneNumberId}` : 'Token saved — Phone Number ID নেই')
+                  : 'এখনো connect করা হয়নি'}
+              </div>
+            </div>
+            <Toggle
+              th={th}
+              checked={s.waEnabled}
+              onChange={v => setS(prev => ({ ...prev, waEnabled: v }))}
+              label=""
+            />
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>
+                Phone Number ID
+              </label>
+              <input
+                style={{ ...inp }}
+                placeholder="123456789012345"
+                value={s.waPhoneNumberId}
+                onChange={e => setS(prev => ({ ...prev, waPhoneNumberId: e.target.value }))}
+              />
+              <div style={{ fontSize: 11, color: th.muted, marginTop: 3 }}>
+                Meta Developer Console → WhatsApp → Phone Numbers
+              </div>
+            </div>
+
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>
+                Access Token {s.waTokenSet && <span style={{ color: '#22c55e', fontWeight: 400 }}>✓ saved</span>}
+              </label>
+              <input
+                type="password"
+                style={{ ...inp }}
+                placeholder={s.waTokenSet ? '••••••• (পরিবর্তন করতে নতুন token দিন)' : 'EAAxxxxxx...'}
+                value={waToken}
+                onChange={e => setWaToken(e.target.value)}
+              />
+              <div style={{ fontSize: 11, color: th.muted, marginTop: 3 }}>
+                Meta Business Manager → System User Token (whatsapp_business_messaging permission)
+              </div>
+            </div>
+
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>
+                Webhook Verify Token
+              </label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  style={{ ...inp, flex: 1 }}
+                  placeholder="my-secret-verify-token"
+                  value={s.waVerifyToken}
+                  onChange={e => setS(prev => ({ ...prev, waVerifyToken: e.target.value }))}
+                />
+                <button
+                  onClick={() => {
+                    const rand = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+                    setS(prev => ({ ...prev, waVerifyToken: rand }));
+                  }}
+                  style={{ ...th.btnGhost, fontSize: 11, whiteSpace: 'nowrap' }}
+                >
+                  🔀 Generate
+                </button>
+              </div>
+            </div>
+
+            <div style={{ padding: '10px 12px', borderRadius: 10, background: th.surface, border: `1px solid ${th.border}` }}>
+              <div style={{ fontSize: 11.5, fontWeight: 700, marginBottom: 4 }}>📋 Webhook URL (Meta Console-এ দিন)</div>
+              <div style={{ fontSize: 12, fontFamily: 'monospace', color: th.accent, wordBreak: 'break-all' }}>
+                {`${(typeof window !== 'undefined' ? window.location.origin.replace(/:\d+$/, ':3000') : 'https://api.chatcat.pro')}/wa-webhook`}
+              </div>
+              <div style={{ fontSize: 11, color: th.muted, marginTop: 4 }}>
+                Meta App → Webhook → Edit → এই URL দিন, Verify Token-ও দিন
+              </div>
+            </div>
+          </div>
+
+          <div style={{ marginTop: 14 }}>
+            <button
+              onClick={saveWhatsApp}
+              disabled={waSaving}
+              style={{ ...th.btnPrimary, opacity: waSaving ? 0.6 : 1 }}
+            >
+              {waSaving ? <><Spinner size={13} /> Saving...</> : '💾 WhatsApp Save করুন'}
+            </button>
+          </div>
         </Section>
 
         {/* ── Linked Pages ── */}

@@ -61,6 +61,16 @@ export class PageService {
       data.pageToken = this.encryption.encryptIfNeeded(body.pageToken.trim());
     }
 
+    // WhatsApp Business API settings
+    if (typeof body.waEnabled === 'boolean') data.waEnabled = body.waEnabled;
+    if (typeof body.waPhoneNumberId === 'string')
+      data.waPhoneNumberId = body.waPhoneNumberId.trim() || null;
+    if (typeof body.waToken === 'string' && body.waToken.trim()) {
+      data.waToken = this.encryption.encryptIfNeeded(body.waToken.trim());
+    }
+    if (typeof body.waVerifyToken === 'string')
+      data.waVerifyToken = body.waVerifyToken.trim() || null;
+
     if (typeof body.isActive === 'boolean') data.isActive = body.isActive;
     if (typeof body.automationOn === 'boolean')
       data.automationOn = body.automationOn;

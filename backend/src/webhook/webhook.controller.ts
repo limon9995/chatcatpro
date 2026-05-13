@@ -120,7 +120,11 @@ export class WebhookController {
     this.logger.debug(
       `[Webhook] Received object=${parsedBody?.object} entries=${parsedBody?.entry?.length ?? 0}`,
     );
-    await this.webhookService.handle(parsedBody);
+    try {
+      await this.webhookService.handle(parsedBody);
+    } catch (e) {
+      this.logger.error('[Webhook] Unhandled error in handle()', e);
+    }
     return 'EVENT_RECEIVED';
   }
 }

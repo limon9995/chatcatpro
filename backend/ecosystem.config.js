@@ -6,7 +6,7 @@ module.exports = {
       instances: 1,
       exec_mode: 'fork',
       watch: false,
-      max_memory_restart: '400M',
+      max_memory_restart: '600M',
 
       // Log files — make sure the logs/ directory exists or PM2 creates it
       error_file: 'logs/err.log',

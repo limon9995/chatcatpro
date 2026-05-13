@@ -18,6 +18,54 @@ export class GeminiVisionProvider implements VisionAnalysisProvider {
     this.model = process.env.VISION_MODEL ?? 'gemini-2.0-flash';
   }
 
+  private buildCodeExtractionPrompt(prefix: string): string {
+    return `Look at this image and find any product code or item code text visible.
+Product codes look like: "${prefix}-001", "${prefix} 123", "${prefix}.456" — letters followed by numbers.
+The prefix is typically "${prefix}" but may vary slightly.
+Return ONLY a valid JSON array of codes found. If none, return [].
+Examples: ["${prefix}-001"] or ["${prefix}-023", "XY-456"] or []
+Respond with ONLY the JSON array — no other text, no markdown.`;
+  }
+
+  async extractProductCodes(imageUrl: string, prefix: string): Promise<string[]> {
+    if (!this.apiKey) throw new Error('GEMINI_API_KEY not configured');
+    const dataUrl = await this.toBase64DataUrl(imageUrl);
+    const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+    const mimeType = match?.[1] ?? 'image/jpeg';
+    const data = match?.[2] ?? '';
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent?key=${this.apiKey}`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              { text: this.buildCodeExtractionPrompt(prefix) },
+              { inlineData: { mimeType, data } },
+            ],
+          },
+        ],
+        generationConfig: { maxOutputTokens: 100 },
+      }),
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (!response.ok) {
+      const err = await response.text().catch(() => String(response.status));
+      throw new Error(`Gemini extractCodes error ${response.status}: ${err.slice(0, 100)}`);
+    }
+    const resp = await response.json();
+    const content: string =
+      resp?.candidates?.[0]?.content?.parts?.[0]?.text ?? '[]';
+    try {
+      const arr = JSON.parse(this.extractJson(content));
+      return Array.isArray(arr) ? arr.filter((c: any) => typeof c === 'string') : [];
+    } catch {
+      return [];
+    }
+  }
+
   private buildPrompt(multi: boolean): string {
     return `You are an expert fashion product analyzer for a Bangladeshi e-commerce store.
 ${

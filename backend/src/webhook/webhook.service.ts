@@ -228,7 +228,7 @@ export class WebhookService {
       // V17: if customer is at advance_payment step, route to payment screenshot handler
       const currentDraft = await this.ctx.getActiveDraft(pageId, psid);
       if (currentDraft?.currentStep === 'advance_payment') {
-        this.ocrQueue.add(() =>
+        const payAccepted = await this.ocrQueue.add(() =>
           this.handlePaymentScreenshot(
             page,
             psid,
@@ -236,6 +236,13 @@ export class WebhookService {
             currentDraft,
           ),
         );
+        if (!payAccepted) {
+          await this.safeSend(
+            token,
+            psid,
+            'এই মুহূর্তে queue পূর্ণ 😔 একটু পরে payment screenshot আবার পাঠান 💖',
+          );
+        }
         return;
       }
 
@@ -268,9 +275,16 @@ export class WebhookService {
       (a: any) => a.type === 'audio' && a.payload?.url,
     );
     if (audioAttachment) {
-      this.ocrQueue.add(() =>
+      const audioAccepted = await this.ocrQueue.add(() =>
         this.handleAudioMessage(page, psid, audioAttachment.payload.url),
       );
+      if (!audioAccepted) {
+        await this.safeSend(
+          token,
+          psid,
+          'এই মুহূর্তে queue পূর্ণ 😔 একটু পরে voice message আবার পাঠান 💖',
+        );
+      }
       return;
     }
 
@@ -1163,6 +1177,30 @@ export class WebhookService {
     return `${base}/catalog/${encodeURIComponent(String(pageKey))}?select=1&codes=${encodeURIComponent(codes.join(','))}`;
   }
 
+  private buildCatalogUrl(page: any): string {
+    const websiteUrl = String(page.websiteUrl || '').trim();
+    if (websiteUrl) return websiteUrl;
+    const base = (
+      process.env.CATALOG_BASE_URL || 'https://chatcat.pro'
+    ).replace(/\/$/, '');
+    const slug = page.catalogSlug || page.pageId || String(page.id);
+    return `${base}/catalog/${encodeURIComponent(String(slug))}`;
+  }
+
+  private async sendCatalogFallback(
+    token: string,
+    psid: string,
+    page: any,
+  ): Promise<void> {
+    const catalogUrl = this.buildCatalogUrl(page);
+    const businessName = page.businessName || page.pageName || 'আমাদের';
+    await this.safeSend(
+      token,
+      psid,
+      `🛍️ ${businessName}-এর সব product দেখুন:\n${catalogUrl}\n\nপছন্দের product-এর code বা product page থেকে সরাসরি order করুন 💖`,
+    );
+  }
+
   private async handleExplicitProductCode(
     page: any,
     psid: string,
@@ -1598,22 +1636,43 @@ export class WebhookService {
       const entry = this.imageBuffer.get(key);
       if (!entry) return;
       this.imageBuffer.delete(key);
+
+      const handleQueueFull = () => {
+        void this.apiOcrFallback(entry.page, psid, entry.urls[0]).catch(() => {
+          const tok = entry.page.pageToken as string;
+          const pid = entry.page.id as number;
+          void this.botKnowledge
+            .resolveSystemReply(pid, 'ocr_fail')
+            .then((r) => this.safeSend(tok, psid, r))
+            .then(() => this.sendCatalogFallback(tok, psid, entry.page))
+            .catch(() => {});
+        });
+      };
+
       if (entry.urls.length === 1) {
-        this.ocrQueue.add(() =>
-          this.handleImageAttachment(
-            entry.page,
-            psid,
-            entry.urls[0],
-            entry.caption,
-          ),
-        );
+        void this.ocrQueue
+          .add(() =>
+            this.handleImageAttachment(
+              entry.page,
+              psid,
+              entry.urls[0],
+              entry.caption,
+            ),
+          )
+          .then((accepted) => {
+            if (!accepted) handleQueueFull();
+          });
       } else {
         this.logger.log(
           `[ImageBuffer] Flushing ${entry.urls.length} images for psid=${psid} page=${page.pageId}`,
         );
-        this.ocrQueue.add(() =>
-          this.handleBatchImages(entry.page, psid, entry.urls, entry.caption),
-        );
+        void this.ocrQueue
+          .add(() =>
+            this.handleBatchImages(entry.page, psid, entry.urls, entry.caption),
+          )
+          .then((accepted) => {
+            if (!accepted) handleQueueFull();
+          });
       }
     };
 
@@ -1713,6 +1772,7 @@ export class WebhookService {
           'ocr_fail',
         );
         await this.safeSend(token, psid, reply);
+        await this.sendCatalogFallback(token, psid, page);
         return;
       }
 
@@ -1728,6 +1788,7 @@ export class WebhookService {
         .resolveSystemReply(pageId, 'ocr_fail')
         .catch(() => 'Sorry, something went wrong.');
       await this.safeSend(token, psid, reply);
+      await this.sendCatalogFallback(token, psid, page).catch(() => {});
     }
   }
 
@@ -1851,6 +1912,7 @@ export class WebhookService {
         const key = isLowConf ? 'ocr_low_confidence' : 'ocr_fail';
         const reply = await this.botKnowledge.resolveSystemReply(pageId, key);
         await this.safeSend(token, psid, reply);
+        await this.sendCatalogFallback(token, psid, page);
         return;
       }
 
@@ -1881,6 +1943,7 @@ export class WebhookService {
         .resolveSystemReply(pageId, 'ocr_fail')
         .catch(() => 'Sorry, something went wrong.');
       await this.safeSend(token, psid, reply);
+      await this.sendCatalogFallback(token, psid, page).catch(() => {});
     }
   }
 
@@ -2132,6 +2195,61 @@ export class WebhookService {
   }
 
   /**
+   * OCR queue overflow fallback: uses AI API to extract product codes from the image,
+   * then follows the same product-lookup flow as normal OCR.
+   * Billing: IMAGE rate (API used). Falls back to visionProductRecognition if no codes found.
+   */
+  private async apiOcrFallback(
+    page: any,
+    psid: string,
+    imageUrl: string,
+  ): Promise<void> {
+    const pageId = page.id as number;
+    const token = page.pageToken as string;
+    const prefix = (page.productCodePrefix as string | undefined) || 'DF';
+
+    if (!(await this.walletService.canProcessAi(pageId))) {
+      const reply = await this.botKnowledge.resolveSystemReply(pageId, 'ocr_fail');
+      await this.safeSend(token, psid, reply);
+      await this.sendCatalogFallback(token, psid, page);
+      return;
+    }
+
+    const { codes, usedApi } = await this.visionAnalysis.extractProductCodes(
+      imageUrl,
+      prefix,
+    );
+    await this.walletService.deductUsage(pageId, usedApi ? 'IMAGE' : 'IMAGE_OCR');
+
+    if (!codes.length) {
+      if (page.imageRecognitionOn) {
+        await this.visionProductRecognition(page, psid, imageUrl);
+        return;
+      }
+      const reply = await this.botKnowledge.resolveSystemReply(pageId, 'ocr_fail');
+      await this.safeSend(token, psid, reply);
+      await this.sendCatalogFallback(token, psid, page);
+      return;
+    }
+
+    await this.ctx.setLastPresentedProducts(
+      pageId,
+      psid,
+      codes.map((c) => ({ code: c, price: 0 })),
+    );
+
+    if (codes.length === 1) {
+      await this.productHandler.sendProductInfo(page, psid, codes[0]);
+      return;
+    }
+
+    const newDraft = this.draftHandler.emptyDraft();
+    newDraft.pendingMultiPreview = codes;
+    await this.ctx.saveDraft(pageId, psid, newDraft);
+    await this.productHandler.sendMultiProductPreview(page, psid, codes);
+  }
+
+  /**
    * Called when vision confidence is too low to show products.
    * If fallbackAiOn: try AI reply. Otherwise: ask for clearer image.
    */
@@ -2167,6 +2285,7 @@ export class WebhookService {
       psid,
       'ছবিটা থেকে exact product বুঝতে পারিনি 💖\n\nভালো match পেতে:\n• একবারে ১টা product-এর photo দিন\n• পুরো product যেন frame-এ থাকে\n• front side / clear light-এ ছবি দিন\n• blur বা collage এড়িয়ে চলুন\n• সাথে color/type লিখলে আরো ভালো match হবে\n\nচাইলে product code-ও পাঠাতে পারেন।',
     );
+    await this.sendCatalogFallback(token, psid, page);
   }
 
   private async resolveReferencedProductCode(

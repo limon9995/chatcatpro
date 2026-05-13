@@ -37,6 +37,7 @@ import { WhisperModule } from './whisper/whisper.module';
 import { MessageQueueModule } from './message-queue/message-queue.module';
 import { ChatModule } from './chat/chat.module';
 import { AiGenerateModule } from './ai-generate/ai-generate.module';
+import { WhatsappModule } from './whatsapp/whatsapp.module';
 
 @Module({
   imports: [
@@ -82,6 +83,7 @@ import { AiGenerateModule } from './ai-generate/ai-generate.module';
     CallModule,
     ChatModule,
     AiGenerateModule,
+    WhatsappModule,
     ConversationContextModule,
     FacebookModule,
     AccountingModule,

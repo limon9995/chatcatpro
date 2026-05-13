@@ -158,13 +158,14 @@ export function AnalyticsPage({ th, pageId, onToast }: {
   const [data, setData]     = useState<AnalyticsSummary | null>(null);
   const [vision, setVision] = useState<VisionSummary | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState('');
 
   const BASE = `${API_BASE}/client-dashboard/${pageId}`;
   const cur  = data?.currency || '৳';
   const fmt  = (n: number) => `${cur}${Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 0 })}`;
 
   const load = useCallback(async () => {
-    setLoading(true);
+    setLoading(true); setLoadError('');
     try {
       const days = period === 'daily' ? 1 : period === 'weekly' ? 7 : 30;
       const [analyticsData, visionData] = await Promise.all([
@@ -173,15 +174,22 @@ export function AnalyticsPage({ th, pageId, onToast }: {
       ]);
       setData(analyticsData);
       setVision(visionData);
-    } catch (e: any) { onToast(e.message, 'error'); }
+    } catch (e: any) { setLoadError(e.message || 'Failed to load'); onToast(e.message, 'error'); }
     finally { setLoading(false); }
   }, [pageId, period]);
 
   useEffect(() => { load(); }, [load]);
 
-  if (loading || !data) return (
+  if (loading) return (
     <div style={{ ...th.card, display: 'flex', alignItems: 'center', gap: 12, color: th.muted }}>
       <Spinner size={20} /> Loading analytics…
+    </div>
+  );
+  if (!data) return (
+    <div style={{ ...th.card, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, padding: 40, color: th.muted }}>
+      <div style={{ fontSize: 36, opacity: 0.4 }}>📊</div>
+      {loadError && <div style={{ fontSize: 12, color: '#ef4444', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 8, padding: '8px 16px', maxWidth: 400, textAlign: 'center' }}>{loadError}</div>}
+      <button onClick={load} style={{ padding: '8px 20px', borderRadius: 8, border: `1px solid ${th.border}`, background: 'transparent', color: th.text, cursor: 'pointer', fontSize: 13 }}>Reload</button>
     </div>
   );
 

@@ -1199,6 +1199,11 @@ Return ONLY valid JSON (no markdown):
             })
             .catch(() => null)
         : null,
+      // WhatsApp Business API
+      waEnabled: Boolean(page.waEnabled),
+      waPhoneNumberId: page.waPhoneNumberId ?? '',
+      waVerifyToken: page.waVerifyToken ?? '',
+      waTokenSet: Boolean(page.waToken), // never return the raw token
       // Pricing (from bot-knowledge config)
       pricingPolicy: cfg?.pricingPolicy || {},
       // Call — all fields explicit
@@ -1270,6 +1275,10 @@ Return ONLY valid JSON (no markdown):
       'dualPhotoMode',
       'dualWearingProductId',
       'dualHoldingProductId',
+      // WhatsApp Business API (token handled separately below)
+      'waEnabled',
+      'waPhoneNumberId',
+      'waVerifyToken',
     ];
     const pagePatch: any = {};
     for (const k of PAGE_FIELDS) {
@@ -1288,6 +1297,11 @@ Return ONLY valid JSON (no markdown):
     }
     if (Object.keys(pagePatch).length > 0)
       await this.prisma.page.update({ where: { id: pageId }, data: pagePatch });
+
+    // waToken requires encryption — route through pageService.updateById
+    if (typeof pageFields.waToken === 'string' && pageFields.waToken.trim()) {
+      await this.pageService.updateById(pageId, { waToken: pageFields.waToken.trim() });
+    }
 
     // Pricing policy
     if (pricingPolicy)
