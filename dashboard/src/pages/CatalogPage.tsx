@@ -15,6 +15,9 @@ export function CatalogPage({ th, pageId, onToast }: {
   const [customDomain, setCustomDomain]   = useState('');
   const [savingDomain, setSavingDomain]   = useState(false);
   const [domainSaved, setDomainSaved]     = useState(false);
+  const [slugInput, setSlugInput]         = useState('');
+  const [savingSlug, setSavingSlug]       = useState(false);
+  const [slugError, setSlugError]         = useState('');
 
   const backendBase = API_BASE.startsWith('http') ? API_BASE : `${window.location.protocol}//${window.location.hostname}:3000`;
   const slug        = catalogData?.page?.catalogSlug;
@@ -30,6 +33,7 @@ export function CatalogPage({ th, pageId, onToast }: {
       const data = await res.json();
       setCatalogData(data);
       setCustomDomain(data?.page?.customDomain || '');
+      setSlugInput(data?.page?.catalogSlug || '');
     } catch (e: any) { onToast(e.message, 'error'); }
     finally { setLoading(false); }
   }, [pageId]);
@@ -59,6 +63,39 @@ export function CatalogPage({ th, pageId, onToast }: {
       setTimeout(() => setDomainSaved(false), 3000);
     } catch (e: any) { onToast(e.message, 'error'); }
     finally { setSavingDomain(false); }
+  };
+
+  const handleSlugInput = (val: string) => {
+    const clean = val.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+    setSlugInput(clean);
+    setSlugError('');
+  };
+
+  const saveSlug = async () => {
+    const clean = slugInput.trim();
+    if (!clean) { setSlugError('Slug খালি রাখা যাবে না'); return; }
+    if (clean.length < 3) { setSlugError('কমপক্ষে ৩ টি character দিন'); return; }
+    if (!/^[a-z0-9][a-z0-9-]*[a-z0-9]$/.test(clean)) {
+      setSlugError('শুধু a-z, 0-9 এবং hyphen (-) allowed। শুরু ও শেষ letter/number দিয়ে হতে হবে।');
+      return;
+    }
+    setSavingSlug(true);
+    try {
+      const res = await fetch(`${API_BASE}/client-dashboard/settings`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('dfbot_token')}` },
+        body: JSON.stringify({ pageId, pageFields: { catalogSlug: clean } }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.message || `HTTP ${res.status}`);
+      }
+      onToast('✅ URL slug saved! Link পরিবর্তন হয়েছে।', 'success');
+      await loadPreview();
+    } catch (e: any) {
+      const msg = String(e.message || '');
+      setSlugError(msg.includes('Unique') || msg.includes('unique') ? 'এই slug অন্য কেউ নিয়ে নিয়েছে। অন্য নাম দিন।' : msg);
+    } finally { setSavingSlug(false); }
   };
 
   if (loading) return (
@@ -123,6 +160,62 @@ export function CatalogPage({ th, pageId, onToast }: {
           </div>
           <div style={{ fontSize: 11.5, color: th.muted, marginTop: 8 }}>
             {copy('💡 Products page এ ছবি ও YouTube video যোগ করলে এখানে নিজে থেকেই দেখাবে। "Catalog Visible" tick তুলে দিলে product লুকাবে।', '💡 Add product photos and YouTube videos from the Products page — they appear automatically here. Untick "Catalog Visible" to hide a product.')}
+          </div>
+        </div>
+
+        {/* Slug editor */}
+        <div style={{ borderTop: `1px solid ${th.border}`, paddingTop: 14, marginTop: 4 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: th.muted, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+            {copy('✏️ URL-এর শেষ অংশ বদলান', '✏️ Customize your URL')}
+          </div>
+          <div style={{ fontSize: 12, color: th.muted, marginBottom: 10, lineHeight: 1.6 }}>
+            {copy('নিচের শেষ অংশটি আপনার পছন্দ মতো দিন — শুধু ছোট হাতের letter, সংখ্যা ও hyphen (-) ব্যবহার করুন।', 'Set the last part of your URL to anything you like — lowercase letters, numbers and hyphens only.')}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 0, flexWrap: 'wrap' }}>
+            {/* Static prefix */}
+            <div style={{
+              padding: '10px 12px', borderRadius: '10px 0 0 10px',
+              border: `1.5px solid ${th.border}`, borderRight: 'none',
+              background: th.bg, color: th.muted,
+              fontSize: 12.5, fontFamily: 'monospace', whiteSpace: 'nowrap', flexShrink: 0,
+            }}>
+              {`${backendBase}/catalog/`}
+            </div>
+            {/* Editable slug */}
+            <input
+              style={{
+                padding: '10px 12px', minWidth: 120, flex: 1,
+                border: `1.5px solid ${slugError ? '#ef4444' : th.accent}`,
+                borderLeft: 'none', borderRight: 'none',
+                background: th.surface, color: th.accent,
+                fontSize: 13.5, fontFamily: 'monospace', fontWeight: 700,
+                outline: 'none',
+              }}
+              value={slugInput}
+              onChange={e => handleSlugInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && saveSlug()}
+              placeholder="your-shop-name"
+              spellCheck={false}
+            />
+            <button
+              style={{
+                ...th.btnPrimary, borderRadius: '0 10px 10px 0',
+                whiteSpace: 'nowrap', opacity: savingSlug ? 0.7 : 1,
+                padding: '10px 18px',
+              }}
+              onClick={saveSlug}
+              disabled={savingSlug}
+            >
+              {savingSlug ? <Spinner size={13} /> : copy('💾 Save', 'Save')}
+            </button>
+          </div>
+          {slugError && (
+            <div style={{ marginTop: 6, fontSize: 12, color: '#ef4444', fontWeight: 600 }}>
+              ⚠️ {slugError}
+            </div>
+          )}
+          <div style={{ marginTop: 8, fontSize: 11.5, color: th.muted }}>
+            {copy('⚠️ Save করলে পুরনো link কাজ করবে না — নতুন link share করুন।', '⚠️ After saving, the old link will stop working — share the new one.')}
           </div>
         </div>
 
