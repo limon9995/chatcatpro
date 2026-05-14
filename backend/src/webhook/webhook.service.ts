@@ -153,6 +153,17 @@ export class WebhookService {
 
         const psid: string = event?.sender?.id;
         if (!psid || event.delivery || event.read) continue;
+
+        // V21: m.me catalog referral — ORDER_PRODUCTCODE ref triggers auto order flow
+        if (event.referral?.ref || event.postback?.referral?.ref) {
+          const ref: string = event.referral?.ref ?? event.postback?.referral?.ref ?? '';
+          if (ref.startsWith('ORDER_')) {
+            const productCode = ref.slice(6).toUpperCase();
+            this.handleCatalogReferral(resolvedPage, psid, productCode).catch(() => {});
+          }
+          if (!event.message) continue;
+        }
+
         if (!event.message) continue;
 
         // Push to persistent queue — returns immediately, worker processes async
@@ -165,6 +176,47 @@ export class WebhookService {
           );
       }
     }
+  }
+
+  // ── V21: Catalog referral handler ─────────────────────────────────────────
+
+  private async handleCatalogReferral(page: any, psid: string, productCode: string): Promise<void> {
+    const pageId = page.id as number;
+    const tok = page.pageToken as string;
+
+    const product = await this.prisma.product.findFirst({
+      where: { pageId, code: productCode, isActive: true },
+      select: { id: true, code: true, name: true, price: true, stockQty: true, imageUrl: true },
+    });
+
+    if (!product) {
+      this.logger.warn(`[CatalogRef] Product ${productCode} not found for page ${pageId}`);
+      return;
+    }
+
+    const currency = page.currencySymbol || '৳';
+    const inStock = product.stockQty > 0;
+    const priceFormatted = Number(product.price).toLocaleString();
+
+    // Increment product view from referral click
+    void this.prisma.product.update({ where: { id: product.id }, data: { productViews: { increment: 1 } } }).catch(() => {});
+
+    const msg = inStock
+      ? `🛍️ ${product.name || product.code}\n\n💰 মূল্য: ${currency}${priceFormatted}\n✅ Stock আছে\n\nঅর্ডার confirm করতে আপনার নাম লিখুন।`
+      : `🛍️ ${product.name || product.code}\n\n💰 মূল্য: ${currency}${priceFormatted}\n❌ এই product এর stock শেষ।\n\nআমাদের অন্য product দেখতে চাইলে বলুন।`;
+
+    await this.messenger.sendText(tok, psid, msg).catch((err) =>
+      this.logger.error(`[CatalogRef] sendText failed psid=${psid}: ${err}`),
+    );
+
+    if (inStock) {
+      const draft = this.ctx.emptyDraft();
+      draft.items = [{ productCode: product.code, qty: 1, unitPrice: Number(product.price) }];
+      draft.currentStep = 'name';
+      await this.ctx.saveDraft(pageId, psid, draft).catch(() => {});
+    }
+
+    this.logger.log(`[CatalogRef] psid=${psid} opened catalog for product ${productCode} — referral handled`);
   }
 
   // ── Message router ─────────────────────────────────────────────────────────

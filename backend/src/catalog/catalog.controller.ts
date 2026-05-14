@@ -212,6 +212,11 @@ export class CatalogController {
     const productWithReferenceImages =
       await this.productsService.attachReferenceImages(page.id, product);
 
+    // V21: Increment product view counter — fire-and-forget
+    void this.prisma.product
+      .update({ where: { id: product.id }, data: { productViews: { increment: 1 } } })
+      .catch(() => {});
+
     const pageInfo = {
       id: page.id,
       pageId: page.pageId,
@@ -255,6 +260,10 @@ export class CatalogController {
         );
       return;
     }
+    // V21: Increment catalog view counter — fire-and-forget
+    void this.prisma.page
+      .update({ where: { id: data.page.id }, data: { catalogViews: { increment: 1 } } })
+      .catch(() => {});
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.send(
       this.buildHtml(data, q || '', {
@@ -285,6 +294,7 @@ export class CatalogController {
         memoFooterText: true,
         catalogMessengerUrl: true,
         catalogSlug: true,
+        catalogViews: true,
       },
     });
     if (!page) return { error: 'Page not found' };
@@ -319,6 +329,7 @@ export class CatalogController {
         imageUrl: true,
         description: true,
         videoUrl: true,
+        productViews: true,
       },
     });
 
@@ -340,6 +351,7 @@ export class CatalogController {
           page.catalogMessengerUrl,
         ),
         catalogSlug: page.catalogSlug || null,
+        catalogViews: page.catalogViews ?? 0,
       },
       products,
       total: products.length,
@@ -435,9 +447,16 @@ export class CatalogController {
     const orderText = encodeURIComponent(`${p.code} order করতে চাই`);
     const selectText = encodeURIComponent(`SELECT_PRODUCT:${p.code}`);
     const priceFormatted = Number(p.price).toLocaleString('bn-BD');
-
     const productPublicUrl = `https://api.chatcat.pro/catalog/${esc(page.id)}/product/${esc(p.code)}`;
     const productDesc = `মূল্য: ${currency}${Number(p.price).toLocaleString()} · ${inStock ? 'Stock আছে' : 'Stock নেই'} · ${esc(p.description || p.name || p.code)} — ${esc(page.name)}`;
+    // V21: m.me referral URL — bot receives ORDER_CODE ref event automatically
+    const mmeRef = encodeURIComponent(`ORDER_${p.code}`);
+    const mmeOrderUrl = `https://m.me/${esc(page.pageId)}?ref=${mmeRef}`;
+    // V21: WhatsApp share URL
+    const waShareText = encodeURIComponent(
+      `${p.name || p.code} — ${currency}${Number(p.price).toLocaleString()}\n${productPublicUrl}`,
+    );
+    const waShareUrl = `https://wa.me/?text=${waShareText}`;
 
     return `<!DOCTYPE html>
 <html lang="bn">
@@ -782,7 +801,7 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:var(--b
               : ''
           }
           <a class="btn-order${!inStock ? ' disabled' : ''}"
-            href="${esc(page.messengerUrl)}?text=${orderText}"
+            href="${inStock ? mmeOrderUrl : '#'}"
             target="_blank" rel="noopener"
             ${!inStock ? 'onclick="return false"' : ''}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
@@ -794,10 +813,13 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:var(--b
         </div>
 
         <div class="action-row">
-          <button class="btn-action" onclick="navigator.clipboard.writeText(location.href);this.textContent='✅ Copied!'">
-            🔗 Link Copy
+          <button class="btn-action" onclick="if(navigator.share){navigator.share({title:'${esc(p.name || p.code)}',url:location.href})}else{navigator.clipboard.writeText(location.href);this.innerHTML='✅ Copied!'}">
+            🔗 Share
           </button>
-          ${page.phone ? `<a class="btn-action" href="tel:${esc(page.phone)}">📞 ${esc(page.phone)}</a>` : ''}
+          <a class="btn-action" href="${waShareUrl}" target="_blank" rel="noopener">
+            💚 WhatsApp
+          </a>
+          ${page.phone ? `<a class="btn-action" href="tel:${esc(page.phone)}">📞 Call</a>` : ''}
         </div>
 
         <div class="trust-row">
@@ -816,7 +838,7 @@ ${
   inStock
     ? `
 <div class="mobile-cta">
-  <a class="btn-order" href="${esc(page.messengerUrl)}?text=${orderText}" target="_blank" rel="noopener">
+  <a class="btn-order" href="${mmeOrderUrl}" target="_blank" rel="noopener">
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
     Messenger এ Order করুন
   </a>
@@ -939,6 +961,8 @@ ${poweredByBadge()}
     const catalogSlugOrId = page.catalogSlug || page.id;
     const catalogPublicUrl = `https://api.chatcat.pro/catalog/${catalogSlugOrId}`;
     const ogDesc = `${esc(page.name)}-এর সব product দেখুন। ${products.length > 0 ? `${products.length}টি product available।` : ''} পছন্দের product বেছে Messenger-এ order করুন।`;
+    // V21: Catalog WhatsApp share
+    const catalogWaShare = `https://wa.me/?text=${encodeURIComponent(`${page.name}-এর সব product দেখুন 👇\n${catalogPublicUrl}`)}`;
     const ogImage = products.find((p: any) => p.imageUrl)?.imageUrl || '';
 
     return `<!DOCTYPE html>
@@ -1270,6 +1294,9 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:radial-
       ${page.phone ? `<div class="h-sub">📞 ${esc(page.phone)}</div>` : ''}
     </div>
     <div class="header-actions">
+      <a class="h-msg-btn" href="${catalogWaShare}" target="_blank" rel="noopener" title="WhatsApp এ শেয়ার করুন">
+        💚 <span class="h-msg-txt">Share</span>
+      </a>
       <a class="h-msg-btn" href="${esc(page.messengerUrl)}" target="_blank" rel="noopener">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
         <span class="h-msg-txt">Message করুন</span>

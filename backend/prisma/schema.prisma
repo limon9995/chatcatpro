@@ -108,6 +108,8 @@ model Page {
   primaryColor            String?
   catalogMessengerUrl     String? // Custom link for catalog "Order on Messenger" button
   catalogSlug             String? @unique // e.g. "limon-tech-diary" → /catalog/limon-tech-diary
+  // V21: Catalog analytics
+  catalogViews            Int     @default(0)
   websiteUrl              String? // Optional external store/website URL; bot can send this instead of hosted catalog
   // V8: Custom product code prefix (e.g. "SK", "FZ", "BD"). Default "DF"
   productCodePrefix       String  @default("DF")
@@ -263,6 +265,9 @@ model Product {
 
   // V20: Local CLIP visual embedding — 512-dim float array stored as JSON string
   embedding        String? // e.g. "[0.23, -0.45, 0.78, ...]" — generated in background on product save
+
+  // V21: Catalog analytics
+  productViews     Int     @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
