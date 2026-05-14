@@ -1209,6 +1209,23 @@ export function OrdersPage({ th, pageId, onToast, preset }: {
                     <div style={{ fontSize: 12, color: th.muted }}>
                       {o.items.map((i,idx) => <span key={idx} style={{ marginRight: 8 }}>{i.productCode} ×{i.qty}</span>)}
                     </div>
+                    {o.spamRisk && o.spamRisk !== 'unknown' && (() => {
+                      const riskMap: Record<string, { color: string; bg: string; icon: string }> = {
+                        high:   { color: '#dc2626', bg: '#dc262618', icon: '🔴' },
+                        medium: { color: '#b45309', bg: '#b4530918', icon: '🟡' },
+                        low:    { color: '#16a34a', bg: '#16a34a18', icon: '🟢' },
+                        safe:   { color: '#15803d', bg: '#15803d18', icon: '✅' },
+                        new:    { color: '#6366f1', bg: '#6366f118', icon: '🆕' },
+                      };
+                      const r = riskMap[o.spamRisk] ?? { color: th.muted, bg: 'transparent', icon: '❓' };
+                      const pct = o.spamTotalOrders ? Math.round(((o.spamDelivered ?? 0) / o.spamTotalOrders) * 100) : null;
+                      return (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, padding: '4px 8px', borderRadius: 6, background: r.bg, border: `1px solid ${r.color}30`, width: 'fit-content' }}>
+                          <span style={{ fontWeight: 700, color: r.color }}>{r.icon} {pct !== null ? `${pct}% delivery` : o.spamRisk}</span>
+                          {o.spamTotalOrders != null && <span style={{ color: th.muted }}>· {o.spamTotalOrders}টি order</span>}
+                        </div>
+                      );
+                    })()}
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                       <button style={{ ...th.btnSmGhost, fontSize: 11 }} onClick={() => setMemoOrderId(o.id)}>📋</button>
                       {canTriggerCall && <button style={th.btnSmAccent} onClick={() => callAction(o.id, 'send')}>📞</button>}
@@ -1326,13 +1343,14 @@ export function OrdersPage({ th, pageId, onToast, preset }: {
                             const tip = o.spamTotalOrders
                               ? `${o.spamRisk.toUpperCase()} · ${o.spamTotalOrders} orders · ${Math.round(((o.spamDelivered ?? 0) / o.spamTotalOrders) * 100)}% delivered`
                               : o.spamRisk.toUpperCase();
+                            const pct = o.spamTotalOrders ? Math.round(((o.spamDelivered ?? 0) / o.spamTotalOrders) * 100) : null;
                             return (
                               <span title={tip} style={{
                                 fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 6,
                                 background: r.bg, color: r.color, border: `1px solid ${r.color}40`,
                                 cursor: 'default', whiteSpace: 'nowrap',
                               }}>
-                                {r.icon} {o.spamTotalOrders != null ? `${Math.round(((o.spamDelivered ?? 0) / Math.max(o.spamTotalOrders, 1)) * 100)}%` : o.spamRisk}
+                                {r.icon} {pct !== null ? `${pct}% · ${o.spamTotalOrders}টি` : o.spamRisk}
                               </span>
                             );
                           })()}
