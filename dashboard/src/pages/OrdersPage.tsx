@@ -289,6 +289,13 @@ export function OrdersPage({ th, pageId, onToast, preset }: {
   const [deliveryLoading, setDeliveryLoading] = useState(false);
   const [deliveryActionId, setDeliveryActionId] = useState<number | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [openDropdown, setOpenDropdown] = useState<number | null>(null);
+  useEffect(() => {
+    if (openDropdown === null) return;
+    const close = () => setOpenDropdown(null);
+    document.addEventListener('click', close);
+    return () => document.removeEventListener('click', close);
+  }, [openDropdown]);
 
   const BASE = `${API_BASE}/client-dashboard/${pageId}`;
 
@@ -1204,10 +1211,38 @@ export function OrdersPage({ th, pageId, onToast, preset }: {
                     </div>
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                       <button style={{ ...th.btnSmGhost, fontSize: 11 }} onClick={() => setMemoOrderId(o.id)}>📋</button>
-                      {o.status === 'RECEIVED' && <button style={th.btnSmSuccess} onClick={() => action([o.id], 'confirm')} disabled={busy}>✓ Confirm</button>}
-                      {o.status === 'CONFIRMED' && <button style={{ ...th.btnSmGhost, border: '1.5px solid #7c3aed', color: '#7c3aed', fontSize: 10 }} onClick={() => action([o.id], 'pack')} disabled={busy}>📦 Pack</button>}
-                      {o.status !== 'CANCELLED' && <button style={th.btnSmDanger} onClick={() => action([o.id], 'cancel')} disabled={busy}>✕ Cancel</button>}
                       {canTriggerCall && <button style={th.btnSmAccent} onClick={() => callAction(o.id, 'send')}>📞</button>}
+                      {!['CANCELLED', 'DELIVERED'].includes(o.status) && (
+                        <div style={{ position: 'relative' }}>
+                          <button
+                            style={{ ...th.btnSmGhost, fontSize: 11 }}
+                            onClick={(e) => { e.stopPropagation(); setOpenDropdown(openDropdown === o.id ? null : o.id); }}
+                            disabled={busy}
+                          >
+                            Status ▾
+                          </button>
+                          {openDropdown === o.id && (
+                            <div style={{ position: 'absolute', bottom: '110%', left: 0, zIndex: 200, background: th.panel, border: `1px solid ${th.border}`, borderRadius: 8, boxShadow: th.shadow, minWidth: 120, overflow: 'hidden' }}>
+                              {o.status === 'RECEIVED' && (
+                                <button style={{ display: 'block', width: '100%', padding: '8px 12px', textAlign: 'left', background: 'transparent', border: 'none', color: '#16a34a', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
+                                  onClick={(e) => { e.stopPropagation(); setOpenDropdown(null); action([o.id], 'confirm'); }}>
+                                  ✓ Confirm
+                                </button>
+                              )}
+                              {o.status === 'CONFIRMED' && (
+                                <button style={{ display: 'block', width: '100%', padding: '8px 12px', textAlign: 'left', background: 'transparent', border: 'none', color: '#7c3aed', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
+                                  onClick={(e) => { e.stopPropagation(); setOpenDropdown(null); action([o.id], 'pack'); }}>
+                                  📦 Pack
+                                </button>
+                              )}
+                              <button style={{ display: 'block', width: '100%', padding: '8px 12px', textAlign: 'left', background: 'transparent', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
+                                onClick={(e) => { e.stopPropagation(); setOpenDropdown(null); action([o.id], 'cancel'); }}>
+                                ✕ Cancel
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
                       <button style={th.btnSmGhost} onClick={() => setExpanded(expanded === o.id ? null : o.id)}>{expanded === o.id ? '▲' : '▼'}</button>
                     </div>
                     {expanded === o.id && (
@@ -1364,14 +1399,36 @@ export function OrdersPage({ th, pageId, onToast, preset }: {
                               {['CALL_FAILED', 'NOT_ANSWERED'].includes(o.callStatus) ? '↺' : '📞'}
                             </button>
                           )}
-                          {o.status === 'RECEIVED' && (
-                            <button style={th.btnSmSuccess} onClick={() => action([o.id], 'confirm')} disabled={busy}>✓</button>
-                          )}
-                          {o.status === 'CONFIRMED' && (
-                            <button style={{ ...th.btnSmGhost, border: '1.5px solid #7c3aed', color: '#7c3aed', fontSize: 10 }} onClick={() => action([o.id], 'pack')} disabled={busy}>📦</button>
-                          )}
-                          {o.status !== 'CANCELLED' && (
-                            <button style={th.btnSmDanger} onClick={() => action([o.id], 'cancel')} disabled={busy}>✕</button>
+                          {!['CANCELLED', 'DELIVERED'].includes(o.status) && (
+                            <div style={{ position: 'relative' }}>
+                              <button
+                                style={{ ...th.btnSmGhost, fontSize: 11 }}
+                                onClick={(e) => { e.stopPropagation(); setOpenDropdown(openDropdown === o.id ? null : o.id); }}
+                                disabled={busy}
+                              >
+                                ▾
+                              </button>
+                              {openDropdown === o.id && (
+                                <div style={{ position: 'absolute', top: '110%', right: 0, zIndex: 200, background: th.panel, border: `1px solid ${th.border}`, borderRadius: 8, boxShadow: th.shadow, minWidth: 130, overflow: 'hidden' }}>
+                                  {o.status === 'RECEIVED' && (
+                                    <button style={{ display: 'block', width: '100%', padding: '8px 12px', textAlign: 'left', background: 'transparent', border: 'none', color: '#16a34a', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
+                                      onClick={(e) => { e.stopPropagation(); setOpenDropdown(null); action([o.id], 'confirm'); }}>
+                                      ✓ Confirm
+                                    </button>
+                                  )}
+                                  {o.status === 'CONFIRMED' && (
+                                    <button style={{ display: 'block', width: '100%', padding: '8px 12px', textAlign: 'left', background: 'transparent', border: 'none', color: '#7c3aed', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
+                                      onClick={(e) => { e.stopPropagation(); setOpenDropdown(null); action([o.id], 'pack'); }}>
+                                      📦 Pack
+                                    </button>
+                                  )}
+                                  <button style={{ display: 'block', width: '100%', padding: '8px 12px', textAlign: 'left', background: 'transparent', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
+                                    onClick={(e) => { e.stopPropagation(); setOpenDropdown(null); action([o.id], 'cancel'); }}>
+                                    ✕ Cancel
+                                  </button>
+                                </div>
+                              )}
+                            </div>
                           )}
                           <button style={th.btnSmGhost} onClick={() => setExpanded(isOpen ? null : o.id)}>{isOpen ? '▲' : '▼'}</button>
                         </div>

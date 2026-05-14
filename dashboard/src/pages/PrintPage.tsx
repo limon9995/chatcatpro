@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CardHeader, EmptyState, Spinner } from '../components/ui';
 import type { Theme } from '../components/ui';
 import { API_BASE } from '../hooks/useApi';
@@ -72,7 +72,7 @@ export function PrintPage({ th, pageId, onToast, preset }: {
     }
   }, [preset?.autoSelectAll, preset?.label, orders]);
 
-  const visibleOrders = orders.filter((o) => !o.printedAt);
+  const visibleOrders = useMemo(() => orders.filter((o) => !o.printedAt), [orders]);
 
   useEffect(() => {
     if (preset?.autoSelectAll && visibleOrders.length) {
