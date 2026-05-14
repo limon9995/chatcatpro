@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -1297,8 +1298,28 @@ Return ONLY valid JSON (no markdown):
       }
       pagePatch[k] = nextVal;
     }
-    if (Object.keys(pagePatch).length > 0)
-      await this.prisma.page.update({ where: { id: pageId }, data: pagePatch });
+    // Slug uniqueness pre-check: if catalogSlug is being set, verify no other page owns it
+    if (typeof pagePatch.catalogSlug === 'string' && pagePatch.catalogSlug) {
+      const conflict = await this.prisma.page.findUnique({
+        where: { catalogSlug: pagePatch.catalogSlug },
+        select: { id: true },
+      });
+      if (conflict && conflict.id !== pageId) {
+        throw new ConflictException(
+          'এই URL slug অন্য কেউ ব্যবহার করছে। অন্য নাম দিন।',
+        );
+      }
+    }
+    if (Object.keys(pagePatch).length > 0) {
+      try {
+        await this.prisma.page.update({ where: { id: pageId }, data: pagePatch });
+      } catch (err: any) {
+        if (err?.code === 'P2002' && err?.meta?.target?.includes?.('catalogSlug')) {
+          throw new ConflictException('এই URL slug অন্য কেউ ব্যবহার করছে। অন্য নাম দিন।');
+        }
+        throw err;
+      }
+    }
 
     // waToken requires encryption — route through pageService.updateById
     if (typeof pageFields.waToken === 'string' && pageFields.waToken.trim()) {

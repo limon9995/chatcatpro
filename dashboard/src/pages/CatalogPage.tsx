@@ -94,7 +94,7 @@ export function CatalogPage({ th, pageId, onToast }: {
       await loadPreview();
     } catch (e: any) {
       const msg = String(e.message || '');
-      setSlugError(msg.includes('Unique') || msg.includes('unique') ? 'এই slug অন্য কেউ নিয়ে নিয়েছে। অন্য নাম দিন।' : msg);
+      setSlugError(msg || 'কিছু একটা সমস্যা হয়েছে। আবার চেষ্টা করুন।');
     } finally { setSavingSlug(false); }
   };
 
