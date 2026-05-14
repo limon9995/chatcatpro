@@ -196,21 +196,40 @@ function ManualOrderModal({ th, onClose, onSave, saving }: {
 function MemoModal({ th, orderId, pageId, onClose }: {
   th: Theme; orderId: number; pageId: number; onClose: () => void;
 }) {
-  const url = `${API_BASE}/memo/html?ids=${orderId}&pageId=${pageId}`;
+  const [html, setHtml] = useState('');
+  const [loading, setLoading] = useState(true);
+  const printUrl = `${API_BASE}/memo/html?ids=${orderId}&pageId=${pageId}`;
+
+  useEffect(() => {
+    const token = localStorage.getItem('dfbot_token') || '';
+    fetch(printUrl, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.text())
+      .then(h => { setHtml(h); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [printUrl]);
+
+  const openPrint = () => {
+    const w = window.open('', '_blank');
+    if (w) { w.document.write(html); w.document.close(); setTimeout(() => w.print(), 400); }
+  };
+
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', zIndex: 1000, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
       <div style={{ width: '100%', maxWidth: 820, height: '85vh', display: 'flex', flexDirection: 'column', gap: 10 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span style={{ color: '#fff', fontWeight: 700, fontSize: 15 }}>📋 Memo Preview — Order #{orderId}</span>
           <div style={{ display: 'flex', gap: 8 }}>
-            <a href={url} target="_blank" rel="noreferrer"
-              style={{ ...th.btnPrimary, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+            <button onClick={openPrint} disabled={loading}
+              style={{ ...th.btnPrimary, fontSize: 13 }}>
               🖨️ Print / Download
-            </a>
+            </button>
             <button style={th.btnGhost} onClick={onClose}>✕ Close</button>
           </div>
         </div>
-        <iframe src={url} style={{ flex: 1, border: 'none', borderRadius: 12, background: '#fff' }} title="memo-preview" />
+        {loading
+          ? <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Spinner size={28} /></div>
+          : <iframe srcDoc={html} style={{ flex: 1, border: 'none', borderRadius: 12, background: '#fff' }} title="memo-preview" />
+        }
       </div>
     </div>
   );
