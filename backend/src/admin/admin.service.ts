@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
+import { execFile } from 'child_process';
 import type { Response } from 'express';
 import { Workbook, type Worksheet } from 'exceljs';
 import { PrismaService } from '../prisma/prisma.service';
@@ -332,6 +333,7 @@ export class AdminService {
         id: true,
         pageId: true,
         pageName: true,
+        businessName: true,
         isActive: true,
         automationOn: true,
         ownerId: true,
@@ -339,6 +341,8 @@ export class AdminService {
         lastReconnectedAt: true,
         previousPageId: true,
         createdAt: true,
+        customDomain: true,
+        catalogSlug: true,
         owner: { select: { id: true, username: true, name: true } },
       },
       orderBy: { id: 'desc' },
@@ -1095,5 +1099,199 @@ export class AdminService {
     }
 
     await wb.xlsx.writeFile(filePath);
+  }
+
+  // ── Custom Domain Setup ──────────────────────────────────────────────────────
+
+  private readonly NGINX_CONF = '/etc/nginx/sites-available/chatcat-custom-domains.conf';
+  private readonly NGINX_LINK = '/etc/nginx/sites-enabled/chatcat-custom-domains.conf';
+  private readonly ADMIN_EMAIL = 'admin@chatcat.pro';
+
+  private isDomainValid(domain: string): boolean {
+    return /^[a-z0-9]([a-z0-9\-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9\-]{0,61}[a-z0-9])?)+$/.test(domain);
+  }
+
+  private runCmd(cmd: string, args: string[]): Promise<string> {
+    return new Promise((resolve, reject) => {
+      execFile(cmd, args, { timeout: 120_000 }, (err, stdout, stderr) => {
+        if (err) reject(new Error(stderr || err.message));
+        else resolve(stdout + (stderr ? '\n' + stderr : ''));
+      });
+    });
+  }
+
+  private buildNginxBlock(domain: string, useSsl: boolean): string {
+    if (useSsl) {
+      return `
+# Domain: ${domain}
+server {
+    listen 80;
+    server_name ${domain};
+    return 301 https://$host$request_uri;
+}
+server {
+    listen 443 ssl;
+    server_name ${domain};
+    ssl_certificate     /etc/letsencrypt/live/${domain}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${domain}/privkey.pem;
+    location / {
+        proxy_pass http://localhost:3000/catalog/by-domain?host=${domain}&path=$request_uri;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}`;
+    }
+    return `
+# Domain: ${domain}
+server {
+    listen 80;
+    server_name ${domain};
+    location / {
+        proxy_pass http://localhost:3000/catalog/by-domain?host=${domain}&path=$request_uri;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}`;
+  }
+
+  private addOrReplaceDomainBlock(domain: string, newBlock: string): void {
+    let content = '';
+    if (fs.existsSync(this.NGINX_CONF)) {
+      content = fs.readFileSync(this.NGINX_CONF, 'utf8');
+      // Remove existing block for this domain
+      const marker = `# Domain: ${domain}`;
+      const idx = content.indexOf(marker);
+      if (idx !== -1) {
+        // find the next marker or end of file
+        const nextIdx = content.indexOf('\n# Domain:', idx + 1);
+        content = (content.slice(0, idx) + (nextIdx !== -1 ? content.slice(nextIdx) : '')).trim();
+      }
+    }
+    fs.writeFileSync(this.NGINX_CONF, (content + '\n' + newBlock).trim() + '\n', 'utf8');
+    // Ensure symlink exists
+    if (!fs.existsSync(this.NGINX_LINK)) {
+      fs.symlinkSync(this.NGINX_CONF, this.NGINX_LINK);
+    }
+  }
+
+  private removeDomainBlock(domain: string): void {
+    if (!fs.existsSync(this.NGINX_CONF)) return;
+    let content = fs.readFileSync(this.NGINX_CONF, 'utf8');
+    const marker = `# Domain: ${domain}`;
+    const idx = content.indexOf(marker);
+    if (idx === -1) return;
+    const nextIdx = content.indexOf('\n# Domain:', idx + 1);
+    content = (content.slice(0, idx) + (nextIdx !== -1 ? content.slice(nextIdx) : '')).trim();
+    fs.writeFileSync(this.NGINX_CONF, content + '\n', 'utf8');
+  }
+
+  async setupCustomDomain(pageId: number, domain: string, skipSsl: boolean) {
+    if (!this.isDomainValid(domain)) {
+      throw new BadRequestException('Invalid domain format');
+    }
+
+    const page = await this.prisma.page.findUnique({ where: { id: pageId }, select: { id: true } });
+    if (!page) throw new NotFoundException('Page not found');
+
+    // Check if domain is already taken by another page
+    const existing = await this.prisma.page.findFirst({ where: { customDomain: domain, id: { not: pageId } } });
+    if (existing) throw new BadRequestException('এই domain অন্য একটি page-এ already আছে');
+
+    const steps: { step: string; status: 'ok' | 'error' | 'skip'; detail: string }[] = [];
+
+    // Step 1: Write nginx config (without SSL first)
+    try {
+      this.addOrReplaceDomainBlock(domain, this.buildNginxBlock(domain, false));
+      steps.push({ step: 'Nginx config লেখা', status: 'ok', detail: this.NGINX_CONF });
+    } catch (e: any) {
+      steps.push({ step: 'Nginx config লেখা', status: 'error', detail: e.message });
+      return { success: false, steps };
+    }
+
+    // Step 2: nginx -t
+    try {
+      await this.runCmd('nginx', ['-t']);
+      steps.push({ step: 'Nginx syntax check', status: 'ok', detail: 'nginx -t passed' });
+    } catch (e: any) {
+      steps.push({ step: 'Nginx syntax check', status: 'error', detail: e.message });
+      return { success: false, steps };
+    }
+
+    // Step 3: reload nginx (activates HTTP for certbot challenge)
+    try {
+      await this.runCmd('systemctl', ['reload', 'nginx']);
+      steps.push({ step: 'Nginx reload', status: 'ok', detail: 'HTTP config active' });
+    } catch (e: any) {
+      steps.push({ step: 'Nginx reload', status: 'error', detail: e.message });
+      return { success: false, steps };
+    }
+
+    // Step 4: certbot (optional)
+    if (skipSsl) {
+      steps.push({ step: 'SSL (certbot)', status: 'skip', detail: 'Cloudflare SSL বা skip করা হয়েছে' });
+    } else {
+      try {
+        const out = await this.runCmd('certbot', [
+          '--nginx', '-d', domain,
+          '--non-interactive', '--agree-tos',
+          '-m', this.ADMIN_EMAIL, '--redirect',
+        ]);
+        steps.push({ step: 'SSL certificate (certbot)', status: 'ok', detail: out.slice(0, 300) });
+        // Rewrite config with SSL paths now that certbot has set them
+        // certbot --nginx modifies the nginx config automatically, so no manual rewrite needed
+      } catch (e: any) {
+        steps.push({ step: 'SSL certificate (certbot)', status: 'error', detail: e.message.slice(0, 400) });
+        // Continue — domain still works on HTTP
+      }
+    }
+
+    // Step 5: final reload
+    try {
+      await this.runCmd('systemctl', ['reload', 'nginx']);
+      steps.push({ step: 'Final nginx reload', status: 'ok', detail: 'Done' });
+    } catch (e: any) {
+      steps.push({ step: 'Final nginx reload', status: 'error', detail: e.message });
+    }
+
+    // Step 6: save to DB
+    await this.prisma.page.update({ where: { id: pageId }, data: { customDomain: domain } });
+    steps.push({ step: 'Database save', status: 'ok', detail: `customDomain = ${domain}` });
+
+    return { success: true, domain, steps };
+  }
+
+  async removeCustomDomain(pageId: number) {
+    const page = await this.prisma.page.findUnique({
+      where: { id: pageId },
+      select: { id: true, customDomain: true },
+    });
+    if (!page) throw new NotFoundException('Page not found');
+    const domain = page.customDomain;
+    if (!domain) return { success: true, message: 'কোনো domain set ছিল না' };
+
+    this.removeDomainBlock(domain);
+    try { await this.runCmd('nginx', ['-t']); } catch {}
+    try { await this.runCmd('systemctl', ['reload', 'nginx']); } catch {}
+    await this.prisma.page.update({ where: { id: pageId }, data: { customDomain: null } });
+
+    return { success: true, message: `${domain} সরিয়ে দেওয়া হয়েছে` };
+  }
+
+  async listCustomDomains() {
+    return this.prisma.page.findMany({
+      where: { customDomain: { not: null } },
+      select: {
+        id: true,
+        pageName: true,
+        businessName: true,
+        customDomain: true,
+        catalogSlug: true,
+        owner: { select: { username: true } },
+      },
+    });
   }
 }

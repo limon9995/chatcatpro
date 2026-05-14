@@ -242,6 +242,38 @@ export class CatalogController {
     );
   }
 
+  // Custom domain route — Nginx proxies shop.mybrand.com → /catalog/by-domain?host=shop.mybrand.com
+  @Get('by-domain')
+  async getCatalogByDomain(
+    @Res() res: Response,
+    @Query('host') host: string,
+    @Query('path') path?: string,
+    @Query('q') q?: string,
+    @Query('codes') codes?: string,
+    @Query('select') select?: string,
+  ) {
+    const domain = (host || '').toLowerCase().replace(/^https?:\/\//, '').replace(/\/$/, '').split('/')[0];
+    if (!domain) { res.status(400).send('<h2>Bad Request</h2>'); return; }
+
+    const page = await this.prisma.page.findFirst({
+      where: { customDomain: domain, isActive: true },
+      select: { id: true },
+    });
+    if (!page) { res.status(404).send('<html><body style="font-family:sans-serif;padding:40px"><h2>Website not found</h2><p>No website is configured for this domain.</p></body></html>'); return; }
+
+    // If path includes /product/:code, serve product page
+    const productMatch = (path || '').match(/\/product\/([A-Z0-9]+)/i);
+    if (productMatch) {
+      return this.getProductHtml(String(page.id), productMatch[1], res, select, codes);
+    }
+
+    const data = await this.buildData(String(page.id), q, codes);
+    if ('error' in data) { res.status(404).send('<h2>Not found</h2>'); return; }
+    void this.prisma.page.update({ where: { id: page.id }, data: { catalogViews: { increment: 1 } } }).catch(() => {});
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(this.buildHtml(data, q || '', { selectionMode: select === '1', shortlistCodes: this.normalizeCodeList(codes) }));
+  }
+
   // Public HTML catalog page
   @Get(':pageId')
   async getCatalogHtml(
@@ -295,6 +327,7 @@ export class CatalogController {
         catalogMessengerUrl: true,
         catalogSlug: true,
         catalogViews: true,
+        customDomain: true,
       },
     });
     if (!page) return { error: 'Page not found' };
@@ -352,6 +385,7 @@ export class CatalogController {
         ),
         catalogSlug: page.catalogSlug || null,
         catalogViews: page.catalogViews ?? 0,
+        customDomain: page.customDomain || null,
       },
       products,
       total: products.length,

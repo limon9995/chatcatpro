@@ -77,7 +77,7 @@ const NAV: NavItem[] = [
   { key: 'PRINT',              bn: 'প্রিন্ট / ইনভয়েস',    en: 'Print / Invoice',     icon: '🖸', group: 'orders' },
   // ── Store ─────────────────────────────────────────────────────────────────
   { key: 'PRODUCTS',           bn: 'প্রোডান্ট',           en: 'Products',            icon: '🏷', group: 'store' },
-  { key: 'CATALOG',            bn: 'ক্যাটালগ',            en: 'Catalog',             icon: '📋', group: 'store' },
+  { key: 'CATALOG',            bn: 'ওয়েবসাইট',            en: 'Website',             icon: '🌐', group: 'store' },
   { key: 'ACCOUNTING',         bn: 'হিসাব',               en: 'Accounting',          icon: '💼', group: 'store' },
   { key: 'ANALYTICS',          bn: 'অ্যানালিটিক্স',       en: 'Analytics',           icon: '📊', group: 'store' },
   // ── Bot & Customers ──────────────────────────────────────────────────

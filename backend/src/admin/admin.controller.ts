@@ -312,6 +312,27 @@ export class AdminController {
     return this.svc.rejectPageRequest(id, b?.adminNote);
   }
 
+  // ── Custom Domain Management ─────────────────────────────────────────────
+  @Get('custom-domains')
+  listCustomDomains() {
+    return this.svc.listCustomDomains();
+  }
+
+  @Post('pages/:pageId/setup-domain')
+  setupDomain(
+    @Param('pageId', ParseIntPipe) pageId: number,
+    @Body('domain') domain: string,
+    @Body('skipSsl') skipSsl: boolean,
+  ) {
+    if (!domain?.trim()) throw new BadRequestException('domain required');
+    return this.svc.setupCustomDomain(pageId, domain.trim().toLowerCase(), Boolean(skipSsl));
+  }
+
+  @Post('pages/:pageId/remove-domain')
+  removeDomain(@Param('pageId', ParseIntPipe) pageId: number) {
+    return this.svc.removeCustomDomain(pageId);
+  }
+
   @Get('syslog/snapshot')
   exportSysSnapshot(@Res() res: Response) {
     return this.svc.exportRegistrySnapshot(res);

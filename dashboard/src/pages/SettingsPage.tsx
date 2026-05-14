@@ -517,7 +517,7 @@ export function SettingsPage({ th, pageId, tab, onToast }: {
               </div>
             </div>
             <div style={{ gridColumn: '1 / -1' }}>
-              <Label text="🌐 Catalog URL Slug" hint={copy('Catalog এর সুন্দর URL — যেমন: limon-tech-diary → /catalog/limon-tech-diary', 'Friendly catalog URL, for example: limon-tech-diary -> /catalog/limon-tech-diary')}/>
+              <Label text="🌐 Website URL Slug" hint={copy('আপনার website-এর সুন্দর URL — যেমন: limon-tech-diary → /catalog/limon-tech-diary', 'Your website friendly URL, for example: limon-tech-diary -> /catalog/limon-tech-diary')}/>
               <div style={{ display: 'flex', gap: 8 }}>
                 <div style={{ flex: 1, position: 'relative' }}>
                   <span style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', fontSize: 12, color: th.muted, pointerEvents: 'none' }}>

@@ -3,7 +3,7 @@ import { CardHeader, EmptyState, FieldWithInfo, InfoButton, Spinner } from '../c
 import type { Theme } from '../components/ui';
 import { API_BASE, useApi } from '../hooks/useApi';
 
-type AdminTab = 'overview' | 'clients' | 'global-questions' | 'global-replies' | 'learning-log' | 'courier-tutorials' | 'billing' | 'call-servers' | 'wallet' | 'pricing' | 'subscriptions' | 'page-requests' | 'customers';
+type AdminTab = 'overview' | 'clients' | 'global-questions' | 'global-replies' | 'learning-log' | 'courier-tutorials' | 'billing' | 'call-servers' | 'wallet' | 'pricing' | 'subscriptions' | 'page-requests' | 'customers' | 'domain-setup';
 
 interface TutorialsConfig {
   courier?: { pathao?: string; steadfast?: string; redx?: string; paperfly?: string };
@@ -59,6 +59,7 @@ const ADMIN_TABS: { key: AdminTab; label: string; icon: string; help: string }[]
   { key: 'wallet',            label: 'Wallet',            icon: '💰', help: 'সব client এর wallet balance দেখুন, recharge approve করুন।' },
   { key: 'pricing',           label: 'Pricing',           icon: '🏷️', help: 'Global usage cost rates edit করুন এবং সব client এ একসাথে apply করুন।' },
   { key: 'subscriptions',     label: 'Subscriptions',     icon: '📅', help: 'প্রতিটি page এর server subscription expiry set করুন। Expired হলে bot বন্ধ হয়ে যায়।' },
+  { key: 'domain-setup',      label: 'Custom Domains',    icon: '🌐', help: 'Customer-দের নিজের domain set করুন — Nginx config + SSL সব automatic হবে।' },
 ];
 
 const SECRET_TAB: { key: AdminTab; label: string; icon: string; help: string } =
@@ -85,7 +86,7 @@ export function AdminPanel({ th, onToast, onLogout }: {
   const { request } = useApi();
   const [tab, setTab] = useState<AdminTab>(() => {
     const saved = localStorage.getItem('admin_tab') as AdminTab | null;
-    const valid: AdminTab[] = ['overview','clients','customers','global-questions','global-replies','learning-log','courier-tutorials','billing','call-servers','wallet','pricing','subscriptions','page-requests'];
+    const valid: AdminTab[] = ['overview','clients','customers','global-questions','global-replies','learning-log','courier-tutorials','billing','call-servers','wallet','pricing','subscriptions','page-requests','domain-setup'];
     return saved && valid.includes(saved) ? saved : 'overview';
   });
   const [pageRequests, setPageRequests] = useState<any[]>([]);
@@ -161,6 +162,16 @@ export function AdminPanel({ th, onToast, onLogout }: {
   const [customerSearch, setCustomerSearch] = useState('');
   const [customerOffset, setCustomerOffset] = useState(0);
   const CUSTOMER_LIMIT = 50;
+
+  // Domain Setup tab state
+  const [domainPages, setDomainPages]         = useState<any[]>([]);
+  const [domainSelectedPage, setDomainSelectedPage] = useState<any>(null);
+  const [domainInput, setDomainInput]         = useState('');
+  const [domainSkipSsl, setDomainSkipSsl]     = useState(false);
+  const [domainBusy, setDomainBusy]           = useState(false);
+  const [domainResult, setDomainResult]       = useState<any>(null);
+  const [domainList, setDomainList]           = useState<any[]>([]);
+  const [domainRemoveBusy, setDomainRemoveBusy] = useState<number | null>(null);
 
   // Create client form state
   const [showCreateClient, setShowCreateClient] = useState(false);
@@ -431,7 +442,51 @@ export function AdminPanel({ th, onToast, onLogout }: {
     if (tab === 'subscriptions') loadSubscriptions();
     if (tab === 'page-requests' || tab === 'overview') loadPageRequests();
     if (tab === 'customers') loadCustomers('', 0);
+    if (tab === 'domain-setup') loadDomainTab();
   }, [tab]);
+
+  const loadDomainTab = async () => {
+    try {
+      const [allPages, domains] = await Promise.all([
+        request<any[]>(`${BASE}/pages`),
+        request<any[]>(`${BASE}/custom-domains`),
+      ]);
+      setDomainPages(allPages || []);
+      setDomainList(domains || []);
+    } catch (e: any) { onToast(e.message, 'error'); }
+  };
+
+  const handleSetupDomain = async () => {
+    if (!domainSelectedPage) { onToast('একটি page select করুন', 'error'); return; }
+    if (!domainInput.trim()) { onToast('Domain লিখুন', 'error'); return; }
+    setDomainBusy(true);
+    setDomainResult(null);
+    try {
+      const res = await request(`${BASE}/pages/${domainSelectedPage.id}/setup-domain`, {
+        method: 'POST',
+        body: JSON.stringify({ domain: domainInput.trim(), skipSsl: domainSkipSsl }),
+      });
+      setDomainResult(res);
+      if (res?.success) {
+        onToast(`✅ ${domainInput.trim()} setup সফল!`, 'success');
+        loadDomainTab();
+      } else {
+        onToast('Setup-এ সমস্যা হয়েছে — নিচে log দেখুন', 'error');
+      }
+    } catch (e: any) { onToast(e.message, 'error'); }
+    finally { setDomainBusy(false); }
+  };
+
+  const handleRemoveDomain = async (pageId: number, domain: string) => {
+    if (!window.confirm(`"${domain}" সরিয়ে দেবেন?`)) return;
+    setDomainRemoveBusy(pageId);
+    try {
+      await request(`${BASE}/pages/${pageId}/remove-domain`, { method: 'POST' });
+      onToast(`✅ ${domain} সরানো হয়েছে`, 'success');
+      loadDomainTab();
+    } catch (e: any) { onToast(e.message, 'error'); }
+    finally { setDomainRemoveBusy(null); }
+  };
 
   const loadPageRequests = async (filter?: 'all' | 'pending') => {
     const f = filter ?? pageReqFilter;
@@ -1526,6 +1581,158 @@ export function AdminPanel({ th, onToast, onLogout }: {
             onPage={(o) => { setCustomerOffset(o); loadCustomers(customerSearch, o); }}
             BASE={BASE}
           />
+        )}
+
+        {tab === 'domain-setup' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+            {/* Setup Form */}
+            <div style={{ ...th.card }}>
+              <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 4 }}>🌐 Custom Domain Setup</div>
+              <div style={{ fontSize: 12.5, color: th.muted, marginBottom: 18 }}>
+                Customer-এর page select করুন, তাদের domain লিখুন — Nginx config + SSL সব automatic হবে।
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+                {/* Page selector */}
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: th.muted, marginBottom: 6 }}>১. Customer Page Select করুন</div>
+                  <select
+                    style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: `1.5px solid ${th.border}`, background: th.surface, color: th.text, fontSize: 13 }}
+                    value={domainSelectedPage?.id || ''}
+                    onChange={e => {
+                      const p = domainPages.find(x => String(x.id) === e.target.value);
+                      setDomainSelectedPage(p || null);
+                      setDomainInput(p?.customDomain || '');
+                      setDomainResult(null);
+                    }}
+                  >
+                    <option value="">-- Page select করুন --</option>
+                    {domainPages.map((p: any) => (
+                      <option key={p.id} value={p.id}>
+                        {p.pageName || p.pageId} {p.owner?.username ? `(${p.owner.username})` : ''} {p.customDomain ? `— 🌐 ${p.customDomain}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Domain input */}
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: th.muted, marginBottom: 6 }}>২. Customer-এর Domain লিখুন</div>
+                  <input
+                    style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: `1.5px solid ${th.border}`, background: th.surface, color: th.text, fontSize: 13, fontFamily: 'monospace', boxSizing: 'border-box' }}
+                    placeholder="shop.rahim-fashion.com"
+                    value={domainInput}
+                    onChange={e => setDomainInput(e.target.value.toLowerCase().replace(/\s/g, ''))}
+                  />
+                  {domainInput && (
+                    <div style={{ fontSize: 11.5, color: th.muted, marginTop: 6 }}>
+                      DNS CNAME: <span style={{ fontFamily: 'monospace', color: th.accent }}>{domainInput} → api.chatcat.pro</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* SSL option */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <input
+                    type="checkbox"
+                    id="skip-ssl"
+                    checked={domainSkipSsl}
+                    onChange={e => setDomainSkipSsl(e.target.checked)}
+                    style={{ width: 16, height: 16, cursor: 'pointer' }}
+                  />
+                  <label htmlFor="skip-ssl" style={{ fontSize: 13, cursor: 'pointer' }}>
+                    SSL skip করুন (Cloudflare proxy ব্যবহার করলে এটা tick করুন)
+                  </label>
+                </div>
+
+                <div style={{ padding: '10px 14px', borderRadius: 10, background: `${th.accent}0d`, border: `1px dashed ${th.accent}33`, fontSize: 12, color: th.muted, lineHeight: 1.7 }}>
+                  <strong>⚠️ Setup করার আগে নিশ্চিত করুন:</strong><br/>
+                  ১. Customer DNS-এ CNAME set করেছে এবং propagate হয়েছে (<code>nslookup {domainInput || 'domain'}</code>)<br/>
+                  ২. VPS-এ এই script root privilege-এ চলছে (certbot এবং nginx reload দরকার)
+                </div>
+
+                <button
+                  style={{ ...th.btnPrimary, padding: '12px 24px', fontSize: 14, fontWeight: 800, opacity: domainBusy ? 0.7 : 1 }}
+                  onClick={handleSetupDomain}
+                  disabled={domainBusy}
+                >
+                  {domainBusy ? '⏳ Setup হচ্ছে...' : '🚀 Setup Domain'}
+                </button>
+              </div>
+
+              {/* Result log */}
+              {domainResult && (
+                <div style={{ marginTop: 20, borderTop: `1px solid ${th.border}`, paddingTop: 16 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, color: domainResult.success ? '#16a34a' : '#dc2626' }}>
+                    {domainResult.success ? '✅ Setup সফল!' : '⚠️ Setup partially হয়েছে'}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {(domainResult.steps || []).map((s: any, i: number) => (
+                      <div key={i} style={{
+                        display: 'flex', gap: 10, alignItems: 'flex-start',
+                        padding: '8px 12px', borderRadius: 8,
+                        background: s.status === 'ok' ? '#dcfce7' : s.status === 'skip' ? `${th.accent}0d` : '#fee2e2',
+                      }}>
+                        <span style={{ fontSize: 15, flexShrink: 0 }}>
+                          {s.status === 'ok' ? '✅' : s.status === 'skip' ? '⏭️' : '❌'}
+                        </span>
+                        <div>
+                          <div style={{ fontSize: 12.5, fontWeight: 700, color: s.status === 'ok' ? '#16a34a' : s.status === 'skip' ? th.muted : '#dc2626' }}>{s.step}</div>
+                          {s.detail && <div style={{ fontSize: 11, color: '#666', marginTop: 2, fontFamily: 'monospace', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{s.detail}</div>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {domainResult.success && (
+                    <div style={{ marginTop: 12, padding: '10px 14px', borderRadius: 10, background: '#dcfce7', fontSize: 13, fontWeight: 700, color: '#16a34a' }}>
+                      🎉 এখন browser-এ https://{domainResult.domain} open করে দেখুন!
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Active Domains List */}
+            <div style={{ ...th.card }}>
+              <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 14 }}>
+                📋 Active Custom Domains ({domainList.length})
+                <button style={{ ...th.btnGhost, fontSize: 11, padding: '3px 10px', marginLeft: 10 }} onClick={loadDomainTab}>🔄</button>
+              </div>
+              {domainList.length === 0 ? (
+                <div style={{ color: th.muted, fontSize: 13 }}>এখনো কোনো custom domain নেই।</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {domainList.map((d: any) => (
+                    <div key={d.id} style={{ ...th.card2, borderRadius: 10, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontFamily: 'monospace', fontSize: 13, fontWeight: 700, color: th.accent }}>{d.customDomain}</div>
+                        <div style={{ fontSize: 11.5, color: th.muted, marginTop: 2 }}>
+                          {d.businessName || d.pageName} {d.owner?.username ? `· ${d.owner.username}` : ''}
+                          {d.catalogSlug ? ` · slug: ${d.catalogSlug}` : ''}
+                        </div>
+                      </div>
+                      <a
+                        href={`https://${d.customDomain}`}
+                        target="_blank" rel="noreferrer"
+                        style={{ ...th.btnGhost, fontSize: 11, padding: '5px 12px', textDecoration: 'none', whiteSpace: 'nowrap' }}
+                      >
+                        🔗 Open
+                      </a>
+                      <button
+                        style={{ fontSize: 11, padding: '5px 12px', borderRadius: 8, border: '1.5px solid #fca5a5', background: '#fee2e2', color: '#dc2626', fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                        onClick={() => handleRemoveDomain(d.id, d.customDomain)}
+                        disabled={domainRemoveBusy === d.id}
+                      >
+                        {domainRemoveBusy === d.id ? '...' : '🗑 Remove'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         )}
       </div>
     </div>

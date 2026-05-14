@@ -1162,6 +1162,7 @@ Return ONLY valid JSON (no markdown):
       advancePaymentMessage: page.advancePaymentMessage ?? '',
       catalogMessengerUrl: page.catalogMessengerUrl ?? '',
       catalogSlug: page.catalogSlug ?? '',
+      customDomain: page.customDomain ?? '',
       fbPageId: page.pageId ?? '',
       // Feature flags
       automationOn: Boolean(page.automationOn),
@@ -1265,6 +1266,7 @@ Return ONLY valid JSON (no markdown):
       'advancePaymentMessage',
       'catalogMessengerUrl',
       'catalogSlug',
+      'customDomain',
       'productCodePrefix',
       // V18: image recognition settings
       'imageRecognitionOn',
