@@ -261,6 +261,9 @@ model Product {
   // V19: Detection mode — OCR (product code, 50% cost) or AI_VISION (OpenAI Vision, full cost)
   detectionMode    String  @default("AI_VISION") // "OCR" | "AI_VISION"
 
+  // V20: Local CLIP visual embedding — 512-dim float array stored as JSON string
+  embedding        String? // e.g. "[0.23, -0.45, 0.78, ...]" — generated in background on product save
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

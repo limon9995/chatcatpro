@@ -16,6 +16,7 @@ import { ProductMatchModule } from '../product-match/product-match.module';
 import { FallbackAiModule } from '../fallback-ai/fallback-ai.module';
 import { VisionOpsModule } from '../vision-ops/vision-ops.module';
 import { SpamCheckerModule } from '../spam-checker/spam-checker.module';
+import { EmbeddingModule } from '../embedding/embedding.module';
 import { MessageQueueModule } from '../message-queue/message-queue.module';
 import { WebhookController } from './webhook.controller';
 import { WebhookService } from './webhook.service';
@@ -48,6 +49,7 @@ import {
     VisionOpsModule,
     SpamCheckerModule,
     MessageQueueModule,
+    EmbeddingModule,
   ],
   controllers: [WebhookController],
   providers: [

@@ -21,6 +21,8 @@ import {
   ProductMatchService,
   ProductMatchResult,
 } from '../product-match/product-match.service';
+// V20: Local CLIP visual embedding
+import { EmbeddingService } from '../embedding/embedding.service';
 import { FallbackAiService } from '../fallback-ai/fallback-ai.service';
 import { AiIntentService } from '../bot/ai-intent.service';
 import { BotContextService } from '../bot/bot-context.service';
@@ -73,6 +75,8 @@ export class WebhookService {
     private readonly whisper: WhisperService,
     private readonly botContext: BotContextService,
     private readonly smartBot: SmartBotService,
+    // V20: CLIP embedding for visual similarity search
+    private readonly embeddingService: EmbeddingService,
   ) {}
 
   // ── Entry point ────────────────────────────────────────────────────────────
@@ -1954,6 +1958,54 @@ export class WebhookService {
    * Analyzes the image with the configured AI vision provider, matches products,
    * then routes based on confidence thresholds set per page.
    */
+  /**
+   * V20: Merge attribute-based matches (Track A) with CLIP embedding matches (Track B).
+   * Products appearing in both lists get a boosted combined score.
+   */
+  private mergeMatchResults(
+    attrMatches: ProductMatchResult[],
+    embedMatches: ProductMatchResult[],
+  ): ProductMatchResult[] {
+    if (!embedMatches.length) return attrMatches;
+    if (!attrMatches.length) {
+      return embedMatches
+        .map((m) => ({ ...m, matchScore: m.matchScore * 0.5 }))
+        .slice(0, 4);
+    }
+
+    const embedMap = new Map(embedMatches.map((m) => [m.productCode, m.matchScore]));
+    const attrMap = new Map(attrMatches.map((m) => [m.productCode, m]));
+    const merged = new Map<string, ProductMatchResult>();
+
+    for (const [code, attrMatch] of attrMap) {
+      const embedSim = embedMap.get(code) ?? 0;
+      const finalScore =
+        embedSim > 0
+          ? attrMatch.matchScore * 0.6 + embedSim * 0.4
+          : attrMatch.matchScore * 0.85;
+      merged.set(code, {
+        ...attrMatch,
+        matchScore: finalScore,
+        matchReasons: embedSim > 0
+          ? [...attrMatch.matchReasons, 'visual_similarity']
+          : attrMatch.matchReasons,
+      });
+    }
+
+    for (const embedMatch of embedMatches) {
+      if (!attrMap.has(embedMatch.productCode)) {
+        merged.set(embedMatch.productCode, {
+          ...embedMatch,
+          matchScore: embedMatch.matchScore * 0.5,
+        });
+      }
+    }
+
+    return Array.from(merged.values())
+      .sort((a, b) => b.matchScore - a.matchScore)
+      .slice(0, 4);
+  }
+
   private async visionProductRecognition(
     page: any,
     psid: string,
@@ -1993,42 +2045,66 @@ export class WebhookService {
         return;
       }
 
-      // Step 1: Analyze image(s) — batch if multiple angles, single otherwise
-      const attrs = isBatch
-        ? await this.visionAnalysis.analyzeMultiple(allImageUrls)
-        : await this.visionAnalysis.analyze(imageUrl);
+      // Step 1 & 2: Track A (Gemini vision → attribute match) + Track B (CLIP embedding) in parallel
+      // Track B failure NEVER breaks Track A — Promise.allSettled guarantees this
+      const [visionSettled, embedSettled] = await Promise.allSettled([
+        (isBatch
+          ? this.visionAnalysis.analyzeMultiple(allImageUrls)
+          : this.visionAnalysis.analyze(imageUrl)
+        ).then(async (a) => ({
+          attrs: a,
+          matches: await this.productMatch.findMatches(pageId, a, 6),
+        })),
+        this.embeddingService.findSimilar(pageId, imageUrl, 8),
+      ]);
 
-      // Deduct balance — cheaper rate when local CLIP handled it, full rate when OpenAI was used
-      await this.walletService.deductUsage(
-        pageId,
-        attrs.usedApi ? 'IMAGE' : 'IMAGE_LOCAL',
-      );
+      const visionOk = visionSettled.status === 'fulfilled';
+      const { attrs, matches: attrMatches } = visionOk
+        ? visionSettled.value
+        : {
+            attrs: {
+              category: null, color: null, pattern: null,
+              sleeveType: null, gender: null, confidence: 0,
+              rawDescription: 'Vision analysis failed', usedApi: false,
+            },
+            matches: [] as ProductMatchResult[],
+          };
+
+      const embedMatches =
+        embedSettled.status === 'fulfilled' ? embedSettled.value : [];
 
       this.logger.log(
-        `[VisionRecog] Attributes — cat=${attrs.category} color=${attrs.color} ` +
-          `pattern=${attrs.pattern} confidence=${attrs.confidence.toFixed(2)}`,
+        `[VisionRecog] Track A — cat=${attrs.category} color=${attrs.color} ` +
+          `conf=${attrs.confidence.toFixed(2)} matches=${attrMatches.length} | ` +
+          `Track B — embed matches=${embedMatches.length}`,
       );
 
-      // If vision provider itself has zero confidence (mock or bad image)
-      if (attrs.confidence <= 0 || !attrs.category) {
+      // Deduct wallet only when Track A successfully called an API
+      if (visionOk) {
+        await this.walletService.deductUsage(
+          pageId,
+          attrs.usedApi ? 'IMAGE' : 'IMAGE_LOCAL',
+        );
+      }
+
+      // If Track A returned zero confidence AND Track B also found nothing → fallback
+      if ((attrs.confidence <= 0 || !attrs.category) && !embedMatches.length) {
         this.logger.warn(
-          `[VisionRecog] Zero confidence from vision provider — falling back`,
+          `[VisionRecog] Both tracks returned nothing — falling back`,
         );
         await this.visionOps.logVisionAttempt({
-          pageId,
-          psid,
-          imageUrl,
+          pageId, psid, imageUrl,
           type: 'low_confidence',
           confidence: attrs.confidence,
-          note: 'Vision provider returned zero confidence or no category',
+          note: 'Vision provider zero confidence and no embedding matches',
           attrs,
         });
         await this.visionLowConfidenceFallback(page, psid, attrs, null);
         return;
       }
 
-      // Step 2: Match products by extracted attributes
-      const matches = await this.productMatch.findMatches(pageId, attrs, 4);
+      // Merge Track A attribute matches + Track B embedding matches
+      const matches = this.mergeMatchResults(attrMatches, embedMatches);
 
       this.logger.log(
         `[VisionRecog] Found ${matches.length} candidate match(es). ` +

@@ -7,6 +7,8 @@ import { promises as fs } from 'fs';
 import { join } from 'path';
 import { PrismaService } from '../prisma/prisma.service';
 import { PageService } from '../page/page.service';
+import { EmbeddingService } from '../embedding/embedding.service';
+import { EmbeddingQueueService } from '../embedding/embedding-queue.service';
 
 /**
  * V8: Flexible product code normalization.
@@ -80,6 +82,8 @@ export class ProductsService {
   constructor(
     private prisma: PrismaService,
     private pageService: PageService,
+    private embeddingService: EmbeddingService,
+    private embeddingQueue: EmbeddingQueueService,
   ) {}
 
   /** Returns masterPageId if this page is linked, otherwise own id. */
@@ -288,6 +292,12 @@ export class ProductsService {
       productGroup: data.productGroup,
       variantLabel: data.variantLabel,
     });
+    // V20: Background embedding — fire-and-forget, never blocks response
+    if (created.imageUrl) {
+      void this.embeddingQueue.add(() =>
+        this.embeddingService.indexProduct(created.id, created.imageUrl!),
+      );
+    }
     return this.attachReferenceImages(eid, created);
   }
 
@@ -401,6 +411,12 @@ export class ProductsService {
         productGroup: data.productGroup,
         variantLabel: data.variantLabel,
       });
+    }
+    // V20: Re-embed when imageUrl is explicitly updated
+    if (typeof data.imageUrl === 'string' && updated.imageUrl) {
+      void this.embeddingQueue.add(() =>
+        this.embeddingService.indexProduct(updated.id, updated.imageUrl!),
+      );
     }
     return this.attachReferenceImages(eid, updated);
   }

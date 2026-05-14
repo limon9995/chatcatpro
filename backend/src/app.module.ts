@@ -38,6 +38,7 @@ import { MessageQueueModule } from './message-queue/message-queue.module';
 import { ChatModule } from './chat/chat.module';
 import { AiGenerateModule } from './ai-generate/ai-generate.module';
 import { WhatsappModule } from './whatsapp/whatsapp.module';
+import { EmbeddingModule } from './embedding/embedding.module';
 
 @Module({
   imports: [
@@ -97,6 +98,7 @@ import { WhatsappModule } from './whatsapp/whatsapp.module';
     WalletModule,
     WhisperModule,
     MessageQueueModule,
+    EmbeddingModule,
   ],
   controllers: [AppController],
   providers: [
