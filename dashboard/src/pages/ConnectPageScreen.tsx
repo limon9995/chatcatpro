@@ -4,7 +4,6 @@ import { API_BASE, useApi } from '../hooks/useApi';
 import { useLanguage } from '../i18n';
 
 type ConnectedPage = { id: number; pageId: string; pageName: string; isActive: boolean; masterPageId?: number | null };
-type OAuthPage = { pageId: string; pageName: string; pageToken: string };
 type PageRequest = { id: number; pageUrl: string; fbProfile: string; note?: string; status: string; adminNote?: string; createdAt: string };
 
 interface Props {
@@ -24,10 +23,7 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
   const [manualToken, setManualToken]       = useState('');
   const [manualBusy, setManualBusy]         = useState(false);
   const [manualSuccess, setManualSuccess]   = useState(false);
-  const [tab, setTab] = useState<'oauth' | 'manual' | 'request'>('oauth');
-  const [oauthBusy, setOauthBusy] = useState(false);
-  const [oauthPages, setOauthPages] = useState<OAuthPage[]>([]);
-  const [oauthConnectingPageId, setOauthConnectingPageId] = useState<string | null>(null);
+  const [tab, setTab] = useState<'request' | 'manual'>('request');
   // Linked page: optional master page to share settings from
   const [selectedMasterId, setSelectedMasterId] = useState<number | ''>('');
 
@@ -52,26 +48,6 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
       .then(pages => setAlreadyConnected(pages || []))
       .catch(() => {});
   }, [request]);
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const oauthResultId = params.get('oauthResult');
-    if (!oauthResultId) return;
-
-    setOauthBusy(true);
-    setError('');
-    request<{ pages: OAuthPage[] }>(`${API_BASE}/facebook/oauth-result/${encodeURIComponent(oauthResultId)}`)
-      .then((result) => {
-        setOauthPages(result?.pages || []);
-        setTab('oauth');
-        const nextParams = new URLSearchParams(window.location.search);
-        nextParams.delete('oauthResult');
-        const next = nextParams.toString() ? `/?${nextParams.toString()}` : '/?mode=connect-page';
-        window.history.replaceState({}, '', next);
-      })
-      .catch((e: any) => setError(e?.message || copy('Facebook page list load করা যায়নি', 'Could not load Facebook pages')))
-      .finally(() => setOauthBusy(false));
-  }, [copy, request]);
 
   useEffect(() => {
     if (tab === 'request') {
@@ -121,40 +97,6 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
     }
   };
 
-  const startOAuthConnect = async () => {
-    setOauthBusy(true);
-    setError('');
-    try {
-      const result = await request<{ url: string }>(`${API_BASE}/facebook/oauth-url`);
-      if (!result?.url) throw new Error('Facebook OAuth URL missing');
-      window.location.href = result.url;
-    } catch (e: any) {
-      setError(e?.message || copy('Facebook login শুরু করা যায়নি', 'Could not start Facebook login'));
-      setOauthBusy(false);
-    }
-  };
-
-  const connectOAuthPage = async (page: OAuthPage) => {
-    setOauthConnectingPageId(page.pageId);
-    setError('');
-    try {
-      await request(`${API_BASE}/facebook/connect`, {
-        method: 'POST',
-        body: JSON.stringify({
-          pageId: page.pageId,
-          pageName: page.pageName,
-          pageToken: page.pageToken,
-          ...(selectedMasterId ? { masterPageId: selectedMasterId } : {}),
-        }),
-      });
-      onConnected();
-    } catch (e: any) {
-      setError(e?.message || copy('Page connect করা যায়নি', 'Page connect failed'));
-    } finally {
-      setOauthConnectingPageId(null);
-    }
-  };
-
   const disconnectPage = async (page: ConnectedPage) => {
     const confirmed = window.confirm(
       copy(
@@ -167,9 +109,7 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
     setDisconnecting(page.id);
     setError('');
     try {
-      await request(`${API_BASE}/facebook/disconnect/${page.id}`, {
-        method: 'DELETE',
-      });
+      await request(`${API_BASE}/facebook/disconnect/${page.id}`, { method: 'DELETE' });
       const nextPages = alreadyConnected.map((p) =>
         p.id === page.id ? { ...p, isActive: false } : p,
       );
@@ -246,16 +186,11 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
                   onClick={() => disconnectPage(p)}
                   disabled={disconnecting === p.id || !p.isActive}
                   style={{
-                    border: 'none',
-                    borderRadius: 8,
-                    padding: '7px 12px',
+                    border: 'none', borderRadius: 8, padding: '7px 12px',
                     background: !p.isActive ? (dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)') : 'rgba(239,68,68,0.14)',
                     color: !p.isActive ? muted : '#ef4444',
                     cursor: disconnecting === p.id || !p.isActive ? 'default' : 'pointer',
-                    fontSize: 12,
-                    fontWeight: 700,
-                    fontFamily: 'inherit',
-                    minWidth: 104,
+                    fontSize: 12, fontWeight: 700, fontFamily: 'inherit', minWidth: 104,
                   }}
                 >
                   {disconnecting === p.id
@@ -297,36 +232,46 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
         )}
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
-            {(['oauth', 'request', 'manual'] as const).map((t) => {
-              const labels: Record<string, string> = { oauth: 'Facebook Login', request: '📋 Request', manual: 'Manual Token' };
+          {/* Tab bar — 2 tabs only */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+            {(['request', 'manual'] as const).map((t) => {
+              const labels: Record<string, string> = {
+                request: copy('📋 Request Access', '📋 Request Access'),
+                manual: copy('🔑 Access Token', '🔑 Access Token'),
+              };
               return (
-                <button key={t} onClick={() => { setTab(t); setError(''); }}
-                  style={{
-                    padding: '9px 8px', borderRadius: 12, fontSize: 12,
-                    border: `1px solid ${tab === t ? '#6366f1' : border}`,
-                    background: tab === t ? (dark ? 'rgba(99,102,241,0.16)' : 'rgba(99,102,241,0.08)') : 'transparent',
-                    color: tab === t ? '#6366f1' : text, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit',
-                  }}
-                >{labels[t]}</button>
+                <div key={t} style={{ position: 'relative' }}>
+                  <button onClick={() => { setTab(t); setError(''); }}
+                    style={{
+                      width: '100%', padding: '9px 8px', borderRadius: 12, fontSize: 12,
+                      border: `1px solid ${tab === t ? '#6366f1' : border}`,
+                      background: tab === t ? (dark ? 'rgba(99,102,241,0.16)' : 'rgba(99,102,241,0.08)') : 'transparent',
+                      color: tab === t ? '#6366f1' : text, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit',
+                    }}
+                  >{labels[t]}</button>
+                  {t === 'request' && (
+                    <span style={{ position: 'absolute', top: -7, right: 6, background: '#22c55e', color: '#fff', fontSize: 9, fontWeight: 800, padding: '1px 6px', borderRadius: 20, letterSpacing: '0.04em' }}>
+                      {copy('প্রস্তাবিত', 'Recommended')}
+                    </span>
+                  )}
+                </div>
               );
             })}
           </div>
 
+          {/* ── Request Access tab ── */}
           {tab === 'request' ? (
             <>
-              {/* Info box */}
               <div style={{ background: dark ? 'rgba(251,191,36,0.08)' : 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.28)', borderRadius: 12, padding: '12px 15px', fontSize: 12.5, color: text, lineHeight: 1.9 }}>
                 📋 <strong>{copy('কীভাবে কাজ করে?', 'How does this work?')}</strong><br />
                 <span style={{ color: muted }}>
                   {copy('১. নিচের form পূরণ করুন — আপনার Facebook page link ও profile link দিন', '1. Fill the form below with your Facebook page & profile links')}<br />
                   {copy('২. Admin আপনাকে Facebook App-এ Tester হিসেবে add করবে', '2. Admin will add you as a Tester in the Facebook App')}<br />
                   {copy('৩. Facebook থেকে invite notification আসবে — Accept করুন', '3. You will get an invite notification on Facebook — Accept it')}<br />
-                  {copy('৪. Accepted হলে "Facebook Login" tab থেকে page connect করুন', '4. After accepting, use the "Facebook Login" tab to connect your page')}
+                  {copy('৪. Accepted হলে "Access Token" tab থেকে page connect করুন', '4. After accepting, use the "Access Token" tab to connect your page')}
                 </span>
               </div>
 
-              {/* Existing requests */}
               {myRequests.length > 0 && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   <div style={{ fontSize: 11, color: muted, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
@@ -346,7 +291,7 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
                         )}
                         {r.status === 'approved' && (
                           <div style={{ marginTop: 8, padding: '8px 10px', background: 'rgba(34,197,94,0.08)', borderRadius: 8, fontSize: 12, color: '#16a34a', fontWeight: 600 }}>
-                            🎉 {copy('Approved! এখন "Facebook Login" tab-এ গিয়ে page connect করুন।', 'Approved! Now go to "Facebook Login" tab to connect your page.')}
+                            🎉 {copy('Approved! এখন "Access Token" tab-এ গিয়ে page connect করুন।', 'Approved! Now go to the "Access Token" tab to connect your page.')}
                           </div>
                         )}
                       </div>
@@ -356,7 +301,6 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
                 </div>
               )}
 
-              {/* Submit form */}
               {!reqSubmitted ? (
                 <>
                   <div>
@@ -398,154 +342,79 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
                 </div>
               )}
             </>
-          ) : tab === 'oauth' ? (
+          ) : (
+            /* ── Access Token (manual) tab ── */
             <>
               <div style={{ background: dark ? 'rgba(99,102,241,0.08)' : 'rgba(99,102,241,0.05)', border: '1px solid rgba(99,102,241,0.18)', borderRadius: 12, padding: '12px 15px', fontSize: 12.5, color: text, lineHeight: 1.85 }}>
-                📘 <strong>{copy('সবচেয়ে সহজ উপায়', 'The easiest way')}</strong><br />
+                📌 <strong>{copy('কিভাবে Access Token পাবেন?', 'How to get the Access Token?')}</strong><br />
                 <span style={{ color: muted }}>
-                  {copy('1. Facebook login করুন', '1. Log in with Facebook')}<br />
-                  {copy('2. Permission allow করুন', '2. Approve the requested permissions')}<br />
-                  {copy('3. ফিরে এসে আপনার page select করুন', '3. Come back and select your page')}<br />
-                  {copy('4. Done — token manually দিতে হবে না', '4. Done — no need to paste tokens manually')}
+                  {copy('1. ', '1. ')}<a href="https://developers.facebook.com/tools/explorer/" target="_blank" rel="noreferrer" style={{ color: '#6366f1' }}>Graph API Explorer</a>{copy(' খুলুন', ' and open it')}<br />
+                  {copy('2. আপনার App ও Page select করুন', '2. Select your App and Page')}<br />
+                  {copy('3. ', '3. ')}<code style={{ background: dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)', padding: '1px 5px', borderRadius: 4 }}>pages_messaging</code>{copy(' permission add করুন', ' permission')}<br />
+                  {copy('4. "Generate Access Token" click করুন → copy করুন', '4. Click "Generate Access Token" and copy it')}<br />
+                  {copy('5. Page Name দিন, Access Token দিন — Page ID bot নিজে বের করবে', '5. Enter the Page Name and Access Token — the bot will detect the Page ID automatically')}
                 </span>
               </div>
 
-              {oauthPages.length === 0 ? (
-                <button onClick={startOAuthConnect} disabled={oauthBusy}
-                  style={{
-                    width: '100%', padding: '13px', borderRadius: 13, border: 'none',
-                    background: oauthBusy ? 'rgba(99,102,241,0.5)' : '#6366f1',
-                    color: '#fff', fontWeight: 800, fontSize: 15,
-                    cursor: oauthBusy ? 'default' : 'pointer',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-                    fontFamily: 'inherit',
-                  }}>
-                  {oauthBusy ? <><Spinner size={15} /> {copy('Opening Facebook...', 'Opening Facebook...')}</> : copy('f Facebook Login করুন', 'f Continue with Facebook')}
-                </button>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  <div style={{ fontSize: 12, color: muted, fontWeight: 700 }}>
-                    {copy('একটা page select করুন', 'Select a page')}
+              <div>
+                <label style={{ fontSize: 12, color: muted, fontWeight: 600, display: 'block', marginBottom: 5 }}>{copy('Page Name *', 'Page Name *')}</label>
+                <input style={inp} placeholder={copy('আপনার Page এর নাম', 'Your page name')}
+                  value={manualPageName} onChange={e => setManualPageName(e.target.value)} />
+              </div>
+
+              <div>
+                <label style={{ fontSize: 12, color: muted, fontWeight: 600, display: 'block', marginBottom: 5 }}>{copy('Page Access Token *', 'Page Access Token *')}</label>
+                <textarea style={{ ...inp, resize: 'vertical', minHeight: 80, lineHeight: 1.5 }}
+                  placeholder={copy('EAAxxxxxx... (Graph API Explorer থেকে copy করুন)', 'EAAxxxxxx... (copy from Graph API Explorer)')}
+                  value={manualToken} onChange={e => setManualToken(e.target.value)} />
+              </div>
+
+              {activePages.length > 0 && (
+                <div style={{ padding: '10px 12px', borderRadius: 10, border: `1px solid ${border}`, background: dark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)' }}>
+                  <div style={{ fontSize: 12, color: muted, fontWeight: 600, marginBottom: 6 }}>
+                    🔗 {copy('এই page কি কোনো existing profile share করবে? (optional)', 'Link to an existing page profile? (optional)')}
                   </div>
-                  {/* Link to existing page profile (optional) */}
-                  {activePages.length > 0 && (
-                    <div style={{ padding: '10px 12px', borderRadius: 10, border: `1px solid ${border}`, background: dark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)' }}>
-                      <div style={{ fontSize: 12, color: muted, fontWeight: 600, marginBottom: 6 }}>
-                        🔗 {copy('এই page কি কোনো existing profile share করবে? (optional)', 'Link to an existing page profile? (optional)')}
-                      </div>
-                      <select
-                        value={selectedMasterId}
-                        onChange={e => setSelectedMasterId(e.target.value ? Number(e.target.value) : '')}
-                        style={{ ...inp, fontSize: 13, height: 36, padding: '0 10px' }}
-                      >
-                        <option value="">{copy('না — নতুন standalone page হবে', 'No — create as standalone page')}</option>
-                        {activePages.map(p => (
-                          <option key={p.id} value={p.id}>{p.pageName} — {copy('এর settings/products share করবে', 'share settings & products')}</option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-                  {oauthPages.map((page) => (
-                    <div key={page.pageId} style={{ border: `1px solid ${border}`, borderRadius: 12, padding: '11px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-                      <div>
-                        <div style={{ fontWeight: 800, color: text, fontSize: 13.5 }}>{page.pageName}</div>
-                        <div style={{ fontSize: 11.5, color: muted }}>{page.pageId}</div>
-                      </div>
-                      <button
-                        onClick={() => connectOAuthPage(page)}
-                        disabled={oauthConnectingPageId === page.pageId}
-                        style={{
-                          border: 'none',
-                          borderRadius: 10,
-                          padding: '9px 14px',
-                          background: '#6366f1',
-                          color: '#fff',
-                          fontWeight: 800,
-                          cursor: oauthConnectingPageId === page.pageId ? 'default' : 'pointer',
-                          fontFamily: 'inherit',
-                          minWidth: 110,
-                        }}
-                      >
-                        {oauthConnectingPageId === page.pageId ? copy('Connecting...', 'Connecting...') : copy('এইটা Use করুন', 'Use This')}
-                      </button>
-                    </div>
-                  ))}
+                  <select
+                    value={selectedMasterId}
+                    onChange={e => setSelectedMasterId(e.target.value ? Number(e.target.value) : '')}
+                    style={{ ...inp, fontSize: 13, height: 36, padding: '0 10px' }}
+                  >
+                    <option value="">{copy('না — নতুন standalone page হবে', 'No — create as standalone page')}</option>
+                    {activePages.map(p => (
+                      <option key={p.id} value={p.id}>{p.pageName} — {copy('এর settings/products share করবে', 'share settings & products')}</option>
+                    ))}
+                  </select>
                 </div>
               )}
-            </>
-          ) : (
-            <>
-          <div style={{ background: dark ? 'rgba(99,102,241,0.08)' : 'rgba(99,102,241,0.05)', border: '1px solid rgba(99,102,241,0.18)', borderRadius: 12, padding: '12px 15px', fontSize: 12.5, color: text, lineHeight: 1.85 }}>
-            📌 <strong>{copy('কিভাবে Access Token পাবেন?', 'How to get the Access Token?')}</strong><br />
-            <span style={{ color: muted }}>
-              {copy('1. ', '1. ')}<a href="https://developers.facebook.com/tools/explorer/" target="_blank" rel="noreferrer" style={{ color: '#6366f1' }}>Graph API Explorer</a>{copy(' খুলুন', ' and open it')}<br />
-              {copy('2. আপনার App ও Page select করুন', '2. Select your App and Page')}<br />
-              {copy('3. ', '3. ')}<code style={{ background: dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)', padding: '1px 5px', borderRadius: 4 }}>pages_messaging</code>{copy(' permission add করুন', ' permission')}<br />
-              {copy('4. "Generate Access Token" click করুন → copy করুন', '4. Click "Generate Access Token" and copy it')}<br />
-              {copy('5. Page Name দিন, Access Token দিন — Page ID bot নিজে বের করবে', '5. Enter the Page Name and Access Token — the bot will detect the Page ID automatically')}
-            </span>
-          </div>
 
-          <div>
-            <label style={{ fontSize: 12, color: muted, fontWeight: 600, display: 'block', marginBottom: 5 }}>{copy('Page Name *', 'Page Name *')}</label>
-            <input style={inp} placeholder={copy('আপনার Page এর নাম', 'Your page name')}
-              value={manualPageName} onChange={e => setManualPageName(e.target.value)} />
-          </div>
-
-          <div>
-            <label style={{ fontSize: 12, color: muted, fontWeight: 600, display: 'block', marginBottom: 5 }}>{copy('Page Access Token *', 'Page Access Token *')}</label>
-            <textarea style={{ ...inp, resize: 'vertical', minHeight: 80, lineHeight: 1.5 }}
-              placeholder={copy('EAAxxxxxx... (Graph API Explorer থেকে copy করুন)', 'EAAxxxxxx... (copy from Graph API Explorer)')}
-              value={manualToken} onChange={e => setManualToken(e.target.value)} />
-          </div>
-
-          {/* Link to existing page profile (optional) — manual tab */}
-          {activePages.length > 0 && (
-            <div style={{ padding: '10px 12px', borderRadius: 10, border: `1px solid ${border}`, background: dark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)' }}>
-              <div style={{ fontSize: 12, color: muted, fontWeight: 600, marginBottom: 6 }}>
-                🔗 {copy('এই page কি কোনো existing profile share করবে? (optional)', 'Link to an existing page profile? (optional)')}
-              </div>
-              <select
-                value={selectedMasterId}
-                onChange={e => setSelectedMasterId(e.target.value ? Number(e.target.value) : '')}
-                style={{ ...inp, fontSize: 13, height: 36, padding: '0 10px' }}
-              >
-                <option value="">{copy('না — নতুন standalone page হবে', 'No — create as standalone page')}</option>
-                {activePages.map(p => (
-                  <option key={p.id} value={p.id}>{p.pageName} — {copy('এর settings/products share করবে', 'share settings & products')}</option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {!manualSuccess ? (
-            <button onClick={connectManual} disabled={manualBusy}
-              style={{
-                width: '100%', padding: '13px', borderRadius: 13, border: 'none',
-                background: manualBusy ? 'rgba(99,102,241,0.5)' : '#6366f1',
-                color: '#fff', fontWeight: 800, fontSize: 15,
-                cursor: manualBusy ? 'default' : 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-                fontFamily: 'inherit', transition: 'background .15s',
-              }}>
-              {manualBusy ? <><Spinner size={15} /> {copy('Connecting...', 'Connecting...')}</> : copy('🔗 Page Connect করুন', 'Connect Page')}
-            </button>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.3)', borderRadius: 12, padding: '12px 15px', fontSize: 13, color: '#16a34a', fontWeight: 700 }}>
-                {copy('✅ Page সফলভাবে Connected হয়েছে!', '✅ Page connected successfully!')}
-              </div>
-              <button onClick={onConnected}
-                style={{ width: '100%', padding: '12px', borderRadius: 12, border: 'none', background: '#6366f1', color: '#fff', fontWeight: 800, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}>
-                {copy('→ Dashboard-এ যান', 'Go to Dashboard')}
-              </button>
-            </div>
-          )}
+              {!manualSuccess ? (
+                <button onClick={connectManual} disabled={manualBusy}
+                  style={{
+                    width: '100%', padding: '13px', borderRadius: 13, border: 'none',
+                    background: manualBusy ? 'rgba(99,102,241,0.5)' : '#6366f1',
+                    color: '#fff', fontWeight: 800, fontSize: 15,
+                    cursor: manualBusy ? 'default' : 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+                    fontFamily: 'inherit', transition: 'background .15s',
+                  }}>
+                  {manualBusy ? <><Spinner size={15} /> {copy('Connecting...', 'Connecting...')}</> : copy('🔗 Page Connect করুন', 'Connect Page')}
+                </button>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.3)', borderRadius: 12, padding: '12px 15px', fontSize: 13, color: '#16a34a', fontWeight: 700 }}>
+                    {copy('✅ Page সফলভাবে Connected হয়েছে!', '✅ Page connected successfully!')}
+                  </div>
+                  <button onClick={onConnected}
+                    style={{ width: '100%', padding: '12px', borderRadius: 12, border: 'none', background: '#6366f1', color: '#fff', fontWeight: 800, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}>
+                    {copy('→ Dashboard-এ যান', 'Go to Dashboard')}
+                  </button>
+                </div>
+              )}
             </>
           )}
         </div>
 
-        {/* Goto dashboard only for active pages */}
+        {/* Goto dashboard for active pages */}
         {activePages.length > 0 && (
           <div style={{ marginTop: 18, display: 'flex', flexDirection: 'column', gap: 10 }}>
             <div style={{ fontSize: 11, color: muted, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase' }}>

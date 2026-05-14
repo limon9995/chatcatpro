@@ -202,10 +202,9 @@ export function SettingsPage({ th, pageId, tab, onToast }: {
   // Facebook connection / linked pages state
   const [linkedPages, setLinkedPages] = useState<{ id: number; pageId: string; pageName: string; isActive: boolean }[]>([]);
   const [showReconnectModal, setShowReconnectModal] = useState(false);
-  const [reconnectTab, setReconnectTab] = useState<'oauth' | 'manual' | 'request'>('oauth');
+  const [reconnectTab, setReconnectTab] = useState<'request' | 'manual'>('request');
   const [reconnectToken, setReconnectToken] = useState('');
   const [reconnectBusy, setReconnectBusy] = useState(false);
-  const [reconnectOAuthBusy, setReconnectOAuthBusy] = useState(false);
   const [reconnectReqPageUrl, setReconnectReqPageUrl] = useState('');
   const [reconnectReqFbProfile, setReconnectReqFbProfile] = useState('');
   const [reconnectReqNote, setReconnectReqNote] = useState('');
@@ -301,18 +300,6 @@ export function SettingsPage({ th, pageId, tab, onToast }: {
       load();
     } catch (e: any) { onToast(e.message, 'error'); }
     finally { setReconnectBusy(false); }
-  };
-
-  const startReconnectOAuth = async () => {
-    setReconnectOAuthBusy(true);
-    try {
-      const result = await request<{ url: string }>(`${API_BASE}/facebook/oauth-url`);
-      if (!result?.url) throw new Error('OAuth URL missing');
-      window.location.href = result.url;
-    } catch (e: any) {
-      onToast(e.message || copy('Facebook login শুরু করা যায়নি', 'Could not start Facebook login'), 'error');
-      setReconnectOAuthBusy(false);
-    }
   };
 
   const submitReconnectRequest = async () => {
@@ -616,7 +603,7 @@ export function SettingsPage({ th, pageId, tab, onToast }: {
               </div>
             </div>
             <button
-              onClick={() => { setReconnectToken(''); setReconnectTab('oauth'); setReconnectReqSubmitted(false); setReconnectReqPageUrl(''); setReconnectReqFbProfile(''); setReconnectReqNote(''); setShowReconnectModal(true); }}
+              onClick={() => { setReconnectToken(''); setReconnectTab('request'); setReconnectReqSubmitted(false); setReconnectReqPageUrl(''); setReconnectReqFbProfile(''); setReconnectReqNote(''); setShowReconnectModal(true); }}
               style={{ ...th.btnGhost, whiteSpace: 'nowrap', fontSize: 12 }}
             >
               🔄 {copy('Change FB Page', 'Change FB Page')}
@@ -624,22 +611,28 @@ export function SettingsPage({ th, pageId, tab, onToast }: {
           </div>
           {showReconnectModal && (
             <div style={{ marginTop: 14, borderRadius: 14, border: `1px solid ${th.borderMd}`, background: th.surface, overflow: 'hidden' }}>
-              {/* Tab bar */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', borderBottom: `1px solid ${th.border}` }}>
-                {(['oauth', 'manual', 'request'] as const).map(t => {
+              {/* Tab bar — 2 tabs: Request first (Recommended), Access Token second */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderBottom: `1px solid ${th.border}` }}>
+                {(['request', 'manual'] as const).map(t => {
                   const labels: Record<string, string> = {
-                    oauth: copy('Facebook Login', 'Facebook Login'),
-                    manual: copy('Manual Token', 'Manual Token'),
-                    request: copy('📋 Request', '📋 Request'),
+                    request: copy('📋 Request Access', '📋 Request Access'),
+                    manual: copy('🔑 Access Token', '🔑 Access Token'),
                   };
                   return (
-                    <button key={t} onClick={() => setReconnectTab(t)} style={{
-                      padding: '10px 6px', fontSize: 12, fontWeight: 700, border: 'none', cursor: 'pointer',
-                      fontFamily: 'inherit', borderBottom: `2px solid ${reconnectTab === t ? th.accent : 'transparent'}`,
-                      background: reconnectTab === t ? th.accentSoft : 'transparent',
-                      color: reconnectTab === t ? th.accentText : th.muted,
-                      transition: 'all .15s',
-                    }}>{labels[t]}</button>
+                    <div key={t} style={{ position: 'relative' }}>
+                      <button onClick={() => setReconnectTab(t)} style={{
+                        width: '100%', padding: '10px 6px', fontSize: 12, fontWeight: 700, border: 'none', cursor: 'pointer',
+                        fontFamily: 'inherit', borderBottom: `2px solid ${reconnectTab === t ? th.accent : 'transparent'}`,
+                        background: reconnectTab === t ? th.accentSoft : 'transparent',
+                        color: reconnectTab === t ? th.accentText : th.muted,
+                        transition: 'all .15s',
+                      }}>{labels[t]}</button>
+                      {t === 'request' && (
+                        <span style={{ position: 'absolute', top: 4, right: 8, background: '#22c55e', color: '#fff', fontSize: 8, fontWeight: 800, padding: '1px 5px', borderRadius: 20, letterSpacing: '0.04em', pointerEvents: 'none' }}>
+                          {copy('প্রস্তাবিত', 'Recommended')}
+                        </span>
+                      )}
+                    </div>
                   );
                 })}
               </div>
@@ -648,50 +641,6 @@ export function SettingsPage({ th, pageId, tab, onToast }: {
                 <div style={{ fontSize: 12, color: th.muted }}>
                   {copy('সব settings, products ও bot training অক্ষুণ্ণ থাকবে।', 'All settings, products, and bot training will be preserved.')}
                 </div>
-
-                {/* ── OAuth tab ── */}
-                {reconnectTab === 'oauth' && (
-                  <>
-                    <div style={{ background: th.accentSoft, border: `1px solid ${th.border}`, borderRadius: 10, padding: '11px 14px', fontSize: 12.5, color: th.text, lineHeight: 1.85 }}>
-                      📘 <strong>{copy('সবচেয়ে সহজ উপায়', 'The easiest way')}</strong><br />
-                      <span style={{ color: th.muted }}>
-                        {copy('1. Facebook login করুন', '1. Log in with Facebook')}<br />
-                        {copy('2. Permission allow করুন', '2. Approve the requested permissions')}<br />
-                        {copy('3. ফিরে এসে আপনার page select করুন', '3. Come back and select your page')}<br />
-                        {copy('4. Done — token manually দিতে হবে না', '4. Done — no need to paste tokens manually')}
-                      </span>
-                    </div>
-                    <button onClick={startReconnectOAuth} disabled={reconnectOAuthBusy}
-                      style={{ ...th.btnPrimary, width: '100%', justifyContent: 'center', opacity: reconnectOAuthBusy ? 0.6 : 1 }}>
-                      {reconnectOAuthBusy ? <><Spinner size={13} /> {copy('Opening Facebook...', 'Opening Facebook...')}</> : copy('f Facebook Login করুন', 'f Continue with Facebook')}
-                    </button>
-                  </>
-                )}
-
-                {/* ── Manual tab ── */}
-                {reconnectTab === 'manual' && (
-                  <>
-                    <div style={{ background: th.accentSoft, border: `1px solid ${th.border}`, borderRadius: 10, padding: '11px 14px', fontSize: 12.5, color: th.text, lineHeight: 1.85 }}>
-                      📌 <strong>{copy('কিভাবে Access Token পাবেন?', 'How to get the Access Token?')}</strong><br />
-                      <span style={{ color: th.muted }}>
-                        {copy('1. ', '1. ')}<a href="https://developers.facebook.com/tools/explorer/" target="_blank" rel="noreferrer" style={{ color: th.accent }}>Graph API Explorer</a>{copy(' খুলুন', ' and open it')}<br />
-                        {copy('2. আপনার App ও Page select করুন', '2. Select your App and Page')}<br />
-                        {copy('3. ', '3. ')}<code style={{ background: th.border, padding: '1px 5px', borderRadius: 4 }}>pages_messaging</code>{copy(' permission add করুন', ' permission')}<br />
-                        {copy('4. "Generate Access Token" click করুন → copy করুন', '4. Click "Generate Access Token" and copy it')}
-                      </span>
-                    </div>
-                    <textarea
-                      style={{ ...inp, minHeight: 72, resize: 'vertical', lineHeight: 1.5 }}
-                      placeholder="EAAxxxxxx..."
-                      value={reconnectToken}
-                      onChange={e => setReconnectToken(e.target.value)}
-                    />
-                    <button onClick={reconnectPage} disabled={reconnectBusy}
-                      style={{ ...th.btnPrimary, width: '100%', justifyContent: 'center', opacity: reconnectBusy ? 0.6 : 1 }}>
-                      {reconnectBusy ? <><Spinner size={13} /> {copy('Verifying...', 'Verifying...')}</> : copy('✓ Change Page', '✓ Change Page')}
-                    </button>
-                  </>
-                )}
 
                 {/* ── Request tab ── */}
                 {reconnectTab === 'request' && (
@@ -702,7 +651,7 @@ export function SettingsPage({ th, pageId, tab, onToast }: {
                         {copy('১. নিচের form পূরণ করুন — আপনার Facebook page link ও profile link দিন', '1. Fill the form below with your Facebook page & profile links')}<br />
                         {copy('২. Admin আপনাকে Facebook App-এ Tester হিসেবে add করবে', '2. Admin will add you as a Tester in the Facebook App')}<br />
                         {copy('৩. Facebook থেকে invite notification আসবে — Accept করুন', '3. You will get an invite notification on Facebook — Accept it')}<br />
-                        {copy('৪. Accepted হলে "Facebook Login" tab থেকে page connect করুন', '4. After accepting, use the "Facebook Login" tab to connect your page')}
+                        {copy('৪. Accepted হলে "Access Token" tab থেকে page connect করুন', '4. After accepting, use the "Access Token" tab to connect your page')}
                       </span>
                     </div>
                     {reconnectReqSubmitted ? (
@@ -739,6 +688,31 @@ export function SettingsPage({ th, pageId, tab, onToast }: {
                         </button>
                       </>
                     )}
+                  </>
+                )}
+
+                {/* ── Access Token (manual) tab ── */}
+                {reconnectTab === 'manual' && (
+                  <>
+                    <div style={{ background: th.accentSoft, border: `1px solid ${th.border}`, borderRadius: 10, padding: '11px 14px', fontSize: 12.5, color: th.text, lineHeight: 1.85 }}>
+                      📌 <strong>{copy('কিভাবে Access Token পাবেন?', 'How to get the Access Token?')}</strong><br />
+                      <span style={{ color: th.muted }}>
+                        {copy('1. ', '1. ')}<a href="https://developers.facebook.com/tools/explorer/" target="_blank" rel="noreferrer" style={{ color: th.accent }}>Graph API Explorer</a>{copy(' খুলুন', ' and open it')}<br />
+                        {copy('2. আপনার App ও Page select করুন', '2. Select your App and Page')}<br />
+                        {copy('3. ', '3. ')}<code style={{ background: th.border, padding: '1px 5px', borderRadius: 4 }}>pages_messaging</code>{copy(' permission add করুন', ' permission')}<br />
+                        {copy('4. "Generate Access Token" click করুন → copy করুন', '4. Click "Generate Access Token" and copy it')}
+                      </span>
+                    </div>
+                    <textarea
+                      style={{ ...inp, minHeight: 72, resize: 'vertical', lineHeight: 1.5 }}
+                      placeholder="EAAxxxxxx..."
+                      value={reconnectToken}
+                      onChange={e => setReconnectToken(e.target.value)}
+                    />
+                    <button onClick={reconnectPage} disabled={reconnectBusy}
+                      style={{ ...th.btnPrimary, width: '100%', justifyContent: 'center', opacity: reconnectBusy ? 0.6 : 1 }}>
+                      {reconnectBusy ? <><Spinner size={13} /> {copy('Verifying...', 'Verifying...')}</> : copy('✓ Change Page', '✓ Change Page')}
+                    </button>
                   </>
                 )}
 
