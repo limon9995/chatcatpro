@@ -970,4 +970,59 @@ export class OcrService {
       (_, digits) => '-' + this.fixOcrDigits(digits),
     );
   }
+
+  // ── Gemini-based OCR fallback (used when local Tesseract queue is full) ────
+
+  /**
+   * Extracts raw text from an image using Gemini Flash.
+   * Called ONLY as last resort when the local OCR queue is full.
+   * Cost: ~$0.00005 per call (Gemini 2.0 Flash).
+   */
+  async extractTextViaGemini(imageUrl: string): Promise<string> {
+    const apiKey = process.env.GEMINI_API_KEY ?? '';
+    if (!apiKey) {
+      this.logger.warn('[OCR/Gemini] GEMINI_API_KEY not set — skipping');
+      return '';
+    }
+
+    let rawBuffer: Buffer;
+    try {
+      rawBuffer = await this.downloadImage(imageUrl);
+    } catch {
+      return '';
+    }
+
+    const base64 = rawBuffer.toString('base64');
+    const model = process.env.VISION_MODEL ?? 'gemini-2.0-flash';
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+
+    try {
+      const res = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            role: 'user',
+            parts: [
+              { text: 'Extract all visible text from this image. Return only the raw text, no formatting, no explanation.' },
+              { inlineData: { mimeType: 'image/jpeg', data: base64 } },
+            ],
+          }],
+          generationConfig: { maxOutputTokens: 300 },
+        }),
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (!res.ok) {
+        this.logger.warn(`[OCR/Gemini] API error ${res.status}`);
+        return '';
+      }
+      const resp = await res.json();
+      const text: string = resp?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+      this.logger.log(`[OCR/Gemini] Extracted ${text.length} chars`);
+      return text;
+    } catch (e: any) {
+      this.logger.error(`[OCR/Gemini] Failed: ${e?.message}`);
+      return '';
+    }
+  }
 }

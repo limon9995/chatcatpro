@@ -293,11 +293,9 @@ export class WebhookService {
           ),
         );
         if (!payAccepted) {
-          await this.safeSend(
-            token,
-            psid,
-            'এই মুহূর্তে queue পূর্ণ 😔 একটু পরে payment screenshot আবার পাঠান 💖',
-          );
+          // Queue full — run directly via Gemini (API, no local CPU needed)
+          void this.handlePaymentScreenshot(page, psid, img.payload.url, currentDraft, true)
+            .catch(() => {});
         }
         return;
       }
@@ -335,11 +333,9 @@ export class WebhookService {
         this.handleAudioMessage(page, psid, audioAttachment.payload.url),
       );
       if (!audioAccepted) {
-        await this.safeSend(
-          token,
-          psid,
-          'এই মুহূর্তে queue পূর্ণ 😔 একটু পরে voice message আবার পাঠান 💖',
-        );
+        // Queue full — Whisper is already an external API (no local CPU), run directly
+        void this.handleAudioMessage(page, psid, audioAttachment.payload.url)
+          .catch(() => {});
       }
       return;
     }
@@ -1608,16 +1604,19 @@ export class WebhookService {
     psid: string,
     imageUrl: string,
     draft: DraftSession,
+    useGemini = false,
   ): Promise<void> {
     const pageId = page.id as number;
     const token = page.pageToken as string;
 
     this.logger.log(
-      `[PaymentOCR] Processing screenshot for page=${page.pageId} psid=${psid}`,
+      `[PaymentOCR] Processing screenshot for page=${page.pageId} psid=${psid} provider=${useGemini ? 'gemini' : 'tesseract'}`,
     );
 
     try {
-      const rawText = await this.ocr.extractTextFromImageUrl(imageUrl);
+      const rawText = useGemini
+        ? await this.ocr.extractTextViaGemini(imageUrl)
+        : await this.ocr.extractTextFromImageUrl(imageUrl);
       this.logger.log(`[PaymentOCR] Raw text: ${rawText.slice(0, 200)}`);
 
       // Try to extract transaction ID from common Bkash/Nagad patterns
