@@ -18,6 +18,7 @@ export function CatalogPage({ th, pageId, onToast }: {
   const [slugInput, setSlugInput]         = useState('');
   const [savingSlug, setSavingSlug]       = useState(false);
   const [slugError, setSlugError]         = useState('');
+  const [editingSlug, setEditingSlug]     = useState(false);
 
   const backendBase = API_BASE.startsWith('http') ? API_BASE : `${window.location.protocol}//${window.location.hostname}:3000`;
   const slug        = catalogData?.page?.catalogSlug;
@@ -49,15 +50,22 @@ export function CatalogPage({ th, pageId, onToast }: {
 
   const openCatalog = () => window.open(CATALOG_URL, '_blank');
 
+  const patchSettings = async (fields: Record<string, any>) => {
+    const res = await fetch(`${API_BASE}/client-dashboard/${pageId}/settings`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('dfbot_token')}` },
+      body: JSON.stringify({ pageFields: fields }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err?.message || `HTTP ${res.status}`);
+    }
+  };
+
   const saveCustomDomain = async () => {
     setSavingDomain(true);
     try {
-      const res = await fetch(`${API_BASE}/client-dashboard/settings`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('dfbot_token')}` },
-        body: JSON.stringify({ pageId, pageFields: { customDomain: customDomain.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/$/, '') || null } }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      await patchSettings({ customDomain: customDomain.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/$/, '') || null });
       setDomainSaved(true);
       onToast('✅ Custom domain saved!', 'success');
       setTimeout(() => setDomainSaved(false), 3000);
@@ -73,29 +81,28 @@ export function CatalogPage({ th, pageId, onToast }: {
 
   const saveSlug = async () => {
     const clean = slugInput.trim();
-    if (!clean) { setSlugError('Slug খালি রাখা যাবে না'); return; }
+    if (!clean) { setSlugError('খালি রাখা যাবে না'); return; }
     if (clean.length < 3) { setSlugError('কমপক্ষে ৩ টি character দিন'); return; }
     if (!/^[a-z0-9][a-z0-9-]*[a-z0-9]$/.test(clean)) {
-      setSlugError('শুধু a-z, 0-9 এবং hyphen (-) allowed। শুরু ও শেষ letter/number দিয়ে হতে হবে।');
+      setSlugError('শুধু a-z, 0-9 এবং hyphen (-)। শুরু ও শেষ letter/number হতে হবে।');
       return;
     }
     setSavingSlug(true);
     try {
-      const res = await fetch(`${API_BASE}/client-dashboard/settings`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('dfbot_token')}` },
-        body: JSON.stringify({ pageId, pageFields: { catalogSlug: clean } }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err?.message || `HTTP ${res.status}`);
-      }
-      onToast('✅ URL slug saved! Link পরিবর্তন হয়েছে।', 'success');
+      await patchSettings({ catalogSlug: clean });
+      onToast('✅ URL পরিবর্তন হয়েছে!', 'success');
+      setEditingSlug(false);
+      setSlugError('');
       await loadPreview();
     } catch (e: any) {
-      const msg = String(e.message || '');
-      setSlugError(msg || 'কিছু একটা সমস্যা হয়েছে। আবার চেষ্টা করুন।');
+      setSlugError(String(e.message || 'সমস্যা হয়েছে, আবার চেষ্টা করুন।'));
     } finally { setSavingSlug(false); }
+  };
+
+  const startEditSlug = () => {
+    setSlugInput(catalogData?.page?.catalogSlug || '');
+    setSlugError('');
+    setEditingSlug(true);
   };
 
   if (loading) return (
@@ -137,85 +144,86 @@ export function CatalogPage({ th, pageId, onToast }: {
           sub={copy('Customer দের এই link share করুন', 'Share this link with customers')}
         />
 
-        {/* Option A — chatcat.pro URL */}
+        {/* URL row — normal view OR inline slug edit */}
         <div style={{ marginBottom: 12 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: th.muted, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.07em' }}>
             {copy('✅ আপনার Website Link', '✅ Your Website Link')}
           </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-            <div style={{
-              flex: 1, padding: '10px 14px', ...th.card2,
-              borderRadius: 10, border: `1.5px solid ${th.accent}44`,
-              fontSize: 13, fontFamily: 'monospace', wordBreak: 'break-all',
-              color: th.accent, minWidth: 0,
-            }}>
-              {activeCustomDomain ? `https://${activeCustomDomain}` : CATALOG_URL}
-            </div>
-            <button style={{ ...th.btnPrimary, whiteSpace: 'nowrap' }} onClick={copyUrl}>
-              {copied ? '✅ Copied!' : '📋 Copy'}
-            </button>
-            <button style={{ ...th.btnGhost, whiteSpace: 'nowrap' }} onClick={openCatalog}>
-              🔗 Open
-            </button>
-          </div>
-          <div style={{ fontSize: 11.5, color: th.muted, marginTop: 8 }}>
-            {copy('💡 Products page এ ছবি ও YouTube video যোগ করলে এখানে নিজে থেকেই দেখাবে। "Catalog Visible" tick তুলে দিলে product লুকাবে।', '💡 Add product photos and YouTube videos from the Products page — they appear automatically here. Untick "Catalog Visible" to hide a product.')}
-          </div>
-        </div>
 
-        {/* Slug editor */}
-        <div style={{ borderTop: `1px solid ${th.border}`, paddingTop: 14, marginTop: 4 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: th.muted, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.07em' }}>
-            {copy('✏️ URL-এর শেষ অংশ বদলান', '✏️ Customize your URL')}
-          </div>
-          <div style={{ fontSize: 12, color: th.muted, marginBottom: 10, lineHeight: 1.6 }}>
-            {copy('নিচের শেষ অংশটি আপনার পছন্দ মতো দিন — শুধু ছোট হাতের letter, সংখ্যা ও hyphen (-) ব্যবহার করুন।', 'Set the last part of your URL to anything you like — lowercase letters, numbers and hyphens only.')}
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 0, flexWrap: 'wrap' }}>
-            {/* Static prefix */}
-            <div style={{
-              padding: '10px 12px', borderRadius: '10px 0 0 10px',
-              border: `1.5px solid ${th.border}`, borderRight: 'none',
-              background: th.bg, color: th.muted,
-              fontSize: 12.5, fontFamily: 'monospace', whiteSpace: 'nowrap', flexShrink: 0,
-            }}>
-              {`${backendBase}/catalog/`}
+          {editingSlug ? (
+            /* ── Inline slug edit mode ── */
+            <div>
+              <div style={{ display: 'flex', alignItems: 'stretch', gap: 0 }}>
+                <div style={{
+                  padding: '10px 11px', borderRadius: '10px 0 0 10px',
+                  border: `1.5px solid ${th.border}`, borderRight: 'none',
+                  background: th.bg, color: th.muted,
+                  fontSize: 12, fontFamily: 'monospace', whiteSpace: 'nowrap',
+                  display: 'flex', alignItems: 'center',
+                }}>
+                  {`${backendBase}/catalog/`}
+                </div>
+                <input
+                  autoFocus
+                  style={{
+                    flex: 1, padding: '10px 11px', minWidth: 100,
+                    border: `1.5px solid ${slugError ? '#ef4444' : th.accent}`,
+                    borderLeft: 'none', borderRight: 'none',
+                    background: th.surface, color: th.accent,
+                    fontSize: 13, fontFamily: 'monospace', fontWeight: 700,
+                    outline: 'none',
+                  }}
+                  value={slugInput}
+                  onChange={e => handleSlugInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') saveSlug(); if (e.key === 'Escape') setEditingSlug(false); }}
+                  placeholder="your-shop-name"
+                  spellCheck={false}
+                />
+                <button
+                  style={{ ...th.btnPrimary, borderRadius: 0, padding: '10px 16px', whiteSpace: 'nowrap', opacity: savingSlug ? 0.7 : 1 }}
+                  onClick={saveSlug} disabled={savingSlug}
+                >
+                  {savingSlug ? <Spinner size={13} /> : copy('💾 Save', 'Save')}
+                </button>
+                <button
+                  style={{ ...th.btnGhost, borderRadius: '0 10px 10px 0', padding: '10px 14px', whiteSpace: 'nowrap' }}
+                  onClick={() => { setEditingSlug(false); setSlugError(''); }}
+                >✕</button>
+              </div>
+              {slugError
+                ? <div style={{ marginTop: 5, fontSize: 12, color: '#ef4444', fontWeight: 600 }}>⚠️ {slugError}</div>
+                : <div style={{ marginTop: 5, fontSize: 11.5, color: th.muted }}>
+                    {copy('⚠️ Save করলে পুরনো link কাজ করবে না। • Esc = বাতিল', '⚠️ Old link stops working after save. • Esc = cancel')}
+                  </div>
+              }
             </div>
-            {/* Editable slug */}
-            <input
-              style={{
-                padding: '10px 12px', minWidth: 120, flex: 1,
-                border: `1.5px solid ${slugError ? '#ef4444' : th.accent}`,
-                borderLeft: 'none', borderRight: 'none',
-                background: th.surface, color: th.accent,
-                fontSize: 13.5, fontFamily: 'monospace', fontWeight: 700,
-                outline: 'none',
-              }}
-              value={slugInput}
-              onChange={e => handleSlugInput(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && saveSlug()}
-              placeholder="your-shop-name"
-              spellCheck={false}
-            />
-            <button
-              style={{
-                ...th.btnPrimary, borderRadius: '0 10px 10px 0',
-                whiteSpace: 'nowrap', opacity: savingSlug ? 0.7 : 1,
-                padding: '10px 18px',
-              }}
-              onClick={saveSlug}
-              disabled={savingSlug}
-            >
-              {savingSlug ? <Spinner size={13} /> : copy('💾 Save', 'Save')}
-            </button>
-          </div>
-          {slugError && (
-            <div style={{ marginTop: 6, fontSize: 12, color: '#ef4444', fontWeight: 600 }}>
-              ⚠️ {slugError}
+          ) : (
+            /* ── Normal view ── */
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <div style={{
+                flex: 1, padding: '10px 14px', ...th.card2,
+                borderRadius: 10, border: `1.5px solid ${th.accent}44`,
+                fontSize: 13, fontFamily: 'monospace', wordBreak: 'break-all',
+                color: th.accent, minWidth: 0,
+              }}>
+                {activeCustomDomain ? `https://${activeCustomDomain}` : CATALOG_URL}
+              </div>
+              <button
+                title={copy('URL-এর শেষ অংশ বদলান', 'Edit URL slug')}
+                style={{ ...th.btnGhost, whiteSpace: 'nowrap', padding: '10px 13px' }}
+                onClick={startEditSlug}
+              >✏️</button>
+              <button style={{ ...th.btnPrimary, whiteSpace: 'nowrap' }} onClick={copyUrl}>
+                {copied ? '✅' : '📋 Copy'}
+              </button>
+              <button style={{ ...th.btnGhost, whiteSpace: 'nowrap' }} onClick={openCatalog}>
+                🔗 Open
+              </button>
             </div>
           )}
-          <div style={{ marginTop: 8, fontSize: 11.5, color: th.muted }}>
-            {copy('⚠️ Save করলে পুরনো link কাজ করবে না — নতুন link share করুন।', '⚠️ After saving, the old link will stop working — share the new one.')}
+
+          <div style={{ fontSize: 11.5, color: th.muted, marginTop: 8 }}>
+            {copy('💡 Products page এ ছবি ও YouTube video যোগ করলে এখানে নিজে থেকেই দেখাবে। "Catalog Visible" tick তুলে দিলে product লুকাবে।', '💡 Add product photos and YouTube videos from the Products page — they appear automatically here. Untick "Catalog Visible" to hide a product.')}
           </div>
         </div>
 
