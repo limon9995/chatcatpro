@@ -60,6 +60,11 @@ export class MemoService {
     const page = await this.prisma.page.findUnique({ where: { id: pageId } });
     const p: any = page || {};
 
+    const slug = p.catalogSlug || String(pageId);
+    const catalogBaseUrl =
+      process.env.CATALOG_BASE_URL || 'https://chatcat.pro';
+    const catalogUrl = `${catalogBaseUrl}/catalog/${slug}`;
+
     return {
       companyName: p.businessName || p.pageName || 'Dress Fashion Zoon',
       phone: p.businessPhone || p.phone || '',
@@ -71,6 +76,7 @@ export class MemoService {
       deliveryFeeOutsideDhaka: Number(p.deliveryFeeOutsideDhaka ?? 0) || 0,
       codLabel: p.codLabel || 'COD',
       currencySymbol: p.currencySymbol || '৳',
+      catalogUrl,
     };
   }
 

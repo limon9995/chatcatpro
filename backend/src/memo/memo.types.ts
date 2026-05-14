@@ -12,6 +12,7 @@ export interface BusinessInfo {
   deliveryFeeOutsideDhaka?: number;
   codLabel?: string;
   currencySymbol?: string;
+  catalogUrl?: string;
 }
 
 export interface MemoItem {
