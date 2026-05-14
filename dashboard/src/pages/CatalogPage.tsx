@@ -54,7 +54,7 @@ export function CatalogPage({ th, pageId, onToast }: {
     const res = await fetch(`${API_BASE}/client-dashboard/${pageId}/settings`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('dfbot_token')}` },
-      body: JSON.stringify({ pageFields: fields }),
+      body: JSON.stringify(fields),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
@@ -301,6 +301,7 @@ export function CatalogPage({ th, pageId, onToast }: {
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 20, flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
             <img
+              key={CATALOG_URL}
               src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(CATALOG_URL)}&color=000000&bgcolor=ffffff&margin=10`}
               alt="Website QR Code"
               style={{ width: 180, height: 180, borderRadius: 12, border: `1.5px solid ${th.border}`, display: 'block' }}
