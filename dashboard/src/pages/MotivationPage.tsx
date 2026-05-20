@@ -183,7 +183,7 @@ export function MotivationPage({ th, pageId, onToast: _onToast, onOpenAgentTasks
     setLoading(true); setLoadError('');
     try {
       const [d, sc] = await Promise.all([
-        request<any>(`${API_BASE}/client-dashboard/${pageId}/analytics/motivation`),
+        request<any>(`${API_BASE}/client-dashboard/${pageId}/stats/overview`),
         request<any>(`${API_BASE}/client-dashboard/${pageId}/sender-count`),
       ]);
       setData(d); setSenderCount(sc?.uniqueSenders ?? null); setAnimKey(k => k + 1);

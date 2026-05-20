@@ -869,7 +869,7 @@ export class ClientDashboardController {
   }
 
   // ── Analytics ─────────────────────────────────────────────────────────────
-  @Get(':pageId/analytics/summary') analyticsSummary(
+  @Get(':pageId/stats/summary') analyticsSummary(
     @Param('pageId') p: string,
     @Query('period') period: string,
     @Req() r: any,
@@ -881,13 +881,13 @@ export class ClientDashboardController {
         : 'monthly') as any,
     );
   }
-  @Get(':pageId/analytics/motivation') motivationDashboard(
+  @Get(':pageId/stats/overview') motivationDashboard(
     @Param('pageId') p: string,
     @Req() r: any,
   ) {
     return this.analytics.getMotivationDashboard(this.pid(r, p));
   }
-  @Get(':pageId/analytics/profit-trend') profitTrend(
+  @Get(':pageId/stats/profit-trend') profitTrend(
     @Param('pageId') p: string,
     @Query('period') period: string,
     @Req() r: any,
@@ -899,7 +899,7 @@ export class ClientDashboardController {
         : 'monthly') as any,
     );
   }
-  @Get(':pageId/analytics/negotiation') negotiation(
+  @Get(':pageId/stats/negotiation') negotiation(
     @Param('pageId') p: string,
     @Query('period') period: string,
     @Req() r: any,
@@ -910,7 +910,7 @@ export class ClientDashboardController {
     const { from, to } = this.accounting.periodRange(per);
     return this.analytics.getNegotiationAnalytics(this.pid(r, p), from, to);
   }
-  @Get(':pageId/analytics/collection-methods') collMethods(
+  @Get(':pageId/stats/collection-methods') collMethods(
     @Param('pageId') p: string,
     @Query('period') period: string,
     @Req() r: any,
@@ -925,7 +925,7 @@ export class ClientDashboardController {
       to,
     );
   }
-  @Get(':pageId/analytics/top-products') topProds(
+  @Get(':pageId/stats/top-products') topProds(
     @Param('pageId') p: string,
     @Query('period') period: string,
     @Req() r: any,

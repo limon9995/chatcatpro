@@ -169,7 +169,7 @@ export function AnalyticsPage({ th, pageId, onToast }: {
     try {
       const days = period === 'daily' ? 1 : period === 'weekly' ? 7 : 30;
       const [analyticsData, visionData] = await Promise.all([
-        request<AnalyticsSummary>(`${BASE}/analytics/summary?period=${period}`),
+        request<AnalyticsSummary>(`${BASE}/stats/summary?period=${period}`),
         request<VisionSummary>(`${BASE}/vision/summary?days=${days}`),
       ]);
       setData(analyticsData);
