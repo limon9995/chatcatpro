@@ -226,22 +226,68 @@ export class WebhookService {
     const classification = await this.classifyCommentFull(products, commentText);
     if (!classification?.shouldReply) return;
 
-    if (products.length === 0 || !classification.productCode || classification.intent === 'other') {
+    const { productCodes, intent } = classification;
+    const inboxCta = `\n\n📩 Order বা আরও তথ্যের জন্য আমাদের Inbox-এ message করুন।`;
+
+    // All-prices intent: list every post product's price
+    if (intent === 'all_prices' || (intent === 'price' && productCodes.length === 0 && products.length > 0)) {
+      const lines = products.map((p, i) => `${i + 1}. ${p.name ?? p.code} — ${p.price}৳`).join('\n');
+      const reply = `📦 আমাদের সব product এর দাম:\n${lines}${inboxCta}`;
+      await this.messenger.sendCommentReply(page.pageToken, commentId, reply);
+      this.logger.log(`[Webhook] All-prices comment reply page=${page.pageId} commentId=${commentId}`);
+      await this.walletService.deductUsage(page.id, 'COMMENT_REPLY');
+      return;
+    }
+
+    // No specific product or general question → generic inbox CTA
+    if (productCodes.length === 0 || intent === 'other') {
       await this.messenger.sendCommentReply(page.pageToken, commentId, this.getGenericCommentReply());
       this.logger.log(`[Webhook] Generic comment reply page=${page.pageId} commentId=${commentId}`);
       await this.walletService.deductUsage(page.id, 'COMMENT_REPLY');
       return;
     }
 
-    const product = products.find(p => p.code === classification.productCode);
-    if (!product) return;
+    const matched = products.filter(p => productCodes.includes(p.code));
+    if (matched.length === 0) {
+      await this.messenger.sendCommentReply(page.pageToken, commentId, this.getGenericCommentReply());
+      await this.walletService.deductUsage(page.id, 'COMMENT_REPLY');
+      return;
+    }
 
-    const reply = this.buildCommentReply(product, classification.intent, page);
+    // Multiple specific products matched — combine replies without per-item CTA
+    if (matched.length > 1) {
+      const parts = matched.map(p => this.buildProductLine(p, intent, page)).filter(Boolean);
+      if (!parts.length) return;
+      const reply = parts.join('\n') + inboxCta;
+      await this.messenger.sendCommentReply(page.pageToken, commentId, reply);
+      this.logger.log(`[Webhook] Multi-product comment reply page=${page.pageId} commentId=${commentId} codes=${productCodes.join(',')}`);
+      await this.walletService.deductUsage(page.id, 'COMMENT_REPLY');
+      return;
+    }
+
+    // Single product
+    const reply = this.buildCommentReply(matched[0], intent, page);
     if (!reply) return;
-
     await this.messenger.sendCommentReply(page.pageToken, commentId, reply);
-    this.logger.log(`[Webhook] Comment replied page=${page.pageId} commentId=${commentId} code=${classification.productCode} intent=${classification.intent}`);
+    this.logger.log(`[Webhook] Comment replied page=${page.pageId} commentId=${commentId} code=${productCodes[0]} intent=${intent}`);
     await this.walletService.deductUsage(page.id, 'COMMENT_REPLY');
+  }
+
+  // Single-line summary for multi-product reply (no CTA — added once at the end)
+  private buildProductLine(product: any, intent: string, page: any): string | null {
+    const label = product.name ?? product.code;
+    switch (intent) {
+      case 'price':
+        return `• ${label} — ${product.price}৳ 🏷️`;
+      case 'stock':
+        return `• ${label} — ${product.stockQty > 0 ? `${product.stockQty}টি stock ✅` : 'stock নেই ❌'}`;
+      case 'delivery':
+        return `• ঢাকার ভেতরে ${page.deliveryFeeInsideDhaka ?? 80}৳, বাইরে ${page.deliveryFeeOutsideDhaka ?? 120}৳ 🚚`;
+      case 'description':
+        return product.description ? `• ${label}: ${product.description}` : null;
+      default:
+        return null;
+    }
   }
 
   private buildCommentReply(product: any, intent: string, page: any): string | null {
@@ -270,44 +316,56 @@ export class WebhookService {
   private async classifyCommentFull(
     products: { code: string; name: string | null; price: number; stockQty: number }[],
     comment: string,
-  ): Promise<{ productCode: string | null; intent: string; shouldReply: boolean } | null> {
+  ): Promise<{ productCodes: string[]; intent: string; shouldReply: boolean } | null> {
     const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) return { productCode: null, intent: 'other', shouldReply: true };
+    if (!apiKey) return { productCodes: [], intent: 'other', shouldReply: true };
     const model = process.env.AI_INTENT_MODEL || 'gemini-2.0-flash';
 
     const productList = products.length > 0
-      ? products.map((p, i) => `${i + 1}. ${p.code}: ${p.name ?? p.code} (দাম ${p.price}৳)`).join('\n')
-      : '(কোনো product link করা নেই)';
+      ? products.map((p, i) => `${i + 1}. ${p.code}: ${p.name ?? p.code} (দাম ${p.price}৳, stock: ${p.stockQty > 0 ? p.stockQty + 'টি' : 'নেই'})`).join('\n')
+      : '(কোনো product নেই)';
 
     const systemPrompt = `You are a Facebook comment handler for a Bengali e-commerce store.
-Given a customer comment and available products, decide:
-1. Is this comment worth replying to? (skip pure emojis like "❤️", "🔥", single "nice", "wow" etc.)
-2. If replying: which product and what info does the customer want?
+Given a customer comment and a numbered product list, decide:
+1. Is this worth replying to?
+2. Which product code(s) is the customer asking about?
+3. What info do they want?
 
-Return JSON: {
+Return ONLY valid JSON:
+{
   "shouldReply": true|false,
-  "productCode": "<code or null>",
-  "intent": "price"|"stock"|"delivery"|"description"|"other"
+  "productCodes": [],
+  "intent": "price"|"stock"|"delivery"|"description"|"all_prices"|"other"
 }
 
-- shouldReply=false for: pure emoji reactions, single-word praise (nice, wow, beautiful), no question implied
-- shouldReply=true for: any question, price/stock inquiry, interest with words, or general product inquiry
-- intent="other" when question is general (will trigger inbox CTA reply)`;
+Rules:
+- shouldReply=false: pure emojis (❤️🔥😍), single praise words (nice, wow, সুন্দর), no question implied
+- shouldReply=true: any question, price/stock inquiry, interest expressed in words
+- productCodes=[]: general question not about a specific product, OR intent is "all_prices"
+- productCodes=["X"]: one specific product (identified by name, color, number reference like "৩ নম্বর", or code)
+- productCodes=["X","Y"]: customer asks about multiple specific products
+- intent="all_prices": user wants prices of ALL products ("সবগুলোর দাম কত?" "price list দাও" "কতগুলো কত কত?")
+- intent="other": general question not about a specific product info → inbox CTA`;
 
     try {
       const body = {
         contents: [{ role: 'user', parts: [{ text: `Available products:\n${productList}\n\nCustomer comment: "${comment}"` }] }],
         systemInstruction: { parts: [{ text: systemPrompt }] },
-        generationConfig: { temperature: 0.1, maxOutputTokens: 120, responseMimeType: 'application/json' },
+        generationConfig: { temperature: 0.1, maxOutputTokens: 150, responseMimeType: 'application/json' },
       };
       const res = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
         { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(10_000) },
       );
       const data = await res.json();
-      return JSON.parse(data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '{}');
+      const parsed = JSON.parse(data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '{}');
+      // Normalise: handle both array and legacy single-string productCode
+      if (!Array.isArray(parsed.productCodes)) {
+        parsed.productCodes = parsed.productCode ? [parsed.productCode] : [];
+      }
+      return parsed;
     } catch {
-      return { productCode: null, intent: 'other', shouldReply: true };
+      return { productCodes: [], intent: 'other', shouldReply: true };
     }
   }
 
