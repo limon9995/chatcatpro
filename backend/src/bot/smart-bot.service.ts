@@ -43,6 +43,8 @@ const VALID_ACTIONS = new Set([
 @Injectable()
 export class SmartBotService {
   private readonly logger = new Logger(SmartBotService.name);
+  private readonly geminiKey: string;
+  private readonly openAiKey: string;
   private readonly apiKey: string;
   private readonly model: string;
 
@@ -57,13 +59,14 @@ export class SmartBotService {
     private readonly walletService: WalletService,
     private readonly prisma: PrismaService,
   ) {
-    this.apiKey =
-      process.env.GEMINI_API_KEY ?? process.env.OPENAI_API_KEY ?? '';
+    this.geminiKey = process.env.GEMINI_API_KEY ?? '';
+    this.openAiKey = process.env.OPENAI_API_KEY ?? '';
+    this.apiKey = this.geminiKey || this.openAiKey;
     this.model = process.env.AI_INTENT_MODEL ?? 'gemini-2.0-flash';
   }
 
   isAvailable(): boolean {
-    return !!this.apiKey && Date.now() > this.cooldownUntil;
+    return !!(this.geminiKey || this.openAiKey) && Date.now() > this.cooldownUntil;
   }
 
   /**
@@ -348,13 +351,26 @@ Customer-এর message দেখে **strictly valid JSON** return করো:
   private async callOpenAI(
     messages: { role: string; content: string }[],
   ): Promise<string | null> {
-    if (!this.apiKey) return null;
+    if (this.geminiKey) {
+      const result = await this.callGemini(messages);
+      if (result !== 'QUOTA_EXCEEDED') return result;
+      // Gemini quota hit — fall through to OpenAI
+      this.logger.warn('[SmartBot] Gemini quota exceeded — falling back to OpenAI');
+    }
+    if (this.openAiKey) {
+      return this.callOpenAIApi(messages);
+    }
+    this.enterCooldown();
+    return null;
+  }
+
+  private async callGemini(
+    messages: { role: string; content: string }[],
+  ): Promise<string | null | 'QUOTA_EXCEEDED'> {
     try {
-      // Extract system prompt → systemInstruction
       const systemMsg = messages.find((m) => m.role === 'system');
       const rest = messages.filter((m) => m.role !== 'system');
 
-      // Map roles: 'assistant' → 'model'; wrap content in parts
       const contents = rest.map((m) => ({
         role: m.role === 'assistant' ? 'model' : 'user',
         parts: [{ text: m.content }],
@@ -372,7 +388,7 @@ Customer-এর message দেখে **strictly valid JSON** return করো:
         body.systemInstruction = { parts: [{ text: systemMsg.content }] };
       }
 
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent?key=${this.apiKey}`;
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent?key=${this.geminiKey}`;
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -382,26 +398,62 @@ Customer-এর message দেখে **strictly valid JSON** return করো:
 
       if (res.status === 429 || res.status === 402) {
         this.logger.warn(`[SmartBot] Gemini quota/limit (${res.status})`);
-        this.enterCooldown();
-        return null;
+        return 'QUOTA_EXCEEDED';
       }
       if (!res.ok) {
         const errText = await res.text();
-        this.logger.error(
-          `[SmartBot] Gemini error ${res.status}: ${errText.slice(0, 200)}`,
-        );
+        this.logger.error(`[SmartBot] Gemini error ${res.status}: ${errText.slice(0, 200)}`);
         this.recordFailure();
         return null;
       }
 
       const data = await res.json();
-      return (
-        (data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '').trim() || null
-      );
+      return (data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '').trim() || null;
     } catch (err: any) {
-      this.logger.warn(
-        `[SmartBot] Gemini network error: ${err?.message ?? err}`,
-      );
+      this.logger.warn(`[SmartBot] Gemini network error: ${err?.message ?? err}`);
+      this.recordFailure();
+      return null;
+    }
+  }
+
+  private async callOpenAIApi(
+    messages: { role: string; content: string }[],
+  ): Promise<string | null> {
+    try {
+      const model = process.env.OPENAI_MODEL ?? 'gpt-4o-mini';
+      const res = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.openAiKey}`,
+        },
+        body: JSON.stringify({
+          model,
+          messages,
+          temperature: 0.3,
+          max_tokens: 500,
+          response_format: { type: 'json_object' },
+        }),
+        signal: AbortSignal.timeout(15_000),
+      });
+
+      if (res.status === 429 || res.status === 402) {
+        this.logger.warn(`[SmartBot] OpenAI quota/limit (${res.status})`);
+        this.enterCooldown();
+        return null;
+      }
+      if (!res.ok) {
+        const errText = await res.text();
+        this.logger.error(`[SmartBot] OpenAI error ${res.status}: ${errText.slice(0, 200)}`);
+        this.recordFailure();
+        return null;
+      }
+
+      const data = await res.json();
+      this.logger.log('[SmartBot] OpenAI fallback used successfully');
+      return (data?.choices?.[0]?.message?.content ?? '').trim() || null;
+    } catch (err: any) {
+      this.logger.warn(`[SmartBot] OpenAI network error: ${err?.message ?? err}`);
       this.recordFailure();
       return null;
     }
