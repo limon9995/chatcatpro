@@ -206,10 +206,22 @@ export class WebhookService {
 
     const postIdPart = postId.includes('_') ? postId.split('_').slice(1).join('_') : postId;
 
-    const products = await this.prisma.product.findMany({
+    type ProductInfo = { code: string; name: string | null; price: number; stockQty: number; description: string | null };
+    const productSelect = { code: true, name: true, price: true, stockQty: true, description: true } as const;
+
+    // Try post-linked products first; fall back to full page catalog (capped at 15)
+    let products: ProductInfo[] = await this.prisma.product.findMany({
       where: { pageId: page.id, isActive: true, fbPostId: postIdPart },
-      select: { code: true, name: true, price: true, stockQty: true, description: true },
+      select: productSelect,
     });
+    if (products.length === 0) {
+      products = await this.prisma.product.findMany({
+        where: { pageId: page.id, isActive: true },
+        select: productSelect,
+        orderBy: { stockQty: 'desc' },
+        take: 15,
+      });
+    }
 
     const classification = await this.classifyCommentFull(products, commentText);
     if (!classification?.shouldReply) return;
