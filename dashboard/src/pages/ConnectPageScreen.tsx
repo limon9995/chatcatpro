@@ -28,6 +28,7 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
   const [manualToken, setManualToken]       = useState('');
   const [manualBusy, setManualBusy]         = useState(false);
   const [manualSuccess, setManualSuccess]   = useState(false);
+  const [connectResult, setConnectResult]   = useState<{ verifyToken?: string; webhookUrl?: string; hasCustomApp?: boolean } | null>(null);
   const [tab, setTab] = useState<'request' | 'manual'>('request');
   // Linked page: optional master page to share settings from
   const [selectedMasterId, setSelectedMasterId] = useState<number | ''>('');
@@ -101,7 +102,7 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
     if (!pname || !tok) { setError(copy('Page Name এবং Access Token দিন।', 'Enter the Page Name and Access Token.')); return; }
     setManualBusy(true); setError('');
     try {
-      await request(`${API_BASE}/facebook/connect`, {
+      const res: any = await request(`${API_BASE}/facebook/connect`, {
         method: 'POST',
         body: JSON.stringify({
           pageId: '', pageName: pname, pageToken: tok,
@@ -109,6 +110,11 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
           ...(customFbAppId.trim() ? { fbAppId: customFbAppId.trim() } : {}),
           ...(customFbAppSecret.trim() ? { fbAppSecret: customFbAppSecret.trim() } : {}),
         }),
+      });
+      setConnectResult({
+        verifyToken: res?.page?.verifyToken,
+        webhookUrl: res?.webhookUrl,
+        hasCustomApp: !!(customFbAppId.trim() || res?.page?.hasCustomApp),
       });
       setManualSuccess(true);
     } catch (e: any) {
@@ -472,6 +478,63 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
                   <div style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.3)', borderRadius: 12, padding: '12px 15px', fontSize: 13, color: '#16a34a', fontWeight: 700 }}>
                     {copy('✅ Page সফলভাবে Connected হয়েছে!', '✅ Page connected successfully!')}
                   </div>
+
+                  {/* Webhook setup instructions — shown only for custom app users */}
+                  {connectResult?.hasCustomApp && connectResult.verifyToken && (
+                    <div style={{ background: dark ? 'rgba(251,191,36,0.07)' : 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.35)', borderRadius: 12, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      <div style={{ fontWeight: 800, fontSize: 13, color: '#f59e0b' }}>
+                        ⚠️ {copy('এখন আপনার Facebook App-এ Webhook Setup করুন', 'Now set up Webhook in your Facebook App')}
+                      </div>
+                      <div style={{ fontSize: 12, color: text, lineHeight: 1.85 }}>
+                        {copy(
+                          'developers.facebook.com → আপনার App → Messenger → Webhooks → "Add Callback URL" এ নিচের তথ্য দিন:',
+                          'Go to developers.facebook.com → Your App → Messenger → Webhooks → "Add Callback URL" and enter:'
+                        )}
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <div style={{ fontSize: 11.5, color: muted, fontWeight: 600 }}>
+                          {copy('Callback URL', 'Callback URL')}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <code style={{ flex: 1, background: dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)', padding: '8px 12px', borderRadius: 8, fontSize: 12.5, color: text, wordBreak: 'break-all', fontFamily: 'monospace' }}>
+                            {connectResult.webhookUrl || 'https://chatcat.pro/webhook'}
+                          </code>
+                          <button onClick={() => navigator.clipboard.writeText(connectResult.webhookUrl || 'https://chatcat.pro/webhook')}
+                            style={{ border: `1px solid ${border}`, borderRadius: 7, padding: '6px 10px', background: 'transparent', color: muted, cursor: 'pointer', fontSize: 11, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                            {copy('Copy', 'Copy')}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <div style={{ fontSize: 11.5, color: muted, fontWeight: 600 }}>
+                          {copy('Verify Token', 'Verify Token')}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <code style={{ flex: 1, background: dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)', padding: '8px 12px', borderRadius: 8, fontSize: 12.5, color: text, wordBreak: 'break-all', fontFamily: 'monospace' }}>
+                            {connectResult.verifyToken}
+                          </code>
+                          <button onClick={() => navigator.clipboard.writeText(connectResult.verifyToken!)}
+                            style={{ border: `1px solid ${border}`, borderRadius: 7, padding: '6px 10px', background: 'transparent', color: muted, cursor: 'pointer', fontSize: 11, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                            {copy('Copy', 'Copy')}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div style={{ fontSize: 12, color: muted, lineHeight: 1.8, borderTop: `1px solid rgba(251,191,36,0.25)`, paddingTop: 8 }}>
+                        {copy(
+                          'Subscriptions-এ ',
+                          'Also subscribe to: '
+                        )}
+                        <code style={{ background: dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)', padding: '1px 5px', borderRadius: 4, fontSize: 11 }}>messages</code>
+                        {', '}
+                        <code style={{ background: dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)', padding: '1px 5px', borderRadius: 4, fontSize: 11 }}>messaging_postbacks</code>
+                        {copy(' subscribe করুন। তারপর আপনার page-টি app-এ add/subscribe করুন।', ' then add and subscribe your page to the app.')}
+                      </div>
+                    </div>
+                  )}
+
                   <button onClick={onConnected}
                     style={{ width: '100%', padding: '12px', borderRadius: 12, border: 'none', background: '#6366f1', color: '#fff', fontWeight: 800, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}>
                     {copy('→ Dashboard-এ যান', 'Go to Dashboard')}
