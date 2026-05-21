@@ -52,6 +52,7 @@ export interface TutorialsConfig {
   };
   facebookAccessToken: string;
   generalOnboarding: string;
+  pageConnect: string;
 }
 
 @Injectable()
@@ -458,13 +459,14 @@ export class AdminService {
         const old = JSON.parse(
           fs.readFileSync(this.courierTutorialFile, 'utf8'),
         );
-        return { courier: old, facebookAccessToken: '', generalOnboarding: '' };
+        return { courier: old, facebookAccessToken: '', generalOnboarding: '', pageConnect: '' };
       }
     } catch {}
     return {
       courier: { pathao: '', steadfast: '', redx: '', paperfly: '' },
       facebookAccessToken: '',
       generalOnboarding: '',
+      pageConnect: '',
     };
   }
 
@@ -502,6 +504,9 @@ export class AdminService {
       ),
       generalOnboarding: this._sanitizeUrl(
         input.generalOnboarding ?? existing.generalOnboarding ?? '',
+      ),
+      pageConnect: this._sanitizeUrl(
+        input.pageConnect ?? existing.pageConnect ?? '',
       ),
     };
     return this._writeTutorials(merged);

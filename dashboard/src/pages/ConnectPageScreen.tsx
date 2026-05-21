@@ -6,6 +6,11 @@ import { useLanguage } from '../i18n';
 type ConnectedPage = { id: number; pageId: string; pageName: string; isActive: boolean; masterPageId?: number | null };
 type PageRequest = { id: number; pageUrl: string; fbProfile: string; note?: string; status: string; adminNote?: string; createdAt: string };
 
+function extractYouTubeId(url: string): string | null {
+  const m = url?.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/);
+  return m?.[1] ?? null;
+}
+
 interface Props {
   dark: boolean; userId: string;
   onConnected: () => void; onLogout: () => void;
@@ -35,6 +40,9 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
   const [reqSubmitted, setReqSubmitted] = useState(false);
   const [myRequests, setMyRequests] = useState<PageRequest[]>([]);
 
+  // Tutorial sidebar
+  const [pageConnectTutorialUrl, setPageConnectTutorialUrl] = useState('');
+
   const bg     = dark ? '#080e1c' : '#f1f3fa';
   const panel  = dark ? '#0d1526' : '#fff';
   const border = dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)';
@@ -46,6 +54,12 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
   useEffect(() => {
     request<ConnectedPage[]>(`${API_BASE}/facebook/my-pages`)
       .then(pages => setAlreadyConnected(pages || []))
+      .catch(() => {});
+  }, [request]);
+
+  useEffect(() => {
+    request<any>(`${API_BASE}/client-dashboard/tutorials`)
+      .then(t => { if (t?.pageConnect) setPageConnectTutorialUrl(t.pageConnect); })
       .catch(() => {});
   }, [request]);
 
@@ -137,9 +151,11 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
     fontFamily: 'inherit',
   };
 
+  const tutorialYtId = extractYouTubeId(pageConnectTutorialUrl);
+
   return (
-    <div style={{ minHeight: '100vh', background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Inter', system-ui, sans-serif" }}>
-      <div style={{ width: 500, background: panel, border: `1px solid ${border}`, borderRadius: 22, padding: 38, boxShadow: dark ? '0 8px 48px rgba(0,0,0,0.5)' : '0 8px 40px rgba(99,102,241,0.1)' }}>
+    <div style={{ minHeight: '100vh', background: bg, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', gap: 24, padding: '40px 20px', fontFamily: "'Inter', system-ui, sans-serif", flexWrap: 'wrap' }}>
+      <div style={{ width: 500, flexShrink: 0, background: panel, border: `1px solid ${border}`, borderRadius: 22, padding: 38, boxShadow: dark ? '0 8px 48px rgba(0,0,0,0.5)' : '0 8px 40px rgba(99,102,241,0.1)' }}>
 
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 22 }}>
@@ -265,6 +281,11 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
               <div style={{ background: dark ? 'rgba(251,191,36,0.08)' : 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.28)', borderRadius: 12, padding: '12px 15px', fontSize: 12.5, color: text, lineHeight: 1.9 }}>
                 📋 <strong>{copy('কীভাবে কাজ করে?', 'How does this work?')}</strong><br />
                 <span style={{ color: muted }}>
+                  {copy('০. ', '0. ')}
+                  <a href="https://developers.facebook.com/" target="_blank" rel="noreferrer" style={{ color: '#6366f1', fontWeight: 700 }}>
+                    {copy('Meta Developer Account', 'Meta Developer Account')}
+                  </a>
+                  {copy(' খুলুন (যদি না থাকে) — developers.facebook.com', ' — create one at developers.facebook.com (if you don\'t have one)')}<br />
                   {copy('১. নিচের form পূরণ করুন — আপনার Facebook page link ও profile link দিন', '1. Fill the form below with your Facebook page & profile links')}<br />
                   {copy('২. Admin আপনাকে Facebook App-এ Tester হিসেবে add করবে', '2. Admin will add you as a Tester in the Facebook App')}<br />
                   {copy('৩. Facebook থেকে invite notification আসবে — Accept করুন', '3. You will get an invite notification on Facebook — Accept it')}<br />
@@ -426,6 +447,63 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
                 {copy(`→ ${page.pageName} dashboard`, `Go to ${page.pageName} dashboard`)}
               </button>
             ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── Tutorial Sidebar ── */}
+      <div style={{ width: 300, flexShrink: 0, background: panel, border: `1px solid ${border}`, borderRadius: 22, padding: 24, boxShadow: dark ? '0 8px 48px rgba(0,0,0,0.5)' : '0 8px 40px rgba(99,102,241,0.1)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+          <div style={{ width: 32, height: 32, borderRadius: 9, background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>🎬</div>
+          <div>
+            <div style={{ fontWeight: 800, fontSize: 14, color: text }}>{copy('Tutorial', 'Tutorial')}</div>
+            <div style={{ fontSize: 11, color: muted }}>{copy('ধাপে ধাপে গাইড', 'Step-by-step guide')}</div>
+          </div>
+        </div>
+
+        {tutorialYtId ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ borderRadius: 12, overflow: 'hidden', aspectRatio: '16/9', background: '#000' }}>
+              <iframe
+                src={`https://www.youtube.com/embed/${tutorialYtId}`}
+                style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen title="Page connect tutorial"
+              />
+            </div>
+            <div style={{ fontSize: 12, color: muted, lineHeight: 1.7 }}>
+              {copy('এই video দেখে সহজেই page connect করতে পারবেন।', 'Watch this video to easily connect your page.')}
+            </div>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ background: dark ? 'rgba(99,102,241,0.08)' : 'rgba(99,102,241,0.05)', border: `1px solid rgba(99,102,241,0.18)`, borderRadius: 12, padding: '14px', fontSize: 12.5, color: muted, lineHeight: 1.8, textAlign: 'center' }}>
+              🎬<br />
+              {copy('Tutorial video শীঘ্রই আসছে', 'Tutorial video coming soon')}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ fontSize: 11.5, fontWeight: 700, color: text, marginBottom: 2 }}>
+                {copy('দ্রুত শুরুর ধাপ:', 'Quick start steps:')}
+              </div>
+              {[
+                copy('১. Meta Developer Account খুলুন', '1. Create Meta Developer Account'),
+                copy('২. Request Access form পূরণ করুন', '2. Fill the Request Access form'),
+                copy('৩. Admin Approve করলে Tester invite Accept করুন', '3. Accept Tester invite after admin approval'),
+                copy('৪. Access Token দিয়ে page connect করুন', '4. Connect page with Access Token'),
+              ].map((step, i) => (
+                <div key={i} style={{ fontSize: 12, color: muted, padding: '7px 10px', borderRadius: 8, background: dark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)', border: `1px solid ${border}` }}>
+                  {step}
+                </div>
+              ))}
+            </div>
+            <a
+              href="https://developers.facebook.com/"
+              target="_blank"
+              rel="noreferrer"
+              style={{ display: 'block', textAlign: 'center', padding: '9px', borderRadius: 10, border: `1px solid rgba(99,102,241,0.35)`, color: '#6366f1', fontSize: 12.5, fontWeight: 700, textDecoration: 'none', background: dark ? 'rgba(99,102,241,0.08)' : 'rgba(99,102,241,0.05)' }}
+            >
+              🔗 {copy('Meta Developer Portal', 'Meta Developer Portal')}
+            </a>
           </div>
         )}
       </div>

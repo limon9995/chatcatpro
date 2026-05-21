@@ -597,9 +597,9 @@ export class CourierService {
       if (fs.existsSync(unified))
         return JSON.parse(fs.readFileSync(unified, 'utf8'));
       const courier = this.getTutorials();
-      return { courier, facebookAccessToken: '', generalOnboarding: '' };
+      return { courier, facebookAccessToken: '', generalOnboarding: '', pageConnect: '' };
     } catch {
-      return { courier: {}, facebookAccessToken: '', generalOnboarding: '' };
+      return { courier: {}, facebookAccessToken: '', generalOnboarding: '', pageConnect: '' };
     }
   }
 }

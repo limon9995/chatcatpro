@@ -9,6 +9,7 @@ interface TutorialsConfig {
   courier?: { pathao?: string; steadfast?: string; redx?: string; paperfly?: string };
   facebookAccessToken?: string;
   generalOnboarding?: string;
+  pageConnect?: string;
 }
 
 interface BillingSupportConfig {
@@ -2109,11 +2110,49 @@ function CourierTutorialsTab({ th, tutorials, setTutorials, saveTutorials, savin
 
   const fbUrl   = tutorials.facebookAccessToken || '';
   const obUrl   = tutorials.generalOnboarding   || '';
+  const pcUrl   = tutorials.pageConnect         || '';
   const fbYtId  = extractId(fbUrl);
   const obYtId  = extractId(obUrl);
+  const pcYtId  = extractId(pcUrl);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+      {/* ── Page Connect Tutorial ──────────────────────────────────────── */}
+      <div style={th.card}>
+        <CardHeader th={th} title="🔗 Page Connect Tutorial (Sidebar)"
+          sub="ConnectPageScreen এর পাশে sidebar এ এই tutorial দেখাবে। নতুন client দের Meta Developer Account খুলতে ও page connect করতে guide করবে।"
+        />
+        <div style={{ ...th.card2, ...th.alert, ...th.alertInfo, marginBottom: 18, fontSize: 12.5 }}>
+          💡 এই video ConnectPageScreen এর ডান পাশে sidebar এ দেখাবে যখন client প্রথমবার page add করতে আসবে।
+        </div>
+        <div style={{ ...th.card2, borderRadius: 14, border: `1.5px solid #6366f122` }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+            <div style={{ fontSize: 22 }}>🔗</div>
+            <div>
+              <div style={{ fontWeight: 800, fontSize: 14, color: '#6366f1' }}>Page Connect Guide</div>
+              <div style={{ fontSize: 12, color: th.muted }}>Meta Developer Account খুলে page connect করার সম্পূর্ণ guide</div>
+            </div>
+            {pcUrl && <span style={{ ...th.pill, ...th.pillGreen, fontSize: 10, marginLeft: 'auto' }}>✓ Set</span>}
+          </div>
+          <input
+            style={{ ...th.input, marginBottom: pcYtId ? 12 : 0 }}
+            placeholder="Page connect tutorial YouTube URL..."
+            value={pcUrl}
+            onChange={e => setTop('pageConnect', e.target.value)}
+          />
+          {pcYtId && (
+            <div style={{ borderRadius: 10, overflow: 'hidden', aspectRatio: '16/9', maxWidth: 400, background: '#000' }}>
+              <iframe
+                src={`https://www.youtube.com/embed/${pcYtId}`}
+                style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen title="Page connect tutorial"
+              />
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* ── Facebook Access Token Tutorial ─────────────────────────────── */}
       <div style={th.card}>
