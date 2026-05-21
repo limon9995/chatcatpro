@@ -45,6 +45,8 @@ interface ClientPage {
   previousPageId?: string | null;
   createdAt?: string;
   owner?: { id: string; username: string; name: string };
+  fbAppId?: string | null;
+  hasCustomApp?: boolean;
 }
 
 const ADMIN_TABS: { key: AdminTab; label: string; icon: string; help: string }[] = [
@@ -107,6 +109,9 @@ export function AdminPanel({ th, onToast, onLogout }: {
   const [clientPageTab, setClientPageTab] = useState<'bot' | 'settings'>('bot');
   const [pageSettings, setPageSettings]   = useState<any>(null);
   const [pageSettingsSaving, setPageSettingsSaving]   = useState(false);
+  const [adminFbAppId, setAdminFbAppId]   = useState('');
+  const [adminFbAppSecret, setAdminFbAppSecret] = useState('');
+  const [appCredSaving, setAppCredSaving] = useState(false);
 
   // Call Servers state
   const [globalCfgCall, setGlobalCfgCall] = useState<{ callFeatureEnabled: boolean; callServers: any[] } | null>(null);
@@ -510,16 +515,50 @@ export function AdminPanel({ th, onToast, onLogout }: {
   const loadPageCfg = async (page: ClientPage) => {
     setSelectedPage(page); setClientCfg(null); setClientLoading(true);
     setPageSettings(null); setClientPageTab('settings');
+    setAdminFbAppId(''); setAdminFbAppSecret('');
     try {
-      const [cfg, settings] = await Promise.all([
+      const [cfg, settings, appCreds] = await Promise.all([
         request(`${BASE}/bot-knowledge/page/${page.id}`),
         request(`${BASE}/pages/${page.id}/settings`),
+        request(`${BASE}/pages/${page.id}/app-credentials`),
       ]);
       setClientCfg(cfg);
       setPageSettings(settings);
+      setAdminFbAppId((appCreds as any)?.fbAppId ?? '');
     }
     catch (e: any) { onToast(e.message, 'error'); }
     finally { setClientLoading(false); }
+  };
+
+  const saveAppCredentials = async () => {
+    if (!selectedPage) return;
+    setAppCredSaving(true);
+    try {
+      const body: any = { fbAppId: adminFbAppId.trim() || null };
+      if (adminFbAppSecret.trim()) body.fbAppSecret = adminFbAppSecret.trim();
+      await request(`${BASE}/pages/${selectedPage.id}/app-credentials`, {
+        method: 'PATCH', body: JSON.stringify(body),
+      });
+      setAdminFbAppSecret('');
+      setPages(prev => prev.map(p => p.id === selectedPage.id ? { ...p, fbAppId: body.fbAppId, hasCustomApp: !!body.fbAppId } : p));
+      onToast('✅ App credentials saved');
+    } catch (e: any) { onToast(e.message, 'error'); }
+    finally { setAppCredSaving(false); }
+  };
+
+  const clearAppCredentials = async () => {
+    if (!selectedPage) return;
+    if (!window.confirm('Custom app credentials সরিয়ে platform default app use করবেন?')) return;
+    setAppCredSaving(true);
+    try {
+      await request(`${BASE}/pages/${selectedPage.id}/app-credentials`, {
+        method: 'PATCH', body: JSON.stringify({ fbAppId: null, fbAppSecret: null }),
+      });
+      setAdminFbAppId(''); setAdminFbAppSecret('');
+      setPages(prev => prev.map(p => p.id === selectedPage.id ? { ...p, fbAppId: null, hasCustomApp: false } : p));
+      onToast('✅ Cleared — platform default app will be used');
+    } catch (e: any) { onToast(e.message, 'error'); }
+    finally { setAppCredSaving(false); }
   };
 
   const savePageSettings = async () => {
@@ -864,8 +903,11 @@ export function AdminPanel({ th, onToast, onLogout }: {
                   }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <div>
-                      <div style={{ fontWeight: 700, fontSize: 13 }}>
+                      <div style={{ fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
                         {pg.masterPageId ? '↳ ' : ''}{pg.pageName}
+                        {pg.hasCustomApp && (
+                          <span style={{ fontSize: 9, background: 'rgba(99,102,241,0.15)', color: '#6366f1', borderRadius: 5, padding: '1px 6px', fontWeight: 800 }}>Custom App</span>
+                        )}
                       </div>
                       {pg.owner && (
                         <div style={{ fontSize: 11.5, color: th.muted, marginTop: 2 }}>
@@ -1076,6 +1118,38 @@ export function AdminPanel({ th, onToast, onLogout }: {
                   <button style={{ ...th.btnPrimary, alignSelf: 'flex-start' }} onClick={savePageSettings} disabled={pageSettingsSaving}>
                     {pageSettingsSaving ? <><Spinner size={13} color="#fff"/> Saving…</> : '💾 Save Settings'}
                   </button>
+
+                  {/* Facebook App Credentials (BYOA) */}
+                  <div style={{ borderTop: `1px solid ${th.border}`, paddingTop: 16 }}>
+                    <div style={{ fontSize: 11, fontWeight: 800, color: th.muted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>
+                      🔑 Facebook App Credentials
+                    </div>
+                    <div style={{ fontSize: 11.5, color: th.muted, marginBottom: 10 }}>
+                      {adminFbAppId
+                        ? <>Custom App: <strong style={{ color: th.text }}>{adminFbAppId}</strong></>
+                        : 'Platform default app (no custom credentials set)'}
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+                      <div>
+                        <div style={{ fontSize: 11, color: th.muted, marginBottom: 4 }}>App ID</div>
+                        <input style={th.input} value={adminFbAppId} onChange={e => setAdminFbAppId(e.target.value)} placeholder="1234567890123456" />
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 11, color: th.muted, marginBottom: 4 }}>App Secret (blank = no change)</div>
+                        <input style={th.input} type="password" value={adminFbAppSecret} onChange={e => setAdminFbAppSecret(e.target.value)} placeholder="Enter new secret to update" autoComplete="new-password" />
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button style={{ ...th.btnPrimary, flex: 1 }} onClick={saveAppCredentials} disabled={appCredSaving}>
+                        {appCredSaving ? <><Spinner size={12} color="#fff"/> Saving…</> : '🔑 Save App Credentials'}
+                      </button>
+                      {adminFbAppId && (
+                        <button style={{ ...th.btnGhost, color: '#ef4444', fontSize: 12, padding: '6px 14px', borderRadius: 8, border: '1px solid rgba(239,68,68,0.35)', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700 }} onClick={clearAppCredentials} disabled={appCredSaving}>
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 </div>
               )
             ) : (

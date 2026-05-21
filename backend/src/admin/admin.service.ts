@@ -10,6 +10,7 @@ import type { Response } from 'express';
 import { Workbook, type Worksheet } from 'exceljs';
 import { PrismaService } from '../prisma/prisma.service';
 import { BotKnowledgeService } from '../bot-knowledge/bot-knowledge.service';
+import { EncryptionService } from '../common/encryption.service';
 
 export interface CallServerConfig {
   id: string;
@@ -60,6 +61,7 @@ export class AdminService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly botKnowledge: BotKnowledgeService,
+    private readonly encryption: EncryptionService,
   ) {}
 
   async overview() {
@@ -329,7 +331,7 @@ export class AdminService {
 
   // ── Get all pages with their owner info (for admin knowledge view) ─────────
   async getAllPages() {
-    return this.prisma.page.findMany({
+    const pages = await this.prisma.page.findMany({
       select: {
         id: true,
         pageId: true,
@@ -344,10 +346,39 @@ export class AdminService {
         createdAt: true,
         customDomain: true,
         catalogSlug: true,
+        fbAppId: true,
+        fbAppSecret: true,
         owner: { select: { id: true, username: true, name: true } },
       },
       orderBy: { id: 'desc' },
     });
+    return pages.map(({ fbAppSecret, ...p }) => ({
+      ...p,
+      hasCustomApp: !!fbAppSecret,
+    }));
+  }
+
+  async getPageAppCredentials(pageId: number) {
+    const page = await this.prisma.page.findUnique({
+      where: { id: pageId },
+      select: { fbAppId: true, fbAppSecret: true },
+    });
+    if (!page) throw new NotFoundException('Page not found');
+    return { fbAppId: page.fbAppId ?? null, hasCustomAppSecret: !!page.fbAppSecret };
+  }
+
+  async setPageAppCredentials(pageId: number, fbAppId?: string, fbAppSecret?: string) {
+    const page = await this.prisma.page.findUnique({ where: { id: pageId } });
+    if (!page) throw new NotFoundException('Page not found');
+    const data: Record<string, string | null> = {};
+    if (fbAppId !== undefined) data.fbAppId = fbAppId.trim() || null;
+    if (fbAppSecret !== undefined) {
+      data.fbAppSecret = fbAppSecret.trim()
+        ? this.encryption.encryptIfNeeded(fbAppSecret.trim())
+        : null;
+    }
+    await this.prisma.page.update({ where: { id: pageId }, data });
+    return { success: true, fbAppId: (data.fbAppId ?? page.fbAppId) || null };
   }
 
   // ── Global Config (callFeatureEnabled, callServers, …) ────────────────────

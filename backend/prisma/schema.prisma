@@ -66,6 +66,8 @@ model Page {
   pageName    String @default("")
   pageToken   String @default("")
   verifyToken String @default("")
+  fbAppId     String? // User's own FB Developer App ID (plaintext)
+  fbAppSecret String? // User's own FB App Secret — AES-256 encrypted
 
   ownerId String?
   owner   User?   @relation(fields: [ownerId], references: [id], onDelete: SetNull)

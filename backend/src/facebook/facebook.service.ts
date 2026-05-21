@@ -89,6 +89,8 @@ export class FacebookService {
       pageToken: string;
       verifyToken?: string;
       masterPageId?: number;
+      fbAppId?: string;
+      fbAppSecret?: string;
     },
   ): Promise<any> {
     const submittedPageId = String(pageInfo.pageId || '').trim();
@@ -98,6 +100,12 @@ export class FacebookService {
     if (!submittedPageToken) {
       throw new BadRequestException('Facebook page token is required');
     }
+
+    const submittedFbAppId = String(pageInfo.fbAppId || '').trim() || null;
+    const rawFbAppSecret = String(pageInfo.fbAppSecret || '').trim();
+    const encryptedFbAppSecret = rawFbAppSecret
+      ? this.encryption.encryptIfNeeded(rawFbAppSecret)
+      : null;
 
     const verifiedPage = await this.verifyPageToken(submittedPageToken);
     if (submittedPageId && submittedPageId !== verifiedPage.pageId) {
@@ -168,6 +176,8 @@ export class FacebookService {
             isActive: true,
             verifyToken: existing.verifyToken || verifyToken,
             ...(masterPageId !== undefined ? { masterPageId } : {}),
+            ...(pageInfo.fbAppId !== undefined ? { fbAppId: submittedFbAppId } : {}),
+            ...(pageInfo.fbAppSecret !== undefined ? { fbAppSecret: encryptedFbAppSecret } : {}),
           },
         })
       : await this.prisma.page.create({
@@ -179,6 +189,8 @@ export class FacebookService {
             ownerId: userId,
             isActive: true,
             automationOn: false,
+            fbAppId: submittedFbAppId,
+            fbAppSecret: encryptedFbAppSecret,
             ...(masterPageId !== undefined ? { masterPageId } : {}),
           },
         });
@@ -195,6 +207,8 @@ export class FacebookService {
         pageId: page.pageId,
         pageName: page.pageName,
         verifyToken: page.verifyToken,
+        fbAppId: page.fbAppId ?? null,
+        hasCustomApp: !!page.fbAppSecret,
       },
       webhookUrl: `${process.env.STORAGE_PUBLIC_URL?.replace('/storage', '') || 'http://localhost:3000'}/webhook`,
       instructions: `Facebook Webhook URL: /webhook | Verify Token: ${page.verifyToken}`,
@@ -274,7 +288,7 @@ export class FacebookService {
   }
 
   async getMyPages(userId: string) {
-    return this.prisma.page.findMany({
+    const pages = await this.prisma.page.findMany({
       where: { ownerId: userId },
       select: {
         id: true,
@@ -285,9 +299,15 @@ export class FacebookService {
         ocrOn: true,
         masterPageId: true,
         createdAt: true,
+        fbAppId: true,
+        fbAppSecret: true,
       },
       orderBy: { id: 'desc' },
     });
+    return pages.map(({ fbAppSecret, ...p }) => ({
+      ...p,
+      hasCustomApp: !!fbAppSecret,
+    }));
   }
 
   getFrontendBaseUrl() {

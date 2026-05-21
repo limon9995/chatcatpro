@@ -75,6 +75,19 @@ export class AdminController {
     return this.svc.updatePageSettings(this.parsePageId(p), b || {});
   }
 
+  @Get('pages/:pageId/app-credentials')
+  getPageAppCredentials(@Param('pageId', ParseIntPipe) pageId: number) {
+    return this.svc.getPageAppCredentials(pageId);
+  }
+
+  @Patch('pages/:pageId/app-credentials')
+  setPageAppCredentials(
+    @Param('pageId', ParseIntPipe) pageId: number,
+    @Body() b: any,
+  ) {
+    return this.svc.setPageAppCredentials(pageId, b?.fbAppId, b?.fbAppSecret);
+  }
+
   // ── Global bot-knowledge ──────────────────────────────────────────────────
   @Get('bot-knowledge/global')
   globalBotKnowledge() {

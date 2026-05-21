@@ -15,6 +15,7 @@ import * as crypto from 'crypto';
 import type { Request } from 'express';
 import { WebhookService } from './webhook.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { EncryptionService } from '../common/encryption.service';
 
 @SkipThrottle() // Facebook can send many events — skip global rate limit
 @Controller('webhook')
@@ -25,6 +26,7 @@ export class WebhookController {
   constructor(
     private readonly webhookService: WebhookService,
     private readonly prisma: PrismaService,
+    private readonly encryption: EncryptionService,
   ) {}
 
   // ── GET: Facebook webhook verification ───────────────────────────────────
@@ -67,16 +69,33 @@ export class WebhookController {
     @Body() body: any,
     @Headers('x-hub-signature-256') sig: string,
   ) {
-    // ── FIX: Webhook signature verification ─────────────────────────────────
-    const secret = process.env.FB_WEBHOOK_SECRET?.trim();
+    // ── Resolve HMAC secret: per-page custom app OR global platform fallback ──
+    const rawBody = (req as any).rawBody ?? req.body;
+    const payload = Buffer.isBuffer(rawBody)
+      ? rawBody
+      : Buffer.from(JSON.stringify(rawBody));
+
+    let secret = process.env.FB_WEBHOOK_SECRET?.trim() ?? '';
+
+    try {
+      const quick = JSON.parse(payload.toString('utf8'));
+      const fbPageId: string | null = quick?.entry?.[0]?.id
+        ? String(quick.entry[0].id)
+        : null;
+      if (fbPageId) {
+        const pageRow = await this.prisma.page.findFirst({
+          where: { pageId: fbPageId, isActive: true },
+          select: { fbAppSecret: true },
+        });
+        if (pageRow?.fbAppSecret) {
+          secret = this.encryption.decrypt(pageRow.fbAppSecret);
+        }
+      }
+    } catch {
+      // unparseable body or DB error — fall through, global secret used
+    }
 
     if (secret) {
-      // main.ts routes /webhook through express.raw() so req.rawBody is Buffer
-      const rawBody = (req as any).rawBody ?? req.body;
-      const payload = Buffer.isBuffer(rawBody)
-        ? rawBody
-        : Buffer.from(JSON.stringify(rawBody));
-
       if (!sig) {
         this.logger.warn(
           '[Webhook] Missing X-Hub-Signature-256 header — rejecting',

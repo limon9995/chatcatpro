@@ -61,6 +61,8 @@ export class FacebookController {
       pageToken: String(body.pageToken || ''),
       verifyToken: body.verifyToken,
       masterPageId: body.masterPageId ? Number(body.masterPageId) : undefined,
+      fbAppId: body.fbAppId ? String(body.fbAppId).trim() : undefined,
+      fbAppSecret: body.fbAppSecret ? String(body.fbAppSecret).trim() : undefined,
     });
   }
 

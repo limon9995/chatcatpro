@@ -3,7 +3,7 @@ import { LanguageSwitch, Spinner } from '../components/ui';
 import { API_BASE, useApi } from '../hooks/useApi';
 import { useLanguage } from '../i18n';
 
-type ConnectedPage = { id: number; pageId: string; pageName: string; isActive: boolean; masterPageId?: number | null };
+type ConnectedPage = { id: number; pageId: string; pageName: string; isActive: boolean; masterPageId?: number | null; hasCustomApp?: boolean; fbAppId?: string | null };
 type PageRequest = { id: number; pageUrl: string; fbProfile: string; note?: string; status: string; adminNote?: string; createdAt: string };
 
 function extractYouTubeId(url: string): string | null {
@@ -31,6 +31,11 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
   const [tab, setTab] = useState<'request' | 'manual'>('request');
   // Linked page: optional master page to share settings from
   const [selectedMasterId, setSelectedMasterId] = useState<number | ''>('');
+
+  // Custom Facebook App (BYOA)
+  const [showCustomApp, setShowCustomApp] = useState(false);
+  const [customFbAppId, setCustomFbAppId] = useState('');
+  const [customFbAppSecret, setCustomFbAppSecret] = useState('');
 
   // Request Access tab state
   const [reqPageUrl, setReqPageUrl] = useState('');
@@ -98,7 +103,12 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
     try {
       await request(`${API_BASE}/facebook/connect`, {
         method: 'POST',
-        body: JSON.stringify({ pageId: '', pageName: pname, pageToken: tok, ...(selectedMasterId ? { masterPageId: selectedMasterId } : {}) }),
+        body: JSON.stringify({
+          pageId: '', pageName: pname, pageToken: tok,
+          ...(selectedMasterId ? { masterPageId: selectedMasterId } : {}),
+          ...(customFbAppId.trim() ? { fbAppId: customFbAppId.trim() } : {}),
+          ...(customFbAppSecret.trim() ? { fbAppSecret: customFbAppSecret.trim() } : {}),
+        }),
       });
       setManualSuccess(true);
     } catch (e: any) {
@@ -192,7 +202,12 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={{ fontSize: 16 }}>{p.isActive ? '✅' : '⏸️'}</span>
                   <div>
-                    <div style={{ fontWeight: 700, fontSize: 13, color: text }}>{p.pageName}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ fontWeight: 700, fontSize: 13, color: text }}>{p.pageName}</span>
+                      {p.hasCustomApp && (
+                        <span style={{ fontSize: 9, background: 'rgba(99,102,241,0.15)', color: '#6366f1', borderRadius: 5, padding: '1px 6px', fontWeight: 800 }}>Custom App</span>
+                      )}
+                    </div>
                     <div style={{ fontSize: 11, color: muted }}>
                       {p.pageId} {p.isActive ? copy('• Active', '• Active') : copy('• Inactive', '• Inactive')}
                     </div>
@@ -407,6 +422,38 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
                   </select>
                 </div>
               )}
+
+              {/* ── Advanced: Custom Facebook App (collapsible) ── */}
+              <div style={{ borderRadius: 11, border: `1px solid ${border}`, overflow: 'hidden' }}>
+                <button
+                  onClick={() => setShowCustomApp(v => !v)}
+                  style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'transparent', border: 'none', cursor: 'pointer', color: text, fontFamily: 'inherit', fontWeight: 700, fontSize: 12.5 }}
+                >
+                  <span>⚙️ {copy('Advanced: নিজের Facebook App', 'Advanced: Custom Facebook App')}</span>
+                  <span style={{ color: muted, fontSize: 11 }}>{showCustomApp ? '▲' : '▼'}</span>
+                </button>
+                {showCustomApp && (
+                  <div style={{ padding: '0 14px 14px', display: 'flex', flexDirection: 'column', gap: 10, borderTop: `1px solid ${border}` }}>
+                    <div style={{ fontSize: 11.5, color: muted, lineHeight: 1.8, paddingTop: 10 }}>
+                      {copy(
+                        'নিজের Facebook Developer App থাকলে credentials দিন। না দিলে platform এর default app ব্যবহার হবে।',
+                        'If you have your own Facebook Developer App, enter its credentials. Otherwise the platform\'s default app is used.',
+                      )}<br />
+                      <a href="https://developers.facebook.com/" target="_blank" rel="noreferrer" style={{ color: '#6366f1' }}>developers.facebook.com</a>
+                      {copy(' → আপনার App → Settings → Basic', ' → Your App → Settings → Basic')}<br />
+                      <strong>{copy('App Secret একবার save হলে আর দেখানো হবে না।', 'App Secret is stored encrypted and never shown again.')}</strong>
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 11.5, color: muted, fontWeight: 600, display: 'block', marginBottom: 4 }}>App ID</label>
+                      <input style={inp} value={customFbAppId} onChange={e => setCustomFbAppId(e.target.value)} placeholder="1234567890123456" />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 11.5, color: muted, fontWeight: 600, display: 'block', marginBottom: 4 }}>App Secret</label>
+                      <input style={inp} type="password" value={customFbAppSecret} onChange={e => setCustomFbAppSecret(e.target.value)} placeholder="••••••••••••••••••••••••••••••••" autoComplete="new-password" />
+                    </div>
+                  </div>
+                )}
+              </div>
 
               {!manualSuccess ? (
                 <button onClick={connectManual} disabled={manualBusy}
