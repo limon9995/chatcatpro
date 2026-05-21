@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { MessengerService } from '../messenger/messenger.service';
 import { MessageQueueService } from '../message-queue/message-queue.service';
@@ -33,7 +33,7 @@ import { WhisperService } from '../whisper/whisper.service';
 import { SmartBotService } from '../bot/smart-bot.service';
 
 @Injectable()
-export class WebhookService {
+export class WebhookService implements OnModuleDestroy {
   private readonly logger = new Logger(WebhookService.name);
 
   // Per-psid image buffer: collects photos sent in quick succession into one batch
@@ -48,8 +48,10 @@ export class WebhookService {
   >();
   private readonly IMAGE_BUFFER_MS = 4_000; // 4-second window
 
-  // Tracks the last reply sent per psid during a processMessage call
+  // Tracks the last reply sent per pageId:psid during a processMessage call
   private readonly inFlightReply = new Map<string, string>();
+  // Maps psid → active replyKey (pageId:psid) so safeSend can use the correct key
+  private readonly activeReplyKey = new Map<string, string>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -78,6 +80,13 @@ export class WebhookService {
     // V20: CLIP embedding for visual similarity search
     private readonly embeddingService: EmbeddingService,
   ) {}
+
+  onModuleDestroy() {
+    for (const entry of this.imageBuffer.values()) {
+      clearTimeout(entry.timer);
+    }
+    this.imageBuffer.clear();
+  }
 
   // ── Entry point ────────────────────────────────────────────────────────────
 
@@ -132,6 +141,7 @@ export class WebhookService {
             ...masterRows[0],
             // Preserve linked page identity (id used for orders/sessions, pageId/token for FB API)
             id: page.id,
+            ownerId: page.ownerId,
             pageId: page.pageId,
             pageName: page.pageName,
             pageToken: page.pageToken,
@@ -203,6 +213,8 @@ export class WebhookService {
     commentText: string,
   ): Promise<void> {
     if (!page.commentReplyOn || !page.automationOn) return;
+    // M-4: skip if page has no token
+    if (!page.pageToken) return;
 
     const postIdPart = postId.includes('_') ? postId.split('_').slice(1).join('_') : postId;
 
@@ -229,28 +241,31 @@ export class WebhookService {
     const { productCodes, intent } = classification;
     const inboxCta = `\n\n📩 Order বা আরও তথ্যের জন্য আমাদের Inbox-এ message করুন।`;
 
+    // M-8: deduct wallet before send so cost is always recorded even if send fails
+    const deduct = () => this.walletService.deductUsage(page.id, 'COMMENT_REPLY');
+
     // All-prices intent: list every post product's price
     if (intent === 'all_prices' || (intent === 'price' && productCodes.length === 0 && products.length > 0)) {
       const lines = products.map((p, i) => `${i + 1}. ${p.name ?? p.code} — ${p.price}৳`).join('\n');
       const reply = `📦 আমাদের সব product এর দাম:\n${lines}${inboxCta}`;
+      await deduct();
       await this.messenger.sendCommentReply(page.pageToken, commentId, reply);
       this.logger.log(`[Webhook] All-prices comment reply page=${page.pageId} commentId=${commentId}`);
-      await this.walletService.deductUsage(page.id, 'COMMENT_REPLY');
       return;
     }
 
     // No specific product or general question → generic inbox CTA
     if (productCodes.length === 0 || intent === 'other') {
+      await deduct();
       await this.messenger.sendCommentReply(page.pageToken, commentId, this.getGenericCommentReply());
       this.logger.log(`[Webhook] Generic comment reply page=${page.pageId} commentId=${commentId}`);
-      await this.walletService.deductUsage(page.id, 'COMMENT_REPLY');
       return;
     }
 
     const matched = products.filter(p => productCodes.includes(p.code));
     if (matched.length === 0) {
+      await deduct();
       await this.messenger.sendCommentReply(page.pageToken, commentId, this.getGenericCommentReply());
-      await this.walletService.deductUsage(page.id, 'COMMENT_REPLY');
       return;
     }
 
@@ -259,18 +274,18 @@ export class WebhookService {
       const parts = matched.map(p => this.buildProductLine(p, intent, page)).filter(Boolean);
       if (!parts.length) return;
       const reply = parts.join('\n') + inboxCta;
+      await deduct();
       await this.messenger.sendCommentReply(page.pageToken, commentId, reply);
       this.logger.log(`[Webhook] Multi-product comment reply page=${page.pageId} commentId=${commentId} codes=${productCodes.join(',')}`);
-      await this.walletService.deductUsage(page.id, 'COMMENT_REPLY');
       return;
     }
 
     // Single product
     const reply = this.buildCommentReply(matched[0], intent, page);
     if (!reply) return;
+    await deduct();
     await this.messenger.sendCommentReply(page.pageToken, commentId, reply);
     this.logger.log(`[Webhook] Comment replied page=${page.pageId} commentId=${commentId} code=${productCodes[0]} intent=${intent}`);
-    await this.walletService.deductUsage(page.id, 'COMMENT_REPLY');
   }
 
   // Single-line summary for multi-product reply (no CTA — added once at the end)
@@ -416,21 +431,24 @@ Rules:
     const pageId = page.id as number;
     const customerText = (message.text || '').trim();
 
-    // Clear any stale reply tracking for this psid before processing
-    this.inFlightReply.delete(psid);
+    // Clear any stale reply tracking for this page+psid before processing
+    const replyKey = `${pageId}:${psid}`;
+    this.inFlightReply.delete(replyKey);
+    this.activeReplyKey.set(psid, replyKey);
 
     await this._processMessageInner(page, psid, message);
 
     // Save conversation exchange to history for AI context
     if (customerText) {
-      const botReply = this.inFlightReply.get(psid) ?? null;
+      const botReply = this.inFlightReply.get(replyKey) ?? null;
       if (botReply) {
         await this.ctx
           .appendToHistory(pageId, psid, customerText, botReply)
           .catch(() => {});
       }
-      this.inFlightReply.delete(psid);
+      this.inFlightReply.delete(replyKey);
     }
+    this.activeReplyKey.delete(psid);
 
     // Record the current draft step after processing so loop detection can compare next time
     const updatedDraft = await this.ctx.getActiveDraft(pageId, psid);
@@ -768,7 +786,8 @@ Rules:
     }
 
     // ── MULTI PRODUCT CODES ────────────────────────────────────────────────
-    const allCodes = this.botIntent.extractAllCodes(text);
+    const prefix = (page.productCodePrefix as string | undefined) || 'DF';
+    const allCodes = this.botIntent.extractAllCodes(text, prefix);
     if (allCodes.length > 1 && page.infoModeOn) {
       const found = await this.productHandler.getProductsByCodes(
         pageId,
@@ -1293,7 +1312,11 @@ Rules:
       return;
     }
 
-    const selectedCode = this.resolveVisionSelectionCode(text, shortlist);
+    const selectedCode = this.resolveVisionSelectionCode(
+      text,
+      shortlist,
+      (page.productCodePrefix as string | undefined) || 'DF',
+    );
     if (!selectedCode) {
       const retryCount = (draft.visionSelectionRetryCount || 0) + 1;
       draft.visionSelectionRetryCount = retryCount;
@@ -1354,6 +1377,7 @@ Rules:
   private resolveVisionSelectionCode(
     text: string,
     shortlist: Array<{ code: string; price: number; name?: string | null }>,
+    prefix = 'DF',
   ): string | null {
     const normalized = text.trim();
     if (!normalized) return null;
@@ -1371,7 +1395,7 @@ Rules:
       );
     }
 
-    const explicitCodes = this.botIntent.extractAllCodes(asciiNormalized);
+    const explicitCodes = this.botIntent.extractAllCodes(asciiNormalized, prefix);
     const byCode = explicitCodes.find((code) =>
       shortlist.some((item) => item.code.toUpperCase() === code.toUpperCase()),
     );
@@ -1465,7 +1489,8 @@ Rules:
     // explicit order words (nibo/lagbe/…) which caused "Limon" sent after seeing
     // product info to be processed with no context.
     if (page.orderModeOn) {
-      const qtyMap = this.botIntent.extractQuantityMap(text);
+      const pagePrefix = (page.productCodePrefix as string | undefined) || 'DF';
+      const qtyMap = this.botIntent.extractQuantityMap(text, pagePrefix);
       const qty = qtyMap.get(code) ?? 1;
       const product = await this.prisma.product.findFirst({
         where: { pageId, code },
@@ -1568,7 +1593,8 @@ Rules:
     text: string,
     draft: DraftSession,
   ): Promise<void> {
-    const removeCode = this.botIntent.extractRemoveCode?.(text);
+    const pagePrefix = (page.productCodePrefix as string | undefined) || 'DF';
+    const removeCode = this.botIntent.extractRemoveCode?.(text, pagePrefix);
     if (!removeCode) return;
 
     draft.items = draft.items.filter((i) => i.productCode !== removeCode);
@@ -1668,7 +1694,7 @@ Rules:
     }
 
     // ── Quantity change ────────────────────────────────────────────────────
-    const qtyMap = this.botIntent.extractQuantityMap(text);
+    const qtyMap = this.botIntent.extractQuantityMap(text, (page.productCodePrefix as string | undefined) || 'DF');
     if (qtyMap.size > 0) {
       qtyMap.forEach((qty, code) => {
         const item = draft.items.find((i) => i.productCode === code);
@@ -2656,7 +2682,8 @@ Rules:
   ): Promise<void> {
     try {
       await this.messenger.sendText(token, psid, text);
-      this.inFlightReply.set(psid, text); // track last reply for history
+      const key = this.activeReplyKey.get(psid) ?? psid;
+      this.inFlightReply.set(key, text); // track last reply for history
     } catch (err) {
       this.logger.error(`[Webhook] safeSend failed psid=${psid}: ${err}`);
     }

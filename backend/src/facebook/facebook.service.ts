@@ -281,9 +281,9 @@ export class FacebookService {
       throw new BadRequestException('Page not found or not yours');
     await this.prisma.page.update({
       where: { id: pageDbId },
-      data: { isActive: false, automationOn: false },
+      data: { isActive: false, automationOn: false, pageToken: '' },
     });
-    this.authService.removePageFromUser(userId, pageDbId);
+    await this.authService.removePageFromUser(userId, pageDbId);
     return { success: true };
   }
 

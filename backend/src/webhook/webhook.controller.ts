@@ -107,10 +107,11 @@ export class WebhookController {
         'sha256=' +
         crypto.createHmac('sha256', secret).update(payload).digest('hex');
 
-      const sigValid = crypto.timingSafeEqual(
-        Buffer.from(sig),
-        Buffer.from(expected),
-      );
+      const sigBuf = Buffer.from(sig);
+      const expBuf = Buffer.from(expected);
+      const sigValid =
+        sigBuf.length === expBuf.length &&
+        crypto.timingSafeEqual(sigBuf, expBuf);
 
       if (!sigValid) {
         this.logger.warn(

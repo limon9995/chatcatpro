@@ -587,7 +587,8 @@ export class AuthService {
   private parsePageIds(raw: string): number[] {
     try {
       return JSON.parse(raw || '[]');
-    } catch {
+    } catch (err) {
+      this.logger.error(`[Auth] Malformed pageIds JSON in DB — defaulting to []. Value: ${raw?.slice(0, 100)} Error: ${err}`);
       return [];
     }
   }

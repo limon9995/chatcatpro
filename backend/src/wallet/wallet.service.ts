@@ -123,8 +123,14 @@ export class WalletService {
 
       if (amountToDeduct <= 0) return true; // Free setup or overridden to 0
 
-      // Transactionally deduct and log
+      // Transactionally deduct and log; skip if balance is already 0 or below
       await this.prisma.$transaction(async (tx) => {
+        const current = await tx.page.findUnique({
+          where: { id: pageId },
+          select: { walletBalanceBdt: true },
+        });
+        if (!current || current.walletBalanceBdt <= 0) return;
+
         await tx.page.update({
           where: { id: pageId },
           data: {

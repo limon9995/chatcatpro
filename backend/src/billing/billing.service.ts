@@ -112,23 +112,33 @@ export class BillingService {
       const trialEnd = new Date(now.getTime() + TRIAL_DAYS * 86_400_000);
       const periodEnd = new Date(now.getTime() + 30 * 86_400_000);
 
-      sub = await this.prisma.subscription.create({
-        data: {
-          id: crypto.randomUUID(),
-          userId,
-          planId: plan!.id,
-          status: 'trial',
-          periodStart: now,
-          periodEnd,
-          ordersLimit: plan!.ordersLimit,
-          trialEndsAt: trialEnd,
-          nextPaymentDue: trialEnd,
-        },
-        include: { plan: true },
-      });
-      this.logger.log(
-        `[Billing] Trial subscription created for user ${userId}`,
-      );
+      try {
+        sub = await this.prisma.subscription.create({
+          data: {
+            id: crypto.randomUUID(),
+            userId,
+            planId: plan!.id,
+            status: 'trial',
+            periodStart: now,
+            periodEnd,
+            ordersLimit: plan!.ordersLimit,
+            trialEndsAt: trialEnd,
+            nextPaymentDue: trialEnd,
+          },
+          include: { plan: true },
+        });
+        this.logger.log(
+          `[Billing] Trial subscription created for user ${userId}`,
+        );
+      } catch {
+        // Concurrent creation race — fetch the one that won
+        sub = await this.prisma.subscription.findFirst({
+          where: { userId },
+          include: { plan: true },
+          orderBy: { createdAt: 'desc' },
+        });
+        if (!sub) throw new Error(`Failed to get or create subscription for user ${userId}`);
+      }
     }
     return sub;
   }

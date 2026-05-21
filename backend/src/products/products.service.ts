@@ -78,6 +78,8 @@ export class ProductsService {
     'data',
     'product-sidecar-meta.json',
   );
+  // Mutex: prevents concurrent read-write races on the sidecar JSON file
+  private sidecarLock: Promise<void> = Promise.resolve();
 
   constructor(
     private prisma: PrismaService,
@@ -87,8 +89,12 @@ export class ProductsService {
   ) {}
 
   /** Returns masterPageId if this page is linked, otherwise own id. */
-  private async effectiveId(pageId: number): Promise<number> {
+  async getEffectivePageId(pageId: number): Promise<number> {
     return this.pageService.getEffectivePageId(pageId);
+  }
+
+  private effectiveId(pageId: number): Promise<number> {
+    return this.getEffectivePageId(pageId);
   }
 
   private productRefKey(pageId: number, code: string): string {
@@ -143,39 +149,52 @@ export class ProductsService {
     );
   }
 
+  private withSidecarLock<T>(fn: () => Promise<T>): Promise<T> {
+    const next = this.sidecarLock.then(fn);
+    this.sidecarLock = next.then(
+      () => {},
+      () => {},
+    );
+    return next;
+  }
+
   private async setSidecarMetaForProduct(
     pageId: number,
     code: string,
     meta: ProductSidecarMeta,
   ): Promise<void> {
-    const all = await this.loadReferenceImagesMap();
-    const key = this.productRefKey(pageId, code);
-    const nextValue: ProductSidecarMeta = {
-      referenceImagesJson: normalizeReferenceImagesJson(
-        meta.referenceImagesJson,
-      ),
-      productGroup: String(meta.productGroup || '').trim() || null,
-      variantLabel: String(meta.variantLabel || '').trim() || null,
-    };
-    if (
-      !nextValue.referenceImagesJson &&
-      !nextValue.productGroup &&
-      !nextValue.variantLabel
-    ) {
-      delete all[key];
-    } else {
-      all[key] = nextValue;
-    }
-    await this.saveReferenceImagesMap(all);
+    return this.withSidecarLock(async () => {
+      const all = await this.loadReferenceImagesMap();
+      const key = this.productRefKey(pageId, code);
+      const nextValue: ProductSidecarMeta = {
+        referenceImagesJson: normalizeReferenceImagesJson(
+          meta.referenceImagesJson,
+        ),
+        productGroup: String(meta.productGroup || '').trim() || null,
+        variantLabel: String(meta.variantLabel || '').trim() || null,
+      };
+      if (
+        !nextValue.referenceImagesJson &&
+        !nextValue.productGroup &&
+        !nextValue.variantLabel
+      ) {
+        delete all[key];
+      } else {
+        all[key] = nextValue;
+      }
+      await this.saveReferenceImagesMap(all);
+    });
   }
 
   private async removeSidecarMetaForProduct(
     pageId: number,
     code: string,
   ): Promise<void> {
-    const all = await this.loadReferenceImagesMap();
-    delete all[this.productRefKey(pageId, code)];
-    await this.saveReferenceImagesMap(all);
+    return this.withSidecarLock(async () => {
+      const all = await this.loadReferenceImagesMap();
+      delete all[this.productRefKey(pageId, code)];
+      await this.saveReferenceImagesMap(all);
+    });
   }
 
   async attachReferenceImages<T extends { code: string }>(

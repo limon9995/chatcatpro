@@ -27,15 +27,16 @@ export class OtpService {
     const logoBase64 = fs.existsSync(logoPath)
       ? `data:image/png;base64,${fs.readFileSync(logoPath).toString('base64')}`
       : '';
-    // Remove previous unused OTPs for this email+purpose
-    await this.prisma.otpToken.deleteMany({ where: { email, purpose } });
-
-    const code = String(Math.floor(100000 + Math.random() * 900000));
+    const code = String(crypto.randomInt(100000, 1000000));
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
-    await this.prisma.otpToken.create({
-      data: { id: crypto.randomUUID(), email, code, purpose, expiresAt },
-    });
+    // Atomically remove old OTPs and insert the new one
+    await this.prisma.$transaction([
+      this.prisma.otpToken.deleteMany({ where: { email, purpose } }),
+      this.prisma.otpToken.create({
+        data: { id: crypto.randomUUID(), email, code, purpose, expiresAt },
+      }),
+    ]);
 
     const isSignup = purpose === 'signup';
     await this.transporter.sendMail({

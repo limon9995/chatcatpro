@@ -411,37 +411,42 @@ export class BotIntentService {
     return null;
   }
 
-  extractSingleCode(text: string): string | null {
+  extractSingleCode(text: string, prefix = 'DF'): string | null {
     const t = String(text || '').toUpperCase();
-    const match = t.match(/\bDF\s*[-]?\s*(\d{1,6})\b/);
+    const p = prefix.toUpperCase();
+    const match = t.match(new RegExp(`\\b${p}\\s*[-]?\\s*(\\d{1,6})\\b`));
     if (!match) return null;
-    return `DF-${match[1].padStart(4, '0')}`;
+    return `${p}-${match[1].padStart(4, '0')}`;
   }
 
-  extractAllCodes(text: string): string[] {
+  extractAllCodes(text: string, prefix = 'DF'): string[] {
     const t = String(text || '').toUpperCase();
-    const matches = [...t.matchAll(/\bDF\s*[-]?\s*(\d{1,6})\b/g)];
-    return [...new Set(matches.map((m) => `DF-${m[1].padStart(4, '0')}`))];
+    const p = prefix.toUpperCase();
+    const matches = [...t.matchAll(new RegExp(`\\b${p}\\s*[-]?\\s*(\\d{1,6})\\b`, 'g'))];
+    return [...new Set(matches.map((m) => `${p}-${m[1].padStart(4, '0')}`))];
   }
 
-  extractQuantityMap(text: string): Map<string, number> {
+  extractQuantityMap(text: string, prefix = 'DF'): Map<string, number> {
     const result = new Map<string, number>();
     const t = String(text || '').toUpperCase();
-    const pattern =
-      /\bDF\s*[-]?\s*(\d{1,6})\b\s*(\d+)\s*(?:TA|TI|টা|টি|PCS|X)?/gi;
+    const p = prefix.toUpperCase();
+    const pattern = new RegExp(
+      `\\b${p}\\s*[-]?\\s*(\\d{1,6})\\b\\s*(\\d+)\\s*(?:TA|TI|টা|টি|PCS|X)?`,
+      'gi',
+    );
     let match: RegExpExecArray | null;
     while ((match = pattern.exec(t)) !== null) {
-      const code = `DF-${match[1].padStart(4, '0')}`;
+      const code = `${p}-${match[1].padStart(4, '0')}`;
       const qty = parseInt(match[2], 10);
       if (qty > 0) result.set(code, qty);
     }
     return result;
   }
 
-  extractRemoveCode(text: string): string | null {
+  extractRemoveCode(text: string, prefix = 'DF'): string | null {
     const t = String(text || '').toLowerCase();
     if (!/\b(bad|lagbe na|remove|bad den)\b/.test(t)) return null;
-    return this.extractSingleCode(text);
+    return this.extractSingleCode(text, prefix);
   }
 
   extractOfferedPrice(text: string): number | null {

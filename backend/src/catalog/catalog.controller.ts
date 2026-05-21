@@ -483,9 +483,7 @@ export class CatalogController {
     const priceFormatted = Number(p.price).toLocaleString('bn-BD');
     const productPublicUrl = `https://api.chatcat.pro/catalog/${esc(page.id)}/product/${esc(p.code)}`;
     const productDesc = `মূল্য: ${currency}${Number(p.price).toLocaleString()} · ${inStock ? 'Stock আছে' : 'Stock নেই'} · ${esc(p.description || p.name || p.code)} — ${esc(page.name)}`;
-    // V21: m.me referral URL — bot receives ORDER_CODE ref event automatically
-    const mmeRef = encodeURIComponent(`ORDER_${p.code}`);
-    const mmeOrderUrl = `https://m.me/${esc(page.pageId)}?ref=${mmeRef}`;
+    const mmeOrderUrl = `https://m.me/${esc(page.pageId)}?text=${orderText}`;
     // V21: WhatsApp share URL
     const waShareText = encodeURIComponent(
       `${p.name || p.code} — ${currency}${Number(p.price).toLocaleString()}\n${productPublicUrl}`,

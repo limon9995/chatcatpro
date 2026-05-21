@@ -493,47 +493,78 @@ export class DraftOrderHandler {
       | import('../../spam-checker/spam-checker.service').SpamResult
       | undefined;
 
-    const order = await this.prisma.order.create({
-      data: {
-        pageIdRef: pageId,
-        customerPsid: psid,
-        customerName: draft.customerName || 'Customer',
-        phone: draft.phone ?? null,
-        address: draft.address ?? '',
-        status: orderStatus,
-        confirmedAt: confirmedAt,
-        negotiationRequested: draft.negotiationRequested ?? false,
-        customerOfferedPrice: draft.offeredPrice ?? null,
-        orderNote: combinedNote,
-        paymentStatus,
-        transactionId: draft.paymentProof ?? null,
-        paymentScreenshotUrl: draft.paymentScreenshotUrl ?? null,
-        spamRisk: spamResult?.risk ?? 'unknown',
-        spamScore: spamResult?.score ?? null,
-        spamTotalOrders: spamResult?.totalOrders ?? null,
-        spamDelivered: spamResult?.delivered ?? null,
-        spamCancelled: spamResult?.cancelled ?? null,
-        spamSource: spamResult?.source ?? null,
-        spamCheckedAt: spamResult ? new Date() : null,
-        items: {
-          create: draft.items.map((i) => ({
-            productCode: i.productCode,
-            qty: i.qty,
-            unitPrice: i.unitPrice,
-          })),
+    // Resolve effective pageId (linked pages share master's product catalog)
+    const effectivePageId = await this.products.getEffectivePageId(pageId);
+
+    // M-3: Stock check before creating order — abort if any item is out of stock
+    for (const item of draft.items) {
+      const product = await this.prisma.product.findUnique({
+        where: {
+          pageId_code: {
+            pageId: effectivePageId,
+            code: item.productCode,
+          },
         },
-      },
+        select: { stockQty: true, name: true },
+      });
+      if (product && product.stockQty <= 0) {
+        throw new Error(
+          `Product ${item.productCode} is out of stock`,
+        );
+      }
+    }
+
+    // C-3: Create order AND decrement stock atomically
+    const order = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.order.create({
+        data: {
+          pageIdRef: pageId,
+          customerPsid: psid,
+          customerName: draft.customerName || 'Customer',
+          phone: draft.phone ?? null,
+          address: draft.address ?? '',
+          status: orderStatus,
+          confirmedAt: confirmedAt,
+          negotiationRequested: draft.negotiationRequested ?? false,
+          customerOfferedPrice: draft.offeredPrice ?? null,
+          orderNote: combinedNote,
+          paymentStatus,
+          transactionId: draft.paymentProof ?? null,
+          paymentScreenshotUrl: draft.paymentScreenshotUrl ?? null,
+          spamRisk: spamResult?.risk ?? 'unknown',
+          spamScore: spamResult?.score ?? null,
+          spamTotalOrders: spamResult?.totalOrders ?? null,
+          spamDelivered: spamResult?.delivered ?? null,
+          spamCancelled: spamResult?.cancelled ?? null,
+          spamSource: spamResult?.source ?? null,
+          spamCheckedAt: spamResult ? new Date() : null,
+          items: {
+            create: draft.items.map((i) => ({
+              productCode: i.productCode,
+              qty: i.qty,
+              unitPrice: i.unitPrice,
+            })),
+          },
+        },
+      });
+
+      // Decrement stock atomically inside same transaction
+      for (const item of draft.items) {
+        await tx.product.updateMany({
+          where: {
+            pageId: effectivePageId,
+            code: item.productCode,
+            stockQty: { gt: 0 },
+          },
+          data: { stockQty: { decrement: item.qty } },
+        });
+      }
+
+      return created;
     });
 
     await this.ctx.clearDraft(pageId, psid);
-    // Clear conversation history after order is placed — fresh start for next conversation
     await this.ctx.clearHistory(pageId, psid).catch(() => {});
-
-    // V8: auto-decrement stock
-    await this.products.decrementStock(
-      pageId,
-      draft.items.map((i) => ({ productCode: i.productCode, qty: i.qty })),
-    );
 
     // V9: upsert CRM customer record
     const subtotal = draft.items.reduce((s, i) => s + i.unitPrice * i.qty, 0);

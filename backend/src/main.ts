@@ -90,7 +90,9 @@ async function bootstrap() {
   const isProduction = process.env.NODE_ENV === 'production';
   app.enableCors({
     origin: (origin, cb) => {
-      if (!origin || origin === 'null') return cb(null, true);
+      // Allow requests with no Origin header (server-to-server, curl, etc.)
+      // but never allow the literal string "null" (sandboxed iframe / file://)
+      if (!origin) return cb(null, true);
       if (!allowedOrigins) {
         if (isProduction)
           return cb(new Error(`CORS blocked: ${origin} — set CORS_ORIGINS`));

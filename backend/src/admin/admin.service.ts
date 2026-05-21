@@ -267,7 +267,8 @@ export class AdminService {
         ].includes(k)
       ) {
         patch[k] = Boolean(v);
-        patch[MODE_ACCESS_MAP[k]] = Boolean(v);
+        // Only lock the Allowed flag when admin disables — never force-enable it
+        if (!Boolean(v)) patch[MODE_ACCESS_MAP[k]] = false;
       } else if (k === 'productCodePrefix') {
         const p = String(v || 'DF')
           .toUpperCase()
@@ -957,10 +958,10 @@ export class AdminService {
     const where: any = opts.search
       ? {
           OR: [
-            { name: { contains: opts.search } },
-            { phone: { contains: opts.search } },
-            { psid: { contains: opts.search } },
-            { address: { contains: opts.search } },
+            { name: { contains: opts.search, mode: 'insensitive' } },
+            { phone: { contains: opts.search, mode: 'insensitive' } },
+            { psid: { contains: opts.search, mode: 'insensitive' } },
+            { address: { contains: opts.search, mode: 'insensitive' } },
           ],
         }
       : {};
@@ -1157,6 +1158,7 @@ export class AdminService {
   }
 
   private buildNginxBlock(domain: string, useSsl: boolean): string {
+    const encodedDomain = encodeURIComponent(domain);
     if (useSsl) {
       return `
 # Domain: ${domain}
@@ -1171,7 +1173,7 @@ server {
     ssl_certificate     /etc/letsencrypt/live/${domain}/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/${domain}/privkey.pem;
     location / {
-        proxy_pass http://localhost:3000/catalog/by-domain?host=${domain}&path=$request_uri;
+        proxy_pass http://localhost:3000/catalog/by-domain?host=${encodedDomain}&path=$request_uri;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -1185,7 +1187,7 @@ server {
     listen 80;
     server_name ${domain};
     location / {
-        proxy_pass http://localhost:3000/catalog/by-domain?host=${domain}&path=$request_uri;
+        proxy_pass http://localhost:3000/catalog/by-domain?host=${encodedDomain}&path=$request_uri;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
