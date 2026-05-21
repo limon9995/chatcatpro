@@ -48,7 +48,8 @@ export class WalletService {
       | 'DUAL_PHOTO_AI'
       | 'SMART_BOT'
       | 'MEMO_PRINT'
-      | 'KEYWORD_REPLY',
+      | 'KEYWORD_REPLY'
+      | 'COMMENT_REPLY',
     options?: { photoCount?: number; memoCount?: number },
   ): Promise<boolean> {
     try {
@@ -113,6 +114,10 @@ export class WalletService {
         case 'KEYWORD_REPLY':
           amountToDeduct = (page as any).costPerKeywordReplyBdt ?? 0.02;
           description = 'Keyword/Template Bot Reply';
+          break;
+        case 'COMMENT_REPLY':
+          amountToDeduct = (page as any).costPerCommentReplyBdt ?? 0.05;
+          description = 'Comment Auto-Reply';
           break;
       }
 

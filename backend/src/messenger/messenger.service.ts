@@ -74,4 +74,38 @@ export class MessengerService {
       }
     }
   }
+
+  async sendCommentReply(pageToken: string, commentId: string, text: string): Promise<void> {
+    if (!pageToken || !commentId || !text) return;
+    const rawToken = this.encryption.decrypt(pageToken);
+    const url = `https://graph.facebook.com/v20.0/${encodeURIComponent(commentId)}/comments?access_token=${encodeURIComponent(rawToken)}`;
+    const body = JSON.stringify({ message: text });
+
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body,
+        });
+        if (res.ok) {
+          this.logger.debug(`[Messenger] Comment reply sent commentId=${commentId}`);
+          return;
+        }
+        const errText = await res.text().catch(() => '');
+        if ((res.status === 429 || res.status >= 500) && attempt < MAX_RETRIES) {
+          await new Promise((r) => setTimeout(r, RETRY_DELAY_MS[attempt]));
+          continue;
+        }
+        this.logger.error(`[Messenger] Comment reply failed status=${res.status} body=${errText.slice(0, 200)}`);
+        return;
+      } catch (err) {
+        if (attempt < MAX_RETRIES) {
+          await new Promise((r) => setTimeout(r, RETRY_DELAY_MS[attempt]));
+        } else {
+          this.logger.error(`[Messenger] Comment reply network error: ${err}`);
+        }
+      }
+    }
+  }
 }

@@ -1104,6 +1104,8 @@ export function AdminPanel({ th, onToast, onLogout }: {
                         ['memoSaveModeOn','📝 Memo Save'],
                         ['memoTemplateModeOn','📄 Memo Template'],
                         ['autoMemoDesignModeOn','🎨 Auto Memo Design'],
+                        ['commentReplyAllowed','💬 Comment Reply Allow'],
+                        ['commentReplyOn','💬 Comment Reply On'],
                       ].map(([key, label]) => (
                         <label key={key} style={{ ...th.card2, display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: '8px 12px', borderRadius: 8 }}>
                           <input type="checkbox" checked={Boolean(pageSettings[key])}

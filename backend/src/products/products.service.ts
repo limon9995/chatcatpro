@@ -230,6 +230,20 @@ export class ProductsService {
     }));
   }
 
+  private extractFbPostId(url: string): string | null {
+    if (!url) return null;
+    try {
+      const u = new URL(url.trim());
+      const match = u.pathname.match(/\/(posts|videos|photos)\/(\d+)/);
+      if (match) return match[2];
+      const storyId = u.searchParams.get('story_fbid');
+      if (storyId) return storyId;
+      const fbid = u.searchParams.get('fbid');
+      if (fbid) return fbid;
+    } catch {}
+    return null;
+  }
+
   async create(data: {
     pageId: number;
     code: string;
@@ -244,6 +258,7 @@ export class ProductsService {
     variantLabel?: string | null;
     postCaption?: string;
     videoUrl?: string;
+    fbPostUrl?: string;
     catalogVisible?: boolean;
     catalogSortOrder?: number;
     variantOptions?: string | null;
@@ -276,6 +291,8 @@ export class ProductsService {
         imageUrl: data.imageUrl ?? null,
         postCaption: data.postCaption ?? null,
         videoUrl: data.videoUrl ?? null,
+        fbPostUrl: data.fbPostUrl ?? null,
+        fbPostId: data.fbPostUrl ? this.extractFbPostId(data.fbPostUrl) : null,
         catalogVisible: data.catalogVisible ?? true,
         catalogSortOrder: data.catalogSortOrder ?? 0,
         variantOptions: data.variantOptions ?? null,
@@ -339,6 +356,7 @@ export class ProductsService {
       isActive?: boolean;
       postCaption?: string;
       videoUrl?: string;
+      fbPostUrl?: string;
       catalogVisible?: boolean;
       catalogSortOrder?: number;
       variantOptions?: string | null;
@@ -369,6 +387,10 @@ export class ProductsService {
       payload.postCaption = data.postCaption || null;
     if (typeof data.videoUrl === 'string')
       payload.videoUrl = data.videoUrl || null;
+    if (typeof data.fbPostUrl === 'string') {
+      payload.fbPostUrl = data.fbPostUrl || null;
+      payload.fbPostId = data.fbPostUrl ? this.extractFbPostId(data.fbPostUrl) : null;
+    }
     if (typeof data.catalogVisible === 'boolean')
       payload.catalogVisible = data.catalogVisible;
     if (typeof data.catalogSortOrder === 'number')

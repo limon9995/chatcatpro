@@ -145,6 +145,9 @@ model Page {
   imageFallbackAiOn     Boolean @default(false) // use AI fallback when low confidence
   textFallbackAiOn      Boolean @default(false) // use AI fallback for unmatched text messages
   smartBotOn            Boolean @default(false)  // V19: SmartBot — single AI call replaces keyword pipeline
+  commentReplyOn        Boolean @default(false)
+  commentReplyAllowed   Boolean @default(true)
+  costPerCommentReplyBdt Float  @default(0.05)
 
   callLanguage        String    @default("BN")
   voiceType           String    @default("FEMALE")
@@ -246,6 +249,10 @@ model Product {
   isActive    Boolean @default(true)
   // V8: Optional post caption — bot combines with OCR for confident code detection
   postCaption String?
+
+  // Comment reply post linking
+  fbPostUrl        String? // Full FB post URL (display only)
+  fbPostId         String? // Extracted numeric post ID for webhook matching
 
   // V10: Product Catalog
   videoUrl         String? // YouTube URL

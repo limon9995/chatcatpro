@@ -523,14 +523,17 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
                       </div>
 
                       <div style={{ fontSize: 12, color: muted, lineHeight: 1.8, borderTop: `1px solid rgba(251,191,36,0.25)`, paddingTop: 8 }}>
-                        {copy(
-                          'Subscriptions-এ ',
-                          'Also subscribe to: '
-                        )}
-                        <code style={{ background: dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)', padding: '1px 5px', borderRadius: 4, fontSize: 11 }}>messages</code>
-                        {', '}
-                        <code style={{ background: dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)', padding: '1px 5px', borderRadius: 4, fontSize: 11 }}>messaging_postbacks</code>
-                        {copy(' subscribe করুন। তারপর আপনার page-টি app-এ add/subscribe করুন।', ' then add and subscribe your page to the app.')}
+                        <strong style={{ display: 'block', marginBottom: 4 }}>{copy('Webhook Subscriptions:', 'Webhook Subscriptions:')}</strong>
+                        {['messages', 'messaging_postbacks', 'feed'].map(s => (
+                          <code key={s} style={{ background: dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)', padding: '1px 5px', borderRadius: 4, fontSize: 11, marginRight: 4 }}>{s}</code>
+                        ))}
+                        <br /><br />
+                        <strong style={{ display: 'block', marginBottom: 4 }}>{copy('Page Token Permissions:', 'Page Token Permissions:')}</strong>
+                        {['pages_messaging', 'pages_read_engagement', 'pages_manage_engagement'].map(p => (
+                          <code key={p} style={{ background: dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)', padding: '1px 5px', borderRadius: 4, fontSize: 11, marginRight: 4 }}>{p}</code>
+                        ))}
+                        <br />
+                        <span style={{ marginTop: 4, display: 'block' }}>{copy('তারপর আপনার page-টি app-এ subscribe করুন।', 'Then subscribe your page to the app.')}</span>
                       </div>
                     </div>
                   )}

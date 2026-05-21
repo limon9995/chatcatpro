@@ -34,6 +34,7 @@ export class ClientDashboardService {
     memoSaveModeOn: 'memoSaveModeAllowed',
     memoTemplateModeOn: 'memoTemplateModeAllowed',
     autoMemoDesignModeOn: 'autoMemoDesignModeAllowed',
+    commentReplyOn: 'commentReplyAllowed',
   };
 
   constructor(
@@ -113,6 +114,7 @@ export class ClientDashboardService {
       memoTemplateModeOn: Boolean(page.memoTemplateModeOn),
       autoMemoDesignModeOn: Boolean(page.autoMemoDesignModeOn),
       smartBotOn: Boolean(page.smartBotOn),
+      commentReplyOn: Boolean(page.commentReplyOn),
       modeAccess: this.getModeAccess(page),
     };
   }
@@ -130,6 +132,7 @@ export class ClientDashboardService {
       'memoTemplateModeOn',
       'autoMemoDesignModeOn',
       'smartBotOn',
+      'commentReplyOn',
     ];
     const patch: any = {};
     for (const k of allowed) {

@@ -8,7 +8,7 @@ type Product = {
   id: number; code: string; name: string | null;
   price: number; costPrice: number; stockQty: number;
   isActive: boolean; postCaption: string | null;
-  videoUrl: string | null; catalogVisible: boolean;
+  videoUrl: string | null; fbPostUrl: string | null; catalogVisible: boolean;
   imageUrl: string | null; description: string | null;
   referenceImagesJson: string | null;
   productGroup: string | null;
@@ -24,7 +24,7 @@ type Product = {
 
 type EditData = {
   name?: string; price?: number; costPrice?: number; stockQty?: number;
-  postCaption?: string; videoUrl?: string; catalogVisible?: boolean;
+  postCaption?: string; videoUrl?: string; fbPostUrl?: string; catalogVisible?: boolean;
   description?: string; imageUrl?: string; referenceImagesJson?: string; productGroup?: string; variantLabel?: string; variantOptions?: string;
   // V18: Image recognition metadata
   category?: string; color?: string; tags?: string; imageKeywords?: string;
@@ -33,7 +33,7 @@ type EditData = {
   detectionMode?: 'OCR' | 'AI_VISION';
 };
 
-const EMPTY = { code: '', name: '', price: 0, costPrice: 0, stockQty: 0, postCaption: '', videoUrl: '', catalogVisible: true, description: '', imageUrl: '', referenceImagesJson: '', productGroup: '', variantLabel: '', variantOptions: '', category: '', color: '', tags: '', imageKeywords: '', visionSearchable: false, detectionMode: 'AI_VISION' as 'OCR' | 'AI_VISION' };
+const EMPTY = { code: '', name: '', price: 0, costPrice: 0, stockQty: 0, postCaption: '', videoUrl: '', fbPostUrl: '', catalogVisible: true, description: '', imageUrl: '', referenceImagesJson: '', productGroup: '', variantLabel: '', variantOptions: '', category: '', color: '', tags: '', imageKeywords: '', visionSearchable: false, detectionMode: 'AI_VISION' as 'OCR' | 'AI_VISION' };
 
 /** Convert DB JSON variantOptions → textarea text ("Size: S,M,L,XL\nColor: Red,Blue") */
 function variantOptionsToText(json: string | null): string {
@@ -228,7 +228,7 @@ export function ProductsPage({ th, pageId, onToast }: {
 
   const openEdit = (p: Product) => {
     setEditId(p.id);
-    setEditData({ name: p.name ?? '', price: p.price, costPrice: p.costPrice, stockQty: p.stockQty, postCaption: p.postCaption ?? '', videoUrl: p.videoUrl ?? '', catalogVisible: p.catalogVisible ?? true, description: p.description ?? '', imageUrl: p.imageUrl ?? '', referenceImagesJson: referenceImagesToText(p.referenceImagesJson), productGroup: p.productGroup ?? '', variantLabel: p.variantLabel ?? '', variantOptions: variantOptionsToText(p.variantOptions), category: p.category ?? '', color: p.color ?? '', tags: p.tags ?? '', imageKeywords: p.imageKeywords ?? '', visionSearchable: p.visionSearchable ?? false, detectionMode: p.detectionMode ?? 'AI_VISION' });
+    setEditData({ name: p.name ?? '', price: p.price, costPrice: p.costPrice, stockQty: p.stockQty, postCaption: p.postCaption ?? '', videoUrl: p.videoUrl ?? '', fbPostUrl: p.fbPostUrl ?? '', catalogVisible: p.catalogVisible ?? true, description: p.description ?? '', imageUrl: p.imageUrl ?? '', referenceImagesJson: referenceImagesToText(p.referenceImagesJson), productGroup: p.productGroup ?? '', variantLabel: p.variantLabel ?? '', variantOptions: variantOptionsToText(p.variantOptions), category: p.category ?? '', color: p.color ?? '', tags: p.tags ?? '', imageKeywords: p.imageKeywords ?? '', visionSearchable: p.visionSearchable ?? false, detectionMode: p.detectionMode ?? 'AI_VISION' });
     setEditVideoGuide(null);
     setUniquenessEdit(null);
     setUniquenessEditHidden(false);
@@ -630,6 +630,11 @@ export function ProductsPage({ th, pageId, onToast }: {
                 </button>
               </div>
             </FieldWithInfo>
+            <FieldWithInfo th={th} label={copy('🔗 Facebook Post Link (optional)', '🔗 Facebook Post Link (optional)')} helpText={copy('এই post-এ comment করলে bot auto reply দেবে', 'Bot will auto-reply to comments on this post')}>
+              <input style={th.input} placeholder="https://facebook.com/yourpage/posts/123456"
+                value={(newP as any).fbPostUrl ?? ''}
+                onChange={e => setNewP(p => ({ ...p, fbPostUrl: e.target.value }))} />
+            </FieldWithInfo>
           </div>
           <div style={{ marginTop: 12 }}>
             <FieldWithInfo th={th} label="Description" helpText={copy('Product সম্পর্কে ছোট বিবরণ — catalog ও bot reply-এ দেখাবে', 'Short description shown in catalog and bot replies')}>
@@ -1029,6 +1034,13 @@ export function ProductsPage({ th, pageId, onToast }: {
                               ))}
                             </div>
                           )}
+                        </div>
+                        {/* FB Post Link */}
+                        <div>
+                          <div style={{ fontSize: 11, opacity: 0.6, marginBottom: 4 }}>🔗 Facebook Post Link</div>
+                          <input style={{ ...th.input, fontSize: 12.5 }} placeholder="https://facebook.com/yourpage/posts/123456"
+                            value={editData.fbPostUrl ?? ''}
+                            onChange={e => setEditData(d => ({ ...d, fbPostUrl: e.target.value }))} />
                         </div>
                         {/* Catalog visible toggle */}
                         <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 12.5 }}>

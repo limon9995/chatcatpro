@@ -19,6 +19,7 @@ interface Settings {
   infoModeOn: boolean; orderModeOn: boolean; printModeOn: boolean;
   callConfirmModeOn: boolean; memoSaveModeOn: boolean; memoTemplateModeOn: boolean;
   smartBotOn: boolean;
+  commentReplyOn: boolean;
   // V18: Image recognition
   imageRecognitionOn: boolean; imageHighConfidence: number;
   imageMediumConfidence: number; imageFallbackAiOn: boolean;
@@ -57,6 +58,7 @@ const S0: Settings = {
   infoModeOn: true, orderModeOn: true, printModeOn: false,
   callConfirmModeOn: false, memoSaveModeOn: false, memoTemplateModeOn: false,
   smartBotOn: false,
+  commentReplyOn: false,
   imageRecognitionOn: false, imageHighConfidence: 0.75, imageMediumConfidence: 0.45, imageFallbackAiOn: false, textFallbackAiOn: false,
   pricingPolicy: {
     priceMode: 'FIXED', allowCustomerOffer: false, agentApprovalRequired: true,
@@ -1004,6 +1006,7 @@ export function SettingsPage({ th, pageId, tab, onToast }: {
               { key: 'printModeOn',       label: 'Print Mode',        sub: copy('Invoice/memo print করা যাবে', 'Enable invoice and memo printing') },
               { key: 'memoSaveModeOn',    label: 'Memo Save Mode',    sub: copy('Memo auto-save হবে', 'Memos will be auto-saved') },
               { key: 'callConfirmModeOn', label: 'Call Confirm Mode', sub: copy('Phone call দিয়ে order confirm করবে', 'Confirm orders by phone call') },
+              { key: 'commentReplyOn',   label: 'Comment Reply',     sub: copy('Post-এর comment-এ auto reply দেবে', 'Auto-reply to Facebook post comments') },
             ].map(m => (
               <Toggle key={m.key} th={th} label={m.label} sub={m.sub}
                 checked={(s as any)[m.key] ?? false}

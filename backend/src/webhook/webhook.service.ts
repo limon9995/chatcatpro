@@ -175,6 +175,127 @@ export class WebhookService {
             ),
           );
       }
+
+      // ── Feed events: Facebook post comments ──────────────────────────────
+      for (const change of entry.changes ?? []) {
+        if (change.field !== 'feed') continue;
+        const val = change.value ?? {};
+        if (val.item !== 'comment' || val.verb !== 'add') continue;
+        if (String(val.sender_id) === String(resolvedPage.pageId)) continue;
+
+        const commentId: string = val.comment_id ?? '';
+        const postId: string = val.post_id ?? '';
+        const commentText: string = String(val.message ?? '').trim();
+        if (!commentId || !commentText) continue;
+
+        this.handleCommentReply(resolvedPage, commentId, postId, commentText)
+          .catch(err => this.logger.error(`[Webhook] Comment reply error: ${err}`));
+      }
+    }
+  }
+
+  // ── Comment reply handler ─────────────────────────────────────────────────
+
+  private async handleCommentReply(
+    page: any,
+    commentId: string,
+    postId: string,
+    commentText: string,
+  ): Promise<void> {
+    if (!page.commentReplyOn || !page.automationOn) return;
+
+    const postIdPart = postId.includes('_') ? postId.split('_').slice(1).join('_') : postId;
+
+    const products = await this.prisma.product.findMany({
+      where: { pageId: page.id, isActive: true, fbPostId: postIdPart },
+      select: { code: true, name: true, price: true, stockQty: true, description: true },
+    });
+
+    const classification = await this.classifyCommentFull(products, commentText);
+    if (!classification?.shouldReply) return;
+
+    if (products.length === 0 || !classification.productCode || classification.intent === 'other') {
+      await this.messenger.sendCommentReply(page.pageToken, commentId, this.getGenericCommentReply());
+      this.logger.log(`[Webhook] Generic comment reply page=${page.pageId} commentId=${commentId}`);
+      await this.walletService.deductUsage(page.id, 'COMMENT_REPLY');
+      return;
+    }
+
+    const product = products.find(p => p.code === classification.productCode);
+    if (!product) return;
+
+    const reply = this.buildCommentReply(product, classification.intent, page);
+    if (!reply) return;
+
+    await this.messenger.sendCommentReply(page.pageToken, commentId, reply);
+    this.logger.log(`[Webhook] Comment replied page=${page.pageId} commentId=${commentId} code=${classification.productCode} intent=${classification.intent}`);
+    await this.walletService.deductUsage(page.id, 'COMMENT_REPLY');
+  }
+
+  private buildCommentReply(product: any, intent: string, page: any): string | null {
+    const label = product.name ? `${product.name} (${product.code})` : product.code;
+    const inboxCta = `\n\n📩 Order বা আরও তথ্যের জন্য আমাদের Inbox-এ message করুন।`;
+    switch (intent) {
+      case 'price':
+        return `${label} এর দাম ${product.price}৳ 🏷️${inboxCta}`;
+      case 'stock':
+        return (product.stockQty > 0
+          ? `${label} এ ${product.stockQty} টি stock আছে ✅`
+          : `${label} বর্তমানে stock এ নেই ❌`) + inboxCta;
+      case 'delivery':
+        return `ঢাকার ভেতরে ডেলিভারি ${page.deliveryFeeInsideDhaka ?? 80}৳, বাইরে ${page.deliveryFeeOutsideDhaka ?? 120}৳ 🚚${inboxCta}`;
+      case 'description':
+        return product.description ? `${product.description}${inboxCta}` : null;
+      default:
+        return null;
+    }
+  }
+
+  private getGenericCommentReply(): string {
+    return `আগ্রহের জন্য ধন্যবাদ! 😊 আমাদের Inbox-এ message করুন — দাম, stock ও অর্ডার সম্পর্কে সব তথ্য পাবেন। 📩`;
+  }
+
+  private async classifyCommentFull(
+    products: { code: string; name: string | null; price: number; stockQty: number }[],
+    comment: string,
+  ): Promise<{ productCode: string | null; intent: string; shouldReply: boolean } | null> {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) return { productCode: null, intent: 'other', shouldReply: true };
+    const model = process.env.AI_INTENT_MODEL || 'gemini-2.0-flash';
+
+    const productList = products.length > 0
+      ? products.map((p, i) => `${i + 1}. ${p.code}: ${p.name ?? p.code} (দাম ${p.price}৳)`).join('\n')
+      : '(কোনো product link করা নেই)';
+
+    const systemPrompt = `You are a Facebook comment handler for a Bengali e-commerce store.
+Given a customer comment and available products, decide:
+1. Is this comment worth replying to? (skip pure emojis like "❤️", "🔥", single "nice", "wow" etc.)
+2. If replying: which product and what info does the customer want?
+
+Return JSON: {
+  "shouldReply": true|false,
+  "productCode": "<code or null>",
+  "intent": "price"|"stock"|"delivery"|"description"|"other"
+}
+
+- shouldReply=false for: pure emoji reactions, single-word praise (nice, wow, beautiful), no question implied
+- shouldReply=true for: any question, price/stock inquiry, interest with words, or general product inquiry
+- intent="other" when question is general (will trigger inbox CTA reply)`;
+
+    try {
+      const body = {
+        contents: [{ role: 'user', parts: [{ text: `Available products:\n${productList}\n\nCustomer comment: "${comment}"` }] }],
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        generationConfig: { temperature: 0.1, maxOutputTokens: 120, responseMimeType: 'application/json' },
+      };
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(10_000) },
+      );
+      const data = await res.json();
+      return JSON.parse(data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '{}');
+    } catch {
+      return { productCode: null, intent: 'other', shouldReply: true };
     }
   }
 

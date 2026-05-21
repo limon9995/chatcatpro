@@ -38,6 +38,7 @@ export class ProductsController {
       code: string;
       price: number;
       stockQty?: number;
+      fbPostUrl?: string;
     },
   ) {
     this.auth.ensurePageAccess(req.user || req.authUser, Number(body.pageId));
@@ -67,7 +68,7 @@ export class ProductsController {
     @Req() req: any,
     @Param('code') code: string,
     @Query('pageId') pageId: string,
-    @Body() body: { stockQty?: number; price?: number },
+    @Body() body: { stockQty?: number; price?: number; fbPostUrl?: string },
   ) {
     return this.products.updateOne(this.pid(req, pageId), code, body);
   }
