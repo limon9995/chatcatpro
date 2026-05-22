@@ -3,9 +3,9 @@
 ## Architecture
 
 ```
-chatcat.pro        →  Vercel  (React dashboard)
-www.chatcat.pro    →  Vercel  (redirect to chatcat.pro)
-api.chatcat.pro    →  VPS     (NestJS backend, Nginx reverse proxy)
+chatcat.pro        →  VPS Nginx  (Static landing page)
+app.chatcat.pro    →  VPS Nginx  (React dashboard dist/)
+api.chatcat.pro    →  VPS Nginx  (NestJS backend, reverse proxy to PM2)
 ```
 
 ---
@@ -172,23 +172,34 @@ sudo certbot --nginx -d api.chatcat.pro
 
 ---
 
-## 4. Frontend Deployment (Vercel)
+## 4. Dashboard Deployment (VPS)
 
-1. Push your code to GitHub
-2. Go to [vercel.com](https://vercel.com) → New Project → import repository
-3. Set **Root Directory** to `dashboard`
-4. Add Environment Variable in Vercel dashboard:
-   ```
-   VITE_API_BASE = https://api.chatcat.pro
-   ```
-5. Vercel auto-detects Vite and runs `npm run build`
-6. Add your custom domain `chatcat.pro` in Vercel → Settings → Domains
-
-**DNS records needed:**
+```bash
+cd /var/www/chatcatpro/dashboard
+git pull origin main
+npm install
+npm run build    # outputs to dist/
 ```
-A     chatcat.pro        →  76.76.21.21  (Vercel IP — Vercel shows the exact IP)
-CNAME www.chatcat.pro    →  cname.vercel-dns.com
-A     api.chatcat.pro    →  YOUR_VPS_IP
+
+Nginx serves the `dist/` directory for `app.chatcat.pro`.
+The `.env` on the server should have:
+```
+VITE_API_BASE=https://api.chatcat.pro
+```
+
+## 4b. Landing Page Deployment (VPS)
+
+```bash
+cd /var/www/chatcatpro/landing
+git pull origin main
+# No build step — static HTML served by Nginx
+```
+
+**DNS records (all point to VPS IP):**
+```
+A     chatcat.pro        →  187.127.157.248
+A     app.chatcat.pro    →  187.127.157.248
+A     api.chatcat.pro    →  187.127.157.248
 ```
 
 ---

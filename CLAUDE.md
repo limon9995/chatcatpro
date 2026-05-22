@@ -125,12 +125,49 @@ After any schema change in `backend/prisma/schema.prisma`:
 1. Create a migration: `npx prisma migrate dev --name <description>`
 2. Regenerate client: `npm run prisma:generate`
 
-## Production Deployment
+## Production Deployment (VPS — all services)
 
-1. Build backend: `cd backend && npm run build`
-2. Start with PM2: `pm2 start ecosystem.config.js`
-3. Build dashboard: `cd dashboard && npm run build` (output to `dist/`)
-4. Serve dashboard `dist/` via a static file server or reverse proxy
+**Server:** `root@187.127.157.248` (Ubuntu)
+
+**Architecture (all on single VPS):**
+```
+chatcat.pro        →  Nginx serves /var/www/chatcatpro/landing/
+app.chatcat.pro    →  Nginx serves /var/www/chatcatpro/dashboard/dist/
+api.chatcat.pro    →  Nginx reverse-proxies to PM2 (NestJS, port 3000)
+```
+
+**Deploy backend:**
+```bash
+ssh root@187.127.157.248
+cd /var/www/chatcatpro/backend
+git pull origin main
+bash scripts/deploy.sh     # npm ci → prisma generate → build → pm2 reload
+```
+
+**Deploy dashboard:**
+```bash
+ssh root@187.127.157.248
+cd /var/www/chatcatpro/dashboard
+git pull origin main
+npm install && npm run build   # output to dist/, Nginx serves it
+```
+
+**Deploy landing page:**
+```bash
+ssh root@187.127.157.248
+cd /var/www/chatcatpro/landing
+git pull origin main
+# No build step — static HTML, Nginx serves directly
+```
+
+**Useful PM2 commands:**
+```bash
+pm2 status                   # check all processes
+pm2 logs chatcatpro          # tail backend logs
+pm2 reload chatcatpro        # zero-downtime restart
+```
+
+> **Note:** There is NO Vercel or external hosting. Everything runs on the VPS.
 
 <!-- code-review-graph MCP tools -->
 ## MCP Tools: code-review-graph
