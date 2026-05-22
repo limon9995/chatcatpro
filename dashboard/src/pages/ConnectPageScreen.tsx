@@ -445,8 +445,11 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
                         'নিজের Facebook Developer App থাকলে credentials দিন। না দিলে platform এর default app ব্যবহার হবে।',
                         'If you have your own Facebook Developer App, enter its credentials. Otherwise the platform\'s default app is used.',
                       )}<br />
-                      <a href="https://developers.facebook.com/" target="_blank" rel="noreferrer" style={{ color: '#6366f1' }}>developers.facebook.com</a>
-                      {copy(' → আপনার App → Settings → Basic', ' → Your App → Settings → Basic')}<br />
+                      <div style={{ background: dark ? 'rgba(99,102,241,0.08)' : 'rgba(99,102,241,0.05)', padding: '8px 10px', borderRadius: 8, marginTop: 8, marginBottom: 8, border: `1px solid rgba(99,102,241,0.2)` }}>
+                        <strong style={{ color: '#6366f1' }}>{copy('কোথায় পাবেন?', 'Where to find?')}</strong><br/>
+                        <a href="https://developers.facebook.com/" target="_blank" rel="noreferrer" style={{ color: text, textDecoration: 'none', fontWeight: 600 }}>developers.facebook.com</a>
+                        {copy(' → আপনার App → Settings → Basic', ' → Your App → Settings → Basic')}
+                      </div>
                       <strong>{copy('App Secret একবার save হলে আর দেখানো হবে না।', 'App Secret is stored encrypted and never shown again.')}</strong>
                     </div>
                     <div>
@@ -481,60 +484,77 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
 
                   {/* Webhook setup instructions — shown only for custom app users */}
                   {connectResult?.hasCustomApp && connectResult.verifyToken && (
-                    <div style={{ background: dark ? 'rgba(251,191,36,0.07)' : 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.35)', borderRadius: 12, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-                      <div style={{ fontWeight: 800, fontSize: 13, color: '#f59e0b' }}>
-                        ⚠️ {copy('এখন আপনার Facebook App-এ Webhook Setup করুন', 'Now set up Webhook in your Facebook App')}
+                    <div style={{ background: dark ? 'rgba(251,191,36,0.07)' : 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.35)', borderRadius: 12, padding: '16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+                      <div style={{ fontWeight: 800, fontSize: 14, color: '#f59e0b', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontSize: 18 }}>⚠️</span> 
+                        {copy('এখন আপনার Facebook App-এ Webhook Setup করুন', 'Now set up the Webhook in your Facebook App')}
                       </div>
-                      <div style={{ fontSize: 12, color: text, lineHeight: 1.85 }}>
+                      
+                      <div style={{ fontSize: 12.5, color: text, lineHeight: 1.7, background: dark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)', padding: '12px', borderRadius: 8, border: `1px solid ${border}` }}>
+                        <div style={{ fontWeight: 700, marginBottom: 6, color: '#6366f1' }}>{copy('ধাপ ১: Webhooks এ যান', 'Step 1: Go to Webhooks')}</div>
                         {copy(
-                          'developers.facebook.com → আপনার App → Messenger → Webhooks → "Add Callback URL" এ নিচের তথ্য দিন:',
-                          'Go to developers.facebook.com → Your App → Messenger → Webhooks → "Add Callback URL" and enter:'
+                          'developers.facebook.com → আপনার App Dashboard → বাম দিকের মেন্যু থেকে Messenger → Webhooks এ যান।',
+                          'Go to developers.facebook.com → your App Dashboard → Messenger → Webhooks from the left menu.'
                         )}
                       </div>
 
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        <div style={{ fontSize: 11.5, color: muted, fontWeight: 600 }}>
-                          {copy('Callback URL', 'Callback URL')}
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <code style={{ flex: 1, background: dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)', padding: '8px 12px', borderRadius: 8, fontSize: 12.5, color: text, wordBreak: 'break-all', fontFamily: 'monospace' }}>
-                            {connectResult.webhookUrl || 'https://chatcat.pro/webhook'}
-                          </code>
-                          <button onClick={() => navigator.clipboard.writeText(connectResult.webhookUrl || 'https://chatcat.pro/webhook')}
-                            style={{ border: `1px solid ${border}`, borderRadius: 7, padding: '6px 10px', background: 'transparent', color: muted, cursor: 'pointer', fontSize: 11, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
-                            {copy('Copy', 'Copy')}
-                          </button>
+                      <div style={{ fontSize: 12.5, color: text, lineHeight: 1.7, background: dark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)', padding: '12px', borderRadius: 8, border: `1px solid ${border}` }}>
+                        <div style={{ fontWeight: 700, marginBottom: 6, color: '#6366f1' }}>{copy('ধাপ ২: Callback URL যোগ করুন', 'Step 2: Add Callback URL')}</div>
+                        {copy(
+                          '"Add Callback URL" বাটনে ক্লিক করে নিচের তথ্যগুলো হুবহু কপি করে বসান এবং Verify & Save এ ক্লিক করুন:',
+                          'Click "Add Callback URL", copy exactly the info below, and click Verify & Save:'
+                        )}
+                        
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                            <div style={{ fontSize: 11.5, color: muted, fontWeight: 600 }}>{copy('Callback URL', 'Callback URL')}</div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <code style={{ flex: 1, background: dark ? 'rgba(0,0,0,0.2)' : '#fff', padding: '8px 12px', borderRadius: 8, fontSize: 12, color: text, wordBreak: 'break-all', fontFamily: 'monospace', border: `1px solid ${border}` }}>
+                                {connectResult.webhookUrl || 'https://chatcat.pro/webhook'}
+                              </code>
+                              <button onClick={() => navigator.clipboard.writeText(connectResult.webhookUrl || 'https://chatcat.pro/webhook')}
+                                style={{ border: `1px solid rgba(99,102,241,0.4)`, borderRadius: 7, padding: '6px 12px', background: 'rgba(99,102,241,0.1)', color: '#6366f1', cursor: 'pointer', fontSize: 11, fontWeight: 700, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                                {copy('Copy', 'Copy')}
+                              </button>
+                            </div>
+                          </div>
+
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                            <div style={{ fontSize: 11.5, color: muted, fontWeight: 600 }}>{copy('Verify Token', 'Verify Token')}</div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <code style={{ flex: 1, background: dark ? 'rgba(0,0,0,0.2)' : '#fff', padding: '8px 12px', borderRadius: 8, fontSize: 12, color: text, wordBreak: 'break-all', fontFamily: 'monospace', border: `1px solid ${border}` }}>
+                                {connectResult.verifyToken}
+                              </code>
+                              <button onClick={() => navigator.clipboard.writeText(connectResult.verifyToken!)}
+                                style={{ border: `1px solid rgba(99,102,241,0.4)`, borderRadius: 7, padding: '6px 12px', background: 'rgba(99,102,241,0.1)', color: '#6366f1', cursor: 'pointer', fontSize: 11, fontWeight: 700, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                                {copy('Copy', 'Copy')}
+                              </button>
+                            </div>
+                          </div>
                         </div>
                       </div>
 
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        <div style={{ fontSize: 11.5, color: muted, fontWeight: 600 }}>
-                          {copy('Verify Token', 'Verify Token')}
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <code style={{ flex: 1, background: dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)', padding: '8px 12px', borderRadius: 8, fontSize: 12.5, color: text, wordBreak: 'break-all', fontFamily: 'monospace' }}>
-                            {connectResult.verifyToken}
-                          </code>
-                          <button onClick={() => navigator.clipboard.writeText(connectResult.verifyToken!)}
-                            style={{ border: `1px solid ${border}`, borderRadius: 7, padding: '6px 10px', background: 'transparent', color: muted, cursor: 'pointer', fontSize: 11, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
-                            {copy('Copy', 'Copy')}
-                          </button>
+                      <div style={{ fontSize: 12.5, color: text, lineHeight: 1.7, background: dark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)', padding: '12px', borderRadius: 8, border: `1px solid ${border}` }}>
+                        <div style={{ fontWeight: 700, marginBottom: 6, color: '#6366f1' }}>{copy('ধাপ ৩: Webhook Subscriptions', 'Step 3: Webhook Subscriptions')}</div>
+                        {copy('এরপর Edit/Manage এ ক্লিক করে নিচের ৩টি ইভেন্ট অবশ্যই সাবস্ক্রাইব করুন:', 'Then click Edit/Manage and subscribe to these 3 events:')}
+                        <div style={{ marginTop: 6 }}>
+                          {['messages', 'messaging_postbacks', 'feed'].map(s => (
+                            <code key={s} style={{ background: dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)', padding: '3px 7px', borderRadius: 6, fontSize: 11.5, marginRight: 6, display: 'inline-block', marginBottom: 4, fontWeight: 600 }}>{s}</code>
+                          ))}
                         </div>
                       </div>
 
-                      <div style={{ fontSize: 12, color: muted, lineHeight: 1.8, borderTop: `1px solid rgba(251,191,36,0.25)`, paddingTop: 8 }}>
-                        <strong style={{ display: 'block', marginBottom: 4 }}>{copy('Webhook Subscriptions:', 'Webhook Subscriptions:')}</strong>
-                        {['messages', 'messaging_postbacks', 'feed'].map(s => (
-                          <code key={s} style={{ background: dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)', padding: '1px 5px', borderRadius: 4, fontSize: 11, marginRight: 4 }}>{s}</code>
-                        ))}
-                        <br /><br />
-                        <strong style={{ display: 'block', marginBottom: 4 }}>{copy('Page Token Permissions:', 'Page Token Permissions:')}</strong>
-                        {['pages_messaging', 'pages_read_engagement', 'pages_manage_engagement'].map(p => (
-                          <code key={p} style={{ background: dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)', padding: '1px 5px', borderRadius: 4, fontSize: 11, marginRight: 4 }}>{p}</code>
-                        ))}
-                        <br />
-                        <span style={{ marginTop: 4, display: 'block' }}>{copy('তারপর আপনার page-টি app-এ subscribe করুন।', 'Then subscribe your page to the app.')}</span>
+                      <div style={{ fontSize: 12.5, color: text, lineHeight: 1.7, background: dark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)', padding: '12px', borderRadius: 8, border: `1px solid ${border}` }}>
+                        <div style={{ fontWeight: 700, marginBottom: 6, color: '#6366f1' }}>{copy('ধাপ ৪: Page Subscribe করুন', 'Step 4: Subscribe the Page')}</div>
+                        {copy('সবশেষে, অ্যাপ ড্যাশবোর্ড থেকেই আপনার নির্দিষ্ট Page-টিকে এই অ্যাপের সাথে সাবস্ক্রাইব (Subscribe) করে দিন।', 'Finally, subscribe your specific Page to this App directly from the App Dashboard.')}
+                        <div style={{ marginTop: 6, color: muted, fontSize: 11.5 }}>
+                          <strong>{copy('প্রয়োজনীয় Page Permissions:', 'Required Page Permissions:')}</strong><br/>
+                          {['pages_messaging', 'pages_read_engagement', 'pages_manage_engagement'].map(p => (
+                            <code key={p} style={{ background: dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)', padding: '2px 5px', borderRadius: 4, fontSize: 10.5, marginRight: 5, marginTop: 4, display: 'inline-block' }}>{p}</code>
+                          ))}
+                        </div>
                       </div>
+
                     </div>
                   )}
 
