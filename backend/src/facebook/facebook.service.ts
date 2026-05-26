@@ -45,7 +45,7 @@ export class FacebookService {
       .digest('hex');
     const state = `${payload}.${sig}`;
     const scope =
-      'pages_show_list,pages_read_engagement,pages_messaging,pages_manage_metadata';
+      'pages_show_list,pages_read_engagement,pages_messaging,pages_manage_metadata,pages_manage_engagement';
     return `https://www.facebook.com/v19.0/dialog/oauth?client_id=${this.appId}&redirect_uri=${encodeURIComponent(this.redirectUri)}&scope=${scope}&state=${encodeURIComponent(state)}&response_type=code`;
   }
 

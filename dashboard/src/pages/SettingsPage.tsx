@@ -696,15 +696,24 @@ export function SettingsPage({ th, pageId, tab, onToast }: {
                 {/* ── Access Token (manual) tab ── */}
                 {reconnectTab === 'manual' && (
                   <>
-                    <div style={{ background: th.accentSoft, border: `1px solid ${th.border}`, borderRadius: 10, padding: '11px 14px', fontSize: 12.5, color: th.text, lineHeight: 1.85 }}>
-                      📌 <strong>{copy('কিভাবে Access Token পাবেন?', 'How to get the Access Token?')}</strong><br />
-                      <span style={{ color: th.muted }}>
-                        {copy('1. ', '1. ')}<a href="https://developers.facebook.com/tools/explorer/" target="_blank" rel="noreferrer" style={{ color: th.accent }}>Graph API Explorer</a>{copy(' খুলুন', ' and open it')}<br />
-                        {copy('2. আপনার App ও Page select করুন', '2. Select your App and Page')}<br />
-                        {copy('3. ', '3. ')}<code style={{ background: th.border, padding: '1px 5px', borderRadius: 4 }}>pages_messaging</code>{copy(' permission add করুন', ' permission')}<br />
-                        {copy('4. "Generate Access Token" click করুন → copy করুন', '4. Click "Generate Access Token" and copy it')}
-                      </span>
+                    <div style={{ background: th.accentSoft, border: `1px solid rgba(99,102,241,0.2)`, borderRadius: 10, padding: '12px 14px', fontSize: 12, color: th.text, lineHeight: 1.85, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <div style={{ fontWeight: 800, color: th.accent }}>📌 {copy('কিভাবে Page Access Token পাবেন?', 'How to get a Page Access Token?')}</div>
+                      <div style={{ color: th.muted }}>
+                        {copy('১. ', '1. ')} <a href="https://developers.facebook.com/tools/explorer/" target="_blank" rel="noreferrer" style={{ color: th.accent }}>Graph API Explorer</a> {copy('খুলুন', '— open it')}<br />
+                        {copy('২. "Meta App" dropdown থেকে আপনার App বেছে নিন। "User or Page" dropdown থেকে আপনার Page select করুন (User নয়, Page)।', '2. Select your App from "Meta App" dropdown. Select your Page (not User) from "User or Page" dropdown.')}<br />
+                        {copy('৩. নিচের permissions একটি একটি করে add করুন:', '3. Add the following permissions one by one:')}
+                        <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                          {['pages_messaging', 'pages_read_engagement', 'pages_manage_engagement', 'pages_manage_metadata', 'pages_show_list'].map(p => (
+                            <code key={p} style={{ background: th.accentSoft, color: th.accent, padding: '2px 6px', borderRadius: 5, fontSize: 10.5, fontWeight: 700 }}>{p}</code>
+                          ))}
+                        </div>
+                        {copy('৪. "Generate Access Token" click করুন → Facebook login করুন → সব permission allow করুন → token copy করুন।', '4. Click "Generate Access Token" → log in to Facebook → allow all permissions → copy the token.')}
+                      </div>
+                      <div style={{ fontSize: 11, background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: 7, padding: '6px 9px', color: th.text }}>
+                        ✅ {copy('Token আমাদের system automatically long-lived (never-expiring)-এ convert করে নেবে।', 'Our system automatically converts the token to long-lived (never-expiring).')}
+                      </div>
                     </div>
+
                     <textarea
                       style={{ ...inp, minHeight: 72, resize: 'vertical', lineHeight: 1.5 }}
                       placeholder="EAAxxxxxx..."
@@ -1013,6 +1022,19 @@ export function SettingsPage({ th, pageId, tab, onToast }: {
                 onChange={v => saveMode(m.key, v)} />
             ))}
           </div>
+            <div style={{ background: th.accentSoft, border: `1px solid rgba(99,102,241,0.2)`, borderRadius: 10, padding: '10px 14px', fontSize: 11.5, color: th.muted, lineHeight: 1.8, marginTop: 4 }}>
+              💬 <strong style={{ color: th.text }}>{copy('Comment Reply কিভাবে কাজ করে?', 'How does Comment Reply work?')}</strong><br />
+              {copy(
+                'আপনার Page-এর কোনো Post-এ কেউ comment করলে bot সেটি detect করে। Comment-এ product, price বা order সংক্রান্ত কিছু থাকলে bot স্বয়ংক্রিয়ভাবে সেই comment-এ public reply দেয়।',
+                'When someone comments on your Page Post, the bot detects it. If the comment mentions a product, price, or order, the bot automatically posts a public reply to that comment.',
+              )}<br />
+              <strong style={{ color: th.text }}>{copy('⚠️ প্রয়োজনীয় Permissions:', '⚠️ Required Permissions:')}</strong>{' '}
+              {['pages_read_engagement', 'pages_manage_engagement'].map(p => (
+                <code key={p} style={{ background: th.accentSoft, color: th.accent, padding: '1px 5px', borderRadius: 4, fontSize: 10.5, fontWeight: 700, marginRight: 4 }}>{p}</code>
+              ))}<br />
+              <span style={{ fontSize: 11 }}>{copy('এই দুটি permission ছাড়া comment reply কাজ করবে না। Settings → Facebook Page → Reconnect করে নতুন token নিন।', 'Without these two permissions, comment reply will not work. Go to Settings → Facebook Page → Reconnect to get a new token.')}</span>
+            </div>
+
         </Section>
 
         {/* V18: Image Recognition */}

@@ -387,39 +387,117 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
           ) : (
             /* ── Access Token (manual) tab ── */
             <>
+              {/* ── App creation guide (collapsible) ── */}
+              <div style={{ borderRadius: 12, border: `1px solid rgba(251,191,36,0.35)`, overflow: 'hidden', background: dark ? 'rgba(251,191,36,0.05)' : 'rgba(251,191,36,0.04)' }}>
+                <button
+                  onClick={() => setShowCustomApp(v => !v)}
+                  style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '11px 14px', background: 'transparent', border: 'none', cursor: 'pointer', color: text, fontFamily: 'inherit', fontWeight: 800, fontSize: 12.5 }}
+                >
+                  <span>🛠️ {copy('Facebook Developer App নেই? কিভাবে বানাবেন — এখানে দেখুন', 'No Facebook Developer App? See how to create one')}</span>
+                  <span style={{ color: muted, fontSize: 11 }}>{showCustomApp ? '▲' : '▼'}</span>
+                </button>
+                {showCustomApp && (
+                  <div style={{ padding: '0 14px 14px', display: 'flex', flexDirection: 'column', gap: 10, borderTop: `1px solid rgba(251,191,36,0.25)` }}>
+                    <div style={{ fontSize: 12, color: muted, lineHeight: 1.8, paddingTop: 10 }}>
+                      {copy(
+                        'Facebook-এর Graph API ব্যবহার করতে হলে একটি Developer App লাগে। নিচের ধাপ অনুসরণ করুন:',
+                        'To use Facebook\'s Graph API, you need a Developer App. Follow the steps below:',
+                      )}
+                    </div>
+                    {[
+                      {
+                        step: '১',
+                        title: copy('Meta Developer Account খুলুন', 'Create a Meta Developer Account'),
+                        desc: (<span><a href="https://developers.facebook.com/" target="_blank" rel="noreferrer" style={{ color: '#6366f1', fontWeight: 700 }}>developers.facebook.com</a>{copy(' → "Get Started" বা "My Apps" click করুন → আপনার Facebook account দিয়ে login করুন।', ' → click "Get Started" or "My Apps" → log in with your Facebook account.')}</span>),
+                      },
+                      {
+                        step: '২',
+                        title: copy('নতুন App তৈরি করুন', 'Create a new App'),
+                        desc: copy(
+                          '"Create App" click করুন → App type হিসেবে "Business" বা "Consumer" বেছে নিন → App-এর একটি নাম দিন (যেমন: MyShopBot) → "Create App" button চাপুন।',
+                          'Click "Create App" → choose "Business" or "Consumer" as type → give the App a name (e.g. MyShopBot) → click the "Create App" button.',
+                        ),
+                      },
+                      {
+                        step: '৩',
+                        title: copy('Messenger product যোগ করুন', 'Add the Messenger product'),
+                        desc: copy(
+                          'App Dashboard-এ যান → "Add Products" section থেকে "Messenger" খুঁজে "Set Up" click করুন। এতে Messenger webhook ও permissions enable হবে।',
+                          'Go to App Dashboard → find "Messenger" under "Add Products" → click "Set Up". This enables Messenger webhooks and permissions.',
+                        ),
+                      },
+                      {
+                        step: '৪',
+                        title: copy('App ID ও App Secret নোট করুন', 'Note down App ID and App Secret'),
+                        desc: copy(
+                          'Settings → Basic এ যান। এখানে App ID ও App Secret পাবেন। App Secret দেখতে "Show" click করুন এবং কোথাও সংরক্ষণ করুন।',
+                          'Go to Settings → Basic. Here you\'ll find the App ID and App Secret. Click "Show" to reveal the App Secret and save it somewhere safe.',
+                        ),
+                      },
+                      {
+                        step: '৫',
+                        title: copy('App কে "Live" mode-এ নিন বা Tester যোগ করুন', 'Switch App to "Live" mode or add Testers'),
+                        desc: copy(
+                          'App যদি Development mode-এ থাকে তাহলে শুধু Testers/Developers কাজ করবে। সব user-এর জন্য কাজ করাতে Settings → Basic → App Mode থেকে "Live" করুন।',
+                          'If the App is in Development mode, only Testers/Developers can use it. To work for all users, switch to "Live" from Settings → Basic → App Mode.',
+                        ),
+                      },
+                    ].map(({ step, title, desc }) => (
+                      <div key={step} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                        <div style={{ minWidth: 22, height: 22, borderRadius: '50%', background: 'rgba(251,191,36,0.2)', color: '#f59e0b', fontSize: 11, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 1, flexShrink: 0 }}>{step}</div>
+                        <div>
+                          <div style={{ fontWeight: 700, fontSize: 12.5, color: text, marginBottom: 2 }}>{title}</div>
+                          <div style={{ color: muted, fontSize: 12, lineHeight: 1.7 }}>{desc}</div>
+                        </div>
+                      </div>
+                    ))}
+                    <div style={{ background: dark ? 'rgba(99,102,241,0.1)' : 'rgba(99,102,241,0.07)', border: `1px solid rgba(99,102,241,0.25)`, borderRadius: 8, padding: '9px 12px', fontSize: 11.5, color: text, marginTop: 4 }}>
+                      💡 {copy(
+                        'App তৈরি হলে নিচে "নিজের Facebook App Credentials" section-এ App ID ও App Secret দিন। তারপর নিচের ধাপ অনুসরণ করে Token নিন।',
+                        'Once the App is created, enter its App ID and App Secret in the "Your Facebook App Credentials" section below. Then follow the steps below to get the Token.',
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* ── Token guide ── */}
               <div style={{ background: dark ? 'rgba(99,102,241,0.08)' : 'rgba(99,102,241,0.05)', border: '1px solid rgba(99,102,241,0.18)', borderRadius: 12, padding: '14px 16px', fontSize: 12.5, color: text, lineHeight: 1.9, display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <div style={{ fontWeight: 800, fontSize: 13.5, color: '#6366f1' }}>
                   📌 {copy('কিভাবে Page Access Token পাবেন?', 'How to get a Page Access Token?')}
                 </div>
-
                 {[
                   {
                     step: '১',
                     title: copy('Graph API Explorer খুলুন', 'Open Graph API Explorer'),
-                    desc: (
-                      <span>
-                        <a href="https://developers.facebook.com/tools/explorer/" target="_blank" rel="noreferrer" style={{ color: '#6366f1', fontWeight: 700 }}>developers.facebook.com/tools/explorer</a>
-                        {copy(' — এই লিংকে যান', ' — go to this link')}
-                      </span>
-                    ),
+                    desc: (<span><a href="https://developers.facebook.com/tools/explorer/" target="_blank" rel="noreferrer" style={{ color: '#6366f1', fontWeight: 700 }}>developers.facebook.com/tools/explorer</a>{copy(' — এই লিংকে যান', ' — go to this link')}</span>),
                   },
                   {
                     step: '২',
                     title: copy('App ও Page select করুন', 'Select App and Page'),
                     desc: copy(
-                      'উপরে "Meta App" dropdown থেকে আপনার App বেছে নিন। তারপর "User or Page" dropdown থেকে আপনার Facebook Page select করুন (User নয়, Page বেছে নিন)।',
-                      'From the "Meta App" dropdown at the top, select your App. Then from the "User or Page" dropdown, select your Facebook Page (choose Page, not User).',
+                      '"Meta App" dropdown থেকে আপনার App বেছে নিন। তারপর "User or Page" dropdown থেকে আপনার Facebook Page select করুন — "User" নয়, "Page" বেছে নিন।',
+                      'From the "Meta App" dropdown, select your App. Then from the "User or Page" dropdown, select your Facebook Page — choose "Page", not "User".',
                     ),
                   },
                   {
                     step: '৩',
-                    title: copy('Permissions যোগ করুন', 'Add required permissions'),
+                    title: copy('সব প্রয়োজনীয় Permissions যোগ করুন', 'Add all required permissions'),
                     desc: (
                       <span>
-                        {copy('"Add a Permission" বাটনে click করে নিচের ৩টি permission যোগ করুন:', '"Add a Permission" এ click করে এই ৩টি permission যোগ করুন:')}
-                        <div style={{ marginTop: 5 }}>
-                          {['pages_messaging', 'pages_read_engagement', 'pages_manage_engagement'].map(p => (
-                            <code key={p} style={{ background: dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)', padding: '2px 6px', borderRadius: 5, fontSize: 11.5, marginRight: 5, marginBottom: 3, display: 'inline-block', fontWeight: 700 }}>{p}</code>
+                        {copy('"Add a Permission" বাটনে click করে নিচের সব permission একটি একটি করে যোগ করুন:', 'Click "Add a Permission" and add each permission one by one:')}
+                        <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 5 }}>
+                          {[
+                            { perm: 'pages_messaging', use: copy('Messenger-এ bot reply দেওয়ার জন্য', 'For bot to reply in Messenger') },
+                            { perm: 'pages_read_engagement', use: copy('Post-এর comment detect করতে (comment reply)', 'To detect post comments (for comment reply)') },
+                            { perm: 'pages_manage_engagement', use: copy('Post comment-এ reply দেওয়ার জন্য', 'For replying to post comments') },
+                            { perm: 'pages_manage_metadata', use: copy('Webhook subscription-এর জন্য', 'For webhook subscription') },
+                            { perm: 'pages_show_list', use: copy('Page list দেখার জন্য', 'For listing pages') },
+                          ].map(({ perm, use }) => (
+                            <div key={perm} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, background: dark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)', borderRadius: 7, padding: '5px 8px' }}>
+                              <code style={{ background: dark ? 'rgba(99,102,241,0.2)' : 'rgba(99,102,241,0.1)', color: '#6366f1', padding: '2px 6px', borderRadius: 5, fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0 }}>{perm}</code>
+                              <span style={{ fontSize: 11, color: muted, marginTop: 1 }}>{use}</span>
+                            </div>
                           ))}
                         </div>
                       </span>
@@ -429,8 +507,8 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
                     step: '৪',
                     title: copy('Token Generate করুন', 'Generate the Token'),
                     desc: copy(
-                      '"Generate Access Token" বাটনে click করুন। Facebook login করতে বলবে — করুন। তারপর একটি লম্বা token দেখাবে (EAAxxxxx...)।',
-                      'Click "Generate Access Token". Facebook will ask you to log in — do so. A long token starting with EAAxxxxx... will appear.',
+                      '"Generate Access Token" বাটনে click করুন। Facebook login করতে বলবে — করুন এবং সব permission allow করুন। একটি লম্বা token দেখাবে (EAAxxxxx...)।',
+                      'Click "Generate Access Token". Facebook will ask you to log in — do so and allow all permissions. A long token starting with EAAxxxxx... will appear.',
                     ),
                   },
                   {
@@ -443,21 +521,32 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
                   },
                 ].map(({ step, title, desc }) => (
                   <div key={step} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-                    <div style={{ minWidth: 22, height: 22, borderRadius: '50%', background: 'rgba(99,102,241,0.2)', color: '#6366f1', fontSize: 11, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 1 }}>{step}</div>
+                    <div style={{ minWidth: 22, height: 22, borderRadius: '50%', background: 'rgba(99,102,241,0.2)', color: '#6366f1', fontSize: 11, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 1, flexShrink: 0 }}>{step}</div>
                     <div>
                       <div style={{ fontWeight: 700, fontSize: 12.5, color: text, marginBottom: 2 }}>{title}</div>
                       <div style={{ color: muted, fontSize: 12, lineHeight: 1.7 }}>{desc}</div>
                     </div>
                   </div>
                 ))}
-
-                <div style={{ background: dark ? 'rgba(251,191,36,0.08)' : 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 8, padding: '8px 12px', fontSize: 11.5, color: text, marginTop: 2 }}>
-                  ⚠️ {copy(
-                    'Graph API Explorer-এ দেখানো token টি short-lived। আমাদের system এটিকে automatically long-lived (never-expiring) token-এ convert করে নেয় — আপনাকে কিছু করতে হবে না।',
-                    'The token shown in Graph API Explorer is short-lived. Our system automatically converts it to a long-lived (never-expiring) token — you don\'t need to do anything extra.',
+                <div style={{ background: dark ? 'rgba(34,197,94,0.08)' : 'rgba(34,197,94,0.06)', border: '1px solid rgba(34,197,94,0.25)', borderRadius: 8, padding: '8px 12px', fontSize: 11.5, color: text, marginTop: 2 }}>
+                  ✅ {copy(
+                    'Graph API Explorer-এ দেখানো token short-lived হলেও আমাদের system স্বয়ংক্রিয়ভাবে এটিকে long-lived (never-expiring) token-এ convert করে — আপনাকে কিছু করতে হবে না।',
+                    'Even though the token shown in Graph API Explorer is short-lived, our system automatically converts it to a long-lived (never-expiring) token — you don\'t need to do anything extra.',
                   )}
                 </div>
               </div>
+
+              {/* ── Comment Reply info ── */}
+              <div style={{ background: dark ? 'rgba(99,102,241,0.06)' : 'rgba(99,102,241,0.04)', border: `1px solid rgba(99,102,241,0.2)`, borderRadius: 11, padding: '11px 14px', fontSize: 12, color: muted, lineHeight: 1.8 }}>
+                💬 <strong style={{ color: text }}>{copy('Comment Reply কিভাবে কাজ করে?', 'How does Comment Reply work?')}</strong><br />
+                {copy(
+                  'আপনার Facebook Page-এর Post-এ কেউ comment করলে bot সেটি detect করে এবং product, price বা order সংক্রান্ত হলে স্বয়ংক্রিয়ভাবে reply দেয়। চালু করতে: Settings → Bot Modes → Comment Reply toggle করুন।',
+                  'When someone comments on your Facebook Page Post, the bot detects it and automatically replies if it is about a product, price, or order. To enable: Settings → Bot Modes → Comment Reply.',
+                )}<br />
+                <span style={{ fontSize: 11 }}>⚠️ {copy('Comment reply কাজ করতে অবশ্যই pages_read_engagement ও pages_manage_engagement permission দিয়ে token নিতে হবে।', 'For comment reply to work, you must generate the token with pages_read_engagement and pages_manage_engagement permissions.')}</span>
+              </div>
+
+
 
               <div>
                 <label style={{ fontSize: 12, color: muted, fontWeight: 600, display: 'block', marginBottom: 5 }}>{copy('Page Name *', 'Page Name *')}</label>
@@ -490,39 +579,33 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
                 </div>
               )}
 
-              {/* ── Advanced: Custom Facebook App (collapsible) ── */}
+              {/* ── Custom App Credentials ── */}
               <div style={{ borderRadius: 11, border: `1px solid ${border}`, overflow: 'hidden' }}>
-                <button
-                  onClick={() => setShowCustomApp(v => !v)}
-                  style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'transparent', border: 'none', cursor: 'pointer', color: text, fontFamily: 'inherit', fontWeight: 700, fontSize: 12.5 }}
-                >
-                  <span>⚙️ {copy('Advanced: নিজের Facebook App', 'Advanced: Custom Facebook App')}</span>
-                  <span style={{ color: muted, fontSize: 11 }}>{showCustomApp ? '▲' : '▼'}</span>
-                </button>
-                {showCustomApp && (
-                  <div style={{ padding: '0 14px 14px', display: 'flex', flexDirection: 'column', gap: 10, borderTop: `1px solid ${border}` }}>
-                    <div style={{ fontSize: 11.5, color: muted, lineHeight: 1.8, paddingTop: 10 }}>
-                      {copy(
-                        'নিজের Facebook Developer App থাকলে credentials দিন। না দিলে platform এর default app ব্যবহার হবে।',
-                        'If you have your own Facebook Developer App, enter its credentials. Otherwise the platform\'s default app is used.',
-                      )}<br />
-                      <div style={{ background: dark ? 'rgba(99,102,241,0.08)' : 'rgba(99,102,241,0.05)', padding: '8px 10px', borderRadius: 8, marginTop: 8, marginBottom: 8, border: `1px solid rgba(99,102,241,0.2)` }}>
-                        <strong style={{ color: '#6366f1' }}>{copy('কোথায় পাবেন?', 'Where to find?')}</strong><br/>
-                        <a href="https://developers.facebook.com/" target="_blank" rel="noreferrer" style={{ color: text, textDecoration: 'none', fontWeight: 600 }}>developers.facebook.com</a>
-                        {copy(' → আপনার App → Settings → Basic', ' → Your App → Settings → Basic')}
-                      </div>
-                      <strong>{copy('App Secret একবার save হলে আর দেখানো হবে না।', 'App Secret is stored encrypted and never shown again.')}</strong>
+                <div style={{ padding: '10px 14px', color: text, fontWeight: 700, fontSize: 12.5, borderBottom: `1px solid ${border}` }}>
+                  ⚙️ {copy('নিজের Facebook App Credentials (Optional)', 'Your Facebook App Credentials (Optional)')}
+                </div>
+                <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div style={{ fontSize: 11.5, color: muted, lineHeight: 1.7 }}>
+                    {copy(
+                      'নিজের Developer App থাকলে App ID ও App Secret দিন। না দিলে platform-এর default app ব্যবহার হবে।',
+                      'If you have your own Facebook Developer App, enter its App ID and App Secret. Otherwise the platform default app will be used.',
+                    )}
+                    <div style={{ background: dark ? 'rgba(99,102,241,0.08)' : 'rgba(99,102,241,0.05)', padding: '7px 10px', borderRadius: 8, marginTop: 6, border: `1px solid rgba(99,102,241,0.2)` }}>
+                      <strong style={{ color: '#6366f1' }}>{copy('কোথায় পাবেন?', 'Where to find?')}</strong>{' '}
+                      <a href="https://developers.facebook.com/" target="_blank" rel="noreferrer" style={{ color: text, fontWeight: 600 }}>developers.facebook.com</a>
+                      {copy(' → আপনার App → Settings → Basic', ' → Your App → Settings → Basic')}
                     </div>
-                    <div>
-                      <label style={{ fontSize: 11.5, color: muted, fontWeight: 600, display: 'block', marginBottom: 4 }}>App ID</label>
-                      <input style={inp} value={customFbAppId} onChange={e => setCustomFbAppId(e.target.value)} placeholder="1234567890123456" />
-                    </div>
-                    <div>
-                      <label style={{ fontSize: 11.5, color: muted, fontWeight: 600, display: 'block', marginBottom: 4 }}>App Secret</label>
-                      <input style={inp} type="password" value={customFbAppSecret} onChange={e => setCustomFbAppSecret(e.target.value)} placeholder="••••••••••••••••••••••••••••••••" autoComplete="new-password" />
-                    </div>
+                    <div style={{ marginTop: 5 }}><strong>{copy('App Secret একবার save হলে আর দেখানো হবে না।', 'App Secret is stored encrypted and never shown again.')}</strong></div>
                   </div>
-                )}
+                  <div>
+                    <label style={{ fontSize: 11.5, color: muted, fontWeight: 600, display: 'block', marginBottom: 4 }}>App ID</label>
+                    <input style={inp} value={customFbAppId} onChange={e => setCustomFbAppId(e.target.value)} placeholder="1234567890123456" />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 11.5, color: muted, fontWeight: 600, display: 'block', marginBottom: 4 }}>App Secret</label>
+                    <input style={inp} type="password" value={customFbAppSecret} onChange={e => setCustomFbAppSecret(e.target.value)} placeholder="••••••••••••••••••••••••••••••••" autoComplete="new-password" />
+                  </div>
+                </div>
               </div>
 
               {!manualSuccess ? (
