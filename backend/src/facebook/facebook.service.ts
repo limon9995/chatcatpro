@@ -342,6 +342,18 @@ export class FacebookService {
       throw new BadRequestException(
         `FB token exchange failed: ${JSON.stringify(data)}`,
       );
+    return this.exchangeForLongLivedToken(data.access_token);
+  }
+
+  private async exchangeForLongLivedToken(shortLivedToken: string): Promise<string> {
+    const url = `https://graph.facebook.com/v19.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${this.appId}&client_secret=${this.appSecret}&fb_exchange_token=${shortLivedToken}`;
+    const res = await fetch(url);
+    const data: any = await res.json();
+    if (!data.access_token) {
+      this.logger.warn(`[Facebook] Long-lived token exchange failed, using short-lived: ${JSON.stringify(data)}`);
+      return shortLivedToken;
+    }
+    this.logger.log('[Facebook] Exchanged for long-lived user token successfully');
     return data.access_token;
   }
 
