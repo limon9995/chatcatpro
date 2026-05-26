@@ -387,15 +387,76 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
           ) : (
             /* ── Access Token (manual) tab ── */
             <>
-              <div style={{ background: dark ? 'rgba(99,102,241,0.08)' : 'rgba(99,102,241,0.05)', border: '1px solid rgba(99,102,241,0.18)', borderRadius: 12, padding: '12px 15px', fontSize: 12.5, color: text, lineHeight: 1.85 }}>
-                📌 <strong>{copy('কিভাবে Access Token পাবেন?', 'How to get the Access Token?')}</strong><br />
-                <span style={{ color: muted }}>
-                  {copy('1. ', '1. ')}<a href="https://developers.facebook.com/tools/explorer/" target="_blank" rel="noreferrer" style={{ color: '#6366f1' }}>Graph API Explorer</a>{copy(' খুলুন', ' and open it')}<br />
-                  {copy('2. আপনার App ও Page select করুন', '2. Select your App and Page')}<br />
-                  {copy('3. ', '3. ')}<code style={{ background: dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)', padding: '1px 5px', borderRadius: 4 }}>pages_messaging</code>{copy(' permission add করুন', ' permission')}<br />
-                  {copy('4. "Generate Access Token" click করুন → copy করুন', '4. Click "Generate Access Token" and copy it')}<br />
-                  {copy('5. Page Name দিন, Access Token দিন — Page ID bot নিজে বের করবে', '5. Enter the Page Name and Access Token — the bot will detect the Page ID automatically')}
-                </span>
+              <div style={{ background: dark ? 'rgba(99,102,241,0.08)' : 'rgba(99,102,241,0.05)', border: '1px solid rgba(99,102,241,0.18)', borderRadius: 12, padding: '14px 16px', fontSize: 12.5, color: text, lineHeight: 1.9, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ fontWeight: 800, fontSize: 13.5, color: '#6366f1' }}>
+                  📌 {copy('কিভাবে Page Access Token পাবেন?', 'How to get a Page Access Token?')}
+                </div>
+
+                {[
+                  {
+                    step: '১',
+                    title: copy('Graph API Explorer খুলুন', 'Open Graph API Explorer'),
+                    desc: (
+                      <span>
+                        <a href="https://developers.facebook.com/tools/explorer/" target="_blank" rel="noreferrer" style={{ color: '#6366f1', fontWeight: 700 }}>developers.facebook.com/tools/explorer</a>
+                        {copy(' — এই লিংকে যান', ' — go to this link')}
+                      </span>
+                    ),
+                  },
+                  {
+                    step: '২',
+                    title: copy('App ও Page select করুন', 'Select App and Page'),
+                    desc: copy(
+                      'উপরে "Meta App" dropdown থেকে আপনার App বেছে নিন। তারপর "User or Page" dropdown থেকে আপনার Facebook Page select করুন (User নয়, Page বেছে নিন)।',
+                      'From the "Meta App" dropdown at the top, select your App. Then from the "User or Page" dropdown, select your Facebook Page (choose Page, not User).',
+                    ),
+                  },
+                  {
+                    step: '৩',
+                    title: copy('Permissions যোগ করুন', 'Add required permissions'),
+                    desc: (
+                      <span>
+                        {copy('"Add a Permission" বাটনে click করে নিচের ৩টি permission যোগ করুন:', '"Add a Permission" এ click করে এই ৩টি permission যোগ করুন:')}
+                        <div style={{ marginTop: 5 }}>
+                          {['pages_messaging', 'pages_read_engagement', 'pages_manage_engagement'].map(p => (
+                            <code key={p} style={{ background: dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)', padding: '2px 6px', borderRadius: 5, fontSize: 11.5, marginRight: 5, marginBottom: 3, display: 'inline-block', fontWeight: 700 }}>{p}</code>
+                          ))}
+                        </div>
+                      </span>
+                    ),
+                  },
+                  {
+                    step: '৪',
+                    title: copy('Token Generate করুন', 'Generate the Token'),
+                    desc: copy(
+                      '"Generate Access Token" বাটনে click করুন। Facebook login করতে বলবে — করুন। তারপর একটি লম্বা token দেখাবে (EAAxxxxx...)।',
+                      'Click "Generate Access Token". Facebook will ask you to log in — do so. A long token starting with EAAxxxxx... will appear.',
+                    ),
+                  },
+                  {
+                    step: '৫',
+                    title: copy('Token copy করে নিচে paste করুন', 'Copy the token and paste below'),
+                    desc: copy(
+                      'Token টি copy করুন এবং নিচের "Page Access Token" field-এ paste করুন। Page Name-ও দিন। Page ID bot নিজেই বের করবে।',
+                      'Copy the token and paste it in the "Page Access Token" field below. Also enter the Page Name. The bot will detect the Page ID automatically.',
+                    ),
+                  },
+                ].map(({ step, title, desc }) => (
+                  <div key={step} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                    <div style={{ minWidth: 22, height: 22, borderRadius: '50%', background: 'rgba(99,102,241,0.2)', color: '#6366f1', fontSize: 11, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 1 }}>{step}</div>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 12.5, color: text, marginBottom: 2 }}>{title}</div>
+                      <div style={{ color: muted, fontSize: 12, lineHeight: 1.7 }}>{desc}</div>
+                    </div>
+                  </div>
+                ))}
+
+                <div style={{ background: dark ? 'rgba(251,191,36,0.08)' : 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 8, padding: '8px 12px', fontSize: 11.5, color: text, marginTop: 2 }}>
+                  ⚠️ {copy(
+                    'Graph API Explorer-এ দেখানো token টি short-lived। আমাদের system এটিকে automatically long-lived (never-expiring) token-এ convert করে নেয় — আপনাকে কিছু করতে হবে না।',
+                    'The token shown in Graph API Explorer is short-lived. Our system automatically converts it to a long-lived (never-expiring) token — you don\'t need to do anything extra.',
+                  )}
+                </div>
               </div>
 
               <div>
