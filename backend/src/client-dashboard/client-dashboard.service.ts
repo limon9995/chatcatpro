@@ -1292,6 +1292,11 @@ Return ONLY valid JSON (no markdown):
       'waEnabled',
       'waPhoneNumberId',
       'waVerifyToken',
+      // AI / Bot
+      'knowledgeText',
+      'textFallbackAiOn',
+      'businessBotOn',
+      'businessInfo',
     ];
     const pagePatch: any = {};
     for (const k of PAGE_FIELDS) {
