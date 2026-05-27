@@ -587,7 +587,12 @@ Rules:
     const aiAllowed = await this.isAiAllowedForPage(page.ownerId);
 
     // ── BUSINESS INFO BOT — replies using businessInfo as knowledge base ──
-    if (page.businessBotOn && page.businessInfo && aiAllowed) {
+    if (page.businessBotOn) {
+      if (!page.businessInfo) {
+        // businessInfo not filled yet — send a setup reminder and stop
+        await this.safeSend(token, psid, 'আমাদের সাথে যোগাযোগ করার জন্য ধন্যবাদ! 🙏 শীঘ্রই আপনার সাথে যোগাযোগ করা হবে।');
+        return;
+      }
       const canAi = await this.walletService.canProcessAi(pageId);
       if (canAi) {
         const reply = await this.generateBusinessBotReply(
@@ -601,6 +606,9 @@ Rules:
           void this.walletService.deductUsage(pageId, 'TEXT');
           return;
         }
+      } else {
+        await this.safeSend(token, psid, 'আমাদের সাথে যোগাযোগ করার জন্য ধন্যবাদ! 🙏 শীঘ্রই আপনার সাথে যোগাযোগ করা হবে।');
+        return;
       }
     }
 
