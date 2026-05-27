@@ -436,10 +436,18 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
                       },
                       {
                         step: '৫',
-                        title: copy('App কে "Live" mode-এ নিন বা Tester যোগ করুন', 'Switch App to "Live" mode or add Testers'),
+                        title: copy('Demo-র জন্য Tester যোগ করুন', 'Add a Tester for Demo'),
                         desc: copy(
-                          'App যদি Development mode-এ থাকে তাহলে শুধু Testers/Developers কাজ করবে। সব user-এর জন্য কাজ করাতে Settings → Basic → App Mode থেকে "Live" করুন।',
-                          'If the App is in Development mode, only Testers/Developers can use it. To work for all users, switch to "Live" from Settings → Basic → App Mode.',
+                          'App যদি Development mode-এ থাকে, শুধু Developer বা Tester-রা এটি ব্যবহার করতে পারবে। Demo দেওয়ার আগে তাদের Tester হিসেবে যোগ করুন:\n→ App Dashboard → বাম মেনু থেকে "Roles" → "Roles" page-এ যান\n→ "Testers" section-এ "Add Testers" click করুন\n→ তাদের Facebook username বা profile link দিন\n→ তারা Facebook-এ একটি request পাবে — accept করলেই কাজ শুরু হবে।',
+                          'If the App is in Development mode, only Developers or Testers can use it. Before the demo, add them as Testers:\n→ App Dashboard → "Roles" from left menu → go to "Roles" page\n→ In the "Testers" section, click "Add Testers"\n→ Enter their Facebook username or profile link\n→ They will receive a request on Facebook — once accepted, it works.',
+                        ),
+                      },
+                      {
+                        step: '৬',
+                        title: copy('সব customer-এর জন্য: নিজের App বানানো সবচেয়ে ভালো', 'For all customers: Creating own App is best'),
+                        desc: copy(
+                          'প্রতিটি customer তাদের নিজের Facebook account দিয়ে developers.facebook.com-এ গিয়ে একটি App বানাবে (Business বা Consumer type) → Messenger product যোগ করবে → Graph API Explorer থেকে নিজের Page-এর জন্য নিচের সব permission দিয়ে token নেবে। এতে তাদের page-এ সম্পূর্ণ কাজ করবে এবং আমাদের App-এর উপর নির্ভরতা থাকবে না।',
+                          'Each customer will go to developers.facebook.com with their own Facebook account and create an App (Business or Consumer type) → add the Messenger product → use Graph API Explorer to generate a token for their Page with all required permissions below. This gives full functionality on their page without depending on our App.',
                         ),
                       },
                     ].map(({ step, title, desc }) => (
@@ -490,9 +498,10 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
                           {[
                             { perm: 'pages_messaging', use: copy('Messenger-এ bot reply দেওয়ার জন্য', 'For bot to reply in Messenger') },
                             { perm: 'pages_read_engagement', use: copy('Post-এর comment detect করতে (comment reply)', 'To detect post comments (for comment reply)') },
-                            { perm: 'pages_manage_engagement', use: copy('Post comment-এ reply দেওয়ার জন্য', 'For replying to post comments') },
+                            { perm: 'pages_manage_engagement', use: copy('Post comment-এ reply দেওয়ার জন্য এবং post-এ link comment করতে', 'For replying to post comments and posting link as comment') },
                             { perm: 'pages_manage_metadata', use: copy('Webhook subscription-এর জন্য', 'For webhook subscription') },
                             { perm: 'pages_show_list', use: copy('Page list দেখার জন্য', 'For listing pages') },
+                            { perm: 'pages_manage_posts', use: copy('Facebook Page-এ post publish করার জন্য (Auto Post feature)', 'For publishing posts to Facebook Page (Auto Post feature)') },
                           ].map(({ perm, use }) => (
                             <div key={perm} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, background: dark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)', borderRadius: 7, padding: '5px 8px' }}>
                               <code style={{ background: dark ? 'rgba(99,102,241,0.2)' : 'rgba(99,102,241,0.1)', color: '#6366f1', padding: '2px 6px', borderRadius: 5, fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0 }}>{perm}</code>
