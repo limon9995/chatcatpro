@@ -55,7 +55,7 @@ class PageErrorBoundary extends Component<{ children: any; name: string }, { err
 type NavKey = 'OVERVIEW' | 'AGENT_TASKS' | 'ORDERS' | 'PRODUCTS' | 'ACCOUNTING' | 'ANALYTICS' |
   'BOT_KNOWLEDGE' | 'PRINT' | 'MEMO_TEMPLATE' | 'CRM' | 'COURIER' |
   'BROADCAST' | 'FOLLOWUP' | 'CATALOG' | 'FRAUD_CHECKER' | 'AUTO_POST' |
-  'WALLET' |
+  'WALLET' | 'CONNECT_FB_PAGE' |
   'SETTINGS_BUSINESS' | 'SETTINGS_DELIVERY' | 'SETTINGS_BOT' |
   'SETTINGS_KNOWLEDGE' | 'SETTINGS_CALL' | 'SETTINGS_VOICE';
 
@@ -90,7 +90,8 @@ const NAV: NavItem[] = [
   { key: 'MEMO_TEMPLATE',      bn: 'মেমো টেমপ্লেট',       en: 'Memo Template',       icon: '📄', group: 'bot' },
   { key: 'FRAUD_CHECKER',      bn: 'ফ্রড চেকার',          en: 'Fraud Checker',       icon: '🛡', group: 'bot' },
   // ── Settings ───────────────────────────────────────────────────────────────
-  { key: 'WALLET',             bn: 'ওয়ালেট',             en: 'Wallet',              icon: '💰', group: 'settings' },
+  { key: 'CONNECT_FB_PAGE',    bn: 'FB পেজ কানেক্ট',      en: 'Connect FB Page',     icon: '🔗', group: 'settings' },
+  { key: 'WALLET',             bn: 'ওয়ালেট',             en: 'Wallet',              icon: '💰', group: 'settings' },
   { key: 'SETTINGS_BUSINESS',  bn: 'ব্যবসার তথ্য',        en: 'Business',            icon: '🏦', group: 'settings' },
   { key: 'SETTINGS_DELIVERY',  bn: 'ডেলিভারি ও পেমেন্ট',  en: 'Fulfillment',         icon: '🚀', group: 'settings' },
   { key: 'SETTINGS_BOT',       bn: 'বট মোড',              en: 'Bot Modes',           icon: '⚙', group: 'settings' },
@@ -427,6 +428,15 @@ export function DashboardLayout({
         </PageErrorBoundary>
       );
     }
+    if (nav === 'CONNECT_FB_PAGE') {
+      return (
+        <PageErrorBoundary name="SettingsPage">
+          <Suspense fallback={pageFallback}>
+            <SettingsPage th={th} pageId={pageId} tab="SETTINGS_BUSINESS" onToast={showToast} autoOpenReconnect={true} />
+          </Suspense>
+        </PageErrorBoundary>
+      );
+    }
     switch (nav) {
       case 'OVERVIEW':    return (
         <PageErrorBoundary name="MotivationPage">
@@ -705,6 +715,52 @@ export function DashboardLayout({
               style={{ position: 'absolute', top: 14, right: 14, ...th.btnGhost, padding: '4px 10px', fontSize: 16, borderRadius: 8, lineHeight: 1 }}
             >✕</button>
           )}
+
+          {/* ── Page Management ─────────────────────────────────────── */}
+          <div style={{ marginBottom: 8, padding: '8px 6px 4px' }}>
+            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.09em', textTransform: 'uppercase', color: th.muted, opacity: 0.6, padding: '0 4px 6px' }}>
+              {copy('পেজ', 'Pages')}
+            </div>
+            {myPages.map(p => {
+              const isActive = activePage?.id === p.id;
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => { setActivePage(p); onSelectPage?.(p); setSidebarOpen(false); }}
+                  style={{
+                    width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+                    background: isActive ? 'rgba(99,102,241,0.12)' : 'transparent',
+                    border: `1px solid ${isActive ? 'rgba(99,102,241,0.3)' : 'transparent'}`,
+                    borderRadius: 9, padding: '7px 9px', cursor: 'pointer',
+                    marginBottom: 3, fontFamily: 'inherit', transition: 'background .12s',
+                  }}
+                >
+                  <span style={{
+                    width: 24, height: 24, borderRadius: 6, flexShrink: 0,
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 12, background: isActive ? 'rgba(99,102,241,0.2)' : 'rgba(255,255,255,0.05)',
+                  }}>📄</span>
+                  <span style={{ flex: 1, fontSize: 12.5, fontWeight: isActive ? 700 : 500, color: isActive ? '#6366f1' : th.text, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {p.masterPageId ? `↳ ${p.pageName || p.pageId}` : (p.pageName || p.pageId)}
+                  </span>
+                  {isActive && <span style={{ width: 5, height: 14, borderRadius: 3, background: '#6366f1', flexShrink: 0 }} />}
+                </button>
+              );
+            })}
+            <button
+              onClick={() => { openNavItem('CONNECT_FB_PAGE'); setSidebarOpen(false); }}
+              style={{
+                width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+                background: 'transparent', border: `1px dashed rgba(99,102,241,0.35)`,
+                borderRadius: 9, padding: '7px 9px', cursor: 'pointer',
+                marginBottom: 3, fontFamily: 'inherit', color: '#6366f1', marginTop: 2,
+              }}
+            >
+              <span style={{ width: 24, height: 24, borderRadius: 6, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, background: 'rgba(99,102,241,0.1)', flexShrink: 0 }}>＋</span>
+              <span style={{ fontSize: 12.5, fontWeight: 600 }}>{copy('নতুন Page যোগ / Reconnect', 'Add / Reconnect Page')}</span>
+            </button>
+          </div>
+          <div style={{ height: 1, background: th.border, margin: '2px 6px 8px' }} />
 
           {navGroups.map(g => (
             <div key={g.key} style={{ marginBottom: 4 }}>
