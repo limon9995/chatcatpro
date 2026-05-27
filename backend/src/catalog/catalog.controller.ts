@@ -328,6 +328,7 @@ export class CatalogController {
         catalogSlug: true,
         catalogViews: true,
         customDomain: true,
+        websiteUrl: true,
       },
     });
     if (!page) return { error: 'Page not found' };
@@ -386,6 +387,7 @@ export class CatalogController {
         catalogSlug: page.catalogSlug || null,
         catalogViews: page.catalogViews ?? 0,
         customDomain: page.customDomain || null,
+        websiteUrl: page.websiteUrl || null,
       },
       products,
       total: products.length,

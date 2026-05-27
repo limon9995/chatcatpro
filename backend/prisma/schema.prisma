@@ -280,6 +280,11 @@ model Product {
   // V21: Catalog analytics
   productViews     Int     @default(0)
 
+  // V22: Simple products (no code/OCR/vision needed — mango, honey, etc.)
+  productType   String  @default("CODED")  // "CODED" | "SIMPLE"
+  unit          String?                     // "kg", "liter", "piece", "dozen" — for SIMPLE
+  orderEnabled  Boolean @default(true)      // false = info-only, no order flow
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

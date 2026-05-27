@@ -20,6 +20,10 @@ type Product = {
   visionSearchable: boolean;
   // V19: Detection mode
   detectionMode: 'OCR' | 'AI_VISION';
+  // V22: Simple products
+  productType: 'CODED' | 'SIMPLE';
+  unit: string | null;
+  orderEnabled: boolean;
 };
 
 type EditData = {
@@ -190,8 +194,15 @@ export function ProductsPage({ th, pageId, onToast }: {
   const editRefsRef = useRef<HTMLInputElement>(null);
   const BASE = `${API_BASE}/client-dashboard/${pageId}`;
 
+  // V22: Simple Products tab state
+  const [simpleForm, setSimpleForm] = useState({ name: '', price: 0, stockQty: 0, unit: 'kg', description: '', orderEnabled: true, isActive: true });
+  const [showSimpleForm, setShowSimpleForm] = useState(false);
+  const [simpleEditId, setSimpleEditId] = useState<number | null>(null);
+  const [simpleEditData, setSimpleEditData] = useState<{ name?: string; price?: number; stockQty?: number; unit?: string; description?: string; orderEnabled?: boolean; isActive?: boolean }>({});
+  const [busySimple, setBusySimple] = useState(false);
+
   // Dual Photo Mode
-  const [productTab, setProductTab] = useState<'single' | 'dual'>('single');
+  const [productTab, setProductTab] = useState<'single' | 'dual' | 'simple'>('single');
   const [dual] = useState<{
     mode: boolean;
     wearingProductId: number | null; wearingCode: string; wearingName: string;
@@ -481,19 +492,20 @@ export function ProductsPage({ th, pageId, onToast }: {
     await loadLiveSessions();
   };
 
-  const filtered = products.filter(p => {
+  const codedProducts = products.filter(p => p.productType !== 'SIMPLE');
+  const filtered = codedProducts.filter(p => {
     if (!search) return true;
     const s = search.toLowerCase();
     return p.code.toLowerCase().includes(s) || (p.name || '').toLowerCase().includes(s);
   });
 
   const stats = {
-    total:    products.length,
-    active:   products.filter(p => p.isActive).length,
-    lowStock: products.filter(p => p.stockQty <= 3 && p.isActive).length,
-    withImg:  products.filter(p => p.imageUrl).length,
-    withAngles: products.filter(p => parseReferenceImages(p.referenceImagesJson).length > 0).length,
-    withVid:  products.filter(p => p.videoUrl).length,
+    total:    codedProducts.length,
+    active:   codedProducts.filter(p => p.isActive).length,
+    lowStock: codedProducts.filter(p => p.stockQty <= 3 && p.isActive).length,
+    withImg:  codedProducts.filter(p => p.imageUrl).length,
+    withAngles: codedProducts.filter(p => parseReferenceImages(p.referenceImagesJson).length > 0).length,
+    withVid:  codedProducts.filter(p => p.videoUrl).length,
   };
 
   return (
@@ -512,21 +524,30 @@ export function ProductsPage({ th, pageId, onToast }: {
             {showNew ? copy('✕ Cancel', '✕ Cancel') : copy('+ Add Product', '+ Add Product')}
           </button>
         )}
+        {productTab === 'simple' && (
+          <button style={th.btnPrimary} onClick={() => { setShowSimpleForm(v => !v); setSimpleEditId(null); }}>
+            {showSimpleForm && simpleEditId === null ? '✕ Cancel' : '+ Add Simple Product'}
+          </button>
+        )}
       </div>
 
       {/* Mode tabs */}
-      <div style={{ display: 'flex', gap: 8 }}>
-        {(['single', 'dual'] as const).map(tab => {
-          const active = productTab === tab;
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        {([
+          { key: 'single', label: '📷 Coded Products' },
+          { key: 'simple', label: '🥭 Simple Products' },
+          { key: 'dual',   label: dual.mode ? '📸 Dual Photo ●' : '📸 Dual Photo' },
+        ] as const).map(({ key, label }) => {
+          const active = productTab === key;
           return (
-            <button key={tab} onClick={() => setProductTab(tab)} style={{
+            <button key={key} onClick={() => setProductTab(key)} style={{
               padding: '7px 18px', borderRadius: 20, fontSize: 13, fontWeight: 600, cursor: 'pointer', border: 'none',
               background: active ? th.accent : th.surface,
               color: active ? '#fff' : th.muted,
               boxShadow: active ? `0 0 0 2px ${th.accent}44` : 'none',
               transition: 'all .15s',
             }}>
-              {tab === 'single' ? '📷 Single Photo' : (dual.mode ? '📸 Dual Photo ●' : '📸 Dual Photo')}
+              {label}
             </button>
           );
         })}
@@ -1196,6 +1217,181 @@ export function ProductsPage({ th, pageId, onToast }: {
       )}
 
       </>)}
+
+      {/* ── Simple Products Tab ─────────────────────────────────────────── */}
+      {productTab === 'simple' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+          {/* Info banner */}
+          <div style={{ ...th.card2, background: 'rgba(99,102,241,0.07)', border: '1px solid rgba(99,102,241,0.2)', padding: '12px 16px', borderRadius: 12 }}>
+            <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 4 }}>🥭 Simple Products — কোড বা ছবি ছাড়া</div>
+            <div style={{ fontSize: 12, color: th.muted, lineHeight: 1.6 }}>
+              Mango, Honey, Egg, Fish — এই ধরনের product যেখানে কোনো code বা image detection দরকার নেই।
+              Customer নাম লিখলে বা ছবি পাঠালে bot automatically price ও stock জানাবে।
+            </div>
+          </div>
+
+          {/* Add/Edit form */}
+          {(showSimpleForm || simpleEditId !== null) && (
+            <div style={{ ...th.card2, padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>
+                {simpleEditId !== null ? '✏️ Edit Simple Product' : '+ New Simple Product'}
+              </h3>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div>
+                  <label style={{ fontSize: 12, color: th.muted, display: 'block', marginBottom: 4 }}>Product Name *</label>
+                  <input
+                    style={th.input}
+                    placeholder="যেমন: Himsagar Mango"
+                    value={simpleEditId !== null ? (simpleEditData.name ?? '') : simpleForm.name}
+                    onChange={e => simpleEditId !== null
+                      ? setSimpleEditData(d => ({ ...d, name: e.target.value }))
+                      : setSimpleForm(f => ({ ...f, name: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: 12, color: th.muted, display: 'block', marginBottom: 4 }}>Unit</label>
+                  <select
+                    style={th.input}
+                    value={simpleEditId !== null ? (simpleEditData.unit ?? 'kg') : simpleForm.unit}
+                    onChange={e => simpleEditId !== null
+                      ? setSimpleEditData(d => ({ ...d, unit: e.target.value }))
+                      : setSimpleForm(f => ({ ...f, unit: e.target.value }))}
+                  >
+                    {['kg', 'liter', 'piece', 'dozen', 'gram', 'pcs', 'box', 'bag'].map(u => (
+                      <option key={u} value={u}>{u}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: 12, color: th.muted, display: 'block', marginBottom: 4 }}>Price *</label>
+                  <input
+                    style={th.input} type="number" min={0}
+                    placeholder="৳"
+                    value={simpleEditId !== null ? (simpleEditData.price ?? 0) : simpleForm.price}
+                    onChange={e => simpleEditId !== null
+                      ? setSimpleEditData(d => ({ ...d, price: Number(e.target.value) }))
+                      : setSimpleForm(f => ({ ...f, price: Number(e.target.value) }))}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: 12, color: th.muted, display: 'block', marginBottom: 4 }}>Stock Qty *</label>
+                  <input
+                    style={th.input} type="number" min={0}
+                    value={simpleEditId !== null ? (simpleEditData.stockQty ?? 0) : simpleForm.stockQty}
+                    onChange={e => simpleEditId !== null
+                      ? setSimpleEditData(d => ({ ...d, stockQty: Number(e.target.value) }))
+                      : setSimpleForm(f => ({ ...f, stockQty: Number(e.target.value) }))}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: 12, color: th.muted, display: 'block', marginBottom: 4 }}>Details / Description (bot এটা পড়ে reply করবে)</label>
+                <textarea
+                  style={{ ...th.input, minHeight: 72, resize: 'vertical' }}
+                  placeholder="যেমন: রাজশাহীর সেরা হিমসাগর আম। সরাসরি বাগান থেকে সংগ্রহ করা।"
+                  value={simpleEditId !== null ? (simpleEditData.description ?? '') : simpleForm.description}
+                  onChange={e => simpleEditId !== null
+                    ? setSimpleEditData(d => ({ ...d, description: e.target.value }))
+                    : setSimpleForm(f => ({ ...f, description: e.target.value }))}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer' }}>
+                  <input type="checkbox"
+                    checked={simpleEditId !== null ? (simpleEditData.orderEnabled !== false) : simpleForm.orderEnabled}
+                    onChange={e => simpleEditId !== null
+                      ? setSimpleEditData(d => ({ ...d, orderEnabled: e.target.checked }))
+                      : setSimpleForm(f => ({ ...f, orderEnabled: e.target.checked }))}
+                  />
+                  Order নেবে (uncheck = শুধু info দেবে)
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer' }}>
+                  <input type="checkbox"
+                    checked={simpleEditId !== null ? (simpleEditData.isActive !== false) : simpleForm.isActive}
+                    onChange={e => simpleEditId !== null
+                      ? setSimpleEditData(d => ({ ...d, isActive: e.target.checked }))
+                      : setSimpleForm(f => ({ ...f, isActive: e.target.checked }))}
+                  />
+                  Active
+                </label>
+              </div>
+
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  style={th.btnPrimary}
+                  disabled={busySimple}
+                  onClick={async () => {
+                    const isEdit = simpleEditId !== null;
+                    const prod = isEdit ? products.find(p => p.id === simpleEditId) : null;
+                    if (!isEdit && !simpleForm.name.trim()) return onToast('Product name দিন', 'error');
+                    setBusySimple(true);
+                    try {
+                      if (isEdit && prod) {
+                        await request(`${BASE}/products/${prod.code}`, { method: 'PATCH', body: JSON.stringify(simpleEditData) });
+                      } else {
+                        await request(`${BASE}/products`, { method: 'POST', body: JSON.stringify({ ...simpleForm, productType: 'SIMPLE' }) });
+                      }
+                      onToast(isEdit ? '✓ Updated' : '✓ Created');
+                      setShowSimpleForm(false);
+                      setSimpleEditId(null);
+                      setSimpleForm({ name: '', price: 0, stockQty: 0, unit: 'kg', description: '', orderEnabled: true, isActive: true });
+                      setSimpleEditData({});
+                      load();
+                    } catch (e: any) { onToast(e.message, 'error'); }
+                    finally { setBusySimple(false); }
+                  }}
+                >
+                  {busySimple ? 'Saving...' : (simpleEditId !== null ? 'Update' : 'Create')}
+                </button>
+                <button style={th.btnGhost} onClick={() => { setShowSimpleForm(false); setSimpleEditId(null); setSimpleEditData({}); }}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Simple Products List */}
+          {(() => {
+            const simpleProducts = products.filter(p => p.productType === 'SIMPLE');
+            if (!simpleProducts.length) return (
+              <EmptyState icon="🥭" title="কোনো Simple Product নেই" subtitle="Mango, Honey, Egg — এই ধরনের product এখানে add করুন" />
+            );
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {simpleProducts.map(p => (
+                  <div key={p.id} style={{ ...th.card2, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+                    <div style={{ flex: 1, minWidth: 140 }}>
+                      <div style={{ fontWeight: 700, fontSize: 14 }}>{p.name || p.code}</div>
+                      {p.description && <div style={{ fontSize: 12, color: th.muted, marginTop: 2, lineHeight: 1.4 }}>{p.description.slice(0, 80)}{p.description.length > 80 ? '…' : ''}</div>}
+                    </div>
+                    <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 14, fontWeight: 700, color: th.accent }}>৳{Number(p.price).toLocaleString()}/{p.unit || 'pcs'}</span>
+                      <span style={{ ...th.pill, fontSize: 11, ...(p.stockQty === 0 ? th.pillRed : p.stockQty <= 5 ? th.pillYellow : th.pillGreen) }}>
+                        {p.stockQty} {p.unit || 'pcs'}
+                      </span>
+                      {!p.orderEnabled && <span style={{ ...th.pill, ...th.pillGray, fontSize: 10 }}>Info Only</span>}
+                      {!p.isActive && <span style={{ ...th.pill, ...th.pillGray, fontSize: 10 }}>Inactive</span>}
+                    </div>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button style={th.btnSmGhost} onClick={() => {
+                        setSimpleEditId(p.id);
+                        setSimpleEditData({ name: p.name ?? '', price: p.price, stockQty: p.stockQty, unit: p.unit ?? 'kg', description: p.description ?? '', orderEnabled: p.orderEnabled, isActive: p.isActive });
+                        setShowSimpleForm(false);
+                      }}>Edit</button>
+                      <button style={th.btnSmDanger} onClick={() => deleteProduct(p.code)}>✕</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+
+        </div>
+      )}
 
       {/* Live Session tab (new Dual Photo system) */}
       {productTab === 'dual' && (

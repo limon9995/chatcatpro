@@ -32,3 +32,4 @@ logs/
 *.db-journal
 *.db-shm
 *.db-wal
+VPS_COMPLETE_BACKUP.md

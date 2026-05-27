@@ -8,6 +8,9 @@ export interface BusinessProduct {
   price: number;
   stockQty: number;
   category: string | null;
+  productType?: string;
+  unit?: string | null;
+  orderEnabled?: boolean;
 }
 
 export interface DualProduct {
@@ -62,9 +65,12 @@ export class BotContextService {
           price: true,
           stockQty: true,
           category: true,
+          productType: true,
+          unit: true,
+          orderEnabled: true,
         },
         orderBy: { createdAt: 'desc' },
-        take: 30,
+        take: 50,
       }),
       this.botKnowledge.getConfig(pageId).catch(() => null),
     ]);

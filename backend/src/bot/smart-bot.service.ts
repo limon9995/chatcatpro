@@ -208,17 +208,29 @@ export class SmartBotService {
       ? `"${ctx.businessName}" নামের Bangladeshi e-commerce shop`
       : 'একটি Bangladeshi fashion e-commerce shop';
 
-    // Product catalog (max 30)
-    const productLines = ctx.products
+    // Product catalog — split coded vs simple
+    const codedProducts = ctx.products.filter((p) => (p as any).productType !== 'SIMPLE');
+    const simpleProducts = ctx.products.filter((p) => (p as any).productType === 'SIMPLE');
+
+    const codedLines = codedProducts
       .slice(0, 30)
       .map(
         (p) =>
-          `[${p.code}] ${p.name} — ৳${p.price} | ${p.stockQty > 0 ? `${p.stockQty} পিস আছে` : 'Stock শেষ'}`,
+          `[${p.code}] ${p.name ?? p.code} — ৳${p.price} | ${p.stockQty > 0 ? `${p.stockQty} পিস আছে` : 'Stock শেষ'}`,
       )
       .join('\n');
+
+    const simpleLines = simpleProducts
+      .map((p) => {
+        const unit = (p as any).unit || 'pcs';
+        const stock = p.stockQty > 0 ? `${p.stockQty} ${unit} আছে` : 'Stock শেষ';
+        return `${p.name ?? p.code} — ৳${p.price}/${unit} | ${stock}`;
+      })
+      .join('\n');
+
     const productCtx =
       ctx.products.length > 0
-        ? `\n\n## Product Catalog\n${productLines}`
+        ? `\n\n## Product Catalog\n${codedLines}${simpleLines ? `\n\n### Simple Items\n${simpleLines}` : ''}`
         : '\n\n## Product Catalog\n(কোনো product নেই)';
 
     // Delivery & payment

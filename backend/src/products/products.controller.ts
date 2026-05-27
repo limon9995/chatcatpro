@@ -35,10 +35,27 @@ export class ProductsController {
     @Body()
     body: {
       pageId: number;
-      code: string;
+      code?: string;
       price: number;
       stockQty?: number;
+      name?: string;
+      description?: string;
+      imageUrl?: string;
       fbPostUrl?: string;
+      postCaption?: string;
+      videoUrl?: string;
+      catalogVisible?: boolean;
+      variantOptions?: string | null;
+      category?: string | null;
+      color?: string | null;
+      tags?: string | null;
+      imageKeywords?: string | null;
+      aiDescription?: string | null;
+      visionSearchable?: boolean;
+      costPrice?: number;
+      productType?: string;
+      unit?: string | null;
+      orderEnabled?: boolean;
     },
   ) {
     this.auth.ensurePageAccess(req.user || req.authUser, Number(body.pageId));
@@ -68,7 +85,30 @@ export class ProductsController {
     @Req() req: any,
     @Param('code') code: string,
     @Query('pageId') pageId: string,
-    @Body() body: { stockQty?: number; price?: number; fbPostUrl?: string },
+    @Body()
+    body: {
+      stockQty?: number;
+      price?: number;
+      costPrice?: number;
+      name?: string;
+      description?: string;
+      imageUrl?: string;
+      isActive?: boolean;
+      fbPostUrl?: string;
+      postCaption?: string;
+      videoUrl?: string;
+      catalogVisible?: boolean;
+      catalogSortOrder?: number;
+      variantOptions?: string | null;
+      category?: string | null;
+      color?: string | null;
+      tags?: string | null;
+      imageKeywords?: string | null;
+      aiDescription?: string | null;
+      visionSearchable?: boolean;
+      unit?: string | null;
+      orderEnabled?: boolean;
+    },
   ) {
     return this.products.updateOne(this.pid(req, pageId), code, body);
   }

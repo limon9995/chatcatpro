@@ -31,6 +31,7 @@ import { BillingService } from '../billing/billing.service';
 import { WalletService } from '../wallet/wallet.service';
 import { WhisperService } from '../whisper/whisper.service';
 import { SmartBotService } from '../bot/smart-bot.service';
+import { ProductNameMatchService } from '../product-name-match/product-name-match.service';
 
 @Injectable()
 export class WebhookService implements OnModuleDestroy {
@@ -79,6 +80,8 @@ export class WebhookService implements OnModuleDestroy {
     private readonly smartBot: SmartBotService,
     // V20: CLIP embedding for visual similarity search
     private readonly embeddingService: EmbeddingService,
+    // V22: Product name matching for simple products
+    private readonly productNameMatch: ProductNameMatchService,
   ) {}
 
   onModuleDestroy() {
@@ -816,6 +819,43 @@ Rules:
       return;
     }
 
+    // ── SIMPLE PRODUCT NAME MATCH (text) ──────────────────────────────────
+    // No coded product found — try matching customer text against SIMPLE product names
+    if (page.infoModeOn && allCodes.length === 0) {
+      const simpleProds = await this.prisma.product.findMany({
+        where: { pageId, isActive: true, productType: 'SIMPLE' },
+        select: {
+          code: true,
+          name: true,
+          price: true,
+          stockQty: true,
+          unit: true,
+          orderEnabled: true,
+          description: true,
+          productType: true,
+        },
+      });
+      if (simpleProds.length > 0) {
+        const nameMatches = this.productNameMatch.matchProducts(text, simpleProds, { simpleOnly: true });
+        const strong = nameMatches.filter(
+          (m) => m.confidence === 'HIGH' || m.confidence === 'MEDIUM',
+        );
+        if (strong.length > 0) {
+          this.logger.log(
+            `[NameMatch] Text matched simple product(s): ${strong.map((m) => m.productCode).join(',')}`,
+          );
+          await this.sendSimpleProductInfo(page, psid, strong);
+          return;
+        }
+        // LOW confidence — list all simple products
+        const low = nameMatches.filter((m) => m.confidence === 'LOW');
+        if (low.length > 0) {
+          await this.sendSimpleProductInfo(page, psid, low);
+          return;
+        }
+      }
+    }
+
     // ── DRAFT: OpenAI/intent may decide the customer left the order flow ──
     // In that case clear the draft and let the normal routing below handle it.
     if (
@@ -1466,6 +1506,41 @@ Rules:
       psid,
       `🛍️ ${businessName}-এর সব product দেখুন:\n${catalogUrl}\n\nপছন্দের product-এর code বা product page থেকে সরাসরি order করুন 💖`,
     );
+  }
+
+  private async sendSimpleProductInfo(
+    page: any,
+    psid: string,
+    matches: import('../product-name-match/product-name-match.service').NameMatchResult[],
+  ): Promise<void> {
+    const token = page.pageToken as string;
+    const sym = page.currencySymbol || '৳';
+
+    if (matches.length === 1) {
+      const p = matches[0];
+      const unit = p.unit || 'pcs';
+      const stockText =
+        p.stockQty > 0 ? `✅ ${p.stockQty} ${unit} আছে` : '❌ Stock শেষ';
+      let msg = `🛍️ *${p.productName}*\n💰 মূল্য: ${sym}${Number(p.price).toLocaleString()}/${unit}\n📦 ${stockText}`;
+      if (p.description) msg += `\n\nℹ️ ${p.description}`;
+      if (p.orderEnabled && p.stockQty > 0) msg += `\n\nOrder করতে চাইলে বলুন 😊`;
+      await this.safeSend(token, psid, msg);
+    } else {
+      // Multiple matches — list them
+      const lines = matches
+        .slice(0, 6)
+        .map((p) => {
+          const unit = p.unit || 'pcs';
+          const stock = p.stockQty > 0 ? `${p.stockQty} ${unit}` : 'Stock শেষ';
+          return `• *${p.productName}* — ${sym}${Number(p.price).toLocaleString()}/${unit} (${stock})`;
+        })
+        .join('\n');
+      await this.safeSend(
+        token,
+        psid,
+        `🛍️ এই ধরনের product আমাদের কাছে আছে:\n\n${lines}\n\nকোনটা সম্পর্কে বিস্তারিত জানতে চাইলে নাম লিখুন।`,
+      );
+    }
   }
 
   private async handleExplicitProductCode(
@@ -2173,6 +2248,36 @@ Rules:
           `[OCR] No codes — conf=${ocrResult.confidence.toFixed(0)} overall=${ocrResult.ocrConfidence}`,
         );
 
+        // V22: Try name matching on OCR text before falling back to vision
+        const ocrText = (ocrResult.text || '').trim();
+        if (ocrText) {
+          const allProds = await this.prisma.product.findMany({
+            where: { pageId, isActive: true },
+            select: {
+              code: true,
+              name: true,
+              price: true,
+              stockQty: true,
+              unit: true,
+              orderEnabled: true,
+              description: true,
+              productType: true,
+            },
+          });
+          const nameMatches = this.productNameMatch.matchProducts(ocrText, allProds);
+          const strong = nameMatches.filter(
+            (m) => m.confidence === 'HIGH' || m.confidence === 'MEDIUM',
+          );
+          if (strong.length > 0) {
+            this.logger.log(
+              `[NameMatch] OCR text matched product(s): ${strong.map((m) => m.productCode).join(',')}`,
+            );
+            await this.walletService.deductUsage(pageId, 'IMAGE_OCR');
+            await this.sendSimpleProductInfo(page, psid, strong);
+            return;
+          }
+        }
+
         // V18: Try vision-based product recognition if enabled for this page
         if (page.imageRecognitionOn) {
           await this.visionProductRecognition(page, psid, imageUrl);
@@ -2353,6 +2458,40 @@ Rules:
           pageId,
           attrs.usedApi ? 'IMAGE' : 'IMAGE_LOCAL',
         );
+      }
+
+      // V22: Try name matching on vision rawDescription against SIMPLE products first
+      if (attrs.rawDescription) {
+        const simpleProds = await this.prisma.product.findMany({
+          where: { pageId, isActive: true, productType: 'SIMPLE' },
+          select: {
+            code: true,
+            name: true,
+            price: true,
+            stockQty: true,
+            unit: true,
+            orderEnabled: true,
+            description: true,
+            productType: true,
+          },
+        });
+        if (simpleProds.length > 0) {
+          const nameMatches = this.productNameMatch.matchProducts(
+            attrs.rawDescription,
+            simpleProds,
+            { simpleOnly: true },
+          );
+          const strong = nameMatches.filter(
+            (m) => m.confidence === 'HIGH' || m.confidence === 'MEDIUM',
+          );
+          if (strong.length > 0) {
+            this.logger.log(
+              `[NameMatch] Vision rawDescription matched SIMPLE product(s): ${strong.map((m) => m.productCode).join(',')}`,
+            );
+            await this.sendSimpleProductInfo(page, psid, strong);
+            return;
+          }
+        }
       }
 
       // If Track A returned zero confidence AND Track B also found nothing → fallback

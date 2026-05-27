@@ -18,6 +18,7 @@ import { VisionOpsModule } from '../vision-ops/vision-ops.module';
 import { SpamCheckerModule } from '../spam-checker/spam-checker.module';
 import { EmbeddingModule } from '../embedding/embedding.module';
 import { MessageQueueModule } from '../message-queue/message-queue.module';
+import { ProductNameMatchModule } from '../product-name-match/product-name-match.module';
 import { WebhookController } from './webhook.controller';
 import { WebhookService } from './webhook.service';
 import { SmartBotService } from '../bot/smart-bot.service';
@@ -50,6 +51,7 @@ import {
     SpamCheckerModule,
     MessageQueueModule,
     EmbeddingModule,
+    ProductNameMatchModule,
   ],
   controllers: [WebhookController],
   providers: [

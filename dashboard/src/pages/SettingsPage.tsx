@@ -191,8 +191,8 @@ function extractYouTubeId(url: string): string | null {
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
-export function SettingsPage({ th, pageId, tab, onToast }: {
-  th: Theme; pageId: number; tab: string; onToast: (m: string, t?: any) => void;
+export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect }: {
+  th: Theme; pageId: number; tab: string; onToast: (m: string, t?: any) => void; autoOpenReconnect?: boolean;
 }) {
   const { copy } = useLanguage();
   const { request } = useApi();
@@ -255,6 +255,18 @@ export function SettingsPage({ th, pageId, tab, onToast }: {
   }, [pageId]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    if (autoOpenReconnect && !loading) {
+      setReconnectTab('request');
+      setReconnectToken('');
+      setReconnectReqSubmitted(false);
+      setReconnectReqPageUrl('');
+      setReconnectReqFbProfile('');
+      setReconnectReqNote('');
+      setShowReconnectModal(true);
+    }
+  }, [autoOpenReconnect, loading]);
 
   const save = async (body: any) => {
     setSaving(true);

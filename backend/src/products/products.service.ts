@@ -265,7 +265,7 @@ export class ProductsService {
 
   async create(data: {
     pageId: number;
-    code: string;
+    code?: string;
     price: number;
     costPrice?: number;
     stockQty?: number;
@@ -288,9 +288,16 @@ export class ProductsService {
     imageKeywords?: string | null;
     aiDescription?: string | null;
     visionSearchable?: boolean;
+    // V22: Simple products
+    productType?: string;
+    unit?: string | null;
+    orderEnabled?: boolean;
   }) {
     const eid = await this.effectiveId(data.pageId);
-    const code = normalizeProductCode(data.code);
+    const isSimple = data.productType === 'SIMPLE';
+    const code = isSimple
+      ? `SP-${Date.now().toString().slice(-8)}`
+      : normalizeProductCode(data.code ?? '');
     const existing = await this.prisma.product.findUnique({
       where: { pageId_code: { pageId: eid, code } },
     });
@@ -321,6 +328,9 @@ export class ProductsService {
         imageKeywords: data.imageKeywords ?? null,
         aiDescription: data.aiDescription ?? null,
         visionSearchable: data.visionSearchable ?? false,
+        productType: data.productType ?? 'CODED',
+        unit: data.unit ?? null,
+        orderEnabled: data.orderEnabled !== false,
       },
     });
     await this.setSidecarMetaForProduct(eid, created.code, {
@@ -351,7 +361,7 @@ export class ProductsService {
 
   async findByCode(pageId: number, codeRaw: string) {
     const eid = await this.effectiveId(pageId);
-    const code = normalizeProductCode(codeRaw);
+    const code = codeRaw.startsWith('SP-') ? codeRaw : normalizeProductCode(codeRaw);
     const p = await this.prisma.product.findUnique({
       where: { pageId_code: { pageId: eid, code } },
     });
@@ -386,9 +396,12 @@ export class ProductsService {
       imageKeywords?: string | null;
       aiDescription?: string | null;
       visionSearchable?: boolean;
+      // V22: Simple products
+      unit?: string | null;
+      orderEnabled?: boolean;
     },
   ) {
-    const code = normalizeProductCode(codeRaw);
+    const code = codeRaw.startsWith('SP-') ? codeRaw : normalizeProductCode(codeRaw);
     const payload: any = {};
     if (typeof data.stockQty === 'number') {
       if (data.stockQty < 0)
@@ -426,6 +439,9 @@ export class ProductsService {
       payload.aiDescription = data.aiDescription || null;
     if (typeof data.visionSearchable === 'boolean')
       payload.visionSearchable = data.visionSearchable;
+    if (data.unit !== undefined) payload.unit = data.unit || null;
+    if (typeof data.orderEnabled === 'boolean')
+      payload.orderEnabled = data.orderEnabled;
     const eid = await this.effectiveId(pageId);
     const sidecarOnlyUpdate =
       data.referenceImagesJson !== undefined ||
@@ -481,7 +497,7 @@ export class ProductsService {
 
   async deleteOne(pageId: number, codeRaw: string) {
     const eid = await this.effectiveId(pageId);
-    const code = normalizeProductCode(codeRaw);
+    const code = codeRaw.startsWith('SP-') ? codeRaw : normalizeProductCode(codeRaw);
     await this.prisma.product.delete({
       where: { pageId_code: { pageId: eid, code } },
     });
@@ -500,7 +516,7 @@ export class ProductsService {
     const eid = await this.effectiveId(pageId);
     for (const item of items) {
       try {
-        const code = normalizeProductCode(item.productCode);
+        const code = item.productCode.startsWith('SP-') ? item.productCode : normalizeProductCode(item.productCode);
         const product = await this.prisma.product.findUnique({
           where: { pageId_code: { pageId: eid, code } },
         });
