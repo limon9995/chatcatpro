@@ -301,12 +301,14 @@ export class FacebookService {
         createdAt: true,
         fbAppId: true,
         fbAppSecret: true,
+        pageToken: true,
       },
       orderBy: { id: 'desc' },
     });
-    return pages.map(({ fbAppSecret, ...p }) => ({
+    return pages.map(({ fbAppSecret, pageToken, ...p }) => ({
       ...p,
       hasCustomApp: !!fbAppSecret,
+      isConnected: !!pageToken,
     }));
   }
 

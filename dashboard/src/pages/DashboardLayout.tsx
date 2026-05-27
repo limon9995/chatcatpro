@@ -110,7 +110,7 @@ const GROUPS = [
 const NAV_KEYS = new Set<NavKey>(NAV.map((item) => item.key));
 const LAST_NAV_KEY = 'dfbot_last_nav';
 
-interface PageItem { id: number; pageId: string; pageName: string; masterPageId?: number | null; }
+interface PageItem { id: number; pageId: string; pageName: string; masterPageId?: number | null; isConnected?: boolean; }
 interface ToastItem { msg: string; type?: 'error' | 'success' | 'info'; id: number; }
 interface BillingAdminContact {
   label?: string;
@@ -175,6 +175,7 @@ export function DashboardLayout({
       ? (savedNav as NavKey)
       : 'OVERVIEW';
   });
+  const [pendingSwitchPage, setPendingSwitchPage] = useState<PageItem | null>(null);
   const [ordersPreset, setOrdersPreset] = useState<OrdersPagePreset | null>(null);
   const [printPreset, setPrintPreset] = useState<PrintPagePreset | null>(null);
   const [followUpPreset, setFollowUpPreset] = useState<FollowUpPagePreset | null>(null);
@@ -569,6 +570,39 @@ export function DashboardLayout({
 
   return (
     <div style={th.app}>
+      {/* ── Disconnected Page Switch Modal ──────────────────────────────── */}
+      {pendingSwitchPage && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div style={{ background: th.panel, border: `1px solid ${th.border}`, borderRadius: 16, padding: 28, maxWidth: 380, width: '100%', boxShadow: '0 20px 60px rgba(0,0,0,0.4)' }}>
+            <div style={{ fontSize: 32, textAlign: 'center', marginBottom: 8 }}>⚠️</div>
+            <h3 style={{ margin: '0 0 8px', color: th.text, fontSize: 16, textAlign: 'center' }}>
+              {copy('Page সংযুক্ত নেই', 'Page Not Connected')}
+            </h3>
+            <p style={{ margin: '0 0 20px', color: th.muted, fontSize: 13, textAlign: 'center', lineHeight: 1.6 }}>
+              <strong style={{ color: th.text }}>{pendingSwitchPage.pageName}</strong>{' '}
+              {copy('এখনো connect করা হয়নি। এই page-এ switch করতে হলে আগে connect করুন।', 'is not connected yet. Please connect it first to switch to this page.')}
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <button
+                onClick={() => {
+                  setPendingSwitchPage(null);
+                  onManagePages?.();
+                }}
+                style={{ padding: '10px 16px', borderRadius: 10, border: 'none', background: th.accent, color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}
+              >
+                🔗 {copy('Connect করুন', 'Connect Page')}
+              </button>
+              <button
+                onClick={() => setPendingSwitchPage(null)}
+                style={{ padding: '10px 16px', borderRadius: 10, border: `1px solid ${th.border}`, background: 'transparent', color: th.muted, fontSize: 13, cursor: 'pointer' }}
+              >
+                {copy('বর্তমান page-এ থাকুন', 'Stay on current page')} — {activePage?.pageName}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Topbar ──────────────────────────────────────────────────────── */}
       <header style={th.topbar}>
         <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 8 : 14 }}>
@@ -594,6 +628,10 @@ export function DashboardLayout({
               onChange={(e) => {
                 const next = myPages.find((page) => page.id === Number(e.target.value));
                 if (!next) return;
+                if (!next.isConnected) {
+                  setPendingSwitchPage(next);
+                  return;
+                }
                 setActivePage(next);
                 onSelectPage?.(next);
                 setSearchOpen(false);
@@ -614,7 +652,7 @@ export function DashboardLayout({
             >
               {myPages.map((page) => (
                 <option key={page.id} value={page.id}>
-                  {page.masterPageId ? `↳ ${page.pageName || page.pageId}` : (page.pageName || page.pageId)}
+                  {!page.isConnected ? '⚠ ' : ''}{page.masterPageId ? `↳ ${page.pageName || page.pageId}` : (page.pageName || page.pageId)}
                 </option>
               ))}
             </select>
@@ -726,7 +764,10 @@ export function DashboardLayout({
               return (
                 <button
                   key={p.id}
-                  onClick={() => { setActivePage(p); onSelectPage?.(p); setSidebarOpen(false); }}
+                  onClick={() => {
+                    if (!p.isConnected) { setPendingSwitchPage(p); setSidebarOpen(false); return; }
+                    setActivePage(p); onSelectPage?.(p); setSidebarOpen(false);
+                  }}
                   style={{
                     width: '100%', display: 'flex', alignItems: 'center', gap: 8,
                     background: isActive ? 'rgba(99,102,241,0.12)' : 'transparent',
@@ -743,6 +784,7 @@ export function DashboardLayout({
                   <span style={{ flex: 1, fontSize: 12.5, fontWeight: isActive ? 700 : 500, color: isActive ? '#6366f1' : th.text, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {p.masterPageId ? `↳ ${p.pageName || p.pageId}` : (p.pageName || p.pageId)}
                   </span>
+                  {!p.isConnected && <span title={copy('Connect করা হয়নি', 'Not connected')} style={{ fontSize: 10, color: '#f59e0b', background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: 4, padding: '1px 5px', flexShrink: 0 }}>!</span>}
                   {isActive && <span style={{ width: 5, height: 14, borderRadius: 3, background: '#6366f1', flexShrink: 0 }} />}
                 </button>
               );

@@ -18,7 +18,7 @@ const AdminPanel = safeLazy(async () => {
   return { default: mod.AdminPanel };
 });
 
-type MyPage = { id: number; pageId: string; pageName: string; isActive: boolean; automationOn: boolean; masterPageId?: number | null };
+type MyPage = { id: number; pageId: string; pageName: string; isActive: boolean; automationOn: boolean; masterPageId?: number | null; isConnected?: boolean; };
 type Screen = 'landing' | 'login' | 'signup' | 'forgot-password' | 'change-password' | 'connect-page' | 'dashboard' | 'admin';
 
 function normalizePathname(pathname: string) {
