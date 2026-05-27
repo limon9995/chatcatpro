@@ -1358,7 +1358,7 @@ export function ProductsPage({ th, pageId, onToast }: {
           {(() => {
             const simpleProducts = products.filter(p => p.productType === 'SIMPLE');
             if (!simpleProducts.length) return (
-              <EmptyState icon="🥭" title="কোনো Simple Product নেই" subtitle="Mango, Honey, Egg — এই ধরনের product এখানে add করুন" />
+              <EmptyState icon="🥭" title="কোনো Simple Product নেই" sub="Mango, Honey, Egg — এই ধরনের product এখানে add করুন" />
             );
             return (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
