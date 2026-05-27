@@ -113,9 +113,10 @@ export class AutoPostService {
     return data.choices?.[0]?.message?.content?.trim() || '';
   }
 
-  // ── Image generation via fal.ai (multi-key fallback) ────────────────────────
+  // ── Image generation — priority: fal.ai → Gemini Imagen 3 → Ideogram ─────────
 
   async generateImage(dto: GenerateImageDto): Promise<{ imageUrl: string }> {
+    const geminiKey  = process.env.GEMINI_API_KEY;
     const ideogramKey = process.env.IDEOGRAM_API_KEY;
 
     // Collect all FAL keys: FAL_API_KEY, FAL_API_KEY_2, FAL_API_KEY_3 ...
@@ -125,19 +126,20 @@ export class AutoPostService {
       process.env.FAL_API_KEY_3,
     ].filter(Boolean) as string[];
 
-    if (falKeys.length === 0 && !ideogramKey) {
+    if (falKeys.length === 0 && !geminiKey && !ideogramKey) {
       throw new BadRequestException(
-        'FAL_API_KEY বা IDEOGRAM_API_KEY .env ফাইলে set করুন',
+        'FAL_API_KEY বা GEMINI_API_KEY .env ফাইলে set করুন',
       );
     }
 
-    let remoteUrl: string | null = null;
+    let result: { type: 'url'; value: string } | { type: 'base64'; value: string; mime: string } | null = null;
     let lastError = '';
 
-    // Try each fal.ai key in order — move to next on any error
+    // 1️⃣ Try each fal.ai key
     for (const key of falKeys) {
       try {
-        remoteUrl = await this.callFalAi(key, dto.prompt);
+        const url = await this.callFalAi(key, dto.prompt);
+        result = { type: 'url', value: url };
         break;
       } catch (e: any) {
         lastError = e.message;
@@ -145,20 +147,35 @@ export class AutoPostService {
       }
     }
 
-    // Fallback to Ideogram if all fal keys failed
-    if (!remoteUrl && ideogramKey) {
+    // 2️⃣ Fallback: Gemini Imagen 3 (same key as caption)
+    if (!result && geminiKey) {
       try {
-        remoteUrl = await this.callIdeogram(ideogramKey, dto.prompt);
+        const b64 = await this.callGeminiImagen(geminiKey, dto.prompt);
+        result = { type: 'base64', value: b64, mime: 'image/png' };
+      } catch (e: any) {
+        lastError = e.message;
+        this.logger.warn(`Gemini Imagen 3 failed: ${e.message}`);
+      }
+    }
+
+    // 3️⃣ Fallback: Ideogram
+    if (!result && ideogramKey) {
+      try {
+        const url = await this.callIdeogram(ideogramKey, dto.prompt);
+        result = { type: 'url', value: url };
       } catch (e: any) {
         lastError = e.message;
       }
     }
 
-    if (!remoteUrl) {
+    if (!result) {
       throw new BadRequestException(`Image generation failed: ${lastError}`);
     }
 
-    const savedUrl = await this.downloadAndSave(remoteUrl, dto.pageId);
+    const savedUrl = result.type === 'url'
+      ? await this.downloadAndSave(result.value, dto.pageId)
+      : await this.saveBase64(result.value, result.mime, dto.pageId);
+
     return { imageUrl: savedUrl };
   }
 
@@ -182,6 +199,32 @@ export class AutoPostService {
     return data.images?.[0]?.url || '';
   }
 
+  private async callGeminiImagen(apiKey: string, prompt: string): Promise<string> {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:predict?key=${apiKey}`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        instances: [{
+          prompt: `E-commerce promotional poster for Bangladesh online shop, ${prompt}, high quality, vibrant colors, clean professional design`,
+        }],
+        parameters: {
+          sampleCount: 1,
+          aspectRatio: '1:1',
+          safetySetting: 'block_only_high',
+        },
+      }),
+    });
+    if (!res.ok) {
+      const err: any = await res.json().catch(() => ({}));
+      throw new Error(err?.error?.message || `Imagen 3 error: ${res.status}`);
+    }
+    const data: any = await res.json();
+    const b64 = data.predictions?.[0]?.bytesBase64Encoded;
+    if (!b64) throw new Error('Imagen 3: no image in response');
+    return b64;
+  }
+
   private async callIdeogram(apiKey: string, prompt: string): Promise<string> {
     const res = await fetch('https://api.ideogram.ai/generate', {
       method: 'POST',
@@ -201,6 +244,16 @@ export class AutoPostService {
     if (!res.ok) throw new Error(`Ideogram error: ${res.status}`);
     const data: any = await res.json();
     return data.data?.[0]?.url || '';
+  }
+
+  private async saveBase64(b64: string, mime: string, pageId: number): Promise<string> {
+    const dir = path.join(process.cwd(), 'storage', 'auto-posts');
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    const ext = mime.includes('png') ? 'png' : 'jpg';
+    const filename = `ap_${pageId}_${Date.now()}.${ext}`;
+    const filepath = path.join(dir, filename);
+    fs.writeFileSync(filepath, Buffer.from(b64, 'base64'));
+    return `/storage/auto-posts/${filename}`;
   }
 
   private async downloadAndSave(url: string, pageId: number): Promise<string> {
