@@ -1214,6 +1214,8 @@ Return ONLY valid JSON (no markdown):
       waPhoneNumberId: page.waPhoneNumberId ?? '',
       waVerifyToken: page.waVerifyToken ?? '',
       waTokenSet: Boolean(page.waToken), // never return the raw token
+      // AI Knowledge
+      knowledgeText: page.knowledgeText ?? '',
       // Pricing (from bot-knowledge config)
       pricingPolicy: cfg?.pricingPolicy || {},
       // Call — all fields explicit

@@ -112,6 +112,8 @@ export class PageService {
         Math.max(0, Number(body.imageMediumConfidence) || 0.45),
       );
 
+    if (typeof body.knowledgeText === 'string')
+      data.knowledgeText = body.knowledgeText.slice(0, 3000);
     if (typeof body.businessName === 'string')
       data.businessName = body.businessName.trim();
     if (typeof body.businessPhone === 'string')
