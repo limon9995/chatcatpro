@@ -30,6 +30,19 @@ export class AutoPostService {
     const apiKey = process.env.GEMINI_API_KEY;
     const openaiKey = process.env.OPENAI_API_KEY;
 
+    // Resolve shop link: websiteUrl > catalog link > inbox CTA
+    let shopLink = '';
+    if (dto.pageId) {
+      const page = await this.prisma.page.findUnique({
+        where: { id: dto.pageId },
+        select: { websiteUrl: true, catalogSlug: true },
+      });
+      if (page) {
+        const catalogBase = process.env.CATALOG_BASE_URL || 'https://chatcat.pro';
+        shopLink = page.websiteUrl?.trim() || (page.catalogSlug ? `${catalogBase}/catalog/${page.catalogSlug}` : '');
+      }
+    }
+
     const isBn = (dto.language || 'bn') === 'bn';
     const postTypeLabel =
       dto.postType === 'sale'
@@ -38,9 +51,17 @@ export class AutoPostService {
           ? isBn ? 'ঘোষণা পোস্ট' : 'Announcement Post'
           : isBn ? 'প্রোডাক্ট পোস্ট' : 'Product Post';
 
+    const ctaInstruction = isBn
+      ? shopLink
+        ? `শেষে CTA দাও যেমন "আমাদের ওয়েবসাইট ভিজিট করুন 🌐"। caption-এ কোনো লিংক বা URL লিখবে না — লিংক আলাদাভাবে comment-এ দেওয়া হবে।`
+        : `শেষে call-to-action দাও (যেমন: "অর্ডার করতে ইনবক্স করুন 📩")। caption-এ কোনো লিংক বা placeholder লিখবে না।`
+      : shopLink
+        ? `End with a CTA like "Visit our website 🌐". Do NOT include any link or URL in the caption — the link will be added separately as a comment.`
+        : `End with a call-to-action like "Inbox us to order 📩". Do NOT write any link or placeholder in the caption.`;
+
     const systemPrompt = isBn
-      ? `তুমি একজন বাংলাদেশি ই-কমার্স মার্কেটার। Facebook পেজের জন্য আকর্ষণীয় বাংলা ক্যাপশন লেখো। ইমোজি ব্যবহার করো। ৩-৫ লাইনের মধ্যে রাখো। শেষে call-to-action দাও।`
-      : `You are a Bangladeshi e-commerce marketer. Write engaging English captions for Facebook pages. Use emojis. Keep it 3-5 lines. End with a call-to-action.`;
+      ? `তুমি একজন বাংলাদেশি ই-কমার্স মার্কেটার। Facebook পেজের জন্য আকর্ষণীয় বাংলা ক্যাপশন লেখো। ইমোজি ব্যবহার করো। ৩-৫ লাইনের মধ্যে রাখো। ${ctaInstruction}`
+      : `You are a Bangladeshi e-commerce marketer. Write engaging English captions for Facebook pages. Use emojis. Keep it 3-5 lines. ${ctaInstruction}`;
 
     const userPrompt = isBn
       ? `একটি ${postTypeLabel} লেখো।\nপ্রোডাক্ট: ${dto.productName}\n${dto.price ? `মূল্য: ${dto.price}` : ''}${dto.offer ? `\nঅফার: ${dto.offer}` : ''}${dto.description ? `\nবিবরণ: ${dto.description}` : ''}`
@@ -200,7 +221,7 @@ export class AutoPostService {
   }
 
   private async callGeminiImagen(apiKey: string, prompt: string): Promise<string> {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:predict?key=${apiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1/models/imagen-3.0-generate-001:predict?key=${apiKey}`;
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -279,16 +300,36 @@ export class AutoPostService {
 
   // ── Facebook publish ──────────────────────────────────────────────────────────
 
+  private async postLinkComment(fbPostId: string, link: string, token: string): Promise<void> {
+    try {
+      await fetch(`${FB_GRAPH}/${fbPostId}/comments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: `🔗 ${link}`, access_token: token }),
+      });
+    } catch (e: any) {
+      this.logger.warn(`Link comment failed: ${e.message}`);
+    }
+  }
+
   async publishToFacebook(
     pageId: number,
     caption: string,
     imageUrl?: string,
   ): Promise<string> {
-    const page = await this.prisma.page.findUnique({ where: { id: pageId } });
+    const page = await this.prisma.page.findUnique({
+      where: { id: pageId },
+      select: {
+        id: true, pageId: true, pageToken: true,
+        websiteUrl: true, catalogSlug: true,
+      },
+    });
     if (!page) throw new NotFoundException('Page not found');
 
     const token = this.encryption.decrypt(page.pageToken);
     const fbPageId = page.pageId;
+    const catalogBase = process.env.CATALOG_BASE_URL || 'https://chatcat.pro';
+    const shopLink = page.websiteUrl?.trim() || (page.catalogSlug ? `${catalogBase}/catalog/${page.catalogSlug}` : '');
 
     let fbPostId: string;
 
@@ -328,6 +369,11 @@ export class AutoPostService {
         );
       }
       fbPostId = data.id;
+    }
+
+    // Post shop link as first comment if available
+    if (shopLink && fbPostId) {
+      await this.postLinkComment(fbPostId, shopLink, token);
     }
 
     return fbPostId;
