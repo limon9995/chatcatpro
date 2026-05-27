@@ -5,6 +5,7 @@ import { BillingService } from '../billing/billing.service';
 import { WalletService } from '../wallet/wallet.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AdminService } from '../admin/admin.service';
+import { AutoPostService } from '../auto-post/auto-post.service';
 
 const BASE_FEE_BDT = 500;
 
@@ -18,7 +19,20 @@ export class SchedulerService {
     private readonly wallet: WalletService,
     private readonly prisma: PrismaService,
     private readonly admin: AdminService,
+    private readonly autoPost: AutoPostService,
   ) {}
+
+  // Every 5 minutes — process scheduled auto posts
+  @Cron(CronExpression.EVERY_5_MINUTES)
+  async processScheduledAutoPosts() {
+    try {
+      const count = await this.autoPost.processScheduledPosts();
+      if (count > 0)
+        this.logger.log(`[Scheduler] AutoPost: ${count} posts published`);
+    } catch (e: any) {
+      this.logger.error(`[Scheduler] AutoPost error: ${e.message}`);
+    }
+  }
 
   // Every 5 minutes — process follow-ups
   @Cron(CronExpression.EVERY_5_MINUTES)

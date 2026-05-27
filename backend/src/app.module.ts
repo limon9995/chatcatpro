@@ -39,6 +39,7 @@ import { ChatModule } from './chat/chat.module';
 import { AiGenerateModule } from './ai-generate/ai-generate.module';
 import { WhatsappModule } from './whatsapp/whatsapp.module';
 import { EmbeddingModule } from './embedding/embedding.module';
+import { AutoPostModule } from './auto-post/auto-post.module';
 
 @Module({
   imports: [
@@ -99,6 +100,7 @@ import { EmbeddingModule } from './embedding/embedding.module';
     WhisperModule,
     MessageQueueModule,
     EmbeddingModule,
+    AutoPostModule,
   ],
   controllers: [AppController],
   providers: [

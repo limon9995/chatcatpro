@@ -228,6 +228,7 @@ model Page {
 
   // Live sessions (new dual photo system)
   liveSessions LiveSession[]
+  autoPosts    AutoPost[]
 
   costPerMemoPrintBdt  Float @default(0.10)
 
@@ -775,6 +776,33 @@ model PageRequest {
 
   @@index([userId])
   @@index([status])
+}
+
+// ── AUTO POST ─────────────────────────────────────────────────────────────────
+
+model AutoPost {
+  id          Int       @id @default(autoincrement())
+  pageId      Int
+  page        Page      @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  caption     String
+  imageUrl    String?
+  imagePrompt String?
+  postType    String    @default("product") // product | sale | announcement | custom
+  language    String    @default("bn")      // bn | en
+
+  // draft | scheduled | published | failed
+  status      String    @default("draft")
+  fbPostId    String?
+  scheduledAt DateTime?
+  publishedAt DateTime?
+  errorMsg    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([pageId])
+  @@index([status, scheduledAt])
 }
 
 model LiveSession {
