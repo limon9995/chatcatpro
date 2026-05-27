@@ -114,6 +114,8 @@ export class ClientDashboardService {
       memoTemplateModeOn: Boolean(page.memoTemplateModeOn),
       autoMemoDesignModeOn: Boolean(page.autoMemoDesignModeOn),
       smartBotOn: Boolean(page.smartBotOn),
+      businessBotOn: Boolean(page.businessBotOn),
+      businessInfo: page.businessInfo ?? '',
       commentReplyOn: Boolean(page.commentReplyOn),
       modeAccess: this.getModeAccess(page),
     };
@@ -132,6 +134,7 @@ export class ClientDashboardService {
       'memoTemplateModeOn',
       'autoMemoDesignModeOn',
       'smartBotOn',
+      'businessBotOn',
       'commentReplyOn',
     ];
     const patch: any = {};
@@ -146,6 +149,8 @@ export class ClientDashboardService {
       }
       patch[k] = nextVal;
     }
+    if (typeof body.businessInfo === 'string')
+      patch.businessInfo = body.businessInfo.trim() || null;
     if (Object.keys(patch).length > 0)
       await this.prisma.page.update({ where: { id: pageId }, data: patch });
     return this.getModes(pageId);

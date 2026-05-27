@@ -97,6 +97,10 @@ export class PageService {
       data.imageFallbackAiOn = body.imageFallbackAiOn;
     if (typeof body.textFallbackAiOn === 'boolean')
       data.textFallbackAiOn = body.textFallbackAiOn;
+    if (typeof body.businessBotOn === 'boolean')
+      data.businessBotOn = body.businessBotOn;
+    if (typeof body.businessInfo === 'string')
+      data.businessInfo = body.businessInfo.trim() || null;
     if (body.imageHighConfidence !== undefined)
       data.imageHighConfidence = Math.min(
         1,

@@ -19,6 +19,8 @@ interface Settings {
   infoModeOn: boolean; orderModeOn: boolean; printModeOn: boolean;
   callConfirmModeOn: boolean; memoSaveModeOn: boolean; memoTemplateModeOn: boolean;
   smartBotOn: boolean;
+  businessBotOn: boolean;
+  businessInfo: string;
   commentReplyOn: boolean;
   // V18: Image recognition
   imageRecognitionOn: boolean; imageHighConfidence: number;
@@ -58,6 +60,8 @@ const S0: Settings = {
   infoModeOn: true, orderModeOn: true, printModeOn: false,
   callConfirmModeOn: false, memoSaveModeOn: false, memoTemplateModeOn: false,
   smartBotOn: false,
+  businessBotOn: false,
+  businessInfo: '',
   commentReplyOn: false,
   imageRecognitionOn: false, imageHighConfidence: 0.75, imageMediumConfidence: 0.45, imageFallbackAiOn: false, textFallbackAiOn: false,
   pricingPolicy: {
@@ -1000,6 +1004,31 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect }: {
         <p style={{ fontSize: 13, color: th.muted, margin: '3px 0 0' }}>{copy('Bot কী কী করতে পারবে তা এখানে চালু/বন্ধ করো', 'Control which features the bot can use')}</p>
       </div>
       <div style={{ ...th.card }}>
+        {/* Business Info Bot */}
+        <Section title="🏢 Business Info Bot" desc="Product বিক্রি না করে শুধু business সম্পর্কে তথ্য দিতে চাইলে এটি চালু করুন। Customer যেকোনো প্রশ্ন করলে AI আপনার দেওয়া business তথ্য থেকে উত্তর দেবে।">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <Toggle th={th}
+              label="Business Info Bot চালু করুন"
+              sub="চালু থাকলে নিচের তথ্য দিয়ে সব message-এর AI reply দেবে। SmartBot ও Order mode-এর দরকার নেই।"
+              checked={s.businessBotOn}
+              onChange={v => setS(p => ({ ...p, businessBotOn: v }))} />
+            {s.businessBotOn && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <Label text="Business সম্পর্কে বিস্তারিত তথ্য" hint="আপনার business-এর নাম, কী সেবা দেন, যোগাযোগ, ঠিকানা, সময়সূচি, FAQ — সব লিখুন। এই তথ্য থেকে AI customer-দের reply করবে।" />
+                <textarea
+                  style={{ ...th.input, minHeight: 180, resize: 'vertical', fontFamily: 'inherit', fontSize: 13, lineHeight: 1.7 }}
+                  placeholder={`উদাহরণ:\nআমাদের business-এর নাম: Limon Tech Diary\nআমরা যা করি: ওয়েব ডিজাইন, গ্রাফিক্স ডিজাইন, ডিজিটাল মার্কেটিং সেবা প্রদান করি\nযোগাযোগ: 01XXXXXXXXX\nইমেইল: info@example.com\nঅফিস সময়: শনি-বৃহস্পতি, সকাল ১০টা - রাত ৮টা\nঠিকানা: ঢাকা, বাংলাদেশ\n\nকাজের ধরন:\n- ওয়েবসাইট তৈরি: ৳৫,০০০ থেকে শুরু\n- লোগো ডিজাইন: ৳১,৫০০\n- ফেসবুক পেজ ম্যানেজমেন্ট: মাসে ৳৩,০০০`}
+                  value={s.businessInfo}
+                  onChange={e => setS(p => ({ ...p, businessInfo: e.target.value }))}
+                />
+                <p style={{ fontSize: 11.5, color: th.muted, margin: 0 }}>
+                  💡 যত বেশি তথ্য দেবেন, AI তত ভালো উত্তর দিতে পারবে। GEMINI_API_KEY বা OPENAI_API_KEY server-এ থাকলেই কাজ করবে।
+                </p>
+              </div>
+            )}
+          </div>
+        </Section>
+
         {/* SmartBot */}
         <Section title="🧠 SmartBot Mode" desc="ChatGPT-style AI — customer যেকোনো ভাষায় কথা বলবে, bot বুঝে order নেবে। Knowledge box-এর তথ্য দিয়ে reply দেবে।">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -1096,6 +1125,8 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect }: {
           imageMediumConfidence: s.imageMediumConfidence,
           imageFallbackAiOn: s.imageFallbackAiOn,
           textFallbackAiOn: s.textFallbackAiOn,
+          businessBotOn: s.businessBotOn,
+          businessInfo: s.businessInfo,
         })} saving={saving}/>
       </div>
     </div>

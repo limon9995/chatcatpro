@@ -586,6 +586,24 @@ Rules:
 
     const aiAllowed = await this.isAiAllowedForPage(page.ownerId);
 
+    // ── BUSINESS INFO BOT — replies using businessInfo as knowledge base ──
+    if (page.businessBotOn && page.businessInfo && aiAllowed) {
+      const canAi = await this.walletService.canProcessAi(pageId);
+      if (canAi) {
+        const reply = await this.generateBusinessBotReply(
+          page.businessInfo as string,
+          text,
+          pageId,
+          psid,
+        );
+        if (reply) {
+          await this.safeSend(token, psid, reply);
+          void this.walletService.deductUsage(pageId, 'TEXT');
+          return;
+        }
+      }
+    }
+
     // ── SMART BOT (V19) — single AI call replaces keyword pipeline ────────
     if (page.smartBotOn && aiAllowed && this.smartBot.isAvailable()) {
       const reply = await this.smartBot.handle(
@@ -3065,6 +3083,95 @@ If you cannot match any product with confidence > 0.5, return:
   }
 
   /** Returns false for Basic plan users — AI features are disabled on Basic */
+  private async generateBusinessBotReply(
+    businessInfo: string,
+    customerText: string,
+    pageId: number,
+    psid: string,
+  ): Promise<string | null> {
+    const geminiKey = process.env.GEMINI_API_KEY;
+    const openaiKey = process.env.OPENAI_API_KEY;
+
+    const history = await this.ctx.getHistory(pageId, psid).catch(() => []);
+    const historyLines = (history as any[])
+      .slice(-6)
+      .map((h: any) => `Customer: ${h.customerText}\nBot: ${h.botReply}`)
+      .join('\n');
+
+    const systemPrompt = `তুমি একটি business-এর customer service assistant। নিচে এই business সম্পর্কে সব তথ্য দেওয়া আছে। এই তথ্যের ভিত্তিতে customer-এর প্রশ্নের উত্তর দাও।
+
+Business Information:
+${businessInfo}
+
+নিয়মাবলী:
+- যে ভাষায় customer লিখবে সেই ভাষায় উত্তর দাও (Bengali/Banglish/English)
+- সংক্ষিপ্ত ও helpful উত্তর দাও (2-3 বাক্য)
+- Business info-এ না থাকলে বলো "আরও জানতে আমাদের সাথে যোগাযোগ করুন"
+- কোনো link বা placeholder লিখবে না`;
+
+    const userMsg = historyLines
+      ? `Previous conversation:\n${historyLines}\n\nCustomer: ${customerText}`
+      : customerText;
+
+    // Try Gemini first
+    if (geminiKey) {
+      try {
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              system_instruction: { parts: [{ text: systemPrompt }] },
+              contents: [{ role: 'user', parts: [{ text: userMsg }] }],
+              generationConfig: { maxOutputTokens: 300, temperature: 0.5 },
+            }),
+            signal: AbortSignal.timeout(10_000),
+          },
+        );
+        if (res.ok) {
+          const data = await res.json();
+          const text = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+          if (text) return text;
+        }
+      } catch (e: any) {
+        this.logger.warn(`[BusinessBot] Gemini failed: ${e?.message}`);
+      }
+    }
+
+    // Fallback: OpenAI
+    if (openaiKey) {
+      try {
+        const res = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${openaiKey}`,
+          },
+          body: JSON.stringify({
+            model: 'gpt-4o-mini',
+            max_tokens: 300,
+            temperature: 0.5,
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: userMsg },
+            ],
+          }),
+          signal: AbortSignal.timeout(10_000),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const text = (data?.choices?.[0]?.message?.content ?? '').trim();
+          if (text) return text;
+        }
+      } catch (e: any) {
+        this.logger.warn(`[BusinessBot] OpenAI failed: ${e?.message}`);
+      }
+    }
+
+    return null;
+  }
+
   private async isAiAllowedForPage(ownerId: string | null): Promise<boolean> {
     if (!ownerId) return true; // no owner = allow (shouldn't happen in prod)
     try {
