@@ -113,27 +113,51 @@ export class AutoPostService {
     return data.choices?.[0]?.message?.content?.trim() || '';
   }
 
-  // ── Image generation via fal.ai ───────────────────────────────────────────────
+  // ── Image generation via fal.ai (multi-key fallback) ────────────────────────
 
   async generateImage(dto: GenerateImageDto): Promise<{ imageUrl: string }> {
-    const falKey = process.env.FAL_API_KEY;
     const ideogramKey = process.env.IDEOGRAM_API_KEY;
 
-    if (!falKey && !ideogramKey) {
+    // Collect all FAL keys: FAL_API_KEY, FAL_API_KEY_2, FAL_API_KEY_3 ...
+    const falKeys = [
+      process.env.FAL_API_KEY,
+      process.env.FAL_API_KEY_2,
+      process.env.FAL_API_KEY_3,
+    ].filter(Boolean) as string[];
+
+    if (falKeys.length === 0 && !ideogramKey) {
       throw new BadRequestException(
         'FAL_API_KEY বা IDEOGRAM_API_KEY .env ফাইলে set করুন',
       );
     }
 
-    let remoteUrl: string;
+    let remoteUrl: string | null = null;
+    let lastError = '';
 
-    if (falKey) {
-      remoteUrl = await this.callFalAi(falKey, dto.prompt);
-    } else {
-      remoteUrl = await this.callIdeogram(ideogramKey!, dto.prompt);
+    // Try each fal.ai key in order — move to next on any error
+    for (const key of falKeys) {
+      try {
+        remoteUrl = await this.callFalAi(key, dto.prompt);
+        break;
+      } catch (e: any) {
+        lastError = e.message;
+        this.logger.warn(`fal.ai key failed (trying next): ${e.message}`);
+      }
     }
 
-    // Save image to local storage
+    // Fallback to Ideogram if all fal keys failed
+    if (!remoteUrl && ideogramKey) {
+      try {
+        remoteUrl = await this.callIdeogram(ideogramKey, dto.prompt);
+      } catch (e: any) {
+        lastError = e.message;
+      }
+    }
+
+    if (!remoteUrl) {
+      throw new BadRequestException(`Image generation failed: ${lastError}`);
+    }
+
     const savedUrl = await this.downloadAndSave(remoteUrl, dto.pageId);
     return { imageUrl: savedUrl };
   }
