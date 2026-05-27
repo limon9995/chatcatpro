@@ -132,7 +132,7 @@ export class FacebookService {
       const plan = (sub as any).plan;
       if (plan && plan.pagesLimit !== -1) {
         const pageCount = await this.prisma.page.count({
-          where: { ownerId: userId },
+          where: { ownerId: userId, NOT: { pageToken: '' } },
         });
         if (pageCount >= plan.pagesLimit) {
           throw new ForbiddenException(
