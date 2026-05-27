@@ -432,7 +432,7 @@ export function DashboardLayout({
       return (
         <PageErrorBoundary name="SettingsPage">
           <Suspense fallback={pageFallback}>
-            <SettingsPage th={th} pageId={pageId} tab="SETTINGS_BUSINESS" onToast={showToast} autoOpenReconnect={true} />
+            <SettingsPage th={th} pageId={pageId} tab="SETTINGS_BUSINESS" onToast={showToast} />
           </Suspense>
         </PageErrorBoundary>
       );
