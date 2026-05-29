@@ -9,6 +9,7 @@ import { ChangePasswordPage } from './pages/ChangePasswordPage';
 import { ConnectPageScreen } from './pages/ConnectPageScreen';
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { LandingPage } from './pages/LandingPage';
+import { OnboardingFlow } from './pages/OnboardingFlow';
 const DashboardLayout = safeLazy(async () => {
   const mod = await import('./pages/DashboardLayout');
   return { default: mod.DashboardLayout };
@@ -19,7 +20,7 @@ const AdminPanel = safeLazy(async () => {
 });
 
 type MyPage = { id: number; pageId: string; pageName: string; isActive: boolean; automationOn: boolean; masterPageId?: number | null; isConnected?: boolean; };
-type Screen = 'landing' | 'login' | 'signup' | 'forgot-password' | 'change-password' | 'connect-page' | 'dashboard' | 'admin';
+type Screen = 'landing' | 'login' | 'signup' | 'forgot-password' | 'change-password' | 'connect-page' | 'onboarding' | 'dashboard' | 'admin';
 
 function normalizePathname(pathname: string) {
   const cleaned = String(pathname || '/')
@@ -181,6 +182,10 @@ export function AppContent() {
       const nextPage = found || activePages[0];
       setActivePage(nextPage);
       localStorage.setItem('dfbot_active_page', String(nextPage.id));
+      if (localStorage.getItem('chatcat_onboarding_v1') !== 'done') {
+        setScreen('onboarding');
+        return;
+      }
       setScreen('dashboard');
     } catch {
       setMyPages([]);
@@ -301,6 +306,18 @@ export function AppContent() {
           await loadMyPages();
         }} />
       </Suspense>
+    );
+  }
+
+  if (screen === 'onboarding' && activePage && user) {
+    return (
+      <OnboardingFlow
+        dark={dark}
+        user={user}
+        activePage={activePage}
+        onComplete={() => { localStorage.setItem('chatcat_onboarding_v1', 'done'); setScreen('dashboard'); }}
+        onSkip={() => { localStorage.setItem('chatcat_onboarding_v1', 'done'); setScreen('dashboard'); }}
+      />
     );
   }
 
