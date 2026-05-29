@@ -352,7 +352,7 @@ body{font-family:"Courier New",Courier,monospace;background:#f5f5f5;padding:10px
     });
     const page = await browser.newPage();
     await page.emulateMediaType('print');
-    await page.setContent(html, { waitUntil: 'networkidle0' });
+    await page.setContent(html, { waitUntil: 'domcontentloaded' });
     const pdf = await page.pdf({
       format: 'A4',
       printBackground: true,
