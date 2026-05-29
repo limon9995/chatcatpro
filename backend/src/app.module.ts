@@ -38,6 +38,7 @@ import { MessageQueueModule } from './message-queue/message-queue.module';
 import { ChatModule } from './chat/chat.module';
 import { AiGenerateModule } from './ai-generate/ai-generate.module';
 import { WhatsappModule } from './whatsapp/whatsapp.module';
+import { InstagramModule } from './instagram/instagram.module';
 import { EmbeddingModule } from './embedding/embedding.module';
 import { AutoPostModule } from './auto-post/auto-post.module';
 import { SupportChatModule } from './support-chat/support-chat.module';
@@ -87,6 +88,7 @@ import { SupportChatModule } from './support-chat/support-chat.module';
     ChatModule,
     AiGenerateModule,
     WhatsappModule,
+    InstagramModule,
     ConversationContextModule,
     FacebookModule,
     AccountingModule,

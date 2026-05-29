@@ -9,6 +9,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { MessengerService } from '../messenger/messenger.service';
 import { EncryptionService } from '../common/encryption.service';
 import { BillingService } from '../billing/billing.service';
+import { WalletService } from '../wallet/wallet.service';
 
 /**
  * FIX 1: Queue-based broadcast architecture.
@@ -43,6 +44,7 @@ export class BroadcastService {
     private readonly messenger: MessengerService,
     private readonly encryption: EncryptionService,
     private readonly billing: BillingService,
+    private readonly wallet: WalletService,
   ) {}
 
   async create(
@@ -125,6 +127,26 @@ export class BroadcastService {
       broadcast.targetValue,
     );
 
+    // Wallet check: calculate total cost and verify sufficient balance
+    const costPerMsg = (page as any).costPerBroadcastMsgBdt ?? 0.05;
+    const totalCost = costPerMsg * psids.length;
+
+    if (psids.length > 0) {
+      const walletOk = await this.wallet.canProcessAi(pageId);
+      if (!walletOk) {
+        throw new BadRequestException(
+          `Wallet balance নেই। Broadcast বন্ধ। Recharge করুন।`,
+        );
+      }
+      if (page.walletBalanceBdt < totalCost) {
+        throw new BadRequestException(
+          `Insufficient balance। ${psids.length} জনকে message পাঠাতে ৳${totalCost.toFixed(2)} লাগবে, কিন্তু wallet-এ আছে ৳${page.walletBalanceBdt.toFixed(2)}।`,
+        );
+      }
+      // Deduct full cost upfront before sending
+      await this.wallet.deductUsage(pageId, 'BROADCAST', { msgCount: psids.length });
+    }
+
     await this.prisma.broadcast.update({
       where: { id },
       data: {
@@ -168,7 +190,7 @@ export class BroadcastService {
       }
 
       try {
-        await this.messenger.sendText(token, psids[i], message);
+        await this.messenger.sendText(token, psids[i], message, 'POST_PURCHASE_UPDATE');
         sent++;
         await new Promise((r) => setTimeout(r, RATE_LIMIT_MS));
       } catch {

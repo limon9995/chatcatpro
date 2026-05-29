@@ -1214,6 +1214,11 @@ Return ONLY valid JSON (no markdown):
       waPhoneNumberId: page.waPhoneNumberId ?? '',
       waVerifyToken: page.waVerifyToken ?? '',
       waTokenSet: Boolean(page.waToken), // never return the raw token
+      // Instagram Business API
+      igEnabled: Boolean(page.igEnabled),
+      igBusinessAccountId: page.igBusinessAccountId ?? '',
+      igVerifyToken: page.igVerifyToken ?? '',
+      igTokenSet: Boolean(page.igToken), // never return the raw token
       // AI Knowledge
       knowledgeText: page.knowledgeText ?? '',
       // Pricing (from bot-knowledge config)

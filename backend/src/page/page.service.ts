@@ -71,6 +71,15 @@ export class PageService {
     if (typeof body.waVerifyToken === 'string')
       data.waVerifyToken = body.waVerifyToken.trim() || null;
 
+    if (typeof body.igEnabled === 'boolean') data.igEnabled = body.igEnabled;
+    if (typeof body.igBusinessAccountId === 'string')
+      data.igBusinessAccountId = body.igBusinessAccountId.trim() || null;
+    if (typeof body.igToken === 'string' && body.igToken.trim()) {
+      data.igToken = this.encryption.encryptIfNeeded(body.igToken.trim());
+    }
+    if (typeof body.igVerifyToken === 'string')
+      data.igVerifyToken = body.igVerifyToken.trim() || null;
+
     if (typeof body.isActive === 'boolean') data.isActive = body.isActive;
     if (typeof body.automationOn === 'boolean')
       data.automationOn = body.automationOn;

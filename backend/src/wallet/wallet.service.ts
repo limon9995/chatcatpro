@@ -49,8 +49,9 @@ export class WalletService {
       | 'SMART_BOT'
       | 'MEMO_PRINT'
       | 'KEYWORD_REPLY'
-      | 'COMMENT_REPLY',
-    options?: { photoCount?: number; memoCount?: number },
+      | 'COMMENT_REPLY'
+      | 'BROADCAST',
+    options?: { photoCount?: number; memoCount?: number; msgCount?: number },
   ): Promise<boolean> {
     try {
       const page = await this.prisma.page.findUnique({ where: { id: pageId } });
@@ -119,6 +120,12 @@ export class WalletService {
           amountToDeduct = (page as any).costPerCommentReplyBdt ?? 0.05;
           description = 'Comment Auto-Reply';
           break;
+        case 'BROADCAST': {
+          const msgCount = options?.msgCount ?? 1;
+          amountToDeduct = ((page as any).costPerBroadcastMsgBdt ?? 0.05) * msgCount;
+          description = `Broadcast (${msgCount} messages)`;
+          break;
+        }
       }
 
       if (amountToDeduct <= 0) return true; // Free setup or overridden to 0

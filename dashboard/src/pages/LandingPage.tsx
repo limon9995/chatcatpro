@@ -342,11 +342,14 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
   <div class="hero-btns fade-up delay-3">
     <a id="hero-signup" href="#" class="btn-primary">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-      শুরু করুন →
+      ৭ দিন Free Trial শুরু করুন →
     </a>
     <a href="#pricing" class="btn-ghost">Pricing দেখুন ↓</a>
     <a href="https://wa.me/8801720450797" target="_blank" rel="noopener" class="btn-ghost">💬 WhatsApp করুন</a>
   </div>
+  <p style="margin-top:14px;font-size:12.5px;color:rgba(148,163,184,0.6);animation:fadeUp .6s .45s ease both">
+    🎁 ৭ দিন বিনামূল্যে ব্যবহার করুন — কোনো Credit Card লাগবে না
+  </p>
 
   <!-- Dashboard mockup with floating badges -->
   <div style="position:relative;width:100%;max-width:960px;margin-top:72px">
@@ -552,7 +555,8 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
         </div>
 
         <!-- CTA -->
-        <a id="value-signup" href="#" style="display:block;text-align:center;padding:15px;background:linear-gradient(135deg,var(--accent),var(--accent3));color:#fff;border-radius:12px;font-weight:800;font-size:15px;text-decoration:none;box-shadow:0 4px 20px rgba(99,102,241,0.4);transition:all .2s">মাত্র ৳৬৯৯/মাসে শুরু করুন →</a>
+        <a id="value-signup" href="#" style="display:block;text-align:center;padding:15px;background:linear-gradient(135deg,var(--accent),var(--accent3));color:#fff;border-radius:12px;font-weight:800;font-size:15px;text-decoration:none;box-shadow:0 4px 20px rgba(99,102,241,0.4);transition:all .2s">🎁 ৭ দিন Free Trial শুরু করুন — Card লাগবে না →</a>
+        <p style="text-align:center;margin-top:10px;font-size:12px;color:rgba(148,163,184,0.55)">Trial শেষে মাত্র ৳৬৯৯/মাস • যেকোনো সময় বাতিল করুন</p>
       </div>
 
     </div>
@@ -945,17 +949,18 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
 
 <!-- ══ CTA ══ -->
 <div class="cta-section" id="contact">
-  <h2>এখনই শুরু করুন</h2>
-  <p>প্রথম মাসে কোনো ঝামেলা নেই।<br/>কাজ না হলে cancel করুন — কোনো প্রশ্ন নেই।</p>
+  <h2>৭ দিন বিনামূল্যে ব্যবহার করুন</h2>
+  <p>Sign up করুন — কোনো Credit Card লাগবে না।<br/>Trial শেষে পছন্দ হলে payment করুন, না হলে চলে যান।</p>
   <div style="display:flex;gap:14px;justify-content:center;flex-wrap:wrap;position:relative">
     <a id="cta-signup" href="#" class="btn-primary">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-      ফ্রিতে শুরু করুন
+      🎁 Free Trial শুরু করুন
     </a>
     <a href="https://wa.me/8801720450797" target="_blank" rel="noopener" class="btn-ghost">💬 WhatsApp এ জিজ্ঞেস করুন</a>
     <a id="cta-login" href="#" class="btn-ghost">Login করুন</a>
   </div>
-  <p style="margin-top:20px;font-size:13.5px;opacity:.6;position:relative">যোগাযোগ: <a href="mailto:info@chatcat.pro" style="color:#a5b4fc;text-decoration:none;font-weight:600">info@chatcat.pro</a></p>
+  <p style="margin-top:12px;font-size:13px;opacity:.55;position:relative">৭ দিন free • Card লাগবে না • যেকোনো সময় বাতিল</p>
+  <p style="margin-top:8px;font-size:13.5px;opacity:.6;position:relative">যোগাযোগ: <a href="mailto:info@chatcat.pro" style="color:#a5b4fc;text-decoration:none;font-weight:600">info@chatcat.pro</a></p>
 </div>
 
 <!-- ══ Footer ══ -->

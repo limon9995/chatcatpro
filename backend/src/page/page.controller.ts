@@ -90,12 +90,15 @@ export class PageController {
     const pageName =
       String(body.newPageName || verified.pageName || '').trim() ||
       verified.pageName;
-    return this.pageService.reconnectFbPage(
+    const result = await this.pageService.reconnectFbPage(
       pageId,
       verified.pageId,
       pageName,
       rawToken,
     );
+    // Subscribe page to webhook after token is saved
+    await this.facebookService.subscribePageToWebhook(verified.pageId, rawToken).catch(() => {});
+    return result;
   }
 
   /** POST /page/:id/knowledge/scrape — scrape website URL and return extracted text preview */

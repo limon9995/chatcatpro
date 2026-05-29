@@ -14,7 +14,12 @@ export class MessengerService {
    * Send a text message via Facebook Messenger Send API.
    * Retries up to 3× on 429 (rate limit) or 5xx errors with exponential backoff.
    */
-  async sendText(pageToken: string, psid: string, text: string): Promise<void> {
+  async sendText(
+    pageToken: string,
+    psid: string,
+    text: string,
+    tag?: string,
+  ): Promise<void> {
     if (!pageToken || !psid || !text) {
       this.logger.warn(
         `[Messenger] sendText called with missing params: psid=${psid}`,
@@ -24,7 +29,15 @@ export class MessengerService {
 
     const rawToken = this.encryption.decrypt(pageToken);
     const url = `https://graph.facebook.com/v20.0/me/messages?access_token=${encodeURIComponent(rawToken)}`;
-    const body = JSON.stringify({ recipient: { id: psid }, message: { text } });
+    const payload: Record<string, unknown> = {
+      recipient: { id: psid },
+      message: { text },
+    };
+    if (tag) {
+      payload.messaging_type = 'MESSAGE_TAG';
+      payload.tag = tag;
+    }
+    const body = JSON.stringify(payload);
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       try {

@@ -200,6 +200,11 @@ export class FacebookService {
       `[Facebook] Page connected: ${page.pageName} (${page.pageId}) → user ${userId}`,
     );
 
+    // Subscribe the page to this app's webhook so Facebook delivers messages
+    await this.subscribePageToWebhook(verifiedPage.pageId, submittedPageToken).catch((err: any) =>
+      this.logger.warn(`[Facebook] Webhook subscription failed for ${verifiedPage.pageId}: ${err?.message}`),
+    );
+
     return {
       success: true,
       page: {
@@ -302,13 +307,21 @@ export class FacebookService {
         fbAppId: true,
         fbAppSecret: true,
         pageToken: true,
+        waEnabled: true,
+        waPhoneNumberId: true,
+        waToken: true,
+        igEnabled: true,
+        igBusinessAccountId: true,
+        igToken: true,
       },
       orderBy: { id: 'desc' },
     });
-    return pages.map(({ fbAppSecret, pageToken, ...p }) => ({
+    return pages.map(({ fbAppSecret, pageToken, waToken, igToken, ...p }) => ({
       ...p,
       hasCustomApp: !!fbAppSecret,
       isConnected: !!pageToken,
+      waConfigured: !!waToken,
+      igConfigured: !!igToken,
     }));
   }
 
@@ -369,6 +382,17 @@ export class FacebookService {
       pageName: p.name,
       pageToken: p.access_token,
     }));
+  }
+
+  async subscribePageToWebhook(pageId: string, pageToken: string): Promise<void> {
+    const fields = 'messages,messaging_postbacks,messaging_optins,message_deliveries,message_reads,messaging_referrals';
+    const url = `https://graph.facebook.com/v19.0/${pageId}/subscribed_apps?subscribed_fields=${encodeURIComponent(fields)}&access_token=${encodeURIComponent(pageToken)}`;
+    const res = await fetch(url, { method: 'POST' });
+    const data: any = await res.json().catch(() => ({}));
+    if (!data.success) {
+      throw new Error(data?.error?.message || JSON.stringify(data));
+    }
+    this.logger.log(`[Facebook] Webhook subscribed for page ${pageId}`);
   }
 
   async verifyPageToken(pageToken: string): Promise<FacebookPageInfo> {

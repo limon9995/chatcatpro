@@ -99,6 +99,16 @@ export function SignupPageComponent({ dark, setDark, onBack }: Props) {
         <div style={{ textAlign:'center', marginBottom:28 }}>
           <img src="/logo.png" alt="Chatcat" style={{ width: 80, height: 80, objectFit: 'cover', borderRadius: '50%', margin: '0 auto 14px', display: 'block' }} />
           <div style={{ fontSize:22, fontWeight:800, color:text, letterSpacing:'-0.04em' }}>{copy('অ্যাকাউন্ট তৈরি করুন', 'Create Account')}</div>
+          {/* Trial badge */}
+          <div style={{
+            display:'inline-flex', alignItems:'center', gap:6,
+            marginTop:10, padding:'6px 14px', borderRadius:999,
+            background:'rgba(16,185,129,0.10)', border:'1px solid rgba(16,185,129,0.30)',
+            fontSize:12.5, fontWeight:700, color:'#10b981',
+          }}>
+            <span style={{ fontSize:14 }}>🎁</span>
+            {copy('৭ দিন Free Trial — কোনো Card লাগবে না', '7-Day Free Trial — No Card Required')}
+          </div>
         </div>
 
         {/* Alerts */}

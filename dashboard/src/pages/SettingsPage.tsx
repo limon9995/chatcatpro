@@ -16,6 +16,7 @@ interface Settings {
   paymentMode: string; advanceAmount: number; advanceBkash: string; advanceNagad: string; advancePaymentMessage: string;
   automationOn: boolean; ocrOn: boolean;
   waEnabled: boolean; waPhoneNumberId: string; waVerifyToken: string; waTokenSet: boolean;
+  igEnabled: boolean; igBusinessAccountId: string; igVerifyToken: string; igTokenSet: boolean;
   infoModeOn: boolean; orderModeOn: boolean; printModeOn: boolean;
   callConfirmModeOn: boolean; memoSaveModeOn: boolean; memoTemplateModeOn: boolean;
   smartBotOn: boolean;
@@ -57,6 +58,7 @@ const S0: Settings = {
   knowledgeText: '',
   automationOn: false, ocrOn: false,
   waEnabled: false, waPhoneNumberId: '', waVerifyToken: '', waTokenSet: false,
+  igEnabled: false, igBusinessAccountId: '', igVerifyToken: '', igTokenSet: false,
   infoModeOn: true, orderModeOn: true, printModeOn: false,
   callConfirmModeOn: false, memoSaveModeOn: false, memoTemplateModeOn: false,
   smartBotOn: false,
@@ -223,6 +225,9 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect }: {
   // WhatsApp settings state
   const [waToken, setWaToken] = useState('');
   const [waSaving, setWaSaving] = useState(false);
+  // Instagram settings state
+  const [igToken, setIgToken] = useState('');
+  const [igSaving, setIgSaving] = useState(false);
   const banglaVoiceUploadRef = useRef<HTMLInputElement>(null);
   const englishVoiceUploadRef = useRef<HTMLInputElement>(null);
   const BASE = `${API_BASE}/client-dashboard/${pageId}`;
@@ -353,6 +358,23 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect }: {
       load();
     } catch (e: any) { onToast(e.message, 'error'); }
     finally { setWaSaving(false); }
+  };
+
+  const saveInstagram = async () => {
+    setIgSaving(true);
+    try {
+      const body: any = {
+        igEnabled: s.igEnabled,
+        igBusinessAccountId: s.igBusinessAccountId.trim(),
+        igVerifyToken: s.igVerifyToken.trim(),
+      };
+      if (igToken.trim()) body.igToken = igToken.trim();
+      await request(`${BASE}/settings`, { method: 'PATCH', body: JSON.stringify(body) });
+      onToast('✅ Instagram settings saved');
+      setIgToken('');
+      load();
+    } catch (e: any) { onToast(e.message, 'error'); }
+    finally { setIgSaving(false); }
   };
 
   const unlinkPage = async (linkedPageId: number) => {
@@ -843,6 +865,95 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect }: {
               style={{ ...th.btnPrimary, opacity: waSaving ? 0.6 : 1 }}
             >
               {waSaving ? <><Spinner size={13} /> Saving...</> : '💾 WhatsApp Save করুন'}
+            </button>
+          </div>
+        </Section>
+
+        {/* ── Instagram Connection ── */}
+        <Section title="📸 Instagram Connection" desc="Instagram Business API দিয়ে DM ও post comment automation চালু করুন">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <Toggle
+              label={<div><div style={{ fontSize: 13, fontWeight: 700 }}>Instagram Automation</div>
+                <div style={{ fontSize: 11.5, color: th.muted }}>
+                  {s.igTokenSet
+                    ? (s.igBusinessAccountId ? `IG Account ID: ${s.igBusinessAccountId}` : 'Token saved — IG Account ID নেই')
+                    : 'Instagram DM ও comment reply automation'}
+                </div>
+              </div>}
+              checked={s.igEnabled}
+              onChange={v => setS(prev => ({ ...prev, igEnabled: v }))}
+              dark={dark}
+            />
+            <div>
+              <label style={{ fontSize: 12, color: th.muted, fontWeight: 600, display: 'block', marginBottom: 5 }}>
+                Instagram Business Account ID
+              </label>
+              <input
+                style={th.input}
+                value={s.igBusinessAccountId}
+                onChange={e => setS(prev => ({ ...prev, igBusinessAccountId: e.target.value }))}
+                placeholder="e.g. 17841400455057828"
+              />
+              <div style={{ fontSize: 11, color: th.muted, marginTop: 4 }}>
+                Meta Developer Console → Instagram → Instagram Business Account ID
+              </div>
+            </div>
+            <div>
+              <label style={{ fontSize: 12, color: th.muted, fontWeight: 600, display: 'block', marginBottom: 5 }}>
+                Access Token {s.igTokenSet && <span style={{ color: '#22c55e', fontWeight: 400 }}>✓ saved</span>}
+              </label>
+              <input
+                style={th.input}
+                type="password"
+                autoComplete="new-password"
+                placeholder={s.igTokenSet ? '••••••• (পরিবর্তন করতে নতুন token দিন)' : 'EAAxxxxxx... (Graph API Explorer থেকে)'}
+                value={igToken}
+                onChange={e => setIgToken(e.target.value)}
+              />
+              <div style={{ fontSize: 11, color: th.muted, marginTop: 4 }}>
+                Graph API Explorer → আপনার IG-linked Page select → instagram_basic + instagram_manage_messages + instagram_manage_comments → Token generate করুন
+              </div>
+            </div>
+            <div>
+              <label style={{ fontSize: 12, color: th.muted, fontWeight: 600, display: 'block', marginBottom: 5 }}>
+                Webhook Verify Token
+              </label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  style={{ ...th.input, flex: 1 }}
+                  value={s.igVerifyToken}
+                  onChange={e => setS(prev => ({ ...prev, igVerifyToken: e.target.value }))}
+                  placeholder="যেকোনো random string"
+                />
+                <button
+                  onClick={() => {
+                    const rand = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+                    setS(prev => ({ ...prev, igVerifyToken: rand }));
+                  }}
+                  style={{ ...th.btnSecondary, whiteSpace: 'nowrap', fontSize: 12 }}
+                >
+                  Generate
+                </button>
+              </div>
+            </div>
+            <div style={{ padding: '10px 12px', borderRadius: 10, background: th.surface, border: `1px solid ${th.border}` }}>
+              <div style={{ fontSize: 11.5, fontWeight: 700, marginBottom: 4 }}>📋 Webhook URL (Meta Console-এ দিন)</div>
+              <div style={{ fontSize: 12, fontFamily: 'monospace', color: th.accent, wordBreak: 'break-all' }}>
+                {`${(typeof window !== 'undefined' ? window.location.origin.replace(/:\d+$/, ':3000') : 'https://api.chatcat.pro')}/ig-webhook`}
+              </div>
+              <div style={{ fontSize: 11, color: th.muted, marginTop: 4 }}>
+                Meta App → Instagram → Webhooks → এই URL দিন। Subscribe করুন: messages, comments
+              </div>
+            </div>
+          </div>
+
+          <div style={{ marginTop: 14 }}>
+            <button
+              onClick={saveInstagram}
+              disabled={igSaving}
+              style={{ ...th.btnPrimary, opacity: igSaving ? 0.6 : 1 }}
+            >
+              {igSaving ? <><Spinner size={13} /> Saving...</> : '💾 Instagram Save করুন'}
             </button>
           </div>
         </Section>

@@ -707,6 +707,14 @@ export function DashboardLayout({
       </header>
 
       {/* ── Server Subscription Banner (per-page, admin-controlled) ─────── */}
+      {/* Trial banner */}
+      {billingStatus?.status === 'trial' && (
+        <div style={{ background: 'linear-gradient(90deg,#059669,#0d9488)', color: '#fff', fontSize: 13, fontWeight: 600, padding: '8px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <span>🎁 Free Trial চলছে — আর {billingStatus.daysLeft} দিন বাকি। কোনো payment লাগবে না।</span>
+          <button onClick={() => void openBillingModal()} style={{ background: 'rgba(255,255,255,0.18)', color: '#fff', border: '1px solid rgba(255,255,255,0.35)', borderRadius: 6, padding: '4px 14px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Upgrade করুন</button>
+        </div>
+      )}
+
       {pageSubStatus && (() => {
         if (pageSubStatus.suspended || pageSubStatus.expired) return (
           <div style={{ background: '#ef4444', color: '#fff', fontSize: 13, fontWeight: 600, padding: '8px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>

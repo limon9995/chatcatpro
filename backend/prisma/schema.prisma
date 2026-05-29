@@ -174,7 +174,8 @@ model Page {
   costPerImageLocalBdt    Float @default(0.10)  // Customer image — local Ollama path (no API)
   costPerAnalyzeBdt       Float @default(0.20)  // Admin uploading product
   costPerAiGenerateBdt    Float @default(0.10)  // AI text generation (description/broadcast draft)
-  costPerKeywordReplyBdt  Float @default(0.02)  // Pure keyword/template bot reply (no AI call)
+  costPerKeywordReplyBdt    Float @default(0.02)  // Pure keyword/template bot reply (no AI call)
+  costPerBroadcastMsgBdt    Float @default(0.05)  // Per broadcast message sent
 
   // -- DUAL PHOTO MODE (legacy single-pair, kept for backward compat) --
   dualPhotoMode        Boolean  @default(false)
@@ -199,6 +200,12 @@ model Page {
   waPhoneNumberId String? // Meta phone number ID (e.g. "123456789012345")
   waToken         String? // encrypted WA Cloud API access token
   waVerifyToken   String? // webhook verify token for WA
+
+  // ── Instagram Business API ────────────────────────────────────────────────
+  igEnabled           Boolean @default(false) // master toggle for IG automation
+  igBusinessAccountId String? // Instagram Business Account ID
+  igToken             String? // encrypted IG access token
+  igVerifyToken       String? // webhook verify token for IG
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

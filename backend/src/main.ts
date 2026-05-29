@@ -60,6 +60,7 @@ async function bootstrap() {
   // Webhook: raw buffer needed for HMAC signature verification
   app.use('/webhook', express.raw({ type: 'application/json', limit: '1mb' }));
   app.use('/wa-webhook', express.raw({ type: 'application/json', limit: '1mb' }));
+  app.use('/ig-webhook', express.raw({ type: 'application/json', limit: '1mb' }));
   // All other routes: standard JSON with 1MB limit
   app.use(express.json({ limit: '1mb' }));
   app.use(express.urlencoded({ extended: true, limit: '1mb' }));

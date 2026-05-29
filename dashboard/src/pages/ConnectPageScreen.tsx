@@ -3,12 +3,224 @@ import { LanguageSwitch, Spinner } from '../components/ui';
 import { API_BASE, useApi } from '../hooks/useApi';
 import { useLanguage } from '../i18n';
 
-type ConnectedPage = { id: number; pageId: string; pageName: string; isActive: boolean; masterPageId?: number | null; hasCustomApp?: boolean; fbAppId?: string | null };
+type ConnectedPage = {
+  id: number; pageId: string; pageName: string; isActive: boolean;
+  masterPageId?: number | null; hasCustomApp?: boolean; fbAppId?: string | null;
+  waEnabled?: boolean; waPhoneNumberId?: string | null; waConfigured?: boolean;
+  igEnabled?: boolean; igBusinessAccountId?: string | null; igConfigured?: boolean;
+};
 type PageRequest = { id: number; pageUrl: string; fbProfile: string; note?: string; status: string; adminNote?: string; createdAt: string };
 
 function extractYouTubeId(url: string): string | null {
   const m = url?.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/);
   return m?.[1] ?? null;
+}
+
+function ChannelCard({ icon, title, connected, configuredLabel, notConfiguredMsg, permissions, onSetup, dark, text, muted, border, copy }: {
+  icon: string; title: string; connected: boolean; configuredLabel: string;
+  notConfiguredMsg: string; permissions: string[];
+  onSetup: () => void; dark: boolean; text: string; muted: string; border: string;
+  copy: (bn: string, en: string) => string;
+}) {
+  const [showPerms, setShowPerms] = React.useState(false);
+  const cardBg = connected
+    ? (dark ? 'rgba(34,197,94,0.06)' : 'rgba(34,197,94,0.04)')
+    : (dark ? 'rgba(251,191,36,0.06)' : 'rgba(251,191,36,0.04)');
+  const cardBorder = connected ? 'rgba(34,197,94,0.25)' : 'rgba(251,191,36,0.3)';
+
+  return (
+    <div style={{ flex: 1, minWidth: 140, borderRadius: 12, border: `1px solid ${cardBorder}`, background: cardBg, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 18 }}>{icon}</span>
+          <span style={{ fontWeight: 800, fontSize: 13, color: text }}>{title}</span>
+        </div>
+        <span style={{ fontSize: 10, fontWeight: 800, padding: '2px 7px', borderRadius: 20, background: connected ? 'rgba(34,197,94,0.15)' : 'rgba(251,191,36,0.15)', color: connected ? '#16a34a' : '#b45309' }}>
+          {connected ? copy('✅ সংযুক্ত', '✅ Connected') : copy('⚠️ সংযুক্ত নেই', '⚠️ Not set up')}
+        </span>
+      </div>
+      <div style={{ fontSize: 11.5, color: muted, lineHeight: 1.6 }}>
+        {connected ? configuredLabel : notConfiguredMsg}
+      </div>
+      {!connected && (
+        <>
+          <button
+            onClick={() => setShowPerms(v => !v)}
+            style={{ background: 'transparent', border: `1px solid ${border}`, borderRadius: 7, padding: '4px 10px', color: muted, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' }}
+          >
+            {showPerms ? copy('▲ যা যা লাগবে', '▲ Requirements') : copy('▼ যা যা লাগবে', '▼ Requirements')}
+          </button>
+          {showPerms && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {permissions.map((p, i) => (
+                <div key={i} style={{ fontSize: 11, color: muted, display: 'flex', gap: 5, alignItems: 'flex-start' }}>
+                  <span style={{ color: '#f59e0b', flexShrink: 0 }}>•</span>
+                  <code style={{ background: dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)', padding: '1px 5px', borderRadius: 4, fontSize: 10.5, fontFamily: 'monospace' }}>{p}</code>
+                </div>
+              ))}
+            </div>
+          )}
+          <button
+            onClick={onSetup}
+            style={{ border: 'none', borderRadius: 8, padding: '7px 10px', background: 'rgba(99,102,241,0.12)', color: '#6366f1', fontSize: 11.5, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'center' }}
+          >
+            {copy('⚙️ Setup করুন →', '⚙️ Setup →')}
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
+function ChannelStatusCards({ page, dark, text, muted, border, copy, onSetup }: {
+  page: ConnectedPage; dark: boolean; text: string; muted: string; border: string;
+  copy: (bn: string, en: string) => string; onSetup: () => void;
+}) {
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <div style={{ fontSize: 11, color: muted, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 8 }}>
+        {copy(`${page.pageName} — Channel Status`, `${page.pageName} — Channel Status`)}
+      </div>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        <ChannelCard
+          icon="📘" title="Facebook"
+          connected={true}
+          configuredLabel={copy('Facebook Messenger ও comment automation চালু আছে।', 'Facebook Messenger & comment automation active.')}
+          notConfiguredMsg="" permissions={[]}
+          onSetup={onSetup} dark={dark} text={text} muted={muted} border={border} copy={copy}
+        />
+        <ChannelCard
+          icon="📱" title="WhatsApp"
+          connected={!!(page.waConfigured && page.waEnabled)}
+          configuredLabel={copy(
+            `WhatsApp automation চালু।${page.waPhoneNumberId ? ` Phone: ${page.waPhoneNumberId}` : ''}`,
+            `WhatsApp automation active.${page.waPhoneNumberId ? ` Phone: ${page.waPhoneNumberId}` : ''}`,
+          )}
+          notConfiguredMsg={copy(
+            'এই page-এ WhatsApp Business automation সংযুক্ত নেই। Settings > WhatsApp থেকে setup করুন।',
+            'WhatsApp Business automation is not set up for this page. Set it up from Settings > WhatsApp.',
+          )}
+          permissions={[
+            'WhatsApp Business Account (Meta Business Suite)',
+            'whatsapp_business_messaging',
+            'whatsapp_business_management',
+            'Phone Number ID + System User Token',
+          ]}
+          onSetup={onSetup} dark={dark} text={text} muted={muted} border={border} copy={copy}
+        />
+        <ChannelCard
+          icon="📸" title="Instagram"
+          connected={!!(page.igConfigured && page.igEnabled)}
+          configuredLabel={copy(
+            `Instagram DM ও comment automation চালু।${page.igBusinessAccountId ? ` Account: ${page.igBusinessAccountId}` : ''}`,
+            `Instagram DM & comment automation active.${page.igBusinessAccountId ? ` Account: ${page.igBusinessAccountId}` : ''}`,
+          )}
+          notConfiguredMsg={copy(
+            'এই page-এ Instagram automation সংযুক্ত নেই। Settings > Instagram থেকে setup করুন।',
+            'Instagram automation is not set up for this page. Set it up from Settings > Instagram.',
+          )}
+          permissions={[
+            'Instagram Business / Creator Account (FB Page-এর সাথে linked)',
+            'instagram_basic',
+            'instagram_manage_messages',
+            'instagram_manage_comments',
+            'pages_show_list',
+          ]}
+          onSetup={onSetup} dark={dark} text={text} muted={muted} border={border} copy={copy}
+        />
+      </div>
+    </div>
+  );
+}
+
+function DevAccountGuide({ dark, panel: _panel, border, text, muted, copy }: {
+  dark: boolean; panel: string; border: string; text: string; muted: string;
+  copy: (bn: string, en: string) => string;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const steps = [
+    {
+      step: '১',
+      emoji: '🌐',
+      title: copy('developers.facebook.com এ যান', 'Go to developers.facebook.com'),
+      desc: (
+        <span>
+          {copy('আপনার browser-এ ', 'Open your browser and visit ')}<a href="https://developers.facebook.com/" target="_blank" rel="noreferrer" style={{ color: '#6366f1', fontWeight: 700 }}>developers.facebook.com</a>
+          {copy(' — এই লিংকে যান।', '.')}
+        </span>
+      ),
+    },
+    {
+      step: '২',
+      emoji: '🔑',
+      title: copy('Facebook account দিয়ে Log in করুন', 'Log in with your Facebook account'),
+      desc: copy(
+        'পেজের উপরে "Log In" button-এ click করুন। আপনার regular Facebook username ও password দিয়ে login করুন। যে Facebook account দিয়ে Tester invite accept করতে চান, সেই account দিয়েই login করুন।',
+        'Click the "Log In" button at the top of the page. Use your regular Facebook username and password. Make sure to log in with the same account you want to use to accept the Tester invite.',
+      ),
+    },
+    {
+      step: '৩',
+      emoji: '🚀',
+      title: copy('"Get Started" বা "Register" click করুন', 'Click "Get Started" or "Register"'),
+      desc: copy(
+        'Login করার পর "Get Started" বা "Register" বাটন দেখবেন। সেটিতে click করুন। Facebook Developer Agreement-এর terms পড়ুন এবং "Accept" বা "Next" click করুন।',
+        'After logging in, you will see a "Get Started" or "Register" button. Click it. Read the Facebook Developer Agreement terms and click "Accept" or "Next".',
+      ),
+    },
+    {
+      step: '৪',
+      emoji: '📱',
+      title: copy('Phone number verify করুন (যদি চায়)', 'Verify your phone number (if prompted)'),
+      desc: copy(
+        'Facebook আপনার phone number verify করতে চাইতে পারে। আপনার mobile number দিন → SMS-এ আসা code টি enter করুন → "Confirm" click করুন। এটি একটি security step।',
+        'Facebook may ask you to verify your phone number. Enter your mobile number → enter the code received via SMS → click "Confirm". This is a security step.',
+      ),
+    },
+    {
+      step: '৫',
+      emoji: '✅',
+      title: copy('Developer Account তৈরি হয়ে গেছে!', 'Developer Account is ready!'),
+      desc: copy(
+        'Verify হলেই আপনার Facebook Developer Account active হয়ে যাবে। এখন আপনি developers.facebook.com Dashboard দেখতে পাবেন। এখন থেকে Tester invite notification পাবেন Facebook-এ।',
+        'Once verified, your Facebook Developer Account will be active. You will now see the developers.facebook.com Dashboard. From now on, you will receive Tester invite notifications on Facebook.',
+      ),
+    },
+  ];
+
+  return (
+    <div style={{ borderRadius: 10, border: `1px solid rgba(99,102,241,0.25)`, overflow: 'hidden', background: dark ? 'rgba(99,102,241,0.04)' : 'rgba(99,102,241,0.03)' }}>
+      <button
+        onClick={() => setOpen(v => !v)}
+        style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'transparent', border: 'none', cursor: 'pointer', color: text, fontFamily: 'inherit', fontWeight: 800, fontSize: 12.5 }}
+      >
+        <span>📖 {copy('Facebook Developer Account কিভাবে খুলবেন? — A-to-Z গাইড', 'How to create a Facebook Developer Account? — A-to-Z Guide')}</span>
+        <span style={{ color: muted, fontSize: 11, marginLeft: 8, flexShrink: 0 }}>{open ? '▲ বন্ধ করুন' : '▼ দেখুন'}</span>
+      </button>
+      {open && (
+        <div style={{ padding: '0 14px 14px', display: 'flex', flexDirection: 'column', gap: 8, borderTop: `1px solid rgba(99,102,241,0.2)` }}>
+          <div style={{ paddingTop: 10, fontSize: 12, color: muted, lineHeight: 1.7 }}>
+            {copy(
+              'একটি Developer Account খোলা সম্পূর্ণ বিনামূল্যে এবং মাত্র ২-৩ মিনিটের কাজ।',
+              'Creating a Developer Account is completely free and only takes 2-3 minutes.',
+            )}
+          </div>
+          {steps.map(({ step, emoji, title, desc }) => (
+            <div key={step} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', background: dark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)', borderRadius: 8, padding: '9px 11px' }}>
+              <div style={{ minWidth: 22, height: 22, borderRadius: '50%', background: 'rgba(99,102,241,0.2)', color: '#6366f1', fontSize: 11, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 1, flexShrink: 0 }}>{step}</div>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 12.5, color: text, marginBottom: 3 }}>{emoji} {title}</div>
+                <div style={{ color: muted, fontSize: 12, lineHeight: 1.75 }}>{desc}</div>
+              </div>
+            </div>
+          ))}
+          <div style={{ background: dark ? 'rgba(34,197,94,0.08)' : 'rgba(34,197,94,0.06)', border: '1px solid rgba(34,197,94,0.25)', borderRadius: 8, padding: '8px 11px', fontSize: 11.5, color: text, marginTop: 4 }}>
+            🎉 {copy('Developer Account খোলার পরই নিচের form submit করুন — তাহলে Admin আপনাকে Tester invite পাঠাবে এবং আপনি notification পাবেন।', 'After creating your Developer Account, submit the form below — the Admin will then send you a Tester invite and you will receive the notification.')}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 interface Props {
@@ -239,6 +451,12 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
               </div>
             ))}
             <div style={{ height: 1, background: border, margin: '14px 0' }} />
+
+            {/* Channel status cards for each active page */}
+            {activePages.map(p => (
+              <ChannelStatusCards key={`ch-${p.id}`} page={p} dark={dark} text={text} muted={muted} border={border} copy={copy}
+                onSetup={() => goToDashboardForPage(p)} />
+            ))}
           </div>
         )}
 
@@ -310,6 +528,25 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
                     'You can run the bot on your page using our Facebook App. This is the easiest method — no need to create your own app.',
                   )}
                 </div>
+                {/* Developer Account prerequisite warning */}
+                <div style={{ background: dark ? 'rgba(239,68,68,0.1)' : 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 9, padding: '10px 12px', display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                  <span style={{ fontSize: 16, flexShrink: 0 }}>⚠️</span>
+                  <div>
+                    <div style={{ fontWeight: 800, fontSize: 12.5, color: '#ef4444', marginBottom: 3 }}>
+                      {copy('প্রথমে Facebook Developer Account লাগবে!', 'You need a Facebook Developer Account first!')}
+                    </div>
+                    <div style={{ fontSize: 11.5, color: muted, lineHeight: 1.7 }}>
+                      {copy(
+                        'Tester invite notification পেতে হলে আপনার অবশ্যই একটি Facebook Developer Account থাকতে হবে। Developer Account ছাড়া invite notification আসবে না।',
+                        'To receive the Tester invite notification, you must have a Facebook Developer Account. Without it, the invite notification will not appear.',
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Developer Account creation guide — collapsible */}
+                <DevAccountGuide dark={dark} panel={panel} border={border} text={text} muted={muted} copy={copy} />
+
                 {[
                   {
                     n: '১',
@@ -319,12 +556,18 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
                   {
                     n: '২',
                     title: copy('Facebook-এ Invite Accept করুন', 'Accept the Invite on Facebook'),
-                    desc: copy('Admin add করলে আপনার Facebook account-এ একটি notification আসবে — "Developer Tester Invitation"। সেটি Accept করুন।\n→ facebook.com এ যান → Notifications → Tester invitation খুঁজুন → Accept করুন।', 'Once Admin adds you, you will receive a notification on Facebook — "Developer Tester Invitation". Accept it.\n→ Go to facebook.com → Notifications → find the Tester invitation → Accept it.'),
+                    desc: copy(
+                      'Admin add করলে আপনার Facebook account-এ একটি notification আসবে — "Developer Tester Invitation"। সেটি Accept করুন।\n→ facebook.com এ যান → Notifications → Tester invitation খুঁজুন → Accept করুন।\n\n⚠️ মনে রাখুন: Invite accept করলেই page connect হয়ে যাবে না — এটি শুধু আপনাকে আমাদের App ব্যবহারের permission দেয়। পরের ধাপে Access Token নিতে হবে।',
+                      'Once Admin adds you, you will receive a notification on Facebook — "Developer Tester Invitation". Accept it.\n→ Go to facebook.com → Notifications → find the Tester invitation → Accept it.\n\n⚠️ Note: Accepting the invite does NOT connect your page — it only gives you permission to use our App. You still need to get an Access Token in the next step.',
+                    ),
                   },
                   {
                     n: '৩',
                     title: copy('"Access Token" Tab থেকে Page Connect করুন', 'Connect your Page from the "Access Token" tab'),
-                    desc: copy('Invitation accept করার পর উপরের "Access Token" tab-এ click করুন এবং Graph API Explorer থেকে token নিয়ে আপনার page connect করুন।', 'After accepting the invitation, click the "Access Token" tab above and use Graph API Explorer to get your token and connect your page.'),
+                    desc: copy(
+                      'Invitation accept করার পর উপরের "Access Token" tab-এ click করুন। Graph API Explorer-এ গিয়ে আমাদের App select করুন, আপনার Page select করুন, token generate করুন এবং নিচের form-এ paste করে Page Connect করুন।',
+                      'After accepting the invitation, click the "Access Token" tab above. Go to Graph API Explorer, select our App, select your Page, generate the token, and paste it in the form to connect your page.',
+                    ),
                   },
                 ].map(({ n, title, desc }) => (
                   <div key={n} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
