@@ -307,7 +307,7 @@ export function OnboardingFlow({ dark, user, activePage, onComplete, onSkip }: P
 
 // ─── Step 1: Facebook Page Connect ────────────────────────────────────────────
 
-function Step1PageConnect({ dark, panel, border, text, muted, accent, accentSoft, activePage, onConnected, onSkip, request }: any) {
+function Step1PageConnect({ dark, panel, border, text, muted, accent, accentSoft: _accentSoft, activePage: _activePage, onConnected, onSkip, request }: any) {
   const [tab, setTab] = useState<'request' | 'manual'>('request');
   const [reqPageUrl, setReqPageUrl] = useState('');
   const [reqFbProfile, setReqFbProfile] = useState('');
@@ -474,7 +474,7 @@ function Step1PageConnect({ dark, panel, border, text, muted, accent, accentSoft
 
 // ─── Step 2: Add First Product ────────────────────────────────────────────────
 
-function Step2AddProduct({ dark, panel, border, text, muted, accent, accentSoft, activePage, onAdded, onSkip }: any) {
+function Step2AddProduct({ dark, panel: _panel, border, text, muted, accent, accentSoft, activePage, onAdded, onSkip }: any) {
   const [name, setName] = useState('');
   const [price, setPrice] = useState('');
   const [code, setCode] = useState('');
@@ -629,7 +629,7 @@ function Step2AddProduct({ dark, panel, border, text, muted, accent, accentSoft,
 
 // ─── Step 3: Bot Setup ────────────────────────────────────────────────────────
 
-function Step3BotSetup({ dark, panel, border, text, muted, accent, activePage, userName, onSaved, onSkip, request }: any) {
+function Step3BotSetup({ dark, panel: _panel, border, text, muted, accent, activePage, userName, onSaved, onSkip, request }: any) {
   const [businessName, setBusinessName] = useState(userName || '');
   const [phone, setPhone] = useState('');
   const [dhakaCharge, setDhakaCharge] = useState('');
@@ -763,7 +763,7 @@ function Step3BotSetup({ dark, panel, border, text, muted, accent, activePage, u
 
 // ─── Step 4: Celebration ──────────────────────────────────────────────────────
 
-function Step4Complete({ dark, text, muted, accent, accentSoft, pageConnected, productAdded, productSkipped, botSaved, onFinish }: any) {
+function Step4Complete({ dark, text, muted, accent, accentSoft, pageConnected, productAdded: _productAdded, productSkipped, botSaved, onFinish }: any) {
   const badges = [
     { label: '✅ পেজ সংযুক্ত', done: pageConnected, delay: '1600ms' },
     { label: productSkipped ? '⚠️ পণ্য এখনো যোগ হয়নি' : '✅ পণ্য যোগ করা হয়েছে', done: !productSkipped, delay: '1800ms' },
