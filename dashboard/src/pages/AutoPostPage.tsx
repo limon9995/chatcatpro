@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { Theme } from '../components/ui';
 import { Spinner } from '../components/ui';
 import { API_BASE, useApi } from '../hooks/useApi';
@@ -8,6 +8,7 @@ interface AutoPost {
   id: number;
   caption: string;
   imageUrl: string | null;
+  imagePrompt: string | null;
   postType: string;
   language: string;
   status: string;
@@ -18,6 +19,24 @@ interface AutoPost {
   createdAt: string;
 }
 
+interface Analytics {
+  totalPosts: number;
+  publishedCount: number;
+  failedCount: number;
+  scheduledCount: number;
+  successRate: number;
+  topPostType: string;
+  topPostingHour: number;
+  topPostingDay: string;
+  aiInsight: string;
+}
+
+interface BestTime {
+  bestHour: number;
+  basedOn: string;
+  message: string;
+}
+
 const POST_TYPES = [
   { value: 'product',      bn: 'প্রোডাক্ট পোস্ট', en: 'Product Post' },
   { value: 'sale',         bn: 'অফার / সেল',       en: 'Sale / Offer' },
@@ -26,52 +45,110 @@ const POST_TYPES = [
 ];
 
 const STATUS_COLOR: Record<string, string> = {
-  draft:      '#6b7280',
-  scheduled:  '#3b82f6',
-  publishing: '#f59e0b',
-  published:  '#10b981',
-  failed:     '#ef4444',
+  draft: '#6b7280', scheduled: '#3b82f6', publishing: '#f59e0b', published: '#10b981', failed: '#ef4444',
+};
+const STATUS_BN: Record<string, string> = {
+  draft: 'ড্রাফট', scheduled: 'শিডিউলড', publishing: 'পোস্ট হচ্ছে...', published: 'প্রকাশিত', failed: 'ব্যর্থ',
 };
 
-const STATUS_BN: Record<string, string> = {
-  draft:      'ড্রাফট',
-  scheduled:  'শিডিউলড',
-  publishing: 'পোস্ট হচ্ছে...',
-  published:  'প্রকাশিত',
-  failed:     'ব্যর্থ',
+const POSTER_STYLES = [
+  { value: 'minimal',   icon: '🌿', bn: 'মিনিমালিস্ট',  en: 'Minimal',   color: '#10b981' },
+  { value: 'vibrant',   icon: '🌈', bn: 'ভাইব্র্যান্ট', en: 'Vibrant',   color: '#8b5cf6' },
+  { value: 'dark',      icon: '🖤', bn: 'ডার্ক লাক্সারি', en: 'Dark Luxury', color: '#1f2937' },
+  { value: 'festival',  icon: '🎉', bn: 'ফেস্টিভাল',    en: 'Festival',  color: '#f59e0b' },
+  { value: 'sale',      icon: '🔥', bn: 'সেল ব্যানার',  en: 'Sale Banner', color: '#ef4444' },
+  { value: 'realistic', icon: '📸', bn: 'রিয়েলিস্টিক', en: 'Realistic', color: '#0ea5e9' },
+];
+
+const CAPTION_TONES = [
+  { value: 'casual',       icon: '😊', bn: 'কেজুয়াল',        en: 'Casual' },
+  { value: 'professional', icon: '💼', bn: 'প্রফেশনাল',       en: 'Professional' },
+  { value: 'urgent',       icon: '🔥', bn: 'আর্জেন্ট/সেল',   en: 'Urgent' },
+  { value: 'story',        icon: '💬', bn: 'গল্পের ছলে',     en: 'Storytelling' },
+];
+
+const ASPECT_RATIOS = [
+  { value: '1:1', label: '1:1', desc: 'Feed' },
+  { value: '4:5', label: '4:5', desc: 'Portrait' },
+  { value: '9:16', label: '9:16', desc: 'Story' },
+];
+
+const TEMPLATES = [
+  { icon: '🆕', bn: 'নতুন কালেকশন', en: 'New Collection', postType: 'product', productName: 'নতুন কালেকশন', offer: '', description: 'সম্পূর্ণ নতুন ডিজাইন, লিমিটেড স্টক' },
+  { icon: '🎉', bn: 'ঈদ স্পেশাল',   en: 'Eid Special',    postType: 'sale',    productName: 'ঈদ কালেকশন',    offer: '৩০% ছাড়', description: 'ঈদ উপলক্ষে বিশেষ ছাড়' },
+  { icon: '⚡', bn: 'ফ্ল্যাশ সেল',  en: 'Flash Sale',     postType: 'sale',    productName: 'সিলেক্টেড আইটেম', offer: '৫০% পর্যন্ত ছাড়', description: 'মাত্র ২৪ ঘণ্টার জন্য' },
+  { icon: '📦', bn: 'রিস্টক',        en: 'Back in Stock',  postType: 'announcement', productName: 'পপুলার আইটেম', offer: '', description: 'অনেকদিন পর আবার স্টকে এসেছে' },
+  { icon: '🌟', bn: 'বেস্টসেলার',   en: 'Best Seller',    postType: 'product', productName: 'বেস্টসেলার',    offer: '', description: 'আমাদের সবচেয়ে জনপ্রিয় প্রোডাক্ট' },
+  { icon: '🚨', bn: 'শেষ কয়টি',    en: 'Last Few Left',  postType: 'announcement', productName: 'লিমিটেড স্টক', offer: '', description: 'মাত্র কয়েকটি বাকি, দ্রুত অর্ডার করুন' },
+];
+
+const STYLE_MODIFIERS: Record<string, string> = {
+  minimal: 'clean minimal white background, flat lay, soft shadows',
+  vibrant: 'vibrant colorful background, bold colors, eye-catching',
+  dark: 'dark luxury background, gold accents, premium feel',
+  festival: 'festive colorful bokeh background, celebration mood',
+  sale: 'bold red and yellow sale banner, discount urgency',
+  realistic: 'photorealistic product photography, studio lighting, white background',
 };
 
 export function AutoPostPage({
-  th,
-  pageId,
-  onToast,
+  th, pageId, onToast,
 }: {
-  th: Theme;
-  pageId: number;
-  onToast: (msg: string, type?: 'error' | 'success' | 'info') => void;
+  th: Theme; pageId: number; onToast: (msg: string, type?: 'error' | 'success' | 'info') => void;
 }) {
   const { copy } = useLanguage();
   const { request } = useApi();
+  const fileRef = useRef<HTMLInputElement>(null);
 
+  // Form state
   const [productName, setProductName]   = useState('');
   const [price, setPrice]               = useState('');
   const [offer, setOffer]               = useState('');
   const [description, setDescription]   = useState('');
   const [postType, setPostType]         = useState('product');
   const [language, setLanguage]         = useState('bn');
+
+  // Caption state
   const [caption, setCaption]           = useState('');
-  const [imageUrl, setImageUrl]         = useState('');
+  const [captionTone, setCaptionTone]   = useState('casual');
+  const [captionLoading, setCaptionLoading] = useState(false);
+  const [hashtagLoading, setHashtagLoading] = useState(false);
+
+  // Poster state
+  const [imageTab, setImageTab]         = useState<'ai' | 'photo' | 'upload'>('ai');
+  const [posterStyle, setPosterStyle]   = useState('vibrant');
+  const [aspectRatio, setAspectRatio]   = useState('1:1');
   const [imagePrompt, setImagePrompt]   = useState('');
+  const [imageUrls, setImageUrls]       = useState<string[]>([]);
+  const [selectedImageUrl, setSelectedImageUrl] = useState('');
+  const [imageLoading, setImageLoading] = useState(false);
+
+  // Photo-to-poster state
+  const [productPhotoUrl, setProductPhotoUrl] = useState('');
+  const [photoUploading, setPhotoUploading]   = useState(false);
+  const [posterLoading, setPosterLoading]     = useState(false);
+
+  // Publish state
   const [scheduleMode, setScheduleMode] = useState<'now' | 'later'>('now');
   const [scheduledAt, setScheduledAt]   = useState('');
+  const [postLoading, setPostLoading]   = useState(false);
 
-  const [captionLoading, setCaptionLoading] = useState(false);
-  const [imageLoading, setImageLoading]     = useState(false);
-  const [postLoading, setPostLoading]       = useState(false);
-  const [posts, setPosts]                   = useState<AutoPost[]>([]);
-  const [listLoading, setListLoading]       = useState(true);
+  // History state
+  const [posts, setPosts]               = useState<AutoPost[]>([]);
+  const [listLoading, setListLoading]   = useState(true);
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [retryingId, setRetryingId]     = useState<number | null>(null);
+  const [copiedId, setCopiedId]         = useState<number | null>(null);
 
-  useEffect(() => { loadPosts(); }, [pageId]);
+  // Analytics state
+  const [analytics, setAnalytics]       = useState<Analytics | null>(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [showAnalytics, setShowAnalytics] = useState(false);
+
+  // Best time state
+  const [bestTime, setBestTime]         = useState<BestTime | null>(null);
+
+  useEffect(() => { loadPosts(); loadBestTime(); }, [pageId]);
 
   const loadPosts = async () => {
     setListLoading(true);
@@ -82,13 +159,48 @@ export function AutoPostPage({
     finally { setListLoading(false); }
   };
 
+  const loadBestTime = async () => {
+    try {
+      const data = await request<BestTime>(`${API_BASE}/auto-post/${pageId}/best-time`);
+      setBestTime(data);
+    } catch { /* silent */ }
+  };
+
+  const loadAnalytics = async () => {
+    setAnalyticsLoading(true);
+    try {
+      const data = await request<Analytics>(`${API_BASE}/auto-post/${pageId}/analytics`);
+      setAnalytics(data);
+      setShowAnalytics(true);
+    } catch (e: any) {
+      onToast(e.message || 'Analytics load হয়নি', 'error');
+    } finally { setAnalyticsLoading(false); }
+  };
+
+  const applyTemplate = (t: typeof TEMPLATES[0]) => {
+    setPostType(t.postType);
+    setProductName(t.productName);
+    setOffer(t.offer);
+    setDescription(t.description);
+    onToast(copy('টেমপ্লেট প্রয়োগ হয়েছে', 'Template applied'), 'info');
+  };
+
+  const buildAutoPrompt = () => {
+    if (!productName.trim()) { onToast(copy('আগে প্রোডাক্টের নাম দিন', 'Enter product name first'), 'error'); return; }
+    const styleHint = STYLE_MODIFIERS[posterStyle] || '';
+    const typeHint = postType === 'sale' ? 'sale offer banner' : postType === 'announcement' ? 'announcement poster' : 'product promotional poster';
+    const prompt = `${productName}${price ? `, price ${price}` : ''}${offer ? `, ${offer}` : ''}, ${typeHint}, ${styleHint}, Bangladesh e-commerce`;
+    setImagePrompt(prompt);
+    onToast(copy('Prompt তৈরি হয়েছে', 'Prompt built'), 'info');
+  };
+
   const handleGenerateCaption = async () => {
     if (!productName.trim()) { onToast(copy('প্রোডাক্টের নাম দিন', 'Enter product name'), 'error'); return; }
     setCaptionLoading(true);
     try {
       const res = await request<{ caption: string }>(`${API_BASE}/auto-post/generate-caption`, {
         method: 'POST',
-        body: JSON.stringify({ pageId, productName, price, offer, description, postType, language }),
+        body: JSON.stringify({ pageId, productName, price, offer, description, postType, language, tone: captionTone }),
       });
       setCaption(res.caption);
       onToast(copy('ক্যাপশন তৈরি হয়েছে!', 'Caption generated!'), 'success');
@@ -97,19 +209,113 @@ export function AutoPostPage({
     } finally { setCaptionLoading(false); }
   };
 
+  const handleGenerateHashtags = async () => {
+    if (!productName.trim()) { onToast(copy('প্রোডাক্টের নাম দিন', 'Enter product name'), 'error'); return; }
+    setHashtagLoading(true);
+    try {
+      const res = await request<{ hashtags: string }>(`${API_BASE}/auto-post/generate-hashtags`, {
+        method: 'POST',
+        body: JSON.stringify({ pageId, productName, postType, language }),
+      });
+      setCaption((prev) => prev ? `${prev}\n\n${res.hashtags}` : res.hashtags);
+      onToast(copy('হ্যাশট্যাগ যোগ হয়েছে!', 'Hashtags added!'), 'success');
+    } catch (e: any) {
+      onToast(e.message || 'Hashtag তৈরি হয়নি', 'error');
+    } finally { setHashtagLoading(false); }
+  };
+
   const handleGenerateImage = async () => {
     const prompt = imagePrompt.trim() || `${productName} ${postType} poster`;
     setImageLoading(true);
+    setImageUrls([]);
+    setSelectedImageUrl('');
     try {
-      const res = await request<{ imageUrl: string }>(`${API_BASE}/auto-post/generate-image`, {
+      const res = await request<{ imageUrls: string[] }>(`${API_BASE}/auto-post/generate-image`, {
         method: 'POST',
-        body: JSON.stringify({ pageId, prompt }),
+        body: JSON.stringify({ pageId, prompt, style: posterStyle, aspectRatio, count: 2 }),
       });
-      setImageUrl(res.imageUrl);
+      const urls = res.imageUrls || [];
+      setImageUrls(urls);
+      setSelectedImageUrl(urls[0] || '');
       onToast(copy('পোস্টার তৈরি হয়েছে!', 'Poster generated!'), 'success');
     } catch (e: any) {
       onToast(e.message || copy('পোস্টার তৈরি হয়নি', 'Image generation failed'), 'error');
     } finally { setImageLoading(false); }
+  };
+
+  const handleProductPhotoUpload = async (file: File) => {
+    setPhotoUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('pageId', String(pageId));
+      const token = localStorage.getItem('auth_token') || '';
+      const res = await fetch(`${API_BASE}/auto-post/upload-product-photo`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const data: { imageUrl: string } = await res.json();
+      setProductPhotoUrl(data.imageUrl);
+      onToast(copy('ছবি আপলোড হয়েছে', 'Photo uploaded'), 'success');
+    } catch (e: any) {
+      onToast(e.message || 'Upload ব্যর্থ', 'error');
+    } finally { setPhotoUploading(false); }
+  };
+
+  const handlePosterFromPhoto = async () => {
+    if (!productPhotoUrl) { onToast(copy('আগে ছবি আপলোড করুন', 'Upload photo first'), 'error'); return; }
+    if (!productName.trim()) { onToast(copy('প্রোডাক্টের নাম দিন', 'Enter product name'), 'error'); return; }
+    setPosterLoading(true);
+    setImageUrls([]);
+    setSelectedImageUrl('');
+    try {
+      const res = await request<{ imageUrls: string[] }>(`${API_BASE}/auto-post/poster-from-photo`, {
+        method: 'POST',
+        body: JSON.stringify({ pageId, productPhotoUrl, productName, price, offer, style: posterStyle, aspectRatio }),
+      });
+      const urls = res.imageUrls || [];
+      setImageUrls(urls);
+      setSelectedImageUrl(urls[0] || '');
+      onToast(copy('পোস্টার তৈরি হয়েছে!', 'Poster created!'), 'success');
+    } catch (e: any) {
+      onToast(e.message || copy('পোস্টার তৈরি হয়নি', 'Poster creation failed'), 'error');
+    } finally { setPosterLoading(false); }
+  };
+
+  const handleDirectUpload = async (file: File) => {
+    setPhotoUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('pageId', String(pageId));
+      const token = localStorage.getItem('auth_token') || '';
+      const res = await fetch(`${API_BASE}/auto-post/upload-product-photo`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const data: { imageUrl: string } = await res.json();
+      setSelectedImageUrl(data.imageUrl);
+      setImageUrls([data.imageUrl]);
+      onToast(copy('ছবি আপলোড হয়েছে', 'Image uploaded'), 'success');
+    } catch (e: any) {
+      onToast(e.message || 'Upload ব্যর্থ', 'error');
+    } finally { setPhotoUploading(false); }
+  };
+
+  const applyBestTime = () => {
+    if (!bestTime) return;
+    const now = new Date();
+    now.setHours(bestTime.bestHour, 0, 0, 0);
+    if (now <= new Date()) now.setDate(now.getDate() + 1);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const formatted = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:00`;
+    setScheduledAt(formatted);
+    setScheduleMode('later');
+    onToast(copy('সেরা সময় সেট হয়েছে', 'Best time applied'), 'success');
   };
 
   const handlePost = async () => {
@@ -121,19 +327,16 @@ export function AutoPostPage({
         method: 'POST',
         body: JSON.stringify({
           pageId, caption,
-          imageUrl: imageUrl || undefined,
+          imageUrl: selectedImageUrl || undefined,
           imagePrompt: imagePrompt || undefined,
           postType, language,
           scheduledAt: scheduleMode === 'later' ? scheduledAt : undefined,
         }),
       });
-      onToast(
-        scheduleMode === 'now'
-          ? copy('Facebook এ পোস্ট হয়েছে!', 'Posted to Facebook!')
-          : copy('পোস্ট শিডিউল হয়েছে!', 'Post scheduled!'),
-        'success',
-      );
-      setCaption(''); setImageUrl(''); setImagePrompt(''); setScheduledAt(''); setScheduleMode('now');
+      onToast(scheduleMode === 'now' ? copy('Facebook এ পোস্ট হয়েছে!', 'Posted to Facebook!') : copy('পোস্ট শিডিউল হয়েছে!', 'Post scheduled!'), 'success');
+      setCaption(''); setSelectedImageUrl(''); setImageUrls([]); setImagePrompt('');
+      setScheduledAt(''); setScheduleMode('now'); setProductName(''); setPrice(''); setOffer(''); setDescription('');
+      setProductPhotoUrl('');
       await loadPosts();
     } catch (e: any) {
       onToast(e.message || copy('পোস্ট করা যায়নি', 'Post failed'), 'error');
@@ -151,39 +354,69 @@ export function AutoPostPage({
     }
   };
 
-  // Use th.input (CSSProperties) spread + override width
-  const inp: React.CSSProperties = { ...th.input, width: '100%', fontSize: 14 };
-  const cardStyle: React.CSSProperties = {
-    background: th.panel,
-    borderRadius: 12,
-    padding: 18,
-    border: `1px solid ${th.border}`,
+  const handleRetry = async (id: number) => {
+    setRetryingId(id);
+    try {
+      const updated = await request<AutoPost>(`${API_BASE}/auto-post/${pageId}/${id}/retry`, { method: 'POST' });
+      setPosts((prev) => prev.map((p) => p.id === id ? updated : p));
+      onToast(copy('পোস্ট হয়েছে!', 'Posted!'), 'success');
+    } catch (e: any) {
+      onToast(e.message || 'Retry ব্যর্থ', 'error');
+      await loadPosts();
+    } finally { setRetryingId(null); }
   };
 
-  const actionBtn = (color: string, disabled?: boolean): React.CSSProperties => ({
-    background: disabled ? th.border : color,
-    color: '#fff',
-    border: 'none',
-    borderRadius: 8,
-    padding: '10px 18px',
-    fontSize: 13,
-    fontWeight: 600,
-    cursor: disabled ? 'not-allowed' : 'pointer',
-    opacity: disabled ? 0.6 : 1,
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: 6,
+  const handleClone = (post: AutoPost) => {
+    setCaption(post.caption);
+    setSelectedImageUrl(post.imageUrl || '');
+    setImageUrls(post.imageUrl ? [post.imageUrl] : []);
+    setImagePrompt(post.imagePrompt || '');
+    setPostType(post.postType);
+    setLanguage(post.language);
+    setScheduleMode('now'); setScheduledAt('');
+    onToast(copy('পোস্ট ক্লোন হয়েছে', 'Post cloned'), 'info');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleCopyCaption = (post: AutoPost) => {
+    navigator.clipboard.writeText(post.caption).then(() => {
+      setCopiedId(post.id);
+      setTimeout(() => setCopiedId(null), 2000);
+    });
+  };
+
+  const fbPostUrl = (fbPostId: string) => `https://www.facebook.com/${fbPostId.replace('_', '/posts/')}`;
+  const resolveUrl = (url: string) => url.startsWith('/storage') ? `${API_BASE}${url}` : url;
+
+  const inp: React.CSSProperties = { ...th.input, width: '100%', fontSize: 14 };
+  const card: React.CSSProperties = { background: th.panel, borderRadius: 12, padding: 18, border: `1px solid ${th.border}` };
+
+  const btn = (color: string, disabled?: boolean): React.CSSProperties => ({
+    background: disabled ? th.border : color, color: '#fff', border: 'none', borderRadius: 8,
+    padding: '9px 16px', fontSize: 13, fontWeight: 600, cursor: disabled ? 'not-allowed' : 'pointer',
+    opacity: disabled ? 0.6 : 1, display: 'inline-flex', alignItems: 'center', gap: 6,
   });
 
-  const currentPostTypeLabel = POST_TYPES.find((t) => t.value === postType);
-  const imgSrc = imageUrl
-    ? imageUrl.startsWith('/storage') ? `${API_BASE}${imageUrl}` : imageUrl
-    : '';
+  const smBtn = (color: string, disabled?: boolean): React.CSSProperties => ({
+    background: disabled ? th.border : color, color: '#fff', border: 'none', borderRadius: 6,
+    padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: disabled ? 'not-allowed' : 'pointer',
+    opacity: disabled ? 0.6 : 1, display: 'inline-flex', alignItems: 'center', gap: 4,
+  });
+
+  const filteredPosts = statusFilter === 'all' ? posts : posts.filter((p) => p.status === statusFilter);
+  const statusCounts = {
+    all: posts.length,
+    published: posts.filter((p) => p.status === 'published').length,
+    scheduled: posts.filter((p) => p.status === 'scheduled').length,
+    failed: posts.filter((p) => p.status === 'failed').length,
+  };
+  const captionLen = caption.length;
 
   return (
-    <div style={{ padding: '20px 16px', maxWidth: 900, margin: '0 auto' }}>
+    <div style={{ padding: '20px 16px', maxWidth: 980, margin: '0 auto' }}>
+
       {/* Header */}
-      <div style={{ marginBottom: 24 }}>
+      <div style={{ marginBottom: 16 }}>
         <h2 style={{ color: th.text, fontSize: 20, fontWeight: 700, margin: 0 }}>
           📲 {copy('Facebook Auto Post', 'Facebook Auto Post')}
         </h2>
@@ -193,114 +426,270 @@ export function AutoPostPage({
         </p>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,330px)', gap: 20, alignItems: 'start' }}>
+      {/* Quick Templates */}
+      <div style={{ ...card, marginBottom: 16 }}>
+        <div style={{ color: th.muted, fontSize: 11, fontWeight: 700, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+          ⚡ {copy('দ্রুত শুরু করুন', 'Quick Start')}
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {TEMPLATES.map((t) => (
+            <button key={t.bn} onClick={() => applyTemplate(t)} style={{
+              background: th.surface, border: `1px solid ${th.border}`, borderRadius: 20,
+              padding: '5px 14px', fontSize: 12, color: th.text, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: 5, fontWeight: 500,
+            }}>
+              {t.icon} {copy(t.bn, t.en)}
+            </button>
+          ))}
+        </div>
+      </div>
 
-        {/* ── Left: Form ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,340px)', gap: 20, alignItems: 'start' }}>
+
+        {/* ── Left ── */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-          {/* Step 1 */}
-          <div style={cardStyle}>
+          {/* ① Post Details */}
+          <div style={card}>
             <div style={{ color: th.text, fontWeight: 700, fontSize: 14, marginBottom: 14 }}>
-              ① {copy('পোস্টের তথ্য দিন', 'Enter Post Details')}
+              ① {copy('পোস্টের তথ্য দিন', 'Post Details')}
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
               <div>
-                <label style={{ color: th.muted, fontSize: 12, display: 'block', marginBottom: 4 }}>
-                  {copy('পোস্টের ধরন', 'Post Type')}
-                </label>
+                <label style={{ color: th.muted, fontSize: 12, display: 'block', marginBottom: 4 }}>{copy('পোস্টের ধরন', 'Post Type')}</label>
                 <select value={postType} onChange={(e) => setPostType(e.target.value)} style={inp}>
-                  {POST_TYPES.map((t) => (
-                    <option key={t.value} value={t.value}>{copy(t.bn, t.en)}</option>
-                  ))}
+                  {POST_TYPES.map((t) => <option key={t.value} value={t.value}>{copy(t.bn, t.en)}</option>)}
                 </select>
               </div>
               <div>
-                <label style={{ color: th.muted, fontSize: 12, display: 'block', marginBottom: 4 }}>
-                  {copy('ভাষা', 'Language')}
-                </label>
+                <label style={{ color: th.muted, fontSize: 12, display: 'block', marginBottom: 4 }}>{copy('ভাষা', 'Language')}</label>
                 <select value={language} onChange={(e) => setLanguage(e.target.value)} style={inp}>
                   <option value="bn">বাংলা</option>
                   <option value="en">English</option>
                 </select>
               </div>
             </div>
-            <input
-              style={{ ...inp, marginBottom: 10 }}
-              placeholder={copy('প্রোডাক্টের নাম *', 'Product name *')}
-              value={productName}
-              onChange={(e) => setProductName(e.target.value)}
-            />
+            <input style={{ ...inp, marginBottom: 10 }} placeholder={copy('প্রোডাক্টের নাম *', 'Product name *')} value={productName} onChange={(e) => setProductName(e.target.value)} />
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
               <input style={inp} placeholder={copy('মূল্য (৳৮৫০)', 'Price (৳850)')} value={price} onChange={(e) => setPrice(e.target.value)} />
               <input style={inp} placeholder={copy('অফার (৩০% ছাড়)', 'Offer (30% off)')} value={offer} onChange={(e) => setOffer(e.target.value)} />
             </div>
-            <textarea
-              style={{ ...inp, minHeight: 70, resize: 'vertical' }}
-              placeholder={copy('বিবরণ (ঐচ্ছিক)', 'Description (optional)')}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-            />
+            <textarea style={{ ...inp, minHeight: 60, resize: 'vertical' }} placeholder={copy('বিবরণ (ঐচ্ছিক)', 'Description (optional)')} value={description} onChange={(e) => setDescription(e.target.value)} />
           </div>
 
-          {/* Step 2: Caption */}
-          <div style={cardStyle}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          {/* ② AI Caption */}
+          <div style={card}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
               <div style={{ color: th.text, fontWeight: 700, fontSize: 14 }}>
                 ② {copy('AI ক্যাপশন', 'AI Caption')}
               </div>
-              <button style={actionBtn('#6366f1', captionLoading)} onClick={handleGenerateCaption} disabled={captionLoading}>
-                {captionLoading ? <Spinner size={14} color="#fff" /> : '🤖'}
-                {copy('AI দিয়ে লেখো', 'Generate with AI')}
-              </button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button style={smBtn('#8b5cf6', hashtagLoading)} onClick={handleGenerateHashtags} disabled={hashtagLoading}>
+                  {hashtagLoading ? <Spinner size={10} color="#fff" /> : '🏷️'}
+                  {copy('Hashtag', 'Hashtag')}
+                </button>
+                <button style={btn('#6366f1', captionLoading)} onClick={handleGenerateCaption} disabled={captionLoading}>
+                  {captionLoading ? <Spinner size={14} color="#fff" /> : '🤖'}
+                  {copy('AI লেখো', 'Generate')}
+                </button>
+              </div>
             </div>
+
+            {/* Tone selector */}
+            <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
+              {CAPTION_TONES.map((t) => (
+                <button key={t.value} onClick={() => setCaptionTone(t.value)} style={{
+                  background: captionTone === t.value ? '#6366f122' : 'transparent',
+                  color: captionTone === t.value ? '#6366f1' : th.muted,
+                  border: `1px solid ${captionTone === t.value ? '#6366f1' : th.border}`,
+                  borderRadius: 16, padding: '3px 10px', fontSize: 11,
+                  fontWeight: captionTone === t.value ? 700 : 400, cursor: 'pointer',
+                }}>
+                  {t.icon} {copy(t.bn, t.en)}
+                </button>
+              ))}
+            </div>
+
             <textarea
-              style={{ ...inp, minHeight: 120, resize: 'vertical' }}
+              style={{ ...inp, minHeight: 120, resize: 'vertical', borderColor: captionLen > 500 ? '#f59e0b' : undefined }}
               placeholder={copy('এখানে AI ক্যাপশন আসবে, অথবা নিজে লিখুন...', 'AI caption will appear here, or type your own...')}
               value={caption}
               onChange={(e) => setCaption(e.target.value)}
             />
-            <div style={{ color: th.muted, fontSize: 11, marginTop: 6 }}>
-              {copy('Gemini Flash (বিনামূল্যে) বা GPT-4o Mini ব্যবহার করে', 'Uses Gemini Flash (free) or GPT-4o Mini')}
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
+              <div style={{ color: th.muted, fontSize: 11 }}>{copy('Gemini Flash বা GPT-4o Mini', 'Gemini Flash or GPT-4o Mini')}</div>
+              <div style={{ fontSize: 11, color: captionLen > 500 ? '#f59e0b' : th.muted, fontWeight: captionLen > 500 ? 600 : 400 }}>
+                {captionLen} {copy('অক্ষর', 'chars')}{captionLen > 500 ? ` ⚠️` : ''}
+              </div>
             </div>
           </div>
 
-          {/* Step 3: Image */}
-          <div style={cardStyle}>
+          {/* ③ Poster / Image */}
+          <div style={card}>
             <div style={{ color: th.text, fontWeight: 700, fontSize: 14, marginBottom: 12 }}>
               ③ {copy('পোস্টার / ছবি', 'Poster / Image')}
             </div>
-            <input
-              style={{ ...inp, marginBottom: 10 }}
-              placeholder={copy('AI image prompt (যেমন: red floral dress on white background)', 'AI image prompt (e.g. red floral dress on white background)')}
-              value={imagePrompt}
-              onChange={(e) => setImagePrompt(e.target.value)}
-            />
-            <div style={{ display: 'flex', gap: 10, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-              <button style={actionBtn('#0ea5e9', imageLoading)} onClick={handleGenerateImage} disabled={imageLoading}>
-                {imageLoading ? <Spinner size={14} color="#fff" /> : '🎨'}
-                {copy('AI পোস্টার তৈরি', 'Generate AI Poster')}
-              </button>
-              <span style={{ color: th.muted, fontSize: 11 }}>
-                {copy('fal.ai FLUX (~$0.001) বা Ideogram', 'fal.ai FLUX (~$0.001) or Ideogram')}
-              </span>
+
+            {/* Image source tabs */}
+            <div style={{ display: 'flex', gap: 0, marginBottom: 16, borderRadius: 8, overflow: 'hidden', border: `1px solid ${th.border}` }}>
+              {([['ai', '🤖 AI তৈরি', 'AI Generate'], ['photo', '📷 ছবি থেকে Poster', 'Photo→Poster'], ['upload', '🖼️ শুধু Upload', 'Just Upload']] as const).map(([tab, bn, en]) => (
+                <button key={tab} onClick={() => setImageTab(tab)} style={{
+                  flex: 1, background: imageTab === tab ? '#0ea5e9' : th.surface,
+                  color: imageTab === tab ? '#fff' : th.muted, border: 'none',
+                  padding: '8px 4px', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                }}>
+                  {copy(bn, en)}
+                </button>
+              ))}
             </div>
-            {imgSrc ? (
-              <div style={{ position: 'relative', display: 'inline-block' }}>
-                <img src={imgSrc} alt="Generated poster" style={{ width: '100%', maxWidth: 300, borderRadius: 8, border: `1px solid ${th.border}` }} />
-                <button
-                  onClick={() => setImageUrl('')}
-                  style={{ position: 'absolute', top: 6, right: 6, background: '#ef4444', color: '#fff', border: 'none', borderRadius: '50%', width: 24, height: 24, cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                >✕</button>
+
+            {/* Style picker (shared across tabs) */}
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ color: th.muted, fontSize: 11, marginBottom: 6 }}>{copy('পোস্টার স্টাইল', 'Poster Style')}</div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {POSTER_STYLES.map((s) => (
+                  <button key={s.value} onClick={() => setPosterStyle(s.value)} style={{
+                    background: posterStyle === s.value ? `${s.color}22` : th.surface,
+                    color: posterStyle === s.value ? s.color : th.muted,
+                    border: `1.5px solid ${posterStyle === s.value ? s.color : th.border}`,
+                    borderRadius: 20, padding: '4px 12px', fontSize: 12, fontWeight: posterStyle === s.value ? 700 : 400,
+                    cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
+                  }}>
+                    {s.icon} {copy(s.bn, s.en)}
+                  </button>
+                ))}
               </div>
-            ) : (
-              <div style={{ border: `2px dashed ${th.border}`, borderRadius: 8, padding: 24, textAlign: 'center', color: th.muted, fontSize: 13 }}>
+            </div>
+
+            {/* Aspect ratio */}
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ color: th.muted, fontSize: 11, marginBottom: 6 }}>{copy('সাইজ / অ্যাসপেক্ট রেশিও', 'Size / Aspect Ratio')}</div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {ASPECT_RATIOS.map((ar) => (
+                  <button key={ar.value} onClick={() => setAspectRatio(ar.value)} style={{
+                    background: aspectRatio === ar.value ? '#6366f122' : th.surface,
+                    color: aspectRatio === ar.value ? '#6366f1' : th.muted,
+                    border: `1.5px solid ${aspectRatio === ar.value ? '#6366f1' : th.border}`,
+                    borderRadius: 8, padding: '6px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                    display: 'flex', flexDirection: 'column', alignItems: 'center',
+                  }}>
+                    <span>{ar.label}</span>
+                    <span style={{ fontSize: 10, fontWeight: 400 }}>{ar.desc}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Tab content */}
+            {imageTab === 'ai' && (
+              <div>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                  <input
+                    style={{ ...inp, flex: 1 }}
+                    placeholder={copy('AI image prompt (যেমন: red floral dress on white)', 'AI image prompt (e.g. red floral dress on white)')}
+                    value={imagePrompt}
+                    onChange={(e) => setImagePrompt(e.target.value)}
+                  />
+                  <button onClick={buildAutoPrompt} style={smBtn('#f59e0b')} title={copy('Auto prompt তৈরি করো', 'Build prompt automatically')}>
+                    ✨ Auto
+                  </button>
+                </div>
+                <button style={btn('#0ea5e9', imageLoading)} onClick={handleGenerateImage} disabled={imageLoading}>
+                  {imageLoading ? <Spinner size={14} color="#fff" /> : '🎨'}
+                  {copy('AI পোস্টার তৈরি (২টি variation)', 'Generate AI Poster (2 variants)')}
+                </button>
+                <div style={{ color: th.muted, fontSize: 11, marginTop: 6 }}>
+                  {copy('fal.ai FLUX — ২টি variation থেকে বেছে নিন', 'fal.ai FLUX — pick from 2 variations')}
+                </div>
+              </div>
+            )}
+
+            {imageTab === 'photo' && (
+              <div>
+                <div style={{ color: th.muted, fontSize: 12, marginBottom: 8 }}>
+                  {copy('নিজের product photo দিন → AI দিয়ে professional poster বানাবে', 'Upload your product photo → AI creates a professional poster')}
+                </div>
+                {productPhotoUrl ? (
+                  <div style={{ marginBottom: 10 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                      <img src={resolveUrl(productPhotoUrl)} alt="product" style={{ width: 70, height: 70, objectFit: 'cover', borderRadius: 8, border: `1px solid ${th.border}` }} />
+                      <div>
+                        <div style={{ color: '#10b981', fontSize: 12, marginBottom: 4 }}>✓ {copy('ছবি আপলোড হয়েছে', 'Photo uploaded')}</div>
+                        <button onClick={() => setProductPhotoUrl('')} style={smBtn('#ef4444')}>{copy('পরিবর্তন করুন', 'Change')}</button>
+                      </div>
+                    </div>
+                    <button style={btn('#8b5cf6', posterLoading)} onClick={handlePosterFromPhoto} disabled={posterLoading}>
+                      {posterLoading ? <Spinner size={14} color="#fff" /> : '✨'}
+                      {copy('Poster তৈরি করো', 'Create Poster')}
+                    </button>
+                  </div>
+                ) : (
+                  <div
+                    onClick={() => { const i = document.createElement('input'); i.type = 'file'; i.accept = 'image/*'; i.onchange = (e) => { const f = (e.target as HTMLInputElement).files?.[0]; if (f) handleProductPhotoUpload(f); }; i.click(); }}
+                    style={{ border: `2px dashed ${th.border}`, borderRadius: 8, padding: 24, textAlign: 'center', cursor: 'pointer', color: th.muted, fontSize: 13 }}
+                  >
+                    {photoUploading ? <Spinner size={20} /> : (
+                      <>
+                        <div style={{ fontSize: 28, marginBottom: 6 }}>📷</div>
+                        {copy('Product photo ক্লিক করে আপলোড করুন', 'Click to upload product photo')}
+                        <div style={{ fontSize: 11, marginTop: 4 }}>JPG, PNG — max 5MB</div>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {imageTab === 'upload' && (
+              <div
+                onClick={() => { const i = document.createElement('input'); i.type = 'file'; i.accept = 'image/*'; i.onchange = (e) => { const f = (e.target as HTMLInputElement).files?.[0]; if (f) handleDirectUpload(f); }; i.click(); }}
+                style={{ border: `2px dashed ${th.border}`, borderRadius: 8, padding: 24, textAlign: 'center', cursor: 'pointer', color: th.muted, fontSize: 13 }}
+              >
+                {photoUploading ? <Spinner size={20} /> : (
+                  <>
+                    <div style={{ fontSize: 28, marginBottom: 6 }}>🖼️</div>
+                    {copy('নিজের ছবি আপলোড করুন (AI ছাড়া)', 'Upload your own image (no AI)')}
+                    <div style={{ fontSize: 11, marginTop: 4 }}>JPG, PNG — directly use in post</div>
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* Variation picker */}
+            {imageUrls.length > 0 && (
+              <div style={{ marginTop: 14 }}>
+                <div style={{ color: th.muted, fontSize: 11, marginBottom: 8 }}>
+                  {imageUrls.length > 1 ? copy('একটি পোস্টার বেছে নিন:', 'Pick a poster:') : copy('তৈরি পোস্টার:', 'Generated poster:')}
+                </div>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  {imageUrls.map((url) => (
+                    <div key={url} onClick={() => setSelectedImageUrl(url)} style={{
+                      position: 'relative', cursor: 'pointer', borderRadius: 8,
+                      border: `3px solid ${selectedImageUrl === url ? '#10b981' : th.border}`,
+                      overflow: 'hidden', flex: 1,
+                    }}>
+                      <img src={resolveUrl(url)} alt="" style={{ width: '100%', display: 'block', maxHeight: 160, objectFit: 'cover' }} />
+                      {selectedImageUrl === url && (
+                        <div style={{ position: 'absolute', top: 6, right: 6, background: '#10b981', borderRadius: '50%', width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 13 }}>✓</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <button onClick={() => { setImageUrls([]); setSelectedImageUrl(''); }} style={{ ...smBtn('#6b7280'), marginTop: 8 }}>
+                  {copy('ছবি সরাও', 'Remove image')}
+                </button>
+              </div>
+            )}
+
+            {imageUrls.length === 0 && !selectedImageUrl && imageTab !== 'photo' && (
+              <div style={{ border: `2px dashed ${th.border}`, borderRadius: 8, padding: 16, textAlign: 'center', color: th.muted, fontSize: 12, marginTop: 10 }}>
                 {copy('ছবি ছাড়াও পোস্ট করা যাবে (শুধু টেক্সট)', 'Can post without image (text only)')}
               </div>
             )}
           </div>
 
-          {/* Step 4: Publish */}
-          <div style={cardStyle}>
+          {/* ④ Publish */}
+          <div style={card}>
             <div style={{ color: th.text, fontWeight: 700, fontSize: 14, marginBottom: 14 }}>
               ④ {copy('পোস্ট করুন', 'Publish')}
             </div>
@@ -313,10 +702,30 @@ export function AutoPostPage({
               ))}
             </div>
             {scheduleMode === 'later' && (
-              <input type="datetime-local" style={{ ...inp, marginBottom: 14 }} value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} />
+              <div style={{ marginBottom: 14 }}>
+                <input type="datetime-local" style={{ ...inp, marginBottom: 8 }} value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} />
+                {bestTime && (
+                  <div style={{ background: `${th.surface}`, borderRadius: 8, padding: '8px 12px', border: `1px solid ${th.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <div style={{ color: th.text, fontSize: 12, fontWeight: 600 }}>
+                        💡 {bestTime.message}
+                      </div>
+                      <div style={{ color: th.muted, fontSize: 11 }}>
+                        {bestTime.basedOn === 'history' ? copy('আপনার পোস্ট ইতিহাস অনুযায়ী', 'Based on your post history') : copy('বাংলাদেশের সেরা সময়', 'Bangladesh best practice')}
+                      </div>
+                    </div>
+                    <button onClick={applyBestTime} style={smBtn('#10b981')}>
+                      {copy('ব্যবহার করুন', 'Use this')}
+                    </button>
+                  </div>
+                )}
+                <div style={{ color: th.muted, fontSize: 11, marginTop: 6 }}>
+                  ⏰ {copy('প্রতি ৫ মিনিটে স্বয়ংক্রিয়ভাবে পোস্ট হবে', 'Auto-publishes every 5 minutes via scheduler')}
+                </div>
+              </div>
             )}
             <button
-              style={{ ...actionBtn('#10b981', postLoading || !caption.trim()), width: '100%', justifyContent: 'center', fontSize: 15 }}
+              style={{ ...btn('#10b981', postLoading || !caption.trim()), width: '100%', justifyContent: 'center', fontSize: 15 }}
               onClick={handlePost}
               disabled={postLoading || !caption.trim()}
             >
@@ -326,55 +735,143 @@ export function AutoPostPage({
           </div>
         </div>
 
-        {/* ── Right: Preview + History ── */}
+        {/* ── Right: Preview + Analytics + History ── */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
           {/* Preview */}
-          <div style={cardStyle}>
+          <div style={card}>
             <div style={{ color: th.muted, fontSize: 11, fontWeight: 700, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>
               {copy('প্রিভিউ', 'Preview')}
             </div>
-            {imgSrc && (
-              <img src={imgSrc} alt="preview" style={{ width: '100%', borderRadius: 8, marginBottom: 10, objectFit: 'cover', maxHeight: 200 }} />
+            {selectedImageUrl && (
+              <img src={resolveUrl(selectedImageUrl)} alt="preview" style={{ width: '100%', borderRadius: 8, marginBottom: 10, objectFit: 'cover', maxHeight: 200 }} />
             )}
             <div style={{ color: th.text, fontSize: 13, lineHeight: 1.6, whiteSpace: 'pre-wrap', minHeight: 60 }}>
               {caption || <span style={{ color: th.muted }}>{copy('ক্যাপশন এখানে দেখাবে...', 'Caption will appear here...')}</span>}
             </div>
-            {currentPostTypeLabel && (
+            {postType && (
               <div style={{ marginTop: 10 }}>
                 <span style={{ background: '#6366f120', color: '#6366f1', borderRadius: 20, padding: '2px 10px', fontSize: 11, fontWeight: 600 }}>
-                  {copy(currentPostTypeLabel.bn, currentPostTypeLabel.en)}
+                  {copy(POST_TYPES.find((t) => t.value === postType)?.bn || postType, POST_TYPES.find((t) => t.value === postType)?.en || postType)}
                 </span>
               </div>
             )}
           </div>
 
+          {/* AI Analytics */}
+          <div style={card}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: showAnalytics && analytics ? 12 : 0 }}>
+              <div style={{ color: th.text, fontWeight: 700, fontSize: 14 }}>
+                📊 {copy('AI বিশ্লেষণ', 'AI Analytics')}
+              </div>
+              <button onClick={showAnalytics ? () => setShowAnalytics(false) : loadAnalytics} style={smBtn('#8b5cf6', analyticsLoading)}>
+                {analyticsLoading ? <Spinner size={10} color="#fff" /> : showAnalytics ? copy('বন্ধ করুন', 'Hide') : copy('দেখুন', 'View')}
+              </button>
+            </div>
+
+            {showAnalytics && analytics && (
+              <div>
+                {/* Stat cards */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
+                  {[
+                    { label: copy('মোট পোস্ট', 'Total'), value: analytics.totalPosts, color: '#6366f1' },
+                    { label: copy('সফলতার হার', 'Success Rate'), value: `${analytics.successRate}%`, color: '#10b981' },
+                    { label: copy('প্রকাশিত', 'Published'), value: analytics.publishedCount, color: '#10b981' },
+                    { label: copy('ব্যর্থ', 'Failed'), value: analytics.failedCount, color: '#ef4444' },
+                  ].map((s) => (
+                    <div key={s.label} style={{ background: th.surface, borderRadius: 8, padding: '8px 12px', border: `1px solid ${th.border}`, textAlign: 'center' }}>
+                      <div style={{ color: s.color, fontSize: 18, fontWeight: 700 }}>{s.value}</div>
+                      <div style={{ color: th.muted, fontSize: 11 }}>{s.label}</div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ background: th.surface, borderRadius: 8, padding: '8px 12px', border: `1px solid ${th.border}`, marginBottom: 10, fontSize: 12 }}>
+                  <div style={{ color: th.muted, marginBottom: 2 }}>
+                    🏆 {copy('সেরা পোস্ট টাইপ:', 'Top post type:')} <strong style={{ color: th.text }}>{analytics.topPostType}</strong>
+                  </div>
+                  <div style={{ color: th.muted }}>
+                    ⏰ {copy('সবচেয়ে বেশি পোস্ট:', 'Most active:')} <strong style={{ color: th.text }}>{analytics.topPostingDay}, {analytics.topPostingHour}:00</strong>
+                  </div>
+                </div>
+                {analytics.aiInsight && (
+                  <div style={{ background: '#6366f108', borderRadius: 8, padding: '10px 12px', border: `1px solid #6366f122`, color: th.text, fontSize: 12, lineHeight: 1.7 }}>
+                    🤖 {analytics.aiInsight}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           {/* History */}
-          <div style={cardStyle}>
-            <div style={{ color: th.text, fontWeight: 700, fontSize: 14, marginBottom: 12 }}>
+          <div style={card}>
+            <div style={{ color: th.text, fontWeight: 700, fontSize: 14, marginBottom: 10 }}>
               {copy('পোস্ট হিস্টোরি', 'Post History')}
             </div>
+
+            {/* Status filter tabs */}
+            <div style={{ display: 'flex', gap: 5, marginBottom: 12, flexWrap: 'wrap' }}>
+              {(['all', 'published', 'scheduled', 'failed'] as const).map((s) => {
+                const active = statusFilter === s;
+                const color = s === 'all' ? '#6b7280' : STATUS_COLOR[s];
+                const labels: Record<string, string> = {
+                  all: copy('সব', 'All'),
+                  published: copy('প্রকাশিত', 'Published'),
+                  scheduled: copy('শিডিউলড', 'Scheduled'),
+                  failed: copy('ব্যর্থ', 'Failed'),
+                };
+                return (
+                  <button key={s} onClick={() => setStatusFilter(s)} style={{
+                    background: active ? `${color}22` : 'transparent',
+                    color: active ? color : th.muted,
+                    border: `1px solid ${active ? color : th.border}`,
+                    borderRadius: 16, padding: '3px 10px', fontSize: 11,
+                    fontWeight: active ? 700 : 400, cursor: 'pointer',
+                  }}>
+                    {labels[s]} ({statusCounts[s]})
+                  </button>
+                );
+              })}
+            </div>
+
             {listLoading ? (
               <div style={{ textAlign: 'center', padding: 20 }}><Spinner /></div>
-            ) : posts.length === 0 ? (
+            ) : filteredPosts.length === 0 ? (
               <div style={{ color: th.muted, fontSize: 13, textAlign: 'center', padding: 20 }}>
                 {copy('কোনো পোস্ট নেই', 'No posts yet')}
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 480, overflowY: 'auto' }}>
-                {posts.map((post) => (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 560, overflowY: 'auto' }}>
+                {filteredPosts.map((post) => (
                   <div key={post.id} style={{ background: th.surface, borderRadius: 8, padding: 12, border: `1px solid ${th.border}`, fontSize: 13 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 6 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 6, marginBottom: 6 }}>
                       <span style={{ background: `${STATUS_COLOR[post.status] ?? '#6b7280'}22`, color: STATUS_COLOR[post.status] ?? '#6b7280', borderRadius: 20, padding: '2px 8px', fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap' }}>
                         {STATUS_BN[post.status] ?? post.status}
                       </span>
-                      {post.status !== 'publishing' && (
-                        <button onClick={() => handleDelete(post.id)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 12, padding: 0 }}>✕</button>
-                      )}
+                      <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                        <button onClick={() => handleCopyCaption(post)} title={copy('ক্যাপশন কপি', 'Copy caption')}
+                          style={{ background: 'none', border: 'none', color: copiedId === post.id ? '#10b981' : th.muted, cursor: 'pointer', fontSize: 13, padding: '0 2px' }}>
+                          {copiedId === post.id ? '✓' : '⎘'}
+                        </button>
+                        <button onClick={() => handleClone(post)} title={copy('ক্লোন করো', 'Clone')}
+                          style={{ background: 'none', border: 'none', color: th.muted, cursor: 'pointer', fontSize: 12, padding: '0 2px' }}>
+                          🔁
+                        </button>
+                        {post.status !== 'publishing' && (
+                          <button onClick={() => handleDelete(post.id)}
+                            style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 12, padding: '0 2px' }}>✕
+                          </button>
+                        )}
+                      </div>
                     </div>
+
                     <div style={{ color: th.text, lineHeight: 1.5, marginBottom: 4, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
                       {post.caption}
                     </div>
+
+                    {post.imageUrl && (
+                      <img src={resolveUrl(post.imageUrl)} alt="" style={{ width: '100%', height: 80, objectFit: 'cover', borderRadius: 6, marginBottom: 4 }} />
+                    )}
+
                     {post.scheduledAt && post.status === 'scheduled' && (
                       <div style={{ color: th.muted, fontSize: 11 }}>⏰ {new Date(post.scheduledAt).toLocaleString('bn-BD')}</div>
                     )}
@@ -384,6 +881,23 @@ export function AutoPostPage({
                     {post.errorMsg && (
                       <div style={{ color: '#ef4444', fontSize: 11, marginTop: 4 }}>⚠️ {post.errorMsg}</div>
                     )}
+
+                    {(post.status === 'published' || post.status === 'failed') && (
+                      <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                        {post.status === 'published' && post.fbPostId && (
+                          <a href={fbPostUrl(post.fbPostId)} target="_blank" rel="noopener noreferrer"
+                            style={{ ...smBtn('#1877f2'), textDecoration: 'none' }}>
+                            👁 {copy('FB তে দেখো', 'View on FB')}
+                          </a>
+                        )}
+                        {post.status === 'failed' && (
+                          <button style={smBtn('#f59e0b', retryingId === post.id)} onClick={() => handleRetry(post.id)} disabled={retryingId === post.id}>
+                            {retryingId === post.id ? <Spinner size={10} color="#fff" /> : '↻'}
+                            {copy('আবার চেষ্টা', 'Retry')}
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -391,6 +905,9 @@ export function AutoPostPage({
           </div>
         </div>
       </div>
+
+      {/* hidden ref for file input (unused but kept for future) */}
+      <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} />
     </div>
   );
 }

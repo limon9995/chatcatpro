@@ -6,4 +6,5 @@ export class GenerateCaptionDto {
   description?: string;
   postType?: string; // product | sale | announcement | custom
   language?: string; // bn | en
+  tone?: string;     // casual | professional | urgent | story
 }
