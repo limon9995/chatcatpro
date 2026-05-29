@@ -4,6 +4,7 @@ import type { PrintPagePreset } from './PrintPage';
 import type { FollowUpPagePreset } from './FollowUpPage';
 import type { AccountingPagePreset } from './AccountingPage';
 import { getTheme, LanguageSwitch, Spinner, Toast, safeLazy } from '../components/ui';
+import { ChatbotWidget } from '../components/ChatbotWidget';
 import { API_BASE, useApi } from '../hooks/useApi';
 import { useLanguage } from '../i18n';
 
@@ -1201,6 +1202,7 @@ export function DashboardLayout({
           .mobile-scroll-x { overflow-x: auto; -webkit-overflow-scrolling: touch; }
         }
       `}</style>
+      <ChatbotWidget currentPage={nav} dark={dark} />
     </div>
   );
 }
