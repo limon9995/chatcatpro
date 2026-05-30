@@ -1,6 +1,60 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { API_BASE, useApi } from '../hooks/useApi';
 
+function LizaAvatar({ size }: { size: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ borderRadius: '50%', display: 'block' }}>
+      <defs>
+        <linearGradient id="liza-bg" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#6366f1" />
+          <stop offset="100%" stopColor="#a78bfa" />
+        </linearGradient>
+        <linearGradient id="liza-face" x1="16" y1="14" x2="48" y2="50" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#fde8d8" />
+          <stop offset="100%" stopColor="#fcd5bd" />
+        </linearGradient>
+        <linearGradient id="liza-hair" x1="12" y1="8" x2="52" y2="28" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#1e1b4b" />
+          <stop offset="100%" stopColor="#312e81" />
+        </linearGradient>
+      </defs>
+      {/* Background circle */}
+      <circle cx="32" cy="32" r="32" fill="url(#liza-bg)" />
+      {/* Hair back */}
+      <ellipse cx="32" cy="24" rx="16" ry="17" fill="url(#liza-hair)" />
+      {/* Face */}
+      <ellipse cx="32" cy="30" rx="13" ry="14" fill="url(#liza-face)" />
+      {/* Hair top/sides */}
+      <path d="M16 24 Q14 10 32 8 Q50 10 48 24 Q46 14 32 13 Q18 14 16 24Z" fill="url(#liza-hair)" />
+      {/* Side hair strands */}
+      <path d="M19 28 Q14 32 16 40 Q18 34 20 30Z" fill="url(#liza-hair)" />
+      <path d="M45 28 Q50 32 48 40 Q46 34 44 30Z" fill="url(#liza-hair)" />
+      {/* Eyes */}
+      <ellipse cx="26" cy="28" rx="2.5" ry="3" fill="#1e1b4b" />
+      <ellipse cx="38" cy="28" rx="2.5" ry="3" fill="#1e1b4b" />
+      {/* Eye shine */}
+      <circle cx="27.2" cy="26.8" r="0.9" fill="white" />
+      <circle cx="39.2" cy="26.8" r="0.9" fill="white" />
+      {/* Eyebrows */}
+      <path d="M23 24.5 Q26 23 29 24.5" stroke="#312e81" strokeWidth="1.2" strokeLinecap="round" fill="none" />
+      <path d="M35 24.5 Q38 23 41 24.5" stroke="#312e81" strokeWidth="1.2" strokeLinecap="round" fill="none" />
+      {/* Nose */}
+      <circle cx="32" cy="32" r="0.8" fill="#e8a98a" />
+      {/* Smile */}
+      <path d="M27 36 Q32 40 37 36" stroke="#c97b5a" strokeWidth="1.4" strokeLinecap="round" fill="none" />
+      {/* Cheeks */}
+      <ellipse cx="22" cy="34" rx="3.5" ry="2" fill="#f9a8d4" opacity="0.4" />
+      <ellipse cx="42" cy="34" rx="3.5" ry="2" fill="#f9a8d4" opacity="0.4" />
+      {/* Shirt/body */}
+      <path d="M20 54 Q20 46 32 44 Q44 46 44 54 L44 64 L20 64Z" fill="#6366f1" />
+      {/* Collar */}
+      <path d="M27 44 L32 50 L37 44" stroke="#a5b4fc" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+      {/* Star/sparkle decoration */}
+      <path d="M50 10 L51 13 L54 14 L51 15 L50 18 L49 15 L46 14 L49 13Z" fill="#fbbf24" opacity="0.9" />
+    </svg>
+  );
+}
+
 type NavKey =
   | 'OVERVIEW' | 'AGENT_TASKS' | 'ORDERS' | 'PRODUCTS' | 'ACCOUNTING'
   | 'ANALYTICS' | 'BOT_KNOWLEDGE' | 'PRINT' | 'MEMO_TEMPLATE' | 'CRM'
@@ -354,27 +408,21 @@ export function ChatbotWidget({ currentPage, dark, pageId }: Props) {
               flexShrink: 0,
             }}
           >
-            <div
-              style={{
-                width: 34,
-                height: 34,
-                borderRadius: '50%',
-                background: `linear-gradient(135deg, ${accent}, #8b5cf6)`,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: 16,
-                flexShrink: 0,
-              }}
-            >
-              🤖
+            <div style={{ position: 'relative', flexShrink: 0 }}>
+              <LizaAvatar size={38} />
+              <div style={{
+                position: 'absolute', bottom: 0, right: 0,
+                width: 10, height: 10, borderRadius: '50%',
+                background: '#22c55e',
+                border: `2px solid ${dark ? '#1e1f35' : '#f9fafb'}`,
+              }} />
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontWeight: 700, fontSize: 14, color: text }}>
-                Chatcat সহকারী
+              <div style={{ fontWeight: 800, fontSize: 14, color: text, letterSpacing: -0.2 }}>
+                Liza ✨
               </div>
-              <div style={{ fontSize: 11, color: muted, marginTop: 1 }}>
-                {pageLabel} পেজ
+              <div style={{ fontSize: 11, color: '#22c55e', marginTop: 1, fontWeight: 600 }}>
+                ● অনলাইন · AI সহকারী
               </div>
             </div>
             <button
@@ -417,7 +465,7 @@ export function ChatbotWidget({ currentPage, dark, pageId }: Props) {
                 maxWidth: '88%',
               }}
             >
-              👋 আমি Chatcat সহকারী। <strong>{pageLabel}</strong> পেজ সম্পর্কে যেকোনো প্রশ্ন করুন!
+              👋 হ্যালো! আমি <strong>Liza</strong> — Chatcat-এর AI সহকারী। <strong>{pageLabel}</strong> পেজের অর্ডার, পণ্য, বিক্রি সব বিষয়ে আমাকে জিজ্ঞেস করুন!
             </div>
 
             {/* Suggestions */}
@@ -574,8 +622,8 @@ export function ChatbotWidget({ currentPage, dark, pageId }: Props) {
       <button
         onClick={open ? handleClose : handleOpen}
         style={{
-          width: 52,
-          height: 52,
+          width: 56,
+          height: 56,
           borderRadius: '50%',
           background: `linear-gradient(135deg, ${accent}, #8b5cf6)`,
           border: 'none',
@@ -595,9 +643,13 @@ export function ChatbotWidget({ currentPage, dark, pageId }: Props) {
         onMouseLeave={(e) => {
           (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1)';
         }}
-        title="Chatcat সহকারী"
+        title="Liza — AI সহকারী"
       >
-        {open ? '✕' : '🤖'}
+        {open ? (
+          <span style={{ fontSize: 20, fontWeight: 700 }}>✕</span>
+        ) : (
+          <LizaAvatar size={52} />
+        )}
       </button>
 
       {/* Typing animation keyframes */}
@@ -605,6 +657,10 @@ export function ChatbotWidget({ currentPage, dark, pageId }: Props) {
         @keyframes chatbotDot {
           0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
           40% { transform: scale(1); opacity: 1; }
+        }
+        @keyframes liza-pulse {
+          0%,100% { box-shadow: 0 4px 20px rgba(99,102,241,0.5); }
+          50% { box-shadow: 0 4px 28px rgba(139,92,246,0.7); }
         }
       `}</style>
     </div>
