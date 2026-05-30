@@ -21,34 +21,34 @@ function LizaAvatar({ size }: { size: number }) {
       {/* Background circle */}
       <circle cx="32" cy="32" r="32" fill="url(#liza-bg)" />
       {/* Hair back */}
-      <ellipse cx="32" cy="24" rx="16" ry="17" fill="url(#liza-hair)" />
-      {/* Face */}
-      <ellipse cx="32" cy="30" rx="13" ry="14" fill="url(#liza-face)" />
+      <ellipse cx="32" cy="25" rx="13" ry="16" fill="url(#liza-hair)" />
+      {/* Face — slim oval */}
+      <ellipse cx="32" cy="31" rx="10.5" ry="13.5" fill="url(#liza-face)" />
       {/* Hair top/sides */}
-      <path d="M16 24 Q14 10 32 8 Q50 10 48 24 Q46 14 32 13 Q18 14 16 24Z" fill="url(#liza-hair)" />
+      <path d="M19 25 Q18 10 32 8 Q46 10 45 25 Q43 14 32 13 Q21 14 19 25Z" fill="url(#liza-hair)" />
       {/* Side hair strands */}
-      <path d="M19 28 Q14 32 16 40 Q18 34 20 30Z" fill="url(#liza-hair)" />
-      <path d="M45 28 Q50 32 48 40 Q46 34 44 30Z" fill="url(#liza-hair)" />
+      <path d="M21 29 Q17 34 18 41 Q20 35 22 31Z" fill="url(#liza-hair)" />
+      <path d="M43 29 Q47 34 46 41 Q44 35 42 31Z" fill="url(#liza-hair)" />
       {/* Eyes */}
-      <ellipse cx="26" cy="28" rx="2.5" ry="3" fill="#1e1b4b" />
-      <ellipse cx="38" cy="28" rx="2.5" ry="3" fill="#1e1b4b" />
+      <ellipse cx="27" cy="28.5" rx="2.2" ry="2.7" fill="#1e1b4b" />
+      <ellipse cx="37" cy="28.5" rx="2.2" ry="2.7" fill="#1e1b4b" />
       {/* Eye shine */}
-      <circle cx="27.2" cy="26.8" r="0.9" fill="white" />
-      <circle cx="39.2" cy="26.8" r="0.9" fill="white" />
+      <circle cx="28" cy="27.4" r="0.8" fill="white" />
+      <circle cx="38" cy="27.4" r="0.8" fill="white" />
       {/* Eyebrows */}
-      <path d="M23 24.5 Q26 23 29 24.5" stroke="#312e81" strokeWidth="1.2" strokeLinecap="round" fill="none" />
-      <path d="M35 24.5 Q38 23 41 24.5" stroke="#312e81" strokeWidth="1.2" strokeLinecap="round" fill="none" />
+      <path d="M24.5 25.2 Q27 23.8 29.5 25.2" stroke="#312e81" strokeWidth="1.1" strokeLinecap="round" fill="none" />
+      <path d="M34.5 25.2 Q37 23.8 39.5 25.2" stroke="#312e81" strokeWidth="1.1" strokeLinecap="round" fill="none" />
       {/* Nose */}
-      <circle cx="32" cy="32" r="0.8" fill="#e8a98a" />
+      <circle cx="32" cy="33" r="0.7" fill="#e8a98a" />
       {/* Smile */}
-      <path d="M27 36 Q32 40 37 36" stroke="#c97b5a" strokeWidth="1.4" strokeLinecap="round" fill="none" />
+      <path d="M28.5 37 Q32 40.5 35.5 37" stroke="#c97b5a" strokeWidth="1.3" strokeLinecap="round" fill="none" />
       {/* Cheeks */}
-      <ellipse cx="22" cy="34" rx="3.5" ry="2" fill="#f9a8d4" opacity="0.4" />
-      <ellipse cx="42" cy="34" rx="3.5" ry="2" fill="#f9a8d4" opacity="0.4" />
+      <ellipse cx="22.5" cy="34.5" rx="2.8" ry="1.8" fill="#f9a8d4" opacity="0.45" />
+      <ellipse cx="41.5" cy="34.5" rx="2.8" ry="1.8" fill="#f9a8d4" opacity="0.45" />
       {/* Shirt/body */}
-      <path d="M20 54 Q20 46 32 44 Q44 46 44 54 L44 64 L20 64Z" fill="#6366f1" />
+      <path d="M22 54 Q22 47 32 45 Q42 47 42 54 L42 64 L22 64Z" fill="#6366f1" />
       {/* Collar */}
-      <path d="M27 44 L32 50 L37 44" stroke="#a5b4fc" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M28 45 L32 51 L36 45" stroke="#a5b4fc" strokeWidth="1.4" fill="none" strokeLinecap="round" strokeLinejoin="round" />
       {/* Star/sparkle decoration */}
       <path d="M50 10 L51 13 L54 14 L51 15 L50 18 L49 15 L46 14 L49 13Z" fill="#fbbf24" opacity="0.9" />
     </svg>
