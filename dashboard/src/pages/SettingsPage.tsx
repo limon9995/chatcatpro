@@ -792,6 +792,30 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect }: {
             />
           </div>
 
+          {/* Step-by-step guide */}
+          <details style={{ marginBottom: 14 }}>
+            <summary style={{ fontSize: 12, fontWeight: 700, cursor: 'pointer', color: th.accent, userSelect: 'none', marginBottom: 6 }}>
+              📋 {copy('কিভাবে WhatsApp token পাবেন? (ধাপে ধাপে)', 'How to get WhatsApp token? (Step by step)')}
+            </summary>
+            <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {[
+                copy('১. Meta Developer Console-এ যান: developers.facebook.com', '1. Go to Meta Developer Console: developers.facebook.com'),
+                copy('২. "My Apps" → আপনার App select করুন (অথবা নতুন App তৈরি করুন: "Create App" → "Business" type select করুন)', '2. "My Apps" → select your App (or create one: "Create App" → select "Business" type)'),
+                copy('৩. বাম পাশে "WhatsApp" product add করুন → "WhatsApp" → "Getting Started" click করুন', '3. Add "WhatsApp" product from left sidebar → "WhatsApp" → click "Getting Started"'),
+                copy('৪. "Phone Number ID" copy করুন (নিচের "Phone Number ID" field-এ paste করুন)', '4. Copy the "Phone Number ID" (paste it in the Phone Number ID field below)'),
+                copy('৫. Access Token এর জন্য: Meta Business Suite → business.facebook.com → Settings → System Users → "Add" → নতুন System User তৈরি করুন', '5. For Access Token: Meta Business Suite → business.facebook.com → Settings → System Users → "Add" → create a new System User'),
+                copy('৬. System User-এ: "Generate New Token" click করুন → আপনার App select করুন → Permission: whatsapp_business_messaging, whatsapp_business_management যোগ করুন → "Generate Token" click করুন', '6. On System User: click "Generate New Token" → select your App → add permissions: whatsapp_business_messaging, whatsapp_business_management → click "Generate Token"'),
+                copy('৭. Token copy করুন (EAAxxxxx... দিয়ে শুরু) → নিচের "Access Token" field-এ paste করুন', '7. Copy the token (starts with EAAxxxxx...) → paste it in the "Access Token" field below'),
+                copy('৮. "Webhook Verify Token" Generate করুন → Meta App → WhatsApp → Configuration → Webhook URL ও Verify Token দিন → "messages" subscribe করুন', '8. Generate "Webhook Verify Token" → In Meta App → WhatsApp → Configuration → enter Webhook URL & Verify Token → subscribe to "messages"'),
+              ].map((step, i) => (
+                <div key={i} style={{ display: 'flex', gap: 8, fontSize: 12, padding: '7px 10px', borderRadius: 8, background: th.surface, border: `1px solid ${th.border}` }}>
+                  <span style={{ color: th.accent, flexShrink: 0 }}>→</span>
+                  <span style={{ color: th.text, lineHeight: 1.5 }}>{step}</span>
+                </div>
+              ))}
+            </div>
+          </details>
+
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             <div>
               <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>
@@ -871,6 +895,68 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect }: {
 
         {/* ── Instagram Connection ── */}
         <Section title="📸 Instagram Connection" desc="Instagram Business API দিয়ে DM ও post comment automation চালু করুন">
+          {/* Step-by-step guide */}
+          <details style={{ marginBottom: 14 }}>
+            <summary style={{ fontSize: 12, fontWeight: 700, cursor: 'pointer', color: th.accent, userSelect: 'none', marginBottom: 6 }}>
+              📋 {copy('কিভাবে Instagram token পাবেন? (ধাপে ধাপে)', 'How to get Instagram token? (Step by step)')}
+            </summary>
+            <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {/* Meta Developer Instagram product add guide */}
+              <div style={{ padding: '10px 12px', borderRadius: 8, background: 'rgba(234,179,8,0.08)', border: `1px solid rgba(234,179,8,0.3)` }}>
+                <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6, color: '#ca8a04' }}>
+                  ⚙️ {copy('Meta Developer App-এ Instagram product add করুন', 'Add Instagram product in Meta Developer App')}
+                </div>
+                {[
+                  copy('ক. developers.facebook.com → "My Apps" → আপনার App-এ click করুন', 'a. developers.facebook.com → "My Apps" → click your App'),
+                  copy('খ. বাম পাশে "Add Product" বাটনে click করুন', 'b. Click "Add Product" from the left sidebar'),
+                  copy('গ. "Instagram" card খুঁজুন → "Set Up" click করুন', 'c. Find the "Instagram" card → click "Set Up"'),
+                  copy('ঘ. "Instagram Basic Display" নয় — "Instagram" (Business/Graph API) select করুন', 'd. Do NOT select "Instagram Basic Display" — select "Instagram" (Business/Graph API)'),
+                  copy('ঙ. Instagram product add হলে বাম পাশে "Instagram" menu দেখাবে → "Basic Display" বা "API Setup" থেকে আপনার Instagram Business Account connect করুন', 'e. Once added, "Instagram" appears in left menu → connect your Instagram Business Account from "Basic Display" or "API Setup"'),
+                ].map((step, i) => (
+                  <div key={i} style={{ display: 'flex', gap: 8, fontSize: 11.5, padding: '5px 0', borderBottom: i < 4 ? `1px solid rgba(234,179,8,0.15)` : 'none' }}>
+                    <span style={{ color: '#ca8a04', flexShrink: 0 }}>•</span>
+                    <span style={{ color: th.text, lineHeight: 1.5 }}>{step}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Instagram + FB Page linking guide */}
+              <div style={{ padding: '10px 12px', borderRadius: 8, background: 'rgba(99,102,241,0.08)', border: `1px solid rgba(99,102,241,0.25)` }}>
+                <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6, color: th.accent }}>
+                  🔗 {copy('প্রথমে Instagram-কে Facebook Page-এর সাথে link করুন', 'First link your Instagram to a Facebook Page')}
+                </div>
+                {[
+                  copy('ক. Instagram app খুলুন → Profile → উপরে ডানে ☰ (তিন লাইন) → Settings and privacy', 'a. Open Instagram app → Profile → ☰ top right → Settings and privacy'),
+                  copy('খ. "Account type and tools" → "Switch to Professional Account" → Business বা Creator select করুন', 'b. "Account type and tools" → "Switch to Professional Account" → select Business or Creator'),
+                  copy('গ. Professional account হওয়ার পর: Settings → "Account" → "Linked accounts" → "Facebook" → আপনার Facebook account দিয়ে login করুন', 'c. After becoming Professional: Settings → "Account" → "Linked accounts" → "Facebook" → log in with your Facebook account'),
+                  copy('ঘ. Facebook-এ আপনার Page select করুন যেটির সাথে Instagram link করতে চান — এই Page-টিই Chatcat-এ connected থাকতে হবে', 'd. Select the Facebook Page you want to link with Instagram — this Page must be the one connected in Chatcat'),
+                  copy('ঙ. Link confirm হলে Instagram Profile → Edit Profile → এ "Page" দেখাবে — confirm করুন', 'e. After linking, go to Instagram Profile → Edit Profile → you will see the "Page" shown — confirm it'),
+                ].map((step, i) => (
+                  <div key={i} style={{ display: 'flex', gap: 8, fontSize: 11.5, padding: '5px 0', borderBottom: i < 4 ? `1px solid rgba(99,102,241,0.1)` : 'none' }}>
+                    <span style={{ color: th.accent, flexShrink: 0 }}>•</span>
+                    <span style={{ color: th.text, lineHeight: 1.5 }}>{step}</span>
+                  </div>
+                ))}
+              </div>
+
+              {[
+                copy('১. Instagram link হলে এখন token নিন — Graph API Explorer-এ যান: developers.facebook.com/tools/explorer', '1. Once Instagram is linked, get the token — go to Graph API Explorer: developers.facebook.com/tools/explorer'),
+                copy('২. Instagram Business Account ID পেতে: Meta Developer Console → developers.facebook.com → আপনার App → Instagram → "Instagram Business Account" section থেকে ID copy করুন', '2. To get Instagram Business Account ID: Meta Developer Console → developers.facebook.com → your App → Instagram → copy ID from "Instagram Business Account" section'),
+                copy('৩. অথবা Graph API Explorer-এই Account ID বের করুন: আপনার App ও Page select → query field-এ লিখুন: /me?fields=instagram_business_account → Submit → "id" value টি copy করুন', '3. Or find Account ID in Graph API Explorer: select your App & Page → type in query field: /me?fields=instagram_business_account → Submit → copy the "id" value'),
+                copy('৪. "Meta App" dropdown থেকে আপনার App select করুন', '4. Select your App from the "Meta App" dropdown'),
+                copy('৫. "User or Page" থেকে আপনার Instagram-linked Facebook Page select করুন', '5. From "User or Page", select your Instagram-linked Facebook Page'),
+                copy('৬. নিচের permissions যোগ করুন: instagram_basic, instagram_manage_messages, instagram_manage_comments, pages_show_list', '6. Add these permissions: instagram_basic, instagram_manage_messages, instagram_manage_comments, pages_show_list'),
+                copy('৭. "Generate Access Token" click করুন → Facebook login করুন → সব permission Allow করুন → Token copy করুন (EAAxxxxx...)', '7. Click "Generate Access Token" → log in to Facebook → Allow all permissions → copy the token (EAAxxxxx...)'),
+                copy('৮. Webhook-এর জন্য: Meta App → Instagram → Webhooks → নিচের Webhook URL দিন, Verify Token দিন → "messages" ও "comments" subscribe করুন', '8. For Webhook: Meta App → Instagram → Webhooks → enter the Webhook URL below, enter Verify Token → subscribe to "messages" and "comments"'),
+              ].map((step, i) => (
+                <div key={i} style={{ display: 'flex', gap: 8, fontSize: 12, padding: '7px 10px', borderRadius: 8, background: th.surface, border: `1px solid ${th.border}` }}>
+                  <span style={{ color: th.accent, flexShrink: 0 }}>→</span>
+                  <span style={{ color: th.text, lineHeight: 1.5 }}>{step}</span>
+                </div>
+              ))}
+            </div>
+          </details>
+
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <Toggle
               th={th}
