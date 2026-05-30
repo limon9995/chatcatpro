@@ -2,55 +2,126 @@ import React, { useEffect, useRef, useState } from 'react';
 import { API_BASE, useApi } from '../hooks/useApi';
 
 function LizaAvatar({ size }: { size: number }) {
+  const id = 'lz';
   return (
     <svg width={size} height={size} viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ borderRadius: '50%', display: 'block' }}>
       <defs>
-        <linearGradient id="liza-bg" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor="#6366f1" />
-          <stop offset="100%" stopColor="#a78bfa" />
+        <radialGradient id={`${id}-bg`} cx="40%" cy="30%" r="70%">
+          <stop offset="0%" stopColor="#7c3aed" />
+          <stop offset="100%" stopColor="#1e1b4b" />
+        </radialGradient>
+        <linearGradient id={`${id}-skin`} x1="32" y1="14" x2="32" y2="50" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#FDDBB4" />
+          <stop offset="100%" stopColor="#F5C28A" />
         </linearGradient>
-        <linearGradient id="liza-face" x1="16" y1="14" x2="48" y2="50" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor="#fde8d8" />
-          <stop offset="100%" stopColor="#fcd5bd" />
+        <linearGradient id={`${id}-hair`} x1="20" y1="6" x2="44" y2="30" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#2d1b69" />
+          <stop offset="60%" stopColor="#1a0a3d" />
+          <stop offset="100%" stopColor="#0f0720" />
         </linearGradient>
-        <linearGradient id="liza-hair" x1="12" y1="8" x2="52" y2="28" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor="#1e1b4b" />
-          <stop offset="100%" stopColor="#312e81" />
+        <linearGradient id={`${id}-dress`} x1="32" y1="44" x2="32" y2="64" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#4f46e5" />
+          <stop offset="100%" stopColor="#7c3aed" />
         </linearGradient>
+        <linearGradient id={`${id}-lip`} x1="27" y1="37" x2="37" y2="40" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#e05a7a" />
+          <stop offset="100%" stopColor="#be185d" />
+        </linearGradient>
+        <filter id={`${id}-glow`} x="-20%" y="-20%" width="140%" height="140%">
+          <feGaussianBlur stdDeviation="1.5" result="blur" />
+          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
       </defs>
-      {/* Background circle */}
-      <circle cx="32" cy="32" r="32" fill="url(#liza-bg)" />
-      {/* Hair back */}
-      <ellipse cx="32" cy="25" rx="13" ry="16" fill="url(#liza-hair)" />
-      {/* Face — slim oval */}
-      <ellipse cx="32" cy="31" rx="10.5" ry="13.5" fill="url(#liza-face)" />
-      {/* Hair top/sides */}
-      <path d="M19 25 Q18 10 32 8 Q46 10 45 25 Q43 14 32 13 Q21 14 19 25Z" fill="url(#liza-hair)" />
-      {/* Side hair strands */}
-      <path d="M21 29 Q17 34 18 41 Q20 35 22 31Z" fill="url(#liza-hair)" />
-      <path d="M43 29 Q47 34 46 41 Q44 35 42 31Z" fill="url(#liza-hair)" />
-      {/* Eyes */}
-      <ellipse cx="27" cy="28.5" rx="2.2" ry="2.7" fill="#1e1b4b" />
-      <ellipse cx="37" cy="28.5" rx="2.2" ry="2.7" fill="#1e1b4b" />
-      {/* Eye shine */}
-      <circle cx="28" cy="27.4" r="0.8" fill="white" />
-      <circle cx="38" cy="27.4" r="0.8" fill="white" />
-      {/* Eyebrows */}
-      <path d="M24.5 25.2 Q27 23.8 29.5 25.2" stroke="#312e81" strokeWidth="1.1" strokeLinecap="round" fill="none" />
-      <path d="M34.5 25.2 Q37 23.8 39.5 25.2" stroke="#312e81" strokeWidth="1.1" strokeLinecap="round" fill="none" />
-      {/* Nose */}
-      <circle cx="32" cy="33" r="0.7" fill="#e8a98a" />
-      {/* Smile */}
-      <path d="M28.5 37 Q32 40.5 35.5 37" stroke="#c97b5a" strokeWidth="1.3" strokeLinecap="round" fill="none" />
-      {/* Cheeks */}
-      <ellipse cx="22.5" cy="34.5" rx="2.8" ry="1.8" fill="#f9a8d4" opacity="0.45" />
-      <ellipse cx="41.5" cy="34.5" rx="2.8" ry="1.8" fill="#f9a8d4" opacity="0.45" />
-      {/* Shirt/body */}
-      <path d="M22 54 Q22 47 32 45 Q42 47 42 54 L42 64 L22 64Z" fill="#6366f1" />
-      {/* Collar */}
-      <path d="M28 45 L32 51 L36 45" stroke="#a5b4fc" strokeWidth="1.4" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-      {/* Star/sparkle decoration */}
-      <path d="M50 10 L51 13 L54 14 L51 15 L50 18 L49 15 L46 14 L49 13Z" fill="#fbbf24" opacity="0.9" />
+
+      {/* Background */}
+      <circle cx="32" cy="32" r="32" fill={`url(#${id}-bg)`} />
+
+      {/* Subtle bg glow */}
+      <ellipse cx="32" cy="20" rx="18" ry="12" fill="#a78bfa" opacity="0.08" />
+
+      {/* Long hair — back layer */}
+      <path d="M18 28 Q14 42 16 64 L32 64 L48 64 Q50 42 46 28 Q42 16 32 14 Q22 16 18 28Z" fill={`url(#${id}-hair)`} />
+
+      {/* Neck */}
+      <rect x="28.5" y="42" width="7" height="6" rx="2" fill="#F5C28A" />
+
+      {/* Face — elegant slim oval */}
+      <ellipse cx="32" cy="30" rx="11" ry="14" fill={`url(#${id}-skin)`} />
+
+      {/* Jaw shadow */}
+      <ellipse cx="32" cy="42" rx="8" ry="2.5" fill="#e8a870" opacity="0.3" />
+
+      {/* Hair — top/front, with volume */}
+      <path d="M21 24 Q20 8 32 7 Q44 8 43 24 Q41 13 32 12 Q23 13 21 24Z" fill={`url(#${id}-hair)`} />
+
+      {/* Side swept hair — left */}
+      <path d="M21 22 Q15 26 16 36 Q17 30 20 26 Q20 24 21 22Z" fill={`url(#${id}-hair)`} />
+      {/* Side swept hair — right */}
+      <path d="M43 22 Q49 26 48 36 Q47 30 44 26 Q44 24 43 22Z" fill={`url(#${id}-hair)`} />
+
+      {/* Hair highlight strand */}
+      <path d="M28 8 Q30 11 29 16" stroke="#6d28d9" strokeWidth="1.5" strokeLinecap="round" fill="none" opacity="0.6" />
+      <path d="M34 7.5 Q36 10 35 15" stroke="#6d28d9" strokeWidth="1" strokeLinecap="round" fill="none" opacity="0.4" />
+
+      {/* Eyebrows — sharp, arched */}
+      <path d="M23 21.5 Q26.5 19.5 29.5 21" stroke="#1a0a3d" strokeWidth="1.6" strokeLinecap="round" fill="none" />
+      <path d="M34.5 21 Q37.5 19.5 41 21.5" stroke="#1a0a3d" strokeWidth="1.6" strokeLinecap="round" fill="none" />
+
+      {/* Eyes — almond shaped, more mature */}
+      {/* Left eye */}
+      <path d="M23.5 26.5 Q26.5 24 29.5 26.5 Q26.5 29.5 23.5 26.5Z" fill="white" />
+      <ellipse cx="26.5" cy="26.8" rx="1.9" ry="2.1" fill="#1a0a3d" />
+      <circle cx="27.4" cy="25.8" r="0.75" fill="white" />
+      <circle cx="25.8" cy="27.5" r="0.35" fill="white" opacity="0.6" />
+      {/* Left eyelid line */}
+      <path d="M23.5 26.5 Q26.5 24 29.5 26.5" stroke="#1a0a3d" strokeWidth="1" strokeLinecap="round" fill="none" />
+      {/* Left lashes */}
+      <path d="M23.5 26.5 L22.5 25.5" stroke="#1a0a3d" strokeWidth="0.8" strokeLinecap="round" />
+      <path d="M29.5 26.5 L30.5 25.5" stroke="#1a0a3d" strokeWidth="0.8" strokeLinecap="round" />
+
+      {/* Right eye */}
+      <path d="M34.5 26.5 Q37.5 24 40.5 26.5 Q37.5 29.5 34.5 26.5Z" fill="white" />
+      <ellipse cx="37.5" cy="26.8" rx="1.9" ry="2.1" fill="#1a0a3d" />
+      <circle cx="38.4" cy="25.8" r="0.75" fill="white" />
+      <circle cx="36.8" cy="27.5" r="0.35" fill="white" opacity="0.6" />
+      {/* Right eyelid line */}
+      <path d="M34.5 26.5 Q37.5 24 40.5 26.5" stroke="#1a0a3d" strokeWidth="1" strokeLinecap="round" fill="none" />
+      {/* Right lashes */}
+      <path d="M34.5 26.5 L33.5 25.5" stroke="#1a0a3d" strokeWidth="0.8" strokeLinecap="round" />
+      <path d="M40.5 26.5 L41.5 25.5" stroke="#1a0a3d" strokeWidth="0.8" strokeLinecap="round" />
+
+      {/* Nose — subtle, elegant */}
+      <path d="M31 32 Q32 33.5 33 32" stroke="#d4956a" strokeWidth="0.9" strokeLinecap="round" fill="none" />
+      <circle cx="30.5" cy="33" r="0.55" fill="#d4956a" opacity="0.7" />
+      <circle cx="33.5" cy="33" r="0.55" fill="#d4956a" opacity="0.7" />
+
+      {/* Lips — full, with gloss */}
+      <path d="M27.5 37 Q29.5 35.5 32 36 Q34.5 35.5 36.5 37 Q34 38.5 32 38.5 Q30 38.5 27.5 37Z" fill={`url(#${id}-lip)`} />
+      <path d="M27.5 37 Q30 39.5 32 39.5 Q34 39.5 36.5 37" stroke="#9d174d" strokeWidth="0.6" strokeLinecap="round" fill="none" />
+      {/* Lip gloss */}
+      <ellipse cx="30.5" cy="36.8" rx="1.5" ry="0.5" fill="white" opacity="0.25" />
+
+      {/* Blush — subtle */}
+      <ellipse cx="21.5" cy="33" rx="3" ry="1.8" fill="#f472b6" opacity="0.18" />
+      <ellipse cx="42.5" cy="33" rx="3" ry="1.8" fill="#f472b6" opacity="0.18" />
+
+      {/* Earring — left */}
+      <circle cx="21" cy="32" r="1.2" fill="#a78bfa" />
+      <circle cx="21" cy="34.5" r="0.8" fill="#c4b5fd" />
+      {/* Earring — right */}
+      <circle cx="43" cy="32" r="1.2" fill="#a78bfa" />
+      <circle cx="43" cy="34.5" r="0.8" fill="#c4b5fd" />
+
+      {/* Dress / top */}
+      <path d="M20 56 Q21 47 27 45 L32 48 L37 45 Q43 47 44 56 L44 64 L20 64Z" fill={`url(#${id}-dress)`} />
+      {/* Neckline V */}
+      <path d="M27 45 Q32 50 37 45" stroke="#818cf8" strokeWidth="0.8" fill="none" strokeLinecap="round" />
+      {/* Dress shimmer */}
+      <path d="M24 50 Q28 48 32 49 Q36 48 40 50" stroke="#a5b4fc" strokeWidth="0.6" strokeLinecap="round" fill="none" opacity="0.5" />
+
+      {/* Subtle sparkle top-right */}
+      <path d="M52 9 L53 12 L56 13 L53 14 L52 17 L51 14 L48 13 L51 12Z" fill="#fbbf24" opacity="0.85" />
+      <circle cx="56" cy="8" r="1" fill="#fde68a" opacity="0.6" />
     </svg>
   );
 }
