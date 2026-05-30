@@ -581,6 +581,7 @@ function Step3BotConfig({ dark, border, text, muted, accent, activePage, onSaved
   const [automationOn, setAutomationOn] = useState(true);
   const [orderModeOn, setOrderModeOn] = useState(true);
   const [infoModeOn, setInfoModeOn] = useState(true);
+  const [isDigital, setIsDigital] = useState(false);
   const [dhakaCharge, setDhakaCharge] = useState('60');
   const [outsideCharge, setOutsideCharge] = useState('120');
   const [loading, setLoading] = useState(false);
@@ -629,8 +630,8 @@ function Step3BotConfig({ dark, border, text, muted, accent, activePage, onSaved
       await request(`${API_BASE}/client-dashboard/${activePage.id}/settings`, {
         method: 'PATCH',
         body: JSON.stringify({
-          deliveryFeeInsideDhaka: Number(dhakaCharge) || 60,
-          deliveryFeeOutsideDhaka: Number(outsideCharge) || 120,
+          deliveryFeeInsideDhaka: isDigital ? 0 : (Number(dhakaCharge) || 60),
+          deliveryFeeOutsideDhaka: isDigital ? 0 : (Number(outsideCharge) || 120),
         }),
       });
       await request(`${API_BASE}/client-dashboard/${activePage.id}/modes`, {
@@ -656,20 +657,43 @@ function Step3BotConfig({ dark, border, text, muted, accent, activePage, onSaved
         <ToggleRow label="Order Mode" sub={orderModeOn ? '● কাস্টমার থেকে order নেবে' : '● Order নেবে না'} value={orderModeOn} onChange={setOrderModeOn} />
         <ToggleRow label="Info Mode" sub={infoModeOn ? '● Product code দিলে তথ্য দেবে' : '● Product info দেবে না'} value={infoModeOn} onChange={setInfoModeOn} />
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 4 }}>
-          <div>
-            <label style={{ fontSize: 12.5, color: muted, fontWeight: 600, display: 'block', marginBottom: 5 }}>ডেলিভারি ঢাকা ৳</label>
-            <input value={dhakaCharge} onChange={e => setDhakaCharge(e.target.value)}
-              onFocus={() => setF1(true)} onBlur={() => setF1(false)}
-              type="number" placeholder="60" style={inp(f1)} />
-          </div>
-          <div>
-            <label style={{ fontSize: 12.5, color: muted, fontWeight: 600, display: 'block', marginBottom: 5 }}>ডেলিভারি ঢাকার বাইরে ৳</label>
-            <input value={outsideCharge} onChange={e => setOutsideCharge(e.target.value)}
-              onFocus={() => setF2(true)} onBlur={() => setF2(false)}
-              type="number" placeholder="120" style={inp(f2)} />
+        {/* Delivery type */}
+        <div style={{ marginTop: 4 }}>
+          <div style={{ fontSize: 12.5, color: muted, fontWeight: 600, marginBottom: 8 }}>ডেলিভারি টাইপ</div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            {[
+              { val: false, label: '🚚 ফিজিক্যাল পণ্য', sub: 'ডেলিভারি চার্জ আছে' },
+              { val: true,  label: '💻 ডিজিটাল / সার্ভিস', sub: 'কোনো ডেলিভারি নেই' },
+            ].map(opt => (
+              <div key={String(opt.val)} onClick={() => setIsDigital(opt.val)} style={{
+                flex: 1, padding: '12px 14px', borderRadius: 12, cursor: 'pointer',
+                border: `2px solid ${isDigital === opt.val ? accent : (dark ? '#2e3050' : '#e5e7eb')}`,
+                background: isDigital === opt.val ? (dark ? 'rgba(99,102,241,0.12)' : 'rgba(99,102,241,0.07)') : (dark ? '#252640' : '#f3f4f6'),
+                transition: 'all 200ms',
+              }}>
+                <div style={{ fontWeight: 600, color: text, fontSize: 13 }}>{opt.label}</div>
+                <div style={{ color: muted, fontSize: 11.5, marginTop: 3 }}>{opt.sub}</div>
+              </div>
+            ))}
           </div>
         </div>
+
+        {!isDigital && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div>
+              <label style={{ fontSize: 12.5, color: muted, fontWeight: 600, display: 'block', marginBottom: 5 }}>ডেলিভারি ঢাকা ৳</label>
+              <input value={dhakaCharge} onChange={e => setDhakaCharge(e.target.value)}
+                onFocus={() => setF1(true)} onBlur={() => setF1(false)}
+                type="number" placeholder="60" style={inp(f1)} />
+            </div>
+            <div>
+              <label style={{ fontSize: 12.5, color: muted, fontWeight: 600, display: 'block', marginBottom: 5 }}>ডেলিভারি ঢাকার বাইরে ৳</label>
+              <input value={outsideCharge} onChange={e => setOutsideCharge(e.target.value)}
+                onFocus={() => setF2(true)} onBlur={() => setF2(false)}
+                type="number" placeholder="120" style={inp(f2)} />
+            </div>
+          </div>
+        )}
 
         {error && <div style={{ color: '#ef4444', fontSize: 13, animation: 'ob-fade-in 200ms ease' }}>⚠️ {error}</div>}
 
