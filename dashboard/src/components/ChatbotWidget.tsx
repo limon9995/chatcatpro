@@ -39,29 +39,31 @@ function LizaAvatar({ size }: { size: number }) {
       {/* Subtle bg glow */}
       <ellipse cx="32" cy="20" rx="18" ry="12" fill="#a78bfa" opacity="0.08" />
 
-      {/* Long hair — back layer */}
-      <path d="M18 28 Q14 42 16 64 L32 64 L48 64 Q50 42 46 28 Q42 16 32 14 Q22 16 18 28Z" fill={`url(#${id}-hair)`} />
+      {/* Long hair — back layer flowing down */}
+      <path d="M20 26 Q15 44 17 64 L32 64 L47 64 Q49 44 44 26 Q40 15 32 13 Q24 15 20 26Z" fill={`url(#${id}-hair)`} />
 
       {/* Neck */}
-      <rect x="28.5" y="42" width="7" height="6" rx="2" fill="#F5C28A" />
+      <rect x="29" y="42" width="6" height="6" rx="2" fill="#F5C28A" />
 
-      {/* Face — elegant slim oval */}
-      <ellipse cx="32" cy="30" rx="11" ry="14" fill={`url(#${id}-skin)`} />
+      {/* Face — slim high-cheekbone oval */}
+      <ellipse cx="32" cy="30" rx="9.5" ry="14" fill={`url(#${id}-skin)`} />
 
       {/* Jaw shadow */}
-      <ellipse cx="32" cy="42" rx="8" ry="2.5" fill="#e8a870" opacity="0.3" />
+      <ellipse cx="32" cy="42.5" rx="6.5" ry="2" fill="#d4956a" opacity="0.25" />
 
-      {/* Hair — top/front, with volume */}
-      <path d="M21 24 Q20 8 32 7 Q44 8 43 24 Q41 13 32 12 Q23 13 21 24Z" fill={`url(#${id}-hair)`} />
+      {/* Hair — natural flowing top, NO flat cap shape */}
+      <path d="M22 24 Q22 10 32 8 Q42 10 42 24 Q40 15 32 13 Q24 15 22 24Z" fill={`url(#${id}-hair)`} />
+      {/* Hair parting detail */}
+      <path d="M32 8 Q32.5 11 32 16" stroke="#4c1d95" strokeWidth="0.7" strokeLinecap="round" fill="none" opacity="0.5" />
 
-      {/* Side swept hair — left */}
-      <path d="M21 22 Q15 26 16 36 Q17 30 20 26 Q20 24 21 22Z" fill={`url(#${id}-hair)`} />
-      {/* Side swept hair — right */}
-      <path d="M43 22 Q49 26 48 36 Q47 30 44 26 Q44 24 43 22Z" fill={`url(#${id}-hair)`} />
+      {/* Side hair — left, soft curve */}
+      <path d="M22 24 Q17 30 18 40 Q19 33 22 28Z" fill={`url(#${id}-hair)`} />
+      {/* Side hair — right, soft curve */}
+      <path d="M42 24 Q47 30 46 40 Q45 33 42 28Z" fill={`url(#${id}-hair)`} />
 
-      {/* Hair highlight strand */}
-      <path d="M28 8 Q30 11 29 16" stroke="#6d28d9" strokeWidth="1.5" strokeLinecap="round" fill="none" opacity="0.6" />
-      <path d="M34 7.5 Q36 10 35 15" stroke="#6d28d9" strokeWidth="1" strokeLinecap="round" fill="none" opacity="0.4" />
+      {/* Hair highlight strands */}
+      <path d="M29 9 Q30 13 29.5 18" stroke="#6d28d9" strokeWidth="1.2" strokeLinecap="round" fill="none" opacity="0.5" />
+      <path d="M35 9 Q34 13 34.5 18" stroke="#5b21b6" strokeWidth="0.9" strokeLinecap="round" fill="none" opacity="0.35" />
 
       {/* Eyebrows — sharp, arched */}
       <path d="M23 21.5 Q26.5 19.5 29.5 21" stroke="#1a0a3d" strokeWidth="1.6" strokeLinecap="round" fill="none" />
@@ -101,16 +103,16 @@ function LizaAvatar({ size }: { size: number }) {
       {/* Lip gloss */}
       <ellipse cx="30.5" cy="36.8" rx="1.5" ry="0.5" fill="white" opacity="0.25" />
 
-      {/* Blush — subtle */}
-      <ellipse cx="21.5" cy="33" rx="3" ry="1.8" fill="#f472b6" opacity="0.18" />
-      <ellipse cx="42.5" cy="33" rx="3" ry="1.8" fill="#f472b6" opacity="0.18" />
+      {/* Blush — very subtle, high cheekbone */}
+      <ellipse cx="23" cy="32" rx="2.2" ry="1.3" fill="#f472b6" opacity="0.14" />
+      <ellipse cx="41" cy="32" rx="2.2" ry="1.3" fill="#f472b6" opacity="0.14" />
 
       {/* Earring — left */}
-      <circle cx="21" cy="32" r="1.2" fill="#a78bfa" />
-      <circle cx="21" cy="34.5" r="0.8" fill="#c4b5fd" />
+      <circle cx="22.5" cy="31" r="1.1" fill="#a78bfa" />
+      <circle cx="22.5" cy="33.2" r="0.75" fill="#c4b5fd" />
       {/* Earring — right */}
-      <circle cx="43" cy="32" r="1.2" fill="#a78bfa" />
-      <circle cx="43" cy="34.5" r="0.8" fill="#c4b5fd" />
+      <circle cx="41.5" cy="31" r="1.1" fill="#a78bfa" />
+      <circle cx="41.5" cy="33.2" r="0.75" fill="#c4b5fd" />
 
       {/* Dress / top */}
       <path d="M20 56 Q21 47 27 45 L32 48 L37 45 Q43 47 44 56 L44 64 L20 64Z" fill={`url(#${id}-dress)`} />
