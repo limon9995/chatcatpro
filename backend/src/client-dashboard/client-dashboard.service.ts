@@ -1318,26 +1318,6 @@ Return ONLY valid JSON (no markdown):
       }
       pagePatch[k] = nextVal;
     }
-    // Auto-generate catalogSlug from businessName if not already set
-    if (typeof pagePatch.businessName === 'string' && pagePatch.businessName && !pagePatch.catalogSlug) {
-      const existing = await this.prisma.page.findUnique({ where: { id: pageId }, select: { catalogSlug: true } });
-      if (!existing?.catalogSlug) {
-        const base = pagePatch.businessName
-          .toLowerCase()
-          .replace(/[^\w\s-]/g, '')
-          .trim()
-          .replace(/\s+/g, '-')
-          .slice(0, 40);
-        let slug = base || `page-${pageId}`;
-        let suffix = 0;
-        while (true) {
-          const candidate = suffix === 0 ? slug : `${slug}-${suffix}`;
-          const conflict = await this.prisma.page.findUnique({ where: { catalogSlug: candidate }, select: { id: true } });
-          if (!conflict || conflict.id === pageId) { pagePatch.catalogSlug = candidate; break; }
-          suffix++;
-        }
-      }
-    }
     // Slug uniqueness pre-check: if catalogSlug is being set, verify no other page owns it
     if (typeof pagePatch.catalogSlug === 'string' && pagePatch.catalogSlug) {
       const conflict = await this.prisma.page.findUnique({
