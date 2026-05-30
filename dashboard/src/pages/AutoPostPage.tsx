@@ -4,6 +4,26 @@ import { Spinner } from '../components/ui';
 import { API_BASE, useApi } from '../hooks/useApi';
 import { useLanguage } from '../i18n';
 
+type Product = {
+  id: number; code: string; name: string | null;
+  price: number; imageUrl: string | null;
+  description: string | null; category: string | null;
+};
+
+type PerProductState = {
+  caption: string; captionLoading: boolean;
+  imageMode: 'product' | 'poster';
+  posterUrl: string; posterLoading: boolean;
+  scheduleMode: 'now' | 'later'; scheduledAt: string;
+  postLoading: boolean;
+};
+
+const PP_DEFAULT: PerProductState = {
+  caption: '', captionLoading: false,
+  imageMode: 'product', posterUrl: '', posterLoading: false,
+  scheduleMode: 'now', scheduledAt: '', postLoading: false,
+};
+
 interface AutoPost {
   id: number;
   caption: string;
@@ -148,7 +168,86 @@ export function AutoPostPage({
   // Best time state
   const [bestTime, setBestTime]         = useState<BestTime | null>(null);
 
-  useEffect(() => { loadPosts(); loadBestTime(); }, [pageId]);
+  // Products section state
+  const [products, setProducts]         = useState<Product[]>([]);
+  const [productsLoading, setProductsLoading] = useState(false);
+  const [expandedCode, setExpandedCode] = useState<string | null>(null);
+  const [perProduct, setPerProduct]     = useState<Record<string, PerProductState>>({});
+
+  const getPP = (code: string): PerProductState => perProduct[code] ?? PP_DEFAULT;
+  const setPP = (code: string, patch: Partial<PerProductState>) =>
+    setPerProduct(prev => ({ ...prev, [code]: { ...(prev[code] ?? PP_DEFAULT), ...patch } }));
+
+  useEffect(() => { loadPosts(); loadBestTime(); loadProducts(); }, [pageId]);
+
+  const loadProducts = async () => {
+    setProductsLoading(true);
+    try {
+      const rows = await request<Product[]>(`${API_BASE}/client-dashboard/${pageId}/products`);
+      setProducts(rows ?? []);
+    } catch { /* silent */ } finally { setProductsLoading(false); }
+  };
+
+  const handleExpandProduct = (product: Product) => {
+    if (expandedCode === product.code) { setExpandedCode(null); return; }
+    if (!getPP(product.code).caption) {
+      setPP(product.code, { caption: product.name ? `${product.name} — মাত্র ৳${product.price}` : '' });
+    }
+    setExpandedCode(product.code);
+  };
+
+  const generateCaptionFor = async (product: Product) => {
+    setPP(product.code, { captionLoading: true });
+    try {
+      const res = await request<{ caption: string }>(`${API_BASE}/auto-post/generate-caption`, {
+        method: 'POST',
+        body: JSON.stringify({ pageId, postType: 'product', language: 'bn', tone: 'casual', productName: product.name, price: String(product.price) }),
+      });
+      setPP(product.code, { caption: res.caption, captionLoading: false });
+      onToast('ক্যাপশন তৈরি হয়েছে!', 'success');
+    } catch (e: any) {
+      onToast(e.message || 'ক্যাপশন তৈরি হয়নি', 'error');
+      setPP(product.code, { captionLoading: false });
+    }
+  };
+
+  const generatePosterFor = async (product: Product) => {
+    if (!product.imageUrl) { onToast('এই product-এ image নেই', 'error'); return; }
+    setPP(product.code, { posterLoading: true });
+    try {
+      const res = await request<{ imageUrls: string[] }>(`${API_BASE}/auto-post/poster-from-photo`, {
+        method: 'POST',
+        body: JSON.stringify({ pageId, productPhotoUrl: product.imageUrl, productName: product.name, price: String(product.price), offer: '', style: 'vibrant', aspectRatio: '1:1' }),
+      });
+      const url = res.imageUrls?.[0] ?? '';
+      setPP(product.code, { posterUrl: url, posterLoading: false, imageMode: 'poster' });
+      onToast('AI Poster তৈরি হয়েছে!', 'success');
+    } catch (e: any) {
+      onToast(e.message || 'Poster তৈরি হয়নি', 'error');
+      setPP(product.code, { posterLoading: false });
+    }
+  };
+
+  const postFor = async (product: Product) => {
+    const pp = getPP(product.code);
+    if (!pp.caption.trim()) { onToast('ক্যাপশন লিখুন', 'error'); return; }
+    if (pp.scheduleMode === 'later' && !pp.scheduledAt) { onToast('তারিখ ও সময় দিন', 'error'); return; }
+    setPP(product.code, { postLoading: true });
+    try {
+      const imageUrl = pp.imageMode === 'poster' ? pp.posterUrl : (product.imageUrl || undefined);
+      await request(`${API_BASE}/auto-post`, {
+        method: 'POST',
+        body: JSON.stringify({ pageId, caption: pp.caption, imageUrl, postType: 'product', language: 'bn', scheduledAt: pp.scheduleMode === 'later' ? pp.scheduledAt : undefined }),
+      });
+      setPP(product.code, { ...PP_DEFAULT });
+      setExpandedCode(null);
+      await loadPosts();
+      onToast(pp.scheduleMode === 'now' ? '🚀 Facebook এ post হয়েছে!' : '📅 Post scheduled!', 'success');
+    } catch (e: any) {
+      onToast(e.message || 'Post ব্যর্থ হয়েছে', 'error');
+      setPP(product.code, { postLoading: false });
+    }
+  };
 
   const loadPosts = async () => {
     setListLoading(true);
@@ -424,6 +523,173 @@ export function AutoPostPage({
           {copy('AI দিয়ে ক্যাপশন ও পোস্টার তৈরি করুন, Facebook পেজে সরাসরি পোস্ট করুন',
                 'Generate AI captions & posters, post directly to your Facebook page')}
         </p>
+      </div>
+
+      {/* ── Products Section ── */}
+      <div style={{ ...card, marginBottom: 16 }}>
+        <div style={{ color: th.muted, fontSize: 11, fontWeight: 700, marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+          🛍️ তোমার Products — এখানে থেকে সরাসরি post করো
+        </div>
+
+        {productsLoading ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: th.muted, fontSize: 13 }}>
+            <Spinner size={14} /> লোড হচ্ছে...
+          </div>
+        ) : products.length === 0 ? (
+          <p style={{ color: th.muted, fontSize: 13, margin: 0 }}>কোনো product নেই। আগে Products page থেকে product add করো।</p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {products.map((product) => {
+              const pp = getPP(product.code);
+              const isExpanded = expandedCode === product.code;
+              const imgSrc = product.imageUrl?.startsWith('/storage') ? `${API_BASE}${product.imageUrl}` : product.imageUrl;
+              return (
+                <div key={product.code} style={{
+                  border: `1.5px solid ${isExpanded ? th.accent : th.border}`,
+                  borderRadius: 10, overflow: 'hidden', transition: 'border-color 0.2s',
+                }}>
+                  {/* Collapsed row */}
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px',
+                    background: isExpanded ? (th.surface) : 'transparent', cursor: 'pointer',
+                  }} onClick={() => handleExpandProduct(product)}>
+                    {imgSrc ? (
+                      <img src={imgSrc} alt="" style={{ width: 44, height: 44, objectFit: 'cover', borderRadius: 8, flexShrink: 0 }} />
+                    ) : (
+                      <div style={{ width: 44, height: 44, borderRadius: 8, background: th.border, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>📦</div>
+                    )}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ color: th.text, fontWeight: 600, fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {product.name || product.code}
+                      </div>
+                      <div style={{ color: th.muted, fontSize: 12 }}>৳{product.price}</div>
+                    </div>
+                    <button style={{
+                      background: isExpanded ? th.border : th.accent, color: '#fff', border: 'none',
+                      borderRadius: 6, padding: '5px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer', flexShrink: 0,
+                    }}>
+                      {isExpanded ? '✕ বন্ধ করো' : '✍️ Post করো'}
+                    </button>
+                  </div>
+
+                  {/* Expanded post builder */}
+                  {isExpanded && (
+                    <div style={{ padding: '14px 14px 16px', borderTop: `1px solid ${th.border}`, display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+                      {/* Caption */}
+                      <div>
+                        <label style={{ color: th.muted, fontSize: 12, display: 'block', marginBottom: 6, fontWeight: 600 }}>✏️ Caption</label>
+                        <textarea
+                          value={pp.caption}
+                          onChange={e => setPP(product.code, { caption: e.target.value })}
+                          rows={3}
+                          style={{ ...inp, resize: 'vertical', minHeight: 80 }}
+                          placeholder="Caption লিখো অথবা AI দিয়ে তৈরি করো..."
+                        />
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
+                          <span style={{ color: th.muted, fontSize: 11 }}>{pp.caption.length} অক্ষর</span>
+                          <button
+                            onClick={() => generateCaptionFor(product)}
+                            disabled={pp.captionLoading}
+                            style={smBtn('#8b5cf6', pp.captionLoading)}
+                          >
+                            {pp.captionLoading ? <><Spinner size={10} /> তৈরি হচ্ছে...</> : '🤖 AI Caption'}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Image mode */}
+                      <div>
+                        <label style={{ color: th.muted, fontSize: 12, display: 'block', marginBottom: 8, fontWeight: 600 }}>🖼️ ছবি</label>
+                        <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+                          <button
+                            onClick={() => setPP(product.code, { imageMode: 'product' })}
+                            style={{
+                              border: `1.5px solid ${pp.imageMode === 'product' ? th.accent : th.border}`,
+                              background: pp.imageMode === 'product' ? th.surface : 'transparent',
+                              borderRadius: 7, padding: '6px 12px', fontSize: 12, color: th.text, cursor: 'pointer', fontWeight: pp.imageMode === 'product' ? 600 : 400,
+                            }}>
+                            📷 Product-এর ছবি ব্যবহার করো
+                          </button>
+                          <button
+                            onClick={() => setPP(product.code, { imageMode: 'poster' })}
+                            style={{
+                              border: `1.5px solid ${pp.imageMode === 'poster' ? th.accent : th.border}`,
+                              background: pp.imageMode === 'poster' ? th.surface : 'transparent',
+                              borderRadius: 7, padding: '6px 12px', fontSize: 12, color: th.text, cursor: 'pointer', fontWeight: pp.imageMode === 'poster' ? 600 : 400,
+                            }}>
+                            ✨ AI Poster
+                          </button>
+                        </div>
+
+                        {pp.imageMode === 'product' && imgSrc && (
+                          <img src={imgSrc} alt="" style={{ width: 80, height: 80, objectFit: 'cover', borderRadius: 8, border: `2px solid ${th.accent}` }} />
+                        )}
+                        {pp.imageMode === 'product' && !imgSrc && (
+                          <p style={{ color: th.muted, fontSize: 12, margin: 0 }}>এই product-এ ছবি নেই।</p>
+                        )}
+
+                        {pp.imageMode === 'poster' && (
+                          <div>
+                            <button
+                              onClick={() => generatePosterFor(product)}
+                              disabled={pp.posterLoading || !product.imageUrl}
+                              style={smBtn('#f59e0b', pp.posterLoading || !product.imageUrl)}
+                            >
+                              {pp.posterLoading ? <><Spinner size={10} /> Poster তৈরি হচ্ছে...</> : '✨ AI Poster বানাও'}
+                            </button>
+                            {!product.imageUrl && <span style={{ color: th.muted, fontSize: 11, marginLeft: 8 }}>product-এ ছবি নেই</span>}
+                            {pp.posterUrl && (
+                              <img src={pp.posterUrl.startsWith('/storage') ? `${API_BASE}${pp.posterUrl}` : pp.posterUrl}
+                                alt="poster" style={{ display: 'block', marginTop: 10, maxWidth: '100%', maxHeight: 200, objectFit: 'contain', borderRadius: 8, border: `2px solid ${th.accent}` }} />
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Publish */}
+                      <div>
+                        <label style={{ color: th.muted, fontSize: 12, display: 'block', marginBottom: 8, fontWeight: 600 }}>📤 Post করো</label>
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                          <button
+                            onClick={() => { setPP(product.code, { scheduleMode: 'now' }); postFor(product); }}
+                            disabled={pp.postLoading || !pp.caption.trim()}
+                            style={btn('#10b981', pp.postLoading || !pp.caption.trim())}
+                          >
+                            {pp.postLoading && pp.scheduleMode === 'now' ? <><Spinner size={12} /> পোস্ট হচ্ছে...</> : '🚀 এখনই Post করো'}
+                          </button>
+                          <button
+                            onClick={() => setPP(product.code, { scheduleMode: pp.scheduleMode === 'later' ? 'now' : 'later' })}
+                            style={{ border: `1.5px solid ${th.border}`, background: 'transparent', borderRadius: 8, padding: '9px 14px', fontSize: 13, color: th.text, cursor: 'pointer' }}
+                          >
+                            🕐 Schedule
+                          </button>
+                        </div>
+                        {pp.scheduleMode === 'later' && (
+                          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 10 }}>
+                            <input
+                              type="datetime-local"
+                              value={pp.scheduledAt}
+                              onChange={e => setPP(product.code, { scheduledAt: e.target.value })}
+                              style={{ ...inp, width: 'auto', flex: 1 }}
+                            />
+                            <button
+                              onClick={() => postFor(product)}
+                              disabled={pp.postLoading || !pp.caption.trim() || !pp.scheduledAt}
+                              style={btn('#3b82f6', pp.postLoading || !pp.caption.trim() || !pp.scheduledAt)}
+                            >
+                              {pp.postLoading ? <><Spinner size={12} /> শিডিউল হচ্ছে...</> : '📅 শিডিউল করো'}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Quick Templates */}

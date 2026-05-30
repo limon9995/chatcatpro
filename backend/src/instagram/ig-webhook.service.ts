@@ -102,6 +102,9 @@ export class IgWebhookService {
       }
     };
 
+    // Record platform for this customer (fire-and-forget)
+    this.crm.touchPlatform(pageId, senderId, 'INSTAGRAM').catch(() => {});
+
     const isBlocked = await this.crm.isBlocked(pageId, senderId);
     if (isBlocked) return;
 

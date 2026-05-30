@@ -10,6 +10,7 @@ import { ProductsModule } from '../products/products.module';
 import { FollowUpModule } from '../followup/followup.module';
 import { BillingModule } from '../billing/billing.module';
 import { SpamCheckerModule } from '../spam-checker/spam-checker.module';
+import { IgMessengerModule } from './ig-messenger.module';
 import { IgWebhookController } from './ig-webhook.controller';
 import { IgWebhookService } from './ig-webhook.service';
 import { IgMessengerService } from './ig-messenger.service';
@@ -28,12 +29,13 @@ import { DraftOrderHandler } from '../webhook/handlers/draft-order.handler';
     FollowUpModule,
     BillingModule,
     SpamCheckerModule,
+    IgMessengerModule,
   ],
   controllers: [IgWebhookController],
   providers: [
     IgWebhookService,
-    IgMessengerService,
     DraftOrderHandler,
   ],
+  exports: [IgMessengerModule],
 })
 export class InstagramModule {}

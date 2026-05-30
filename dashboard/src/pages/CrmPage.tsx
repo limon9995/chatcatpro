@@ -9,6 +9,20 @@ interface Customer {
   address: string | null; note: string | null; tags: string[];
   totalOrders: number; totalSpent: number;
   firstOrderAt: string | null; lastOrderAt: string | null; isBlocked: boolean;
+  platform?: string;
+}
+
+const PLATFORM_BADGE: Record<string, { icon: string; color: string }> = {
+  FACEBOOK:  { icon: '💙', color: '#1877f2' },
+  INSTAGRAM: { icon: '📸', color: '#e1306c' },
+  WHATSAPP:  { icon: '💚', color: '#25d366' },
+};
+
+function PlatformBadge({ platform }: { platform?: string }) {
+  const p = PLATFORM_BADGE[(platform || 'FACEBOOK').toUpperCase()] ?? PLATFORM_BADGE.FACEBOOK;
+  return (
+    <span style={{ fontSize: 12, color: p.color, fontWeight: 600 }}>{p.icon}</span>
+  );
 }
 interface CustomerDetail extends Customer {
   orders: any[];
@@ -164,6 +178,7 @@ export function CrmPage({ th, pageId, onToast }: {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                       <div style={{ flex: 1 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 3 }}>
+                          <PlatformBadge platform={c.platform} />
                           <span style={{ fontWeight: 700, fontSize: 13.5 }}>{c.name || copy('Unknown', 'Unknown')}</span>
                           {c.isBlocked && <span style={{ ...th.pill, ...th.pillRed, fontSize: 9.5 }}>{copy('🚫 Blocked', '🚫 Blocked')}</span>}
                         </div>
@@ -196,6 +211,12 @@ export function CrmPage({ th, pageId, onToast }: {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {/* Info */}
               <div style={{ ...th.card2, fontSize: 12.5, display: 'flex', flexDirection: 'column', gap: 5 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <PlatformBadge platform={selected.platform} />
+                  <span style={{ color: PLATFORM_BADGE[(selected.platform || 'FACEBOOK').toUpperCase()]?.color ?? '#1877f2', fontWeight: 600 }}>
+                    {(selected.platform || 'Facebook').charAt(0) + (selected.platform || 'Facebook').slice(1).toLowerCase()}
+                  </span>
+                </div>
                 <div>📞 {selected.phone || '—'}</div>
                 <div>📍 {selected.address || '—'}</div>
                 <div style={{ color: '#16a34a', fontWeight: 700 }}>💰 {fmt(selected.totalSpent)} · {selected.totalOrders} {copy('orders', 'orders')}</div>

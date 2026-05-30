@@ -7,6 +7,8 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { MessengerService } from '../messenger/messenger.service';
+import { WaMessengerService } from '../whatsapp/wa-messenger.service';
+import { IgMessengerService } from '../instagram/ig-messenger.service';
 import { EncryptionService } from '../common/encryption.service';
 import { BillingService } from '../billing/billing.service';
 import { WalletService } from '../wallet/wallet.service';
@@ -42,6 +44,8 @@ export class BroadcastService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly messenger: MessengerService,
+    private readonly waMessenger: WaMessengerService,
+    private readonly igMessenger: IgMessengerService,
     private readonly encryption: EncryptionService,
     private readonly billing: BillingService,
     private readonly wallet: WalletService,
@@ -55,6 +59,7 @@ export class BroadcastService {
       targetType: string;
       targetValue?: string;
       scheduledAt?: string;
+      platform?: string;
     },
   ) {
     if (!body.title?.trim()) throw new BadRequestException('Title required');
@@ -76,6 +81,11 @@ export class BroadcastService {
       }
     }
 
+    const platform = (body.platform ?? 'FACEBOOK').toUpperCase();
+    if (!['FACEBOOK', 'INSTAGRAM', 'WHATSAPP'].includes(platform)) {
+      throw new BadRequestException('Invalid platform. Use FACEBOOK, INSTAGRAM, or WHATSAPP');
+    }
+
     return this.prisma.broadcast.create({
       data: {
         pageId,
@@ -85,6 +95,7 @@ export class BroadcastService {
         targetValue: body.targetValue ?? null,
         status: 'draft',
         scheduledAt: body.scheduledAt ? new Date(body.scheduledAt) : null,
+        platform,
       },
     });
   }
@@ -117,14 +128,26 @@ export class BroadcastService {
       throw new BadRequestException('Already completed');
 
     const page = await this.prisma.page.findUnique({ where: { id: pageId } });
-    if (!page?.pageToken) throw new BadRequestException('Page token not found');
-    const token = this.encryption.decrypt(page.pageToken);
+    if (!page) throw new BadRequestException('Page not found');
+
+    const platform = (broadcast as any).platform ?? 'FACEBOOK';
+
+    if (platform === 'WHATSAPP' && (!page.waToken || !page.waPhoneNumberId)) {
+      throw new BadRequestException('WhatsApp token বা Phone Number ID নেই। Settings থেকে configure করুন।');
+    }
+    if (platform === 'INSTAGRAM' && !page.igToken) {
+      throw new BadRequestException('Instagram token নেই। Settings থেকে configure করুন।');
+    }
+    if (platform === 'FACEBOOK' && !page.pageToken) {
+      throw new BadRequestException('Page token not found');
+    }
 
     // FIX 4: filter out blocked customers when building target list
     const psids = await this.getTargets(
       pageId,
       broadcast.targetType,
       broadcast.targetValue,
+      platform,
     );
 
     // Wallet check: calculate total cost and verify sufficient balance
@@ -159,8 +182,22 @@ export class BroadcastService {
     // FIX 1: register in active map for potential cancellation
     this.activeBroadcasts.set(id, { cancelled: false });
 
+    // Build sender function based on platform
+    let sendFn: (recipient: string) => Promise<void>;
+    if (platform === 'WHATSAPP') {
+      const waToken = this.encryption.decrypt(page.waToken!);
+      const phoneNumberId = page.waPhoneNumberId!;
+      sendFn = (to) => this.waMessenger.sendText(phoneNumberId, waToken, to, broadcast.message);
+    } else if (platform === 'INSTAGRAM') {
+      const igToken = this.encryption.decrypt(page.igToken!);
+      sendFn = (recipientId) => this.igMessenger.sendText(igToken, recipientId, broadcast.message);
+    } else {
+      const fbToken = this.encryption.decrypt(page.pageToken!);
+      sendFn = (psid) => this.messenger.sendText(fbToken, psid, broadcast.message, 'POST_PURCHASE_UPDATE');
+    }
+
     // Start processing in background
-    this.processQueue(id, token, broadcast.message, psids).catch((e) =>
+    this.processQueue(id, broadcast.message, psids, sendFn).catch((e) =>
       this.logger.error(`[Broadcast] Queue error #${id}: ${e.message}`),
     );
 
@@ -174,9 +211,9 @@ export class BroadcastService {
   // FIX 1: chunk-based queue processor
   private async processQueue(
     id: number,
-    token: string,
     message: string,
     psids: string[],
+    sendFn: (recipient: string) => Promise<void>,
   ) {
     let sent = 0,
       failed = 0;
@@ -190,7 +227,7 @@ export class BroadcastService {
       }
 
       try {
-        await this.messenger.sendText(token, psids[i], message, 'POST_PURCHASE_UPDATE');
+        await sendFn(psids[i]);
         sent++;
         await new Promise((r) => setTimeout(r, RATE_LIMIT_MS));
       } catch {
@@ -230,17 +267,22 @@ export class BroadcastService {
     );
   }
 
-  // ── Build target PSID list — FIX 4: exclude blocked customers ────────────
+  // ── Build target recipient list — FIX 4: exclude blocked customers ────────────
   private async getTargets(
     pageId: number,
     targetType: string,
     targetValue?: string | null,
+    platform = 'FACEBOOK',
   ): Promise<string[]> {
+    // For platform-specific broadcast, filter by platform in customer table
+    const platformFilter = ['INSTAGRAM', 'WHATSAPP'].includes(platform)
+      ? { platform }
+      : {};
+
     switch (targetType) {
       case 'all': {
-        // FIX 4: isBlocked: false
         const cs = await this.prisma.customer.findMany({
-          where: { pageId, isBlocked: false },
+          where: { pageId, isBlocked: false, ...platformFilter },
           select: { psid: true },
         });
         return cs.map((c) => c.psid);
@@ -252,6 +294,7 @@ export class BroadcastService {
             pageId,
             isBlocked: false,
             tags: { contains: `"${targetValue}"` },
+            ...platformFilter,
           },
           select: { psid: true },
         });
@@ -264,19 +307,29 @@ export class BroadcastService {
           select: { customerPsid: true },
           distinct: ['customerPsid'],
         });
-        // FIX 4: cross-check against blocked list
         const blocked = await this.prisma.customer.findMany({
           where: { pageId, isBlocked: true },
           select: { psid: true },
         });
         const blockedSet = new Set(blocked.map((b) => b.psid));
+        // If platform filter needed, further filter by platform
+        if (platformFilter.platform) {
+          const platformCustomers = await this.prisma.customer.findMany({
+            where: { pageId, platform: platformFilter.platform },
+            select: { psid: true },
+          });
+          const platformSet = new Set(platformCustomers.map((c) => c.psid));
+          return os
+            .map((o) => o.customerPsid)
+            .filter((p) => p && !blockedSet.has(p) && platformSet.has(p));
+        }
         return os
           .map((o) => o.customerPsid)
           .filter((p) => p && !blockedSet.has(p));
       }
       case 'never_ordered': {
         const cs = await this.prisma.customer.findMany({
-          where: { pageId, isBlocked: false, totalOrders: 0 },
+          where: { pageId, isBlocked: false, totalOrders: 0, ...platformFilter },
           select: { psid: true },
         });
         return cs.map((c) => c.psid);

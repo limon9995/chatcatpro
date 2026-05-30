@@ -214,6 +214,33 @@ export class CrmService {
     return c?.isBlocked ?? false;
   }
 
+  // ── Ensure customer exists and platform is recorded ───────────────────────
+  async touchPlatform(
+    pageId: number,
+    psid: string,
+    platform: 'FACEBOOK' | 'INSTAGRAM' | 'WHATSAPP',
+    name?: string | null,
+  ): Promise<void> {
+    try {
+      const existing = await this.prisma.customer.findUnique({
+        where: { pageId_psid: { pageId, psid } },
+        select: { id: true, platform: true },
+      });
+      if (!existing) {
+        await this.prisma.customer.create({
+          data: { pageId, psid, platform, name: name ?? null },
+        });
+      } else if ((existing as any).platform !== platform) {
+        await this.prisma.customer.update({
+          where: { pageId_psid: { pageId, psid } },
+          data: { platform },
+        });
+      }
+    } catch (e: any) {
+      this.logger.error(`[CRM] touchPlatform failed: ${e.message}`);
+    }
+  }
+
   private parseTags(raw: string): string[] {
     try {
       return JSON.parse(raw || '[]');

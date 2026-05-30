@@ -28,7 +28,7 @@ export function FollowUpPage({ th, pageId, onToast, preset }: {
   const [loading, setLoading]     = useState(false);
   const [saving, setSaving]       = useState(false);
   const [filterStatus, setFilterStatus] = useState('pending');
-  const [newFU, setNewFU]         = useState({ psid: '', message: '', scheduledAt: '' });
+  const [newFU, setNewFU]         = useState({ psid: '', message: '', scheduledAt: '', platform: 'FACEBOOK' });
   const [showNew, setShowNew]     = useState(false);
 
   const BASE = `${API_BASE}/client-dashboard/${pageId}`;
@@ -73,7 +73,7 @@ export function FollowUpPage({ th, pageId, onToast, preset }: {
     try {
       await request(`${BASE}/followup`, { method: 'POST', body: JSON.stringify(newFU) });
       onToast(copy('✅ Follow-up scheduled', '✅ Follow-up scheduled')); setShowNew(false);
-      setNewFU({ psid: '', message: '', scheduledAt: '' }); await loadList();
+      setNewFU({ psid: '', message: '', scheduledAt: '', platform: 'FACEBOOK' }); await loadList();
     } catch (e: any) { onToast(e.message, 'error'); }
   };
 
@@ -117,7 +117,14 @@ export function FollowUpPage({ th, pageId, onToast, preset }: {
             <div style={{ ...th.card, border: `2px solid ${th.accent}` }}>
               <CardHeader th={th} title={copy('➕ Manual Follow-up', '➕ Manual Follow-up')} />
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <FieldWithInfo th={th} label="Customer PSID" helpText={copy('Facebook Messenger এর PSID। CRM থেকে দেখুন।', 'Facebook Messenger PSID. You can find it from CRM.')}>
+                <FieldWithInfo th={th} label="Platform" helpText={copy('কোন platform এ follow-up পাঠাবেন।', 'Which platform to send the follow-up on.')}>
+                  <select style={th.input} value={newFU.platform} onChange={e => setNewFU(f => ({ ...f, platform: e.target.value }))}>
+                    <option value="FACEBOOK">💙 Facebook Messenger</option>
+                    <option value="INSTAGRAM">📸 Instagram DM</option>
+                    <option value="WHATSAPP">💚 WhatsApp</option>
+                  </select>
+                </FieldWithInfo>
+                <FieldWithInfo th={th} label="Customer PSID / Phone / IG ID" helpText={copy('Facebook PSID, WhatsApp phone number, বা Instagram sender ID। CRM থেকে দেখুন।', 'Facebook PSID, WhatsApp phone number, or Instagram sender ID. Find from CRM.')}>
                   <input style={th.input} placeholder="1234567890" value={newFU.psid}
                     onChange={e => setNewFU(f => ({ ...f, psid: e.target.value }))} />
                 </FieldWithInfo>
@@ -147,6 +154,8 @@ export function FollowUpPage({ th, pageId, onToast, preset }: {
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                           <span style={{ ...th.pill, background: `${STATUS_COLORS[f.status]}22`, color: STATUS_COLORS[f.status], border: `1px solid ${STATUS_COLORS[f.status]}44`, fontSize: 10.5 }}>{f.status}</span>
                           <span style={{ ...th.pill, ...th.pillGray, fontSize: 10 }}>{TRIGGER_LABELS[f.triggerType] || f.triggerType}</span>
+                          {f.platform === 'WHATSAPP' && <span style={{ ...th.pill, background: '#25d36622', color: '#25d366', fontSize: 10 }}>💚 WhatsApp</span>}
+                          {f.platform === 'INSTAGRAM' && <span style={{ ...th.pill, background: '#e1306c22', color: '#e1306c', fontSize: 10 }}>📸 Instagram</span>}
                         </div>
                         <div style={{ fontSize: 12.5, marginBottom: 4 }}>{f.message.slice(0, 80)}{f.message.length > 80 ? '…' : ''}</div>
                         <div style={{ fontSize: 11, color: th.muted }}>

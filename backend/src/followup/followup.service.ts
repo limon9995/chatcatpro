@@ -3,6 +3,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { PrismaService } from '../prisma/prisma.service';
 import { MessengerService } from '../messenger/messenger.service';
+import { WaMessengerService } from '../whatsapp/wa-messenger.service';
+import { IgMessengerService } from '../instagram/ig-messenger.service';
 import { EncryptionService } from '../common/encryption.service';
 
 export interface FollowUpSettings {
@@ -29,6 +31,8 @@ export class FollowUpService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly messenger: MessengerService,
+    private readonly waMessenger: WaMessengerService,
+    private readonly igMessenger: IgMessengerService,
     private readonly encryption: EncryptionService,
   ) {}
 
@@ -40,6 +44,7 @@ export class FollowUpService {
       triggerType: string;
       message: string;
       delayHours?: number;
+      platform?: string;
     },
   ) {
     const scheduledAt = new Date(
@@ -54,6 +59,7 @@ export class FollowUpService {
         message: data.message,
         scheduledAt,
         status: 'pending',
+        platform: data.platform ?? 'FACEBOOK',
       },
     });
   }
@@ -87,6 +93,7 @@ export class FollowUpService {
       message: string;
       scheduledAt?: string;
       orderId?: number;
+      platform?: string;
     },
   ) {
     return this.prisma.followUp.create({
@@ -98,6 +105,7 @@ export class FollowUpService {
         message: body.message,
         scheduledAt: body.scheduledAt ? new Date(body.scheduledAt) : new Date(),
         status: 'pending',
+        platform: body.platform ?? 'FACEBOOK',
       },
     });
   }
@@ -231,16 +239,47 @@ export class FollowUpService {
         const page = await this.prisma.page.findUnique({
           where: { id: fu.pageId },
         });
-        if (!page?.pageToken) {
+        if (!page) {
           await this.prisma.followUp.update({
             where: { id: fu.id },
-            data: { status: 'failed', error: 'No page token' },
+            data: { status: 'failed', error: 'Page not found' },
           });
           continue;
         }
 
-        const token = this.encryption.decrypt(page.pageToken);
-        await this.messenger.sendText(token, fu.psid, fu.message);
+        const platform = (fu as any).platform ?? 'FACEBOOK';
+
+        if (platform === 'WHATSAPP') {
+          if (!page.waToken || !page.waPhoneNumberId) {
+            await this.prisma.followUp.update({
+              where: { id: fu.id },
+              data: { status: 'failed', error: 'No WA token or phone number ID' },
+            });
+            continue;
+          }
+          const waToken = this.encryption.decrypt(page.waToken);
+          await this.waMessenger.sendText(page.waPhoneNumberId, waToken, fu.psid, fu.message);
+        } else if (platform === 'INSTAGRAM') {
+          if (!page.igToken) {
+            await this.prisma.followUp.update({
+              where: { id: fu.id },
+              data: { status: 'failed', error: 'No IG token' },
+            });
+            continue;
+          }
+          const igToken = this.encryption.decrypt(page.igToken);
+          await this.igMessenger.sendText(igToken, fu.psid, fu.message);
+        } else {
+          if (!page.pageToken) {
+            await this.prisma.followUp.update({
+              where: { id: fu.id },
+              data: { status: 'failed', error: 'No page token' },
+            });
+            continue;
+          }
+          const token = this.encryption.decrypt(page.pageToken);
+          await this.messenger.sendText(token, fu.psid, fu.message);
+        }
 
         // FIX 2: mark sent — final state
         await this.prisma.followUp.update({

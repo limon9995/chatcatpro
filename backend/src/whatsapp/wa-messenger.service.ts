@@ -13,6 +13,76 @@ export class WaMessengerService {
    * rawToken: decrypted WA access token
    * to: recipient wa_id (phone number e.g. "8801712345678")
    */
+  /**
+   * Send an approved WhatsApp template message.
+   * Used when the 24h messaging window has expired.
+   * templateName must be pre-approved in Meta Business Manager.
+   * languageCode defaults to 'en_US'.
+   */
+  async sendTemplate(
+    phoneNumberId: string,
+    rawToken: string,
+    to: string,
+    templateName: string,
+    languageCode = 'en_US',
+    components: any[] = [],
+  ): Promise<void> {
+    if (!phoneNumberId || !rawToken || !to || !templateName) {
+      this.logger.warn(`[WaMessenger] sendTemplate missing params to=${to}`);
+      return;
+    }
+
+    const url = `https://graph.facebook.com/v20.0/${phoneNumberId}/messages`;
+    const body = JSON.stringify({
+      messaging_product: 'whatsapp',
+      recipient_type: 'individual',
+      to,
+      type: 'template',
+      template: {
+        name: templateName,
+        language: { code: languageCode },
+        ...(components.length ? { components } : {}),
+      },
+    });
+
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${rawToken}`,
+          },
+          body,
+        });
+
+        if (res.ok) {
+          this.logger.debug(`[WaMessenger] Template sent to=${to} template=${templateName}`);
+          return;
+        }
+
+        const errText = await res.text().catch(() => '');
+
+        if ((res.status === 429 || res.status >= 500) && attempt < MAX_RETRIES) {
+          const delay = RETRY_DELAY_MS[attempt];
+          await new Promise((r) => setTimeout(r, delay));
+          continue;
+        }
+
+        this.logger.error(
+          `[WaMessenger] Template send failed status=${res.status} to=${to} body=${errText.slice(0, 200)}`,
+        );
+        return;
+      } catch (err) {
+        if (attempt < MAX_RETRIES) {
+          await new Promise((r) => setTimeout(r, RETRY_DELAY_MS[attempt]));
+        } else {
+          this.logger.error(`[WaMessenger] Template network error to=${to} (exhausted): ${err}`);
+        }
+      }
+    }
+  }
+
   async sendText(
     phoneNumberId: string,
     rawToken: string,

@@ -123,6 +123,10 @@ export class WaWebhookService {
       }
     };
 
+    // Record platform for this customer (fire-and-forget)
+    const senderName: string | undefined = msg?.profile?.name;
+    this.crm.touchPlatform(pageId, waId, 'WHATSAPP', senderName).catch(() => {});
+
     // Block check
     const isBlocked = await this.crm.isBlocked(pageId, waId);
     if (isBlocked) {

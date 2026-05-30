@@ -10,6 +10,7 @@ import { ProductsModule } from '../products/products.module';
 import { FollowUpModule } from '../followup/followup.module';
 import { BillingModule } from '../billing/billing.module';
 import { SpamCheckerModule } from '../spam-checker/spam-checker.module';
+import { WaMessengerModule } from './wa-messenger.module';
 import { WaWebhookController } from './wa-webhook.controller';
 import { WaWebhookService } from './wa-webhook.service';
 import { WaMessengerService } from './wa-messenger.service';
@@ -28,12 +29,13 @@ import { DraftOrderHandler } from '../webhook/handlers/draft-order.handler';
     FollowUpModule,
     BillingModule,
     SpamCheckerModule,
+    WaMessengerModule,
   ],
   controllers: [WaWebhookController],
   providers: [
     WaWebhookService,
-    WaMessengerService,
     DraftOrderHandler,
   ],
+  exports: [WaMessengerModule],
 })
 export class WhatsappModule {}

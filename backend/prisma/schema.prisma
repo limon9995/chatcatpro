@@ -558,6 +558,8 @@ model Customer {
   firstOrderAt DateTime?
   lastOrderAt  DateTime?
   isBlocked    Boolean    @default(false)
+  // FACEBOOK | INSTAGRAM | WHATSAPP
+  platform     String     @default("FACEBOOK")
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
   followUps    FollowUp[]
@@ -577,7 +579,7 @@ model FollowUp {
   psid        String
   orderId     Int?
   order       Order?    @relation(fields: [orderId], references: [id], onDelete: SetNull)
-  // pending | sent | failed | cancelled
+  // pending | sent | failed | cancelled | processing
   status      String    @default("pending")
   // order_received | order_delivered | abandoned_cart | custom
   triggerType String    @default("custom")
@@ -585,6 +587,8 @@ model FollowUp {
   scheduledAt DateTime
   sentAt      DateTime?
   error       String?
+  // FACEBOOK | INSTAGRAM | WHATSAPP
+  platform    String    @default("FACEBOOK")
   createdAt   DateTime  @default(now())
 
   @@index([pageId])
@@ -639,6 +643,8 @@ model Broadcast {
   scheduledAt DateTime?
   startedAt   DateTime?
   completedAt DateTime?
+  // FACEBOOK | INSTAGRAM | WHATSAPP | ALL
+  platform    String    @default("FACEBOOK")
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 

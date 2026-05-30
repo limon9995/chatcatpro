@@ -164,7 +164,7 @@ export function BroadcastPage({ th, pageId, onToast }: {
   const [showTemplates, setShowTemplates] = useState(false);
   const [showGuide, setShowGuide]     = useState(false);
   const [activeCategory, setActiveCategory] = useState(CATEGORIES[0]);
-  const [form, setForm] = useState({ title: '', message: '', targetType: 'all', targetValue: '' });
+  const [form, setForm] = useState({ title: '', message: '', targetType: 'all', targetValue: '', platform: 'FACEBOOK' });
   const [generatingDraft, setGeneratingDraft] = useState(false);
   const [confirmId, setConfirmId]     = useState<number | null>(null);
 
@@ -218,7 +218,7 @@ export function BroadcastPage({ th, pageId, onToast }: {
       await request(`${BASE}/broadcast`, { method: 'POST', body: JSON.stringify(form) });
       onToast(copy('✅ Broadcast তৈরি হয়েছে', '✅ Broadcast created'));
       setShowNew(false);
-      setForm({ title: '', message: '', targetType: 'all', targetValue: '' });
+      setForm({ title: '', message: '', targetType: 'all', targetValue: '', platform: 'FACEBOOK' });
       await load();
     } catch (e: any) { onToast(e.message, 'error'); }
   };
@@ -440,6 +440,14 @@ export function BroadcastPage({ th, pageId, onToast }: {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <FieldWithInfo th={th} label="Title (internal)" helpText={copy('Dashboard এ দেখার জন্য। Customer দেখবে না।', 'For your reference only. Customers will not see this.')}>
               <input style={th.input} placeholder="Summer Collection Launch" value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} />
+            </FieldWithInfo>
+
+            <FieldWithInfo th={th} label={copy('Platform', 'Platform')} helpText={copy('কোন platform এ broadcast পাঠাবেন।', 'Which platform to send the broadcast on.')}>
+              <select style={th.input} value={form.platform} onChange={(e) => setForm((f) => ({ ...f, platform: e.target.value }))}>
+                <option value="FACEBOOK">💙 Facebook Messenger</option>
+                <option value="INSTAGRAM">📸 Instagram DM</option>
+                <option value="WHATSAPP">💚 WhatsApp</option>
+              </select>
             </FieldWithInfo>
 
             <FieldWithInfo th={th} label={copy('কাদের পাঠাবেন', 'Target Audience')} helpText={copy('নির্দিষ্ট group এ পাঠালে response বেশি হয়।', 'Targeted segments get better responses than sending to everyone.')}>

@@ -14,7 +14,6 @@ const ProductsPage    = safeLazy(() => import('./ProductsPage').then(m => ({ def
 const SettingsPage    = safeLazy(() => import('./SettingsPage').then(m => ({ default: m.SettingsPage })));
 const AccountingPage  = safeLazy(() => import('./AccountingPage').then(m => ({ default: m.AccountingPage })));
 const AnalyticsPage   = safeLazy(() => import('./AnalyticsPage').then(m => ({ default: m.AnalyticsPage })));
-const MotivationPage  = safeLazy(() => import('./MotivationPage').then(m => ({ default: m.MotivationPage })));
 const AgentTasksPage  = safeLazy(() => import('./AgentTasksPage').then(m => ({ default: m.AgentTasksPage })));
 const BotKnowledgePage= safeLazy(() => import('./BotKnowledgePage').then(m => ({ default: m.BotKnowledgePage })));
 const PrintPage       = safeLazy(() => import('./PrintPage').then(m => ({ default: m.PrintPage })));
@@ -441,15 +440,9 @@ export function DashboardLayout({
     }
     switch (nav) {
       case 'OVERVIEW':    return (
-        <PageErrorBoundary name="MotivationPage">
+        <PageErrorBoundary name="AnalyticsPage">
           <Suspense fallback={pageFallback}>
-            <MotivationPage
-              th={th}
-              pageId={pageId}
-              onToast={showToast}
-              onOpenAgentTasks={() => setNav('AGENT_TASKS')}
-              onOpenOrders={openOrdersWithPreset}
-            />
+            <AnalyticsPage th={th} pageId={pageId} onToast={showToast} />
           </Suspense>
         </PageErrorBoundary>
       );
