@@ -226,7 +226,7 @@ export class WaWebhookService {
           where: { pageId, code: { in: codes }, stockQty: { gt: 0 } },
         });
         if (found.length > 0) {
-          const newDraft = this.draftHandler.emptyDraft();
+          const newDraft = this.draftHandler.emptyDraft('WHATSAPP');
           newDraft.pendingMultiPreview = codes;
           await this.ctx.saveDraft(pageId, waId, newDraft);
           await this.sendMultiProductPreview(page, waId, safeSend, codes);
@@ -267,6 +267,7 @@ export class WaWebhookService {
               [code],
               [product as any],
               variantOptions,
+              'WHATSAPP',
             );
             await this.ctx.saveDraft(pageId, waId, newDraft);
           }
@@ -379,7 +380,7 @@ export class WaWebhookService {
       const products = await this.prisma.product.findMany({
         where: { pageId, code: { in: codes } },
       });
-      const newDraft = this.draftHandler.startDraftFromCodes(codes, products as any[]);
+      const newDraft = this.draftHandler.startDraftFromCodes(codes, products as any[], [], 'WHATSAPP');
       await this.ctx.saveDraft(pageId, waId, newDraft);
       await safeSend('ঠিক আছে 💖 আপনার নাম দিন।');
     } else if (intent === 'CANCEL') {

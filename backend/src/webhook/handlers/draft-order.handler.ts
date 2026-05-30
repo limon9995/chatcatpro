@@ -33,18 +33,6 @@ export class DraftOrderHandler {
     private readonly spamChecker: SpamCheckerService,
   ) {}
 
-  emptyDraft(): DraftSession {
-    return {
-      items: [],
-      customerName: null,
-      phone: null,
-      address: null,
-      currentStep: 'name',
-      pendingCustomFields: [],
-      customFieldValues: {},
-    };
-  }
-
   normalizeVariantOptions(raw: any): CustomFieldDef[] {
     if (!Array.isArray(raw) || raw.length === 0) return [];
 
@@ -106,6 +94,7 @@ export class DraftOrderHandler {
     codes: string[],
     products: Array<{ code: string; price: number }>,
     variantOptions: CustomFieldDef[] = [],
+    platform = 'FACEBOOK',
   ): DraftSession {
     const normalizedVariantOptions =
       this.normalizeVariantOptions(variantOptions);
@@ -126,6 +115,18 @@ export class DraftOrderHandler {
       currentStep: firstStep,
       pendingCustomFields: [...normalizedVariantOptions],
       customFieldValues: {},
+      platform,
+    };
+  }
+
+  emptyDraft(platform = 'FACEBOOK'): DraftSession {
+    return {
+      items: [],
+      customerName: null,
+      phone: null,
+      address: null,
+      currentStep: 'name',
+      platform,
     };
   }
 
@@ -524,6 +525,7 @@ export class DraftOrderHandler {
           phone: draft.phone ?? null,
           address: draft.address ?? '',
           status: orderStatus,
+          source: draft.platform ?? 'FACEBOOK',
           confirmedAt: confirmedAt,
           negotiationRequested: draft.negotiationRequested ?? false,
           customerOfferedPrice: draft.offeredPrice ?? null,

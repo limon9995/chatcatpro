@@ -244,6 +244,21 @@ export class AccountingService {
     }));
   }
 
+  async getPlatformDist(pageId: number): Promise<{ platform: string; count: number; revenue: number }[]> {
+    const orders = await this.prisma.order.findMany({
+      where: { pageIdRef: pageId },
+      select: { source: true, items: { select: { unitPrice: true, qty: true } } },
+    });
+    const map = new Map<string, { count: number; revenue: number }>();
+    for (const o of orders) {
+      const platform = (o.source || 'FACEBOOK').toUpperCase();
+      const revenue = o.items.reduce((s, i) => s + i.unitPrice * i.qty, 0);
+      const cur = map.get(platform) ?? { count: 0, revenue: 0 };
+      map.set(platform, { count: cur.count + 1, revenue: cur.revenue + revenue });
+    }
+    return Array.from(map.entries()).map(([platform, v]) => ({ platform, ...v }));
+  }
+
   // ── Collections ────────────────────────────────────────────────────────────
 
   async addCollection(

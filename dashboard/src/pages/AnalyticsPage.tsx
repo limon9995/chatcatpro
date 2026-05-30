@@ -23,6 +23,7 @@ interface AnalyticsSummary {
   overview: any; profitTrend: ProfitTrend[]; topProducts: ProductPerf[];
   expenseBreakdown: { category: string; amount: number }[];
   collectionMethods: ColMethod[]; orderStatusDist: { status: string; count: number }[];
+  platformDist?: { platform: string; count: number; revenue: number }[];
   returnTrend: ReturnPoint[]; negotiation: NegotiationA; dataFlags: DataFlags;
 }
 interface VisionSummary {
@@ -386,6 +387,31 @@ export function AnalyticsPage({ th, pageId, onToast }: {
         {/* Order Status */}
         <ChartSection th={th} title="📦 Order Status" sub="Distribution" show={data.orderStatusDist.length > 0}>
           <DonutChart data={data.orderStatusDist.map(s => ({ label: s.status, value: s.count }))} colors={['#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4']} />
+        </ChartSection>
+
+        {/* Platform Breakdown */}
+        <ChartSection th={th} title="📡 Platform Breakdown" sub="Orders by channel" show={(data.platformDist ?? []).length > 0}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {(data.platformDist ?? []).map((p) => {
+              const icon = p.platform === 'INSTAGRAM' ? '📸' : p.platform === 'WHATSAPP' ? '💚' : '💙';
+              const color = p.platform === 'INSTAGRAM' ? '#e1306c' : p.platform === 'WHATSAPP' ? '#25d366' : '#1877f2';
+              const total = (data.platformDist ?? []).reduce((s, x) => s + x.count, 0) || 1;
+              return (
+                <div key={p.platform} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontSize: 16 }}>{icon}</span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 3 }}>
+                      <span style={{ fontWeight: 600, color }}>{p.platform.charAt(0) + p.platform.slice(1).toLowerCase()}</span>
+                      <span style={{ color: '#6b7280' }}>{p.count} orders</span>
+                    </div>
+                    <div style={{ height: 6, borderRadius: 4, background: '#e5e7eb', overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${(p.count / total) * 100}%`, background: color, borderRadius: 4 }} />
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </ChartSection>
 
         {/* Collection Methods */}

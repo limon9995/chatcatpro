@@ -450,6 +450,19 @@ export function BroadcastPage({ th, pageId, onToast }: {
               </select>
             </FieldWithInfo>
 
+            {form.platform === 'WHATSAPP' && (
+              <div style={{ background: '#fef3c744', border: '1px solid #f59e0b66', borderRadius: 10, padding: '10px 14px', fontSize: 12.5, color: '#92400e', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                <span style={{ fontSize: 18 }}>⚠️</span>
+                <div>
+                  <strong>{copy('WhatsApp 24h সীমা:', 'WhatsApp 24h Limit:')}</strong>{' '}
+                  {copy(
+                    'যে customer গত ২৪ ঘণ্টায় আপনাকে message করেনি তাদের কাছে free-form message যাবে না — Meta-র approved template লাগবে। Settings-এ Fallback Template Name দিন।',
+                    'Customers who have not messaged you in the last 24h cannot receive free-form messages. You need a Meta-approved template. Set the Fallback Template Name in Settings.',
+                  )}
+                </div>
+              </div>
+            )}
+
             <FieldWithInfo th={th} label={copy('কাদের পাঠাবেন', 'Target Audience')} helpText={copy('নির্দিষ্ট group এ পাঠালে response বেশি হয়।', 'Targeted segments get better responses than sending to everyone.')}>
               <select style={th.input} value={form.targetType} onChange={(e) => setForm((f) => ({ ...f, targetType: e.target.value, targetValue: '' }))}>
                 {TARGET_OPTS.map((t) => (

@@ -15,8 +15,8 @@ interface Settings {
   deliveryTimeText: string;
   paymentMode: string; advanceAmount: number; advanceBkash: string; advanceNagad: string; advancePaymentMessage: string;
   automationOn: boolean; ocrOn: boolean;
-  waEnabled: boolean; waPhoneNumberId: string; waVerifyToken: string; waTokenSet: boolean;
-  igEnabled: boolean; igBusinessAccountId: string; igVerifyToken: string; igTokenSet: boolean;
+  waEnabled: boolean; waPhoneNumberId: string; waVerifyToken: string; waTokenSet: boolean; waFallbackTemplateName: string;
+  igEnabled: boolean; igBusinessAccountId: string; igVerifyToken: string; igTokenSet: boolean; igCommentToDmEnabled: boolean;
   infoModeOn: boolean; orderModeOn: boolean; printModeOn: boolean;
   callConfirmModeOn: boolean; memoSaveModeOn: boolean; memoTemplateModeOn: boolean;
   smartBotOn: boolean;
@@ -57,8 +57,8 @@ const S0: Settings = {
   paymentMode: 'cod', advanceAmount: 0, advanceBkash: '', advanceNagad: '', advancePaymentMessage: '',
   knowledgeText: '',
   automationOn: false, ocrOn: false,
-  waEnabled: false, waPhoneNumberId: '', waVerifyToken: '', waTokenSet: false,
-  igEnabled: false, igBusinessAccountId: '', igVerifyToken: '', igTokenSet: false,
+  waEnabled: false, waPhoneNumberId: '', waVerifyToken: '', waTokenSet: false, waFallbackTemplateName: '',
+  igEnabled: false, igBusinessAccountId: '', igVerifyToken: '', igTokenSet: false, igCommentToDmEnabled: true,
   infoModeOn: true, orderModeOn: true, printModeOn: false,
   callConfirmModeOn: false, memoSaveModeOn: false, memoTemplateModeOn: false,
   smartBotOn: false,
@@ -350,6 +350,7 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect }: {
         waEnabled: s.waEnabled,
         waPhoneNumberId: s.waPhoneNumberId.trim(),
         waVerifyToken: s.waVerifyToken.trim(),
+        waFallbackTemplateName: s.waFallbackTemplateName.trim(),
       };
       if (waToken.trim()) body.waToken = waToken.trim();
       await request(`${BASE}/settings`, { method: 'PATCH', body: JSON.stringify(body) });
@@ -367,6 +368,7 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect }: {
         igEnabled: s.igEnabled,
         igBusinessAccountId: s.igBusinessAccountId.trim(),
         igVerifyToken: s.igVerifyToken.trim(),
+        igCommentToDmEnabled: s.igCommentToDmEnabled,
       };
       if (igToken.trim()) body.igToken = igToken.trim();
       await request(`${BASE}/settings`, { method: 'PATCH', body: JSON.stringify(body) });
@@ -871,6 +873,21 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect }: {
               </div>
             </div>
 
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>
+                Fallback Template Name <span style={{ color: th.muted, fontWeight: 400 }}>(optional)</span>
+              </label>
+              <input
+                style={{ ...inp }}
+                placeholder="e.g. hello_world"
+                value={s.waFallbackTemplateName}
+                onChange={e => setS(prev => ({ ...prev, waFallbackTemplateName: e.target.value }))}
+              />
+              <div style={{ fontSize: 11, color: th.muted, marginTop: 4 }}>
+                {copy('24h window expire হলে এই approved template দিয়ে message পাঠাবে। Meta Business Manager-এ আগে approve করাতে হবে।', 'Used when the 24h messaging window expires. Must be pre-approved in Meta Business Manager.')}
+              </div>
+            </div>
+
             <div style={{ padding: '10px 12px', borderRadius: 10, background: th.surface, border: `1px solid ${th.border}` }}>
               <div style={{ fontSize: 11.5, fontWeight: 700, marginBottom: 4 }}>📋 Webhook URL (Meta Console-এ দিন)</div>
               <div style={{ fontSize: 12, fontFamily: 'monospace', color: th.accent, wordBreak: 'break-all' }}>
@@ -1019,6 +1036,16 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect }: {
                 </button>
               </div>
             </div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', borderRadius: 10, background: th.surface, border: `1px solid ${th.border}` }}>
+              <div>
+                <div style={{ fontSize: 12.5, fontWeight: 700 }}>💬 Comment-to-DM Automation</div>
+                <div style={{ fontSize: 11, color: th.muted, marginTop: 2 }}>
+                  {copy('Post comment-এ product code বা order intent দেখলে automatically DM পাঠাবে।', 'Auto-sends DM when a product code or order intent is detected in post comments.')}
+                </div>
+              </div>
+              <Toggle th={th} label="" checked={s.igCommentToDmEnabled} onChange={v => setS(prev => ({ ...prev, igCommentToDmEnabled: v }))} />
+            </div>
+
             <div style={{ padding: '10px 12px', borderRadius: 10, background: th.surface, border: `1px solid ${th.border}` }}>
               <div style={{ fontSize: 11.5, fontWeight: 700, marginBottom: 4 }}>📋 Webhook URL (Meta Console-এ দিন)</div>
               <div style={{ fontSize: 12, fontFamily: 'monospace', color: th.accent, wordBreak: 'break-all' }}>

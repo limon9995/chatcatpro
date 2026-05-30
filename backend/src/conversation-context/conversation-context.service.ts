@@ -34,6 +34,8 @@ export interface DraftSession {
   paymentProof?: string;
   paymentScreenshotUrl?: string; // URL of screenshot customer sent
   paymentIssueNote?: string; // Customer's problem message — marks order for agent review
+  // Platform the order is being placed from (FACEBOOK | INSTAGRAM | WHATSAPP)
+  platform?: string;
 }
 
 @Injectable()
@@ -282,19 +284,21 @@ export class ConversationContextService {
     }
   }
 
-  emptyDraft(): DraftSession {
+  emptyDraft(platform = 'FACEBOOK'): DraftSession {
     return {
       items: [],
       customerName: null,
       phone: null,
       address: null,
       currentStep: 'name',
+      platform,
     };
   }
 
   startDraftFromCodes(
     codes: string[],
     products: { code: string; price: number }[],
+    platform = 'FACEBOOK',
   ): DraftSession {
     const priceMap = new Map(products.map((p) => [p.code, p.price]));
     return {
@@ -307,6 +311,7 @@ export class ConversationContextService {
       phone: null,
       address: null,
       currentStep: 'name',
+      platform,
     };
   }
 }

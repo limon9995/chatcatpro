@@ -64,6 +64,7 @@ export interface AdvancedAnalyticsSummary {
   expenseBreakdown: { category: string; amount: number }[];
   collectionMethods: CollectionMethodBreakdown[];
   orderStatusDist: { status: string; count: number }[];
+  platformDist: { platform: string; count: number; revenue: number }[];
   returnTrend: { date: string; count: number; refundAmount: number }[];
   negotiation: NegotiationAnalytics;
   // Data sufficiency flags — UI uses these to show/hide charts
@@ -103,6 +104,7 @@ export class AnalyticsService {
       expBreakdown,
       collMethods,
       statusDist,
+      platformDist,
       returnTrend,
       negotiation,
     ] = await Promise.all([
@@ -113,6 +115,7 @@ export class AnalyticsService {
       this.accounting.getExpenseBreakdown(pageId),
       this.getCollectionMethodBreakdown(pageId, from, to),
       this.accounting.getOrderStatusDist(pageId),
+      this.accounting.getPlatformDist(pageId),
       this.getReturnTrend(pageId, period),
       this.getNegotiationAnalytics(pageId, from, to),
     ]);
@@ -128,6 +131,7 @@ export class AnalyticsService {
       expenseBreakdown: expBreakdown,
       collectionMethods: collMethods,
       orderStatusDist: statusDist,
+      platformDist,
       returnTrend,
       negotiation,
       dataFlags: {

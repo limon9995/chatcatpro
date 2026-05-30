@@ -196,16 +196,18 @@ model Page {
   previousPageId    String? // old FB page ID before the last reconnect
 
   // ── WhatsApp Business API ──────────────────────────────────────────────────
-  waEnabled       Boolean @default(false) // master toggle for WA automation
-  waPhoneNumberId String? // Meta phone number ID (e.g. "123456789012345")
-  waToken         String? // encrypted WA Cloud API access token
-  waVerifyToken   String? // webhook verify token for WA
+  waEnabled               Boolean @default(false) // master toggle for WA automation
+  waPhoneNumberId         String? // Meta phone number ID (e.g. "123456789012345")
+  waToken                 String? // encrypted WA Cloud API access token
+  waVerifyToken           String? // webhook verify token for WA
+  waFallbackTemplateName  String? // approved template name for 24h window fallback
 
   // ── Instagram Business API ────────────────────────────────────────────────
   igEnabled           Boolean @default(false) // master toggle for IG automation
   igBusinessAccountId String? // Instagram Business Account ID
   igToken             String? // encrypted IG access token
   igVerifyToken       String? // webhook verify token for IG
+  igCommentToDmEnabled Boolean @default(true) // auto-DM commenters after product/order detected
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

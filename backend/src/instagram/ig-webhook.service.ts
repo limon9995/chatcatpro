@@ -187,7 +187,7 @@ export class IgWebhookService {
           where: { pageId, code: { in: codes }, stockQty: { gt: 0 } },
         });
         if (found.length > 0) {
-          const newDraft = this.draftHandler.emptyDraft();
+          const newDraft = this.draftHandler.emptyDraft('INSTAGRAM');
           newDraft.pendingMultiPreview = codes;
           await this.ctx.saveDraft(pageId, senderId, newDraft);
           await this.sendMultiProductPreview(page, senderId, safeSend, codes);
@@ -220,7 +220,7 @@ export class IgWebhookService {
                   JSON.parse(product.variantOptions),
                 );
             } catch {}
-            const newDraft = this.draftHandler.startDraftFromCodes([code], [product as any], variantOptions);
+            const newDraft = this.draftHandler.startDraftFromCodes([code], [product as any], variantOptions, 'INSTAGRAM');
             await this.ctx.saveDraft(pageId, senderId, newDraft);
           }
 
@@ -274,6 +274,8 @@ export class IgWebhookService {
     const rawToken = this.encryption.decrypt(page.igToken as string);
 
     if (!page.automationOn) return;
+    // igCommentToDmEnabled defaults to true — only skip if explicitly false
+    if (page.igCommentToDmEnabled === false) return;
 
     const isBlocked = await this.crm.isBlocked(pageId, commenterId);
     if (isBlocked) return;
@@ -392,7 +394,7 @@ export class IgWebhookService {
       const products = await this.prisma.product.findMany({
         where: { pageId, code: { in: codes } },
       });
-      const newDraft = this.draftHandler.startDraftFromCodes(codes, products as any[]);
+      const newDraft = this.draftHandler.startDraftFromCodes(codes, products as any[], [], 'INSTAGRAM');
       await this.ctx.saveDraft(pageId, senderId, newDraft);
       await safeSend('ঠিক আছে 💖 আপনার নাম দিন।');
     } else if (intent === 'CANCEL') {
