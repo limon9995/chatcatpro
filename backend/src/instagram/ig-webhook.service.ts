@@ -147,6 +147,12 @@ export class IgWebhookService {
       return;
     }
 
+    // ── PENDING MULTI-PRODUCT PREVIEW ──────────────────────────────────────────
+    if ((draft?.pendingMultiPreview?.length ?? 0) > 0) {
+      await this.handleMultiProductPreview(page, senderId, safeSend, text, intent, draft!);
+      return;
+    }
+
     if (draft && page.orderModeOn) {
       const result = await this.draftHandler.captureField(pageId, senderId, text, draft, page);
 
@@ -170,8 +176,23 @@ export class IgWebhookService {
     }
 
     if (page.infoModeOn) {
-      const codes = this.botIntent.extractAllCodes(text);
-      if (codes.length > 0) {
+      const prefix = (page.productCodePrefix as string | undefined) || 'DF';
+      const codes = this.botIntent.extractAllCodes(text, prefix);
+
+      if (codes.length > 1) {
+        const found = await this.prisma.product.findMany({
+          where: { pageId, code: { in: codes }, stockQty: { gt: 0 } },
+        });
+        if (found.length > 0) {
+          const newDraft = this.draftHandler.emptyDraft();
+          newDraft.pendingMultiPreview = codes;
+          await this.ctx.saveDraft(pageId, senderId, newDraft);
+          await this.sendMultiProductPreview(page, senderId, safeSend, codes);
+          return;
+        }
+      }
+
+      if (codes.length >= 1) {
         const code = codes[0];
         const product = await this.prisma.product.findFirst({
           where: { pageId, code, stockQty: { gt: 0 } },
@@ -263,9 +284,19 @@ export class IgWebhookService {
       }
     };
 
-    // Product code in comment → reply with product info
+    const safeSendDm = async (msg: string) => {
+      if (!msg) return;
+      try {
+        await this.igMessenger.sendText(rawToken, commenterId, msg);
+      } catch (err) {
+        this.logger.debug(`[IG] DM to commenter failed (may not have messaged first) commenterId=${commenterId}: ${err}`);
+      }
+    };
+
+    // Product code in comment → reply with product info + invite to DM for ordering
     if (page.infoModeOn) {
-      const codes = this.botIntent.extractAllCodes(text);
+      const prefix = (page.productCodePrefix as string | undefined) || 'DF';
+      const codes = this.botIntent.extractAllCodes(text, prefix);
       if (codes.length > 0) {
         const code = codes[0];
         const product = await this.prisma.product.findFirst({
@@ -280,8 +311,29 @@ export class IgWebhookService {
             productInfoNote: product.description || '',
           });
           await safeSendComment(infoMsg.trim());
+
+          // Send DM invite to order if orderModeOn
+          if (page.orderModeOn) {
+            const dmInvite = await this.botKnowledge.resolveSystemReply(pageId, 'order_prompt') ||
+              `${product.code} order করতে আমাদের Inbox-এ message করুন 💖`;
+            await safeSendDm(dmInvite);
+          }
           return;
         }
+      }
+    }
+
+    // Order intent in comment (নেব, কিনব, order etc.) → invite to DM
+    if (page.orderModeOn) {
+      const commentIntent = this.botIntent.detectIntent(text, false);
+      if (
+        commentIntent === 'PRODUCT_INFO_REQUEST' ||
+        commentIntent === 'CONFIRM' ||
+        /\b(নেব|কিনব|order|অর্ডার|buy|want|চাই)\b/i.test(text)
+      ) {
+        const dmInvite = 'Order করতে আমাদের Inbox-এ message করুন 💖';
+        await safeSendComment(dmInvite);
+        return;
       }
     }
 
@@ -293,5 +345,61 @@ export class IgWebhookService {
     }
 
     this.logger.debug(`[IG] No comment reply for commentId=${commentId} text="${text.slice(0, 60)}"`);
+  }
+
+  // ── Multi-product preview helpers ────────────────────────────────────────────
+
+  private async sendMultiProductPreview(
+    page: any,
+    senderId: string,
+    safeSend: (t: string) => Promise<void>,
+    codes: string[],
+  ): Promise<void> {
+    const products = await this.prisma.product.findMany({
+      where: { pageId: page.id, code: { in: codes } },
+    });
+    if (!products.length) return;
+
+    const sym = (page as any).currencySymbol || '৳';
+    const lines = codes
+      .map((c) => products.find((p) => p.code === c))
+      .filter(Boolean)
+      .map(
+        (p: any) =>
+          `${p.code} — ${p.price}${sym}${p.stockQty <= 0 ? ' ❌ Stock Out' : ''}`,
+      );
+
+    await safeSend(
+      lines.join('\n') + '\n\nসবগুলো order করতে চান? confirm / cancel লিখুন 💖',
+    );
+  }
+
+  private async handleMultiProductPreview(
+    page: any,
+    senderId: string,
+    safeSend: (t: string) => Promise<void>,
+    _text: string,
+    intent: string | null,
+    draft: any,
+  ): Promise<void> {
+    const pageId = page.id as number;
+    const codes = draft.pendingMultiPreview as string[];
+
+    if (intent === 'CONFIRM' || intent === 'MULTI_CONFIRM') {
+      const products = await this.prisma.product.findMany({
+        where: { pageId, code: { in: codes } },
+      });
+      const newDraft = this.draftHandler.startDraftFromCodes(codes, products as any[]);
+      await this.ctx.saveDraft(pageId, senderId, newDraft);
+      await safeSend('ঠিক আছে 💖 আপনার নাম দিন।');
+    } else if (intent === 'CANCEL') {
+      await this.ctx.clearDraft(pageId, senderId);
+      const msg = await this.botKnowledge.resolveSystemReply(pageId, 'order_cancelled');
+      await safeSend(msg || 'ঠিক আছে 💖 কোনো সমস্যা নেই।');
+    } else {
+      await safeSend(
+        'সবগুলো order করতে confirm লিখুন, বাতিল করতে cancel লিখুন 💖',
+      );
+    }
   }
 }

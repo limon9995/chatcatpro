@@ -64,6 +64,12 @@ export class WaWebhookService {
           continue;
         }
 
+        // ── Message status updates (delivered / read / failed) ───────────────
+        for (const status of value.statuses ?? []) {
+          this.handleStatusUpdate(page.id, status);
+        }
+
+        // ── Incoming messages ─────────────────────────────────────────────────
         for (const msg of value.messages ?? []) {
           const waId: string = msg.from; // sender's phone number
           if (!waId) continue;
@@ -72,6 +78,32 @@ export class WaWebhookService {
           );
         }
       }
+    }
+  }
+
+  // ── Message status handler ───────────────────────────────────────────────────
+
+  private handleStatusUpdate(pageId: number, status: any): void {
+    const { id: msgId, status: state, recipient_id, errors } = status ?? {};
+    if (!msgId || !state) return;
+
+    if (state === 'failed') {
+      const errCode = errors?.[0]?.code;
+      const errTitle = errors?.[0]?.title ?? 'unknown';
+
+      if (errCode === 131047) {
+        this.logger.warn(
+          `[WA] pageId=${pageId} 24h window expired for recipient=${recipient_id} — outbound message blocked. Use approved template to re-open conversation.`,
+        );
+      } else {
+        this.logger.warn(
+          `[WA] pageId=${pageId} message failed msgId=${msgId} recipient=${recipient_id} errCode=${errCode} title="${errTitle}"`,
+        );
+      }
+    } else {
+      this.logger.debug(
+        `[WA] pageId=${pageId} message status=${state} msgId=${msgId} recipient=${recipient_id}`,
+      );
     }
   }
 
@@ -151,6 +183,12 @@ export class WaWebhookService {
       return;
     }
 
+    // ── PENDING MULTI-PRODUCT PREVIEW ──────────────────────────────────────────
+    if ((draft?.pendingMultiPreview?.length ?? 0) > 0) {
+      await this.handleMultiProductPreview(page, waId, safeSend, text, intent, draft!);
+      return;
+    }
+
     // ── ACTIVE DRAFT: capture next field ──────────────────────────────────────
     if (draft && page.orderModeOn) {
       const result = await this.draftHandler.captureField(pageId, waId, text, draft, page);
@@ -176,8 +214,23 @@ export class WaWebhookService {
 
     // ── PRODUCT CODE detection ─────────────────────────────────────────────────
     if (page.infoModeOn) {
-      const codes = this.botIntent.extractAllCodes(text);
-      if (codes.length > 0) {
+      const prefix = (page.productCodePrefix as string | undefined) || 'DF';
+      const codes = this.botIntent.extractAllCodes(text, prefix);
+
+      if (codes.length > 1) {
+        const found = await this.prisma.product.findMany({
+          where: { pageId, code: { in: codes }, stockQty: { gt: 0 } },
+        });
+        if (found.length > 0) {
+          const newDraft = this.draftHandler.emptyDraft();
+          newDraft.pendingMultiPreview = codes;
+          await this.ctx.saveDraft(pageId, waId, newDraft);
+          await this.sendMultiProductPreview(page, waId, safeSend, codes);
+          return;
+        }
+      }
+
+      if (codes.length >= 1) {
         const code = codes[0];
         const product = await this.prisma.product.findFirst({
           where: { pageId, code, stockQty: { gt: 0 } },
@@ -199,7 +252,6 @@ export class WaWebhookService {
             const prompt = await this.botKnowledge.resolveSystemReply(pageId, 'order_prompt');
             if (prompt) infoMsg += `\n\n${prompt}`;
 
-            // Start order draft for this product
             let variantOptions: any[] = [];
             try {
               if (product.variantOptions)
@@ -218,7 +270,6 @@ export class WaWebhookService {
           await safeSend(infoMsg.trim());
           return;
         } else if (product === null) {
-          // Product code matched but out of stock or not found
           const notFound = await this.botKnowledge.resolveSystemReply(
             pageId,
             'product_not_found',
@@ -279,8 +330,62 @@ export class WaWebhookService {
       }
     }
 
-    // ── Fallback — no reply found ──────────────────────────────────────────────
-    // Silently skip (don't spam customer with "I don't understand")
     this.logger.debug(`[WA] No reply for waId=${waId} text="${text.slice(0, 60)}"`);
+  }
+
+  // ── Multi-product preview helpers ────────────────────────────────────────────
+
+  private async sendMultiProductPreview(
+    page: any,
+    waId: string,
+    safeSend: (t: string) => Promise<void>,
+    codes: string[],
+  ): Promise<void> {
+    const products = await this.prisma.product.findMany({
+      where: { pageId: page.id, code: { in: codes } },
+    });
+    if (!products.length) return;
+
+    const sym = (page as any).currencySymbol || '৳';
+    const lines = codes
+      .map((c) => products.find((p) => p.code === c))
+      .filter(Boolean)
+      .map(
+        (p: any) =>
+          `${p.code} — ${p.price}${sym}${p.stockQty <= 0 ? ' ❌ Stock Out' : ''}`,
+      );
+
+    await safeSend(
+      lines.join('\n') + '\n\nসবগুলো order করতে চান? *confirm* / *cancel* লিখুন 💖',
+    );
+  }
+
+  private async handleMultiProductPreview(
+    page: any,
+    waId: string,
+    safeSend: (t: string) => Promise<void>,
+    text: string,
+    intent: string | null,
+    draft: any,
+  ): Promise<void> {
+    const pageId = page.id as number;
+    const codes = draft.pendingMultiPreview as string[];
+
+    if (intent === 'CONFIRM' || intent === 'MULTI_CONFIRM') {
+      const products = await this.prisma.product.findMany({
+        where: { pageId, code: { in: codes } },
+      });
+      const newDraft = this.draftHandler.startDraftFromCodes(codes, products as any[]);
+      await this.ctx.saveDraft(pageId, waId, newDraft);
+      await safeSend('ঠিক আছে 💖 আপনার নাম দিন।');
+    } else if (intent === 'CANCEL') {
+      await this.ctx.clearDraft(pageId, waId);
+      const msg = await this.botKnowledge.resolveSystemReply(pageId, 'order_cancelled');
+      await safeSend(msg || 'ঠিক আছে 💖 কোনো সমস্যা নেই।');
+    } else {
+      await safeSend(
+        'সবগুলো order করতে *confirm* লিখুন, বাতিল করতে *cancel* লিখুন 💖',
+      );
+    }
   }
 }

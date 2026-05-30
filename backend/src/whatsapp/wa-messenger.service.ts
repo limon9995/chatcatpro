@@ -51,6 +51,20 @@ export class WaMessengerService {
 
         const errText = await res.text().catch(() => '');
 
+        // Detect 24h messaging window expiry (error 131047)
+        if (res.status === 400) {
+          try {
+            const errJson = JSON.parse(errText);
+            const errCode = errJson?.error?.code;
+            if (errCode === 131047) {
+              this.logger.warn(
+                `[WaMessenger] 24h window expired for to=${to} — cannot send free-form message. Customer must message first or use approved template.`,
+              );
+              return;
+            }
+          } catch {}
+        }
+
         if ((res.status === 429 || res.status >= 500) && attempt < MAX_RETRIES) {
           const delay = RETRY_DELAY_MS[attempt];
           this.logger.warn(
