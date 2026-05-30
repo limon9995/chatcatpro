@@ -248,8 +248,7 @@ export function AgentTasksPage({ th, pageId, onToast, onOpenOrders, onOpenPrint,
           orders: [],
           count:
             !settings.businessName.trim() ||
-            !settings.businessPhone.trim() ||
-            !settings.businessAddress.trim()
+            !settings.businessPhone.trim()
               ? 1
               : 0,
           preset: { label: 'Complete Business Info' },
