@@ -312,12 +312,13 @@ function Step1BusinessProfile({ dark, border, text, muted, accent, activePage, u
   const [businessPhone, setBusinessPhone] = useState('');
   const [websiteUrl, setWebsiteUrl] = useState('');
   const [productCodePrefix, setProductCodePrefix] = useState('DF');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [f1, setF1] = useState(false);
   const [f2, setF2] = useState(false);
   const [f3, setF3] = useState(false);
   const [f4, setF4] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const savedRef = useRef(false);
 
   const inp = (focused: boolean) => ({
     width: '100%', boxSizing: 'border-box' as const,
@@ -329,27 +330,54 @@ function Step1BusinessProfile({ dark, border, text, muted, accent, activePage, u
     transition: 'border-color 200ms, box-shadow 200ms',
   });
 
-  const handleSave = async () => {
-    setLoading(true); setError('');
+  const doSave = async (name: string, phone: string, website: string, prefix: string) => {
+    if (!name.trim()) return;
+    setSaveStatus('saving');
     try {
       await request(`${API_BASE}/client-dashboard/${activePage.id}/settings`, {
         method: 'PATCH',
         body: JSON.stringify({
-          businessName: businessName.trim(),
-          businessPhone: businessPhone.trim(),
-          websiteUrl: websiteUrl.trim(),
-          productCodePrefix: productCodePrefix.trim() || 'DF',
+          businessName: name.trim(),
+          businessPhone: phone.trim(),
+          websiteUrl: website.trim(),
+          productCodePrefix: prefix.trim() || 'DF',
         }),
       });
-      onSaved();
-    } catch (e: any) {
-      setError(e?.message || 'সেভ করা যায়নি।');
-    } finally { setLoading(false); }
+      setSaveStatus('saved');
+      savedRef.current = true;
+      setTimeout(() => setSaveStatus('idle'), 2000);
+    } catch {
+      setSaveStatus('error');
+    }
   };
+
+  const scheduleAutoSave = (name: string, phone: string, website: string, prefix: string) => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => doSave(name, phone, website, prefix), 800);
+  };
+
+  const handleNext = async () => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    await doSave(businessName, businessPhone, websiteUrl, productCodePrefix);
+    onSaved();
+  };
+
+  const statusLabel = saveStatus === 'saving' ? '💾 সেভ হচ্ছে...'
+    : saveStatus === 'saved' ? '✓ সেভ হয়েছে'
+    : saveStatus === 'error' ? '⚠️ সেভ হয়নি' : '';
 
   return (
     <div>
-      <div style={{ fontSize: 28, marginBottom: 8 }}>🏪</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+        <div style={{ fontSize: 28 }}>🏪</div>
+        {statusLabel && (
+          <span style={{
+            fontSize: 12, fontWeight: 600, marginLeft: 'auto',
+            color: saveStatus === 'saved' ? '#22c55e' : saveStatus === 'error' ? '#ef4444' : muted,
+            animation: 'ob-fade-in 200ms ease',
+          }}>{statusLabel}</span>
+        )}
+      </div>
       <h2 style={{ fontSize: 22, fontWeight: 800, color: text, margin: '0 0 6px' }}>
         ব্যবসার প্রোফাইল সেট করুন
       </h2>
@@ -361,51 +389,46 @@ function Step1BusinessProfile({ dark, border, text, muted, accent, activePage, u
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 14 }}>
           <div>
             <label style={{ fontSize: 12.5, color: muted, fontWeight: 600, display: 'block', marginBottom: 5 }}>ব্যবসার নাম *</label>
-            <input value={businessName} onChange={e => setBusinessName(e.target.value)}
+            <input value={businessName}
+              onChange={e => { setBusinessName(e.target.value); scheduleAutoSave(e.target.value, businessPhone, websiteUrl, productCodePrefix); }}
               onFocus={() => setF1(true)} onBlur={() => setF1(false)}
-              placeholder="যেমন: Rina Fashion House"
-              style={inp(f1)} />
+              placeholder="যেমন: Rina Fashion House" style={inp(f1)} />
           </div>
           <div>
             <label style={{ fontSize: 12.5, color: muted, fontWeight: 600, display: 'block', marginBottom: 5 }}>ফোন নম্বর</label>
-            <input value={businessPhone} onChange={e => setBusinessPhone(e.target.value)}
+            <input value={businessPhone}
+              onChange={e => { setBusinessPhone(e.target.value); scheduleAutoSave(businessName, e.target.value, websiteUrl, productCodePrefix); }}
               onFocus={() => setF2(true)} onBlur={() => setF2(false)}
-              placeholder="01XXXXXXXXX"
-              style={inp(f2)} />
+              placeholder="01XXXXXXXXX" style={inp(f2)} />
           </div>
         </div>
         <div>
           <label style={{ fontSize: 12.5, color: muted, fontWeight: 600, display: 'block', marginBottom: 5 }}>ওয়েবসাইট / ক্যাটালগ URL (ঐচ্ছিক)</label>
-          <input value={websiteUrl} onChange={e => setWebsiteUrl(e.target.value)}
+          <input value={websiteUrl}
+            onChange={e => { setWebsiteUrl(e.target.value); scheduleAutoSave(businessName, businessPhone, e.target.value, productCodePrefix); }}
             onFocus={() => setF3(true)} onBlur={() => setF3(false)}
-            placeholder="https://example.com/catalog"
-            style={inp(f3)} />
+            placeholder="https://example.com/catalog" style={inp(f3)} />
         </div>
         <div>
           <label style={{ fontSize: 12.5, color: muted, fontWeight: 600, display: 'block', marginBottom: 5 }}>
             Product Code Prefix
             <span style={{ fontWeight: 400, marginLeft: 6 }}>— পণ্য কোডের শুরুতে যে অক্ষর থাকে</span>
           </label>
-          <input value={productCodePrefix} onChange={e => setProductCodePrefix(e.target.value.toUpperCase())}
+          <input value={productCodePrefix}
+            onChange={e => { const v = e.target.value.toUpperCase(); setProductCodePrefix(v); scheduleAutoSave(businessName, businessPhone, websiteUrl, v); }}
             onFocus={() => setF4(true)} onBlur={() => setF4(false)}
-            placeholder="DF"
-            maxLength={6}
-            style={{ ...inp(f4), width: 120 }} />
-          <div style={{ fontSize: 11.5, color: muted, marginTop: 4 }}>
-            উদাহরণ: prefix "DF" হলে কোড হবে DF01, DF02…
-          </div>
+            placeholder="DF" maxLength={6} style={{ ...inp(f4), width: 120 }} />
+          <div style={{ fontSize: 11.5, color: muted, marginTop: 4 }}>উদাহরণ: prefix "DF" হলে কোড হবে DF01, DF02…</div>
         </div>
 
-        {error && <div style={{ color: '#ef4444', fontSize: 13, animation: 'ob-fade-in 200ms ease' }}>⚠️ {error}</div>}
-
-        <button onClick={handleSave} disabled={loading || !businessName.trim()} style={{
+        <button onClick={handleNext} disabled={!businessName.trim() || saveStatus === 'saving'} style={{
           padding: '12px',
-          background: (loading || !businessName.trim()) ? (dark ? '#2e3050' : '#e5e7eb') : `linear-gradient(135deg,${accent},#8b5cf6)`,
+          background: (!businessName.trim() || saveStatus === 'saving') ? (dark ? '#2e3050' : '#e5e7eb') : `linear-gradient(135deg,${accent},#8b5cf6)`,
           border: 'none', borderRadius: 10, color: '#fff',
-          fontWeight: 700, fontSize: 14, cursor: (loading || !businessName.trim()) ? 'not-allowed' : 'pointer',
+          fontWeight: 700, fontSize: 14, cursor: (!businessName.trim() || saveStatus === 'saving') ? 'not-allowed' : 'pointer',
           transition: 'background 200ms',
         }}>
-          {loading ? '...' : 'সেভ করুন →'}
+          {saveStatus === 'saving' ? '...' : 'পরবর্তী →'}
         </button>
       </div>
 
@@ -584,10 +607,10 @@ function Step3BotConfig({ dark, border, text, muted, accent, activePage, onSaved
   const [isDigital, setIsDigital] = useState(false);
   const [dhakaCharge, setDhakaCharge] = useState('60');
   const [outsideCharge, setOutsideCharge] = useState('120');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [f1, setF1] = useState(false);
   const [f2, setF2] = useState(false);
+  const deliveryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const inp = (focused: boolean) => ({
     width: '100%', boxSizing: 'border-box' as const,
@@ -598,6 +621,51 @@ function Step3BotConfig({ dark, border, text, muted, accent, activePage, onSaved
     boxShadow: focused ? '0 0 0 3px rgba(99,102,241,0.18)' : 'none',
     transition: 'border-color 200ms, box-shadow 200ms',
   });
+
+  const saveModes = async (auto: boolean, order: boolean, info: boolean) => {
+    setSaveStatus('saving');
+    try {
+      await request(`${API_BASE}/client-dashboard/${activePage.id}/modes`, {
+        method: 'PATCH',
+        body: JSON.stringify({ automationOn: auto, orderModeOn: order, infoModeOn: info }),
+      });
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus('idle'), 1500);
+    } catch { setSaveStatus('error'); }
+  };
+
+  const saveDelivery = async (digital: boolean, dhaka: string, outside: string) => {
+    setSaveStatus('saving');
+    try {
+      await request(`${API_BASE}/client-dashboard/${activePage.id}/settings`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          deliveryFeeInsideDhaka: digital ? 0 : (Number(dhaka) || 60),
+          deliveryFeeOutsideDhaka: digital ? 0 : (Number(outside) || 120),
+        }),
+      });
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus('idle'), 1500);
+    } catch { setSaveStatus('error'); }
+  };
+
+  const scheduleDeliverySave = (digital: boolean, dhaka: string, outside: string) => {
+    if (deliveryTimerRef.current) clearTimeout(deliveryTimerRef.current);
+    deliveryTimerRef.current = setTimeout(() => saveDelivery(digital, dhaka, outside), 800);
+  };
+
+  const handleToggle = (key: 'auto' | 'order' | 'info', val: boolean) => {
+    const next = { auto: automationOn, order: orderModeOn, info: infoModeOn, [key]: val };
+    if (key === 'auto') setAutomationOn(val);
+    if (key === 'order') setOrderModeOn(val);
+    if (key === 'info') setInfoModeOn(val);
+    saveModes(next.auto, next.order, next.info);
+  };
+
+  const handleDigitalToggle = (val: boolean) => {
+    setIsDigital(val);
+    scheduleDeliverySave(val, dhakaCharge, outsideCharge);
+  };
 
   const ToggleRow = ({ label, sub, value, onChange }: { label: string; sub: string; value: boolean; onChange: (v: boolean) => void }) => (
     <div style={{
@@ -614,8 +682,7 @@ function Step3BotConfig({ dark, border, text, muted, accent, activePage, onSaved
         transition: 'background 300ms',
       }}>
         <div style={{
-          position: 'absolute', top: 3,
-          left: value ? 27 : 3,
+          position: 'absolute', top: 3, left: value ? 27 : 3,
           width: 22, height: 22, borderRadius: '50%',
           background: '#fff', boxShadow: '0 2px 6px rgba(0,0,0,0.25)',
           transition: 'left 250ms cubic-bezier(0.34,1.56,0.64,1)',
@@ -624,40 +691,38 @@ function Step3BotConfig({ dark, border, text, muted, accent, activePage, onSaved
     </div>
   );
 
-  const handleSave = async () => {
-    setLoading(true); setError('');
-    try {
-      await request(`${API_BASE}/client-dashboard/${activePage.id}/settings`, {
-        method: 'PATCH',
-        body: JSON.stringify({
-          deliveryFeeInsideDhaka: isDigital ? 0 : (Number(dhakaCharge) || 60),
-          deliveryFeeOutsideDhaka: isDigital ? 0 : (Number(outsideCharge) || 120),
-        }),
-      });
-      await request(`${API_BASE}/client-dashboard/${activePage.id}/modes`, {
-        method: 'PATCH',
-        body: JSON.stringify({ automationOn, orderModeOn, infoModeOn }),
-      });
-      onSaved();
-    } catch (e: any) {
-      setError(e?.message || 'সেভ করা যায়নি।');
-    } finally { setLoading(false); }
+  const handleNext = async () => {
+    if (deliveryTimerRef.current) clearTimeout(deliveryTimerRef.current);
+    await saveDelivery(isDigital, dhakaCharge, outsideCharge);
+    onSaved();
   };
+
+  const statusLabel = saveStatus === 'saving' ? '💾 সেভ হচ্ছে...'
+    : saveStatus === 'saved' ? '✓ সেভ হয়েছে'
+    : saveStatus === 'error' ? '⚠️ সেভ হয়নি' : '';
 
   return (
     <div>
-      <div style={{ fontSize: 28, marginBottom: 8 }}>🤖</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+        <div style={{ fontSize: 28 }}>🤖</div>
+        {statusLabel && (
+          <span style={{
+            fontSize: 12, fontWeight: 600, marginLeft: 'auto',
+            color: saveStatus === 'saved' ? '#22c55e' : saveStatus === 'error' ? '#ef4444' : muted,
+            animation: 'ob-fade-in 200ms ease',
+          }}>{statusLabel}</span>
+        )}
+      </div>
       <h2 style={{ fontSize: 22, fontWeight: 800, color: text, margin: '0 0 6px' }}>বট কনফিগারেশন</h2>
       <p style={{ color: muted, fontSize: 14, marginBottom: 24, lineHeight: 1.6 }}>
         বটের mode ও ডেলিভারি চার্জ সেট করুন।
       </p>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <ToggleRow label="Bot Automation" sub={automationOn ? '● বট চালু' : '● বট বন্ধ'} value={automationOn} onChange={setAutomationOn} />
-        <ToggleRow label="Order Mode" sub={orderModeOn ? '● কাস্টমার থেকে order নেবে' : '● Order নেবে না'} value={orderModeOn} onChange={setOrderModeOn} />
-        <ToggleRow label="Info Mode" sub={infoModeOn ? '● Product code দিলে তথ্য দেবে' : '● Product info দেবে না'} value={infoModeOn} onChange={setInfoModeOn} />
+        <ToggleRow label="Bot Automation" sub={automationOn ? '● বট চালু' : '● বট বন্ধ'} value={automationOn} onChange={v => handleToggle('auto', v)} />
+        <ToggleRow label="Order Mode" sub={orderModeOn ? '● কাস্টমার থেকে order নেবে' : '● Order নেবে না'} value={orderModeOn} onChange={v => handleToggle('order', v)} />
+        <ToggleRow label="Info Mode" sub={infoModeOn ? '● Product code দিলে তথ্য দেবে' : '● Product info দেবে না'} value={infoModeOn} onChange={v => handleToggle('info', v)} />
 
-        {/* Delivery type */}
         <div style={{ marginTop: 4 }}>
           <div style={{ fontSize: 12.5, color: muted, fontWeight: 600, marginBottom: 8 }}>ডেলিভারি টাইপ</div>
           <div style={{ display: 'flex', gap: 10 }}>
@@ -665,7 +730,7 @@ function Step3BotConfig({ dark, border, text, muted, accent, activePage, onSaved
               { val: false, label: '🚚 ফিজিক্যাল পণ্য', sub: 'ডেলিভারি চার্জ আছে' },
               { val: true,  label: '💻 ডিজিটাল / সার্ভিস', sub: 'কোনো ডেলিভারি নেই' },
             ].map(opt => (
-              <div key={String(opt.val)} onClick={() => setIsDigital(opt.val)} style={{
+              <div key={String(opt.val)} onClick={() => handleDigitalToggle(opt.val)} style={{
                 flex: 1, padding: '12px 14px', borderRadius: 12, cursor: 'pointer',
                 border: `2px solid ${isDigital === opt.val ? accent : (dark ? '#2e3050' : '#e5e7eb')}`,
                 background: isDigital === opt.val ? (dark ? 'rgba(99,102,241,0.12)' : 'rgba(99,102,241,0.07)') : (dark ? '#252640' : '#f3f4f6'),
@@ -682,29 +747,29 @@ function Step3BotConfig({ dark, border, text, muted, accent, activePage, onSaved
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div>
               <label style={{ fontSize: 12.5, color: muted, fontWeight: 600, display: 'block', marginBottom: 5 }}>ডেলিভারি ঢাকা ৳</label>
-              <input value={dhakaCharge} onChange={e => setDhakaCharge(e.target.value)}
+              <input value={dhakaCharge}
+                onChange={e => { setDhakaCharge(e.target.value); scheduleDeliverySave(isDigital, e.target.value, outsideCharge); }}
                 onFocus={() => setF1(true)} onBlur={() => setF1(false)}
                 type="number" placeholder="60" style={inp(f1)} />
             </div>
             <div>
               <label style={{ fontSize: 12.5, color: muted, fontWeight: 600, display: 'block', marginBottom: 5 }}>ডেলিভারি ঢাকার বাইরে ৳</label>
-              <input value={outsideCharge} onChange={e => setOutsideCharge(e.target.value)}
+              <input value={outsideCharge}
+                onChange={e => { setOutsideCharge(e.target.value); scheduleDeliverySave(isDigital, dhakaCharge, e.target.value); }}
                 onFocus={() => setF2(true)} onBlur={() => setF2(false)}
                 type="number" placeholder="120" style={inp(f2)} />
             </div>
           </div>
         )}
 
-        {error && <div style={{ color: '#ef4444', fontSize: 13, animation: 'ob-fade-in 200ms ease' }}>⚠️ {error}</div>}
-
-        <button onClick={handleSave} disabled={loading} style={{
+        <button onClick={handleNext} disabled={saveStatus === 'saving'} style={{
           padding: '12px',
-          background: loading ? (dark ? '#2e3050' : '#e5e7eb') : `linear-gradient(135deg,${accent},#8b5cf6)`,
+          background: saveStatus === 'saving' ? (dark ? '#2e3050' : '#e5e7eb') : `linear-gradient(135deg,${accent},#8b5cf6)`,
           border: 'none', borderRadius: 10, color: '#fff',
-          fontWeight: 700, fontSize: 14, cursor: loading ? 'not-allowed' : 'pointer',
-          transition: 'background 200ms',
+          fontWeight: 700, fontSize: 14, cursor: saveStatus === 'saving' ? 'not-allowed' : 'pointer',
+          transition: 'background 200ms', marginTop: 4,
         }}>
-          {loading ? '...' : 'সেভ করুন →'}
+          {saveStatus === 'saving' ? '...' : 'সম্পন্ন করুন →'}
         </button>
       </div>
 
