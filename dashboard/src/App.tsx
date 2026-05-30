@@ -169,11 +169,7 @@ export function AppContent() {
       if (activePages.length === 0) {
         localStorage.removeItem('dfbot_active_page');
         setActivePage(null);
-        if (localStorage.getItem('chatcat_onboarding_v1') !== 'done') {
-          setScreen('onboarding');
-        } else {
-          setScreen('connect-page');
-        }
+        setScreen('connect-page');
         return;
       }
       const params = new URLSearchParams(window.location.search);
@@ -313,13 +309,14 @@ export function AppContent() {
     );
   }
 
-  if (screen === 'onboarding' && user) {
+  if (screen === 'onboarding' && activePage && user) {
     return (
       <OnboardingFlow
         dark={dark}
         user={user}
         activePage={activePage}
-        onComplete={() => { localStorage.setItem('chatcat_onboarding_v1', 'done'); void loadMyPages(); }}
+        onComplete={() => { localStorage.setItem('chatcat_onboarding_v1', 'done'); setScreen('dashboard'); }}
+        onSkip={() => { localStorage.setItem('chatcat_onboarding_v1', 'done'); setScreen('dashboard'); }}
       />
     );
   }

@@ -4,8 +4,9 @@ import { API_BASE, useApi } from '../hooks/useApi';
 interface Props {
   dark: boolean;
   user: { id: string; name: string; role: string };
-  activePage: { id: number; pageId: string; pageName?: string } | null;
+  activePage: { id: number; pageId: string; pageName?: string };
   onComplete: () => void;
+  onSkip: () => void;
 }
 
 type OBStep = 1 | 2 | 3 | 4;
@@ -20,14 +21,14 @@ const CONFETTI = Array.from({ length: 20 }, (_, i) => ({
   isCircle: i % 3 === 0,
 }));
 const MASCOT = [
-  'আপনার Facebook পেজ connect করুন!',
+  'ব্যবসার তথ্য দিন — বট এটি ব্যবহার করবে!',
   'পণ্যের তথ্য দিন, বট সেগুলো চিনবে!',
-  'বটকে আপনার ব্যবসা সম্পর্কে জানান!',
+  'বটের mode ও delivery চার্জ সেট করুন!',
   'দারুণ! সব কিছু সেট হয়ে গেছে!',
 ];
-const STEP_LABELS = ['পেজ', 'পণ্য', 'বট', 'সম্পন্ন'];
+const STEP_LABELS = ['প্রোফাইল', 'পণ্য', 'বট', 'সম্পন্ন'];
 
-export function OnboardingFlow({ dark, user, activePage, onComplete }: Props) {
+export function OnboardingFlow({ dark, user, activePage, onComplete, onSkip }: Props) {
   const [step, setStep] = useState<OBStep>(1);
   const [animating, setAnimating] = useState(false);
   const [exiting, setExiting] = useState(false);
@@ -37,7 +38,7 @@ export function OnboardingFlow({ dark, user, activePage, onComplete }: Props) {
   const [productSkipped, setProductSkipped] = useState(false);
   const [botSaved, setBotSaved] = useState(false);
   const [justCompleted, setJustCompleted] = useState<OBStep | null>(null);
-  const [localPage, setLocalPage] = useState<any>(activePage);
+  const [showSkipConfirm, setShowSkipConfirm] = useState(false);
   const { request } = useApi();
 
   const bg = dark ? '#0f0f1a' : '#f8fafc';
@@ -66,14 +67,10 @@ export function OnboardingFlow({ dark, user, activePage, onComplete }: Props) {
     setTimeout(onComplete, 500);
   };
 
-  const handleStep1Connected = async () => {
-    try {
-      const pages = await request(`${API_BASE}/facebook/my-pages`);
-      const page = (pages as any[]).find((p) => p.isActive);
-      if (page) setLocalPage(page);
-    } catch {}
-    setPageConnected(true);
-    advanceStep(2);
+  const handleSkipConfirm = () => {
+    if (wizardExiting) return;
+    setWizardExiting(true);
+    setTimeout(onSkip, 500);
   };
 
   return (
@@ -144,6 +141,14 @@ export function OnboardingFlow({ dark, user, activePage, onComplete }: Props) {
           <div style={{ fontWeight: 800, fontSize: 20, color: accent, letterSpacing: -0.5 }}>
             🐱 Chatcat
           </div>
+          {step < 4 && (
+            <button onClick={() => setShowSkipConfirm(true)} style={{
+              background: 'none', border: 'none', color: muted,
+              cursor: 'pointer', fontSize: 13, padding: '6px 10px',
+            }}>
+              এখন না →
+            </button>
+          )}
         </div>
 
         {/* Progress bar */}
@@ -197,11 +202,13 @@ export function OnboardingFlow({ dark, user, activePage, onComplete }: Props) {
             animation: exiting ? 'ob-step-out 250ms ease forwards' : 'ob-step-in 300ms ease forwards',
           }}>
             {step === 1 && (
-              <Step1PageConnect
+              <Step1BusinessProfile
                 dark={dark} panel={panel} border={border} text={text} muted={muted}
-                accent={accent} accentSoft={accentSoft}
-                activePage={localPage}
-                onConnected={handleStep1Connected}
+                accent={accent}
+                activePage={activePage}
+                userName={user.name}
+                onSaved={() => { setPageConnected(true); advanceStep(2); }}
+                onSkip={() => { advanceStep(2); }}
                 request={request}
               />
             )}
@@ -209,17 +216,16 @@ export function OnboardingFlow({ dark, user, activePage, onComplete }: Props) {
               <Step2AddProduct
                 dark={dark} panel={panel} border={border} text={text} muted={muted}
                 accent={accent} accentSoft={accentSoft}
-                activePage={localPage}
+                activePage={activePage}
                 onAdded={() => { setProductAdded(true); advanceStep(3); }}
                 onSkip={() => { setProductSkipped(true); advanceStep(3); }}
               />
             )}
             {step === 3 && (
-              <Step3BotSetup
+              <Step3BotConfig
                 dark={dark} panel={panel} border={border} text={text} muted={muted}
                 accent={accent}
-                activePage={localPage}
-                userName={user.name}
+                activePage={activePage}
                 onSaved={() => { setBotSaved(true); advanceStep(4); }}
                 onSkip={() => advanceStep(4)}
                 request={request}
@@ -259,22 +265,61 @@ export function OnboardingFlow({ dark, user, activePage, onComplete }: Props) {
         </div>
       )}
 
+      {/* Skip confirm dialog */}
+      {showSkipConfirm && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 10103, animation: 'ob-fade-in 200ms ease both',
+        }}>
+          <div style={{
+            background: panel, borderRadius: 16, padding: 28,
+            maxWidth: 360, width: '90%',
+            boxShadow: '0 8px 40px rgba(0,0,0,0.3)',
+          }}>
+            <div style={{ fontSize: 24, textAlign: 'center', marginBottom: 12 }}>⏭️</div>
+            <p style={{ color: text, lineHeight: 1.6, marginBottom: 8, fontWeight: 600 }}>
+              Onboarding এড়িয়ে যাবেন?
+            </p>
+            <p style={{ color: muted, fontSize: 13.5, lineHeight: 1.6, marginBottom: 24 }}>
+              আপনি পরে Settings থেকে এটি সম্পন্ন করতে পারবেন।
+            </p>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button onClick={() => setShowSkipConfirm(false)} style={{
+                padding: '9px 18px', borderRadius: 8, cursor: 'pointer', fontSize: 13.5,
+                background: 'none', border: `1px solid ${border}`, color: text,
+              }}>
+                বাতিল করুন
+              </button>
+              <button onClick={handleSkipConfirm} style={{
+                padding: '9px 18px', borderRadius: 8, cursor: 'pointer', fontSize: 13.5,
+                background: 'none', border: '1px solid #ef4444', color: '#ef4444',
+              }}>
+                এড়িয়ে যান
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-// ─── Step 1: Facebook Page Connect ────────────────────────────────────────────
+// ─── Step 1: Business Profile ─────────────────────────────────────────────────
 
-function Step1PageConnect({ dark, panel, border, text, muted, accent, accentSoft: _accentSoft, activePage: _activePage, onConnected, onSkip, request }: any) {
-  const [tab, setTab] = useState<'request' | 'manual'>('request');
-  const [reqPageUrl, setReqPageUrl] = useState('');
-  const [reqFbProfile, setReqFbProfile] = useState('');
-  const [manualToken, setManualToken] = useState('');
+function Step1BusinessProfile({ dark, border, text, muted, accent, activePage, userName, onSaved, onSkip, request }: any) {
+  const [businessName, setBusinessName] = useState(userName || '');
+  const [businessPhone, setBusinessPhone] = useState('');
+  const [websiteUrl, setWebsiteUrl] = useState('');
+  const [productCodePrefix, setProductCodePrefix] = useState('DF');
   const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
+  const [f1, setF1] = useState(false);
+  const [f2, setF2] = useState(false);
+  const [f3, setF3] = useState(false);
+  const [f4, setF4] = useState(false);
 
-  const inputStyle = (focused: boolean) => ({
+  const inp = (focused: boolean) => ({
     width: '100%', boxSizing: 'border-box' as const,
     padding: '10px 13px', borderRadius: 10, fontSize: 14,
     background: dark ? '#252640' : '#f3f4f6',
@@ -283,146 +328,89 @@ function Step1PageConnect({ dark, panel, border, text, muted, accent, accentSoft
     boxShadow: focused ? '0 0 0 3px rgba(99,102,241,0.18)' : 'none',
     transition: 'border-color 200ms, box-shadow 200ms',
   });
-  const [f1, setF1] = useState(false);
-  const [f2, setF2] = useState(false);
-  const [f3, setF3] = useState(false);
 
-  const handleRequest = async () => {
-    if (!reqPageUrl.trim() || !reqFbProfile.trim()) { setError('সব ঘর পূরণ করুন'); return; }
+  const handleSave = async () => {
     setLoading(true); setError('');
     try {
-      await request(`${API_BASE}/facebook/page-request`, {
-        method: 'POST',
-        body: JSON.stringify({ pageUrl: reqPageUrl.trim(), fbProfile: reqFbProfile.trim() }),
+      await request(`${API_BASE}/client-dashboard/${activePage.id}/settings`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          businessName: businessName.trim(),
+          businessPhone: businessPhone.trim(),
+          websiteUrl: websiteUrl.trim(),
+          productCodePrefix: productCodePrefix.trim() || 'DF',
+        }),
       });
-      setSuccess(true);
-      setTimeout(onConnected, 1500);
+      onSaved();
     } catch (e: any) {
-      setError(e?.message || 'কিছু একটা ভুল হয়েছে।');
-    } finally { setLoading(false); }
-  };
-
-  const handleManual = async () => {
-    if (!manualToken.trim()) { setError('Token দিন'); return; }
-    setLoading(true); setError('');
-    try {
-      await request(`${API_BASE}/facebook/connect`, {
-        method: 'POST',
-        body: JSON.stringify({ token: manualToken.trim() }),
-      });
-      setSuccess(true);
-      setTimeout(onConnected, 1500);
-    } catch (e: any) {
-      setError(e?.message || 'Token সঠিক নয়।');
+      setError(e?.message || 'সেভ করা যায়নি।');
     } finally { setLoading(false); }
   };
 
   return (
     <div>
-      <div style={{ fontSize: 28, marginBottom: 8 }}>📱</div>
+      <div style={{ fontSize: 28, marginBottom: 8 }}>🏪</div>
       <h2 style={{ fontSize: 22, fontWeight: 800, color: text, margin: '0 0 6px' }}>
-        Facebook পেজ যুক্ত করুন
+        ব্যবসার প্রোফাইল সেট করুন
       </h2>
       <p style={{ color: muted, fontSize: 14, marginBottom: 24, lineHeight: 1.6 }}>
-        আপনার Facebook পেজের সাথে Chatcat সংযুক্ত করুন — bot এই পেজে কাজ করবে।
+        আপনার ব্যবসার তথ্য দিন — বট এটি ব্যবহার করে কাস্টমারকে সাহায্য করবে।
       </p>
 
-      {success ? (
-        <div style={{ textAlign: 'center', padding: '32px 0', animation: 'ob-fade-in 400ms ease both' }}>
-          <div style={{
-            width: 60, height: 60, borderRadius: '50%', background: '#22c55e',
-            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 28, animation: 'ob-dot-pop 350ms ease',
-          }}>✓</div>
-          <p style={{ color: '#22c55e', fontWeight: 600, marginTop: 14, fontSize: 16 }}>
-            পেজ সংযুক্ত হয়েছে! ✓
-          </p>
-        </div>
-      ) : (
-        <div style={{ background: panel, borderRadius: 16, border: `1px solid ${border}`, overflow: 'hidden' }}>
-          {/* Tabs */}
-          <div style={{ display: 'flex', position: 'relative', borderBottom: `1px solid ${border}` }}>
-            {(['request', 'manual'] as const).map((t, i) => (
-              <button key={t} onClick={() => { setTab(t); setError(''); }} style={{
-                flex: 1, padding: '13px 8px', background: 'none', border: 'none',
-                cursor: 'pointer', fontSize: 13.5, fontWeight: tab === t ? 700 : 400,
-                color: tab === t ? accent : muted,
-              }}>
-                {i === 0 ? 'অ্যাক্সেস রিকোয়েস্ট' : 'ম্যানুয়াল টোকেন'}
-              </button>
-            ))}
-            <div style={{
-              position: 'absolute', bottom: 0, height: 2,
-              background: accent, width: '50%',
-              left: tab === 'request' ? '0%' : '50%',
-              transition: 'left 200ms ease',
-            }} />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 14 }}>
+          <div>
+            <label style={{ fontSize: 12.5, color: muted, fontWeight: 600, display: 'block', marginBottom: 5 }}>ব্যবসার নাম *</label>
+            <input value={businessName} onChange={e => setBusinessName(e.target.value)}
+              onFocus={() => setF1(true)} onBlur={() => setF1(false)}
+              placeholder="যেমন: Rina Fashion House"
+              style={inp(f1)} />
           </div>
-
-          <div style={{ padding: 20 }}>
-            {tab === 'request' ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <div>
-                  <label style={{ fontSize: 12.5, color: muted, fontWeight: 600, display: 'block', marginBottom: 5 }}>Facebook পেজের URL</label>
-                  <input value={reqPageUrl} onChange={e => setReqPageUrl(e.target.value)}
-                    onFocus={() => setF1(true)} onBlur={() => setF1(false)}
-                    placeholder="https://facebook.com/yourpage"
-                    style={inputStyle(f1)} />
-                </div>
-                <div>
-                  <label style={{ fontSize: 12.5, color: muted, fontWeight: 600, display: 'block', marginBottom: 5 }}>আপনার Facebook Profile URL</label>
-                  <input value={reqFbProfile} onChange={e => setReqFbProfile(e.target.value)}
-                    onFocus={() => setF2(true)} onBlur={() => setF2(false)}
-                    placeholder="https://facebook.com/yourprofile"
-                    style={inputStyle(f2)} />
-                </div>
-                <p style={{ fontSize: 12, color: muted, lineHeight: 1.6, margin: 0 }}>
-                  আমরা আপনাকে Facebook App-এ Tester হিসেবে invite করব। Invite accept করার পর manual token দিয়ে connect করুন।
-                </p>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <div>
-                  <label style={{ fontSize: 12.5, color: muted, fontWeight: 600, display: 'block', marginBottom: 5 }}>Page Access Token</label>
-                  <textarea value={manualToken} onChange={e => setManualToken(e.target.value)}
-                    onFocus={() => setF3(true)} onBlur={() => setF3(false)}
-                    placeholder="EAAxxxxx..."
-                    rows={3}
-                    style={{ ...inputStyle(f3), resize: 'none', fontFamily: 'monospace', fontSize: 12 } as any} />
-                </div>
-                <p style={{ fontSize: 12, color: muted, lineHeight: 1.6, margin: 0 }}>
-                  Graph API Explorer থেকে Page Access Token নিন এবং এখানে paste করুন।
-                </p>
-              </div>
-            )}
-
-            {error && (
-              <div style={{ color: '#ef4444', fontSize: 13, marginTop: 10, animation: 'ob-fade-in 200ms ease' }}>
-                ⚠️ {error}
-              </div>
-            )}
-
-            <button
-              onClick={tab === 'request' ? handleRequest : handleManual}
-              disabled={loading}
-              style={{
-                marginTop: 16, width: '100%', padding: '12px',
-                background: loading ? (dark ? '#2e3050' : '#e5e7eb') : `linear-gradient(135deg,${accent},#8b5cf6)`,
-                border: 'none', borderRadius: 10, color: '#fff',
-                fontWeight: 700, fontSize: 14, cursor: loading ? 'not-allowed' : 'pointer',
-                transition: 'background 200ms',
-              }}
-            >
-              {loading ? '...' : tab === 'request' ? 'রিকোয়েস্ট পাঠান' : 'Connect করুন'}
-            </button>
+          <div>
+            <label style={{ fontSize: 12.5, color: muted, fontWeight: 600, display: 'block', marginBottom: 5 }}>ফোন নম্বর</label>
+            <input value={businessPhone} onChange={e => setBusinessPhone(e.target.value)}
+              onFocus={() => setF2(true)} onBlur={() => setF2(false)}
+              placeholder="01XXXXXXXXX"
+              style={inp(f2)} />
           </div>
         </div>
-      )}
+        <div>
+          <label style={{ fontSize: 12.5, color: muted, fontWeight: 600, display: 'block', marginBottom: 5 }}>ওয়েবসাইট / ক্যাটালগ URL (ঐচ্ছিক)</label>
+          <input value={websiteUrl} onChange={e => setWebsiteUrl(e.target.value)}
+            onFocus={() => setF3(true)} onBlur={() => setF3(false)}
+            placeholder="https://example.com/catalog"
+            style={inp(f3)} />
+        </div>
+        <div>
+          <label style={{ fontSize: 12.5, color: muted, fontWeight: 600, display: 'block', marginBottom: 5 }}>
+            Product Code Prefix
+            <span style={{ fontWeight: 400, marginLeft: 6 }}>— পণ্য কোডের শুরুতে যে অক্ষর থাকে</span>
+          </label>
+          <input value={productCodePrefix} onChange={e => setProductCodePrefix(e.target.value.toUpperCase())}
+            onFocus={() => setF4(true)} onBlur={() => setF4(false)}
+            placeholder="DF"
+            maxLength={6}
+            style={{ ...inp(f4), width: 120 }} />
+          <div style={{ fontSize: 11.5, color: muted, marginTop: 4 }}>
+            উদাহরণ: prefix "DF" হলে কোড হবে DF01, DF02…
+          </div>
+        </div>
+
+        {error && <div style={{ color: '#ef4444', fontSize: 13, animation: 'ob-fade-in 200ms ease' }}>⚠️ {error}</div>}
+
+        <button onClick={handleSave} disabled={loading || !businessName.trim()} style={{
+          padding: '12px',
+          background: (loading || !businessName.trim()) ? (dark ? '#2e3050' : '#e5e7eb') : `linear-gradient(135deg,${accent},#8b5cf6)`,
+          border: 'none', borderRadius: 10, color: '#fff',
+          fontWeight: 700, fontSize: 14, cursor: (loading || !businessName.trim()) ? 'not-allowed' : 'pointer',
+          transition: 'background 200ms',
+        }}>
+          {loading ? '...' : 'সেভ করুন →'}
+        </button>
+      </div>
 
       <div style={{ textAlign: 'right', marginTop: 14 }}>
-        <button onClick={onSkip} style={{
-          background: 'none', border: 'none', color: muted, cursor: 'pointer', fontSize: 13,
-        }}>
+        <button onClick={onSkip} style={{ background: 'none', border: 'none', color: muted, cursor: 'pointer', fontSize: 13 }}>
           এখন না, পরে করব →
         </button>
       </div>
@@ -587,20 +575,20 @@ function Step2AddProduct({ dark, panel: _panel, border, text, muted, accent, acc
 
 // ─── Step 3: Bot Setup ────────────────────────────────────────────────────────
 
-function Step3BotSetup({ dark, panel: _panel, border, text, muted, accent, activePage, userName, onSaved, onSkip, request }: any) {
-  const [businessName, setBusinessName] = useState(userName || '');
-  const [phone, setPhone] = useState('');
-  const [dhakaCharge, setDhakaCharge] = useState('');
-  const [outsideCharge, setOutsideCharge] = useState('');
-  const [botOn, setBotOn] = useState(true);
+// ─── Step 3: Bot Configuration ───────────────────────────────────────────────
+
+function Step3BotConfig({ dark, border, text, muted, accent, activePage, onSaved, onSkip, request }: any) {
+  const [automationOn, setAutomationOn] = useState(true);
+  const [orderModeOn, setOrderModeOn] = useState(true);
+  const [infoModeOn, setInfoModeOn] = useState(true);
+  const [dhakaCharge, setDhakaCharge] = useState('60');
+  const [outsideCharge, setOutsideCharge] = useState('120');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [f1, setF1] = useState(false);
   const [f2, setF2] = useState(false);
-  const [f3, setF3] = useState(false);
-  const [f4, setF4] = useState(false);
 
-  const inputStyle = (focused: boolean) => ({
+  const inp = (focused: boolean) => ({
     width: '100%', boxSizing: 'border-box' as const,
     padding: '10px 13px', borderRadius: 10, fontSize: 14,
     background: dark ? '#252640' : '#f3f4f6',
@@ -610,20 +598,44 @@ function Step3BotSetup({ dark, panel: _panel, border, text, muted, accent, activ
     transition: 'border-color 200ms, box-shadow 200ms',
   });
 
+  const ToggleRow = ({ label, sub, value, onChange }: { label: string; sub: string; value: boolean; onChange: (v: boolean) => void }) => (
+    <div style={{
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      background: dark ? '#252640' : '#f3f4f6', borderRadius: 12, padding: '12px 16px',
+    }}>
+      <div>
+        <div style={{ fontWeight: 600, color: text, fontSize: 14 }}>{label}</div>
+        <div style={{ color: value ? '#22c55e' : muted, fontSize: 12.5, marginTop: 2 }}>{sub}</div>
+      </div>
+      <div onClick={() => onChange(!value)} style={{
+        width: 52, height: 28, borderRadius: 14, cursor: 'pointer', flexShrink: 0, position: 'relative',
+        background: value ? 'linear-gradient(135deg,#6366f1,#8b5cf6)' : (dark ? '#333' : '#ccc'),
+        transition: 'background 300ms',
+      }}>
+        <div style={{
+          position: 'absolute', top: 3,
+          left: value ? 27 : 3,
+          width: 22, height: 22, borderRadius: '50%',
+          background: '#fff', boxShadow: '0 2px 6px rgba(0,0,0,0.25)',
+          transition: 'left 250ms cubic-bezier(0.34,1.56,0.64,1)',
+        }} />
+      </div>
+    </div>
+  );
+
   const handleSave = async () => {
     setLoading(true); setError('');
     try {
-      await request(`${API_BASE}/page/${activePage.id}/settings`, {
+      await request(`${API_BASE}/client-dashboard/${activePage.id}/settings`, {
         method: 'PATCH',
         body: JSON.stringify({
-          businessInfo: {
-            name: businessName.trim(),
-            phone: phone.trim(),
-            dhaka: dhakaCharge.trim(),
-            outside: outsideCharge.trim(),
-          },
-          automationOn: botOn,
+          deliveryFeeInsideDhaka: Number(dhakaCharge) || 60,
+          deliveryFeeOutsideDhaka: Number(outsideCharge) || 120,
         }),
+      });
+      await request(`${API_BASE}/client-dashboard/${activePage.id}/modes`, {
+        method: 'PATCH',
+        body: JSON.stringify({ automationOn, orderModeOn, infoModeOn }),
       });
       onSaved();
     } catch (e: any) {
@@ -634,79 +646,41 @@ function Step3BotSetup({ dark, panel: _panel, border, text, muted, accent, activ
   return (
     <div>
       <div style={{ fontSize: 28, marginBottom: 8 }}>🤖</div>
-      <h2 style={{ fontSize: 22, fontWeight: 800, color: text, margin: '0 0 6px' }}>
-        বটের তথ্য সেট করুন
-      </h2>
+      <h2 style={{ fontSize: 22, fontWeight: 800, color: text, margin: '0 0 6px' }}>বট কনফিগারেশন</h2>
       <p style={{ color: muted, fontSize: 14, marginBottom: 24, lineHeight: 1.6 }}>
-        আপনার ব্যবসার তথ্য দিন — বট এটি ব্যবহার করে কাস্টমারকে জানাবে।
+        বটের mode ও ডেলিভারি চার্জ সেট করুন।
       </p>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 14 }}>
-          <div>
-            <label style={{ fontSize: 12.5, color: muted, fontWeight: 600, display: 'block', marginBottom: 5 }}>ব্যবসার নাম</label>
-            <input value={businessName} onChange={e => setBusinessName(e.target.value)}
-              onFocus={() => setF1(true)} onBlur={() => setF1(false)}
-              style={inputStyle(f1)} />
-          </div>
-          <div>
-            <label style={{ fontSize: 12.5, color: muted, fontWeight: 600, display: 'block', marginBottom: 5 }}>ফোন নম্বর</label>
-            <input value={phone} onChange={e => setPhone(e.target.value)}
-              onFocus={() => setF2(true)} onBlur={() => setF2(false)}
-              placeholder="01XXXXXXXXX" style={inputStyle(f2)} />
-          </div>
-          <div>
-            <label style={{ fontSize: 12.5, color: muted, fontWeight: 600, display: 'block', marginBottom: 5 }}>ডেলিভারি — ঢাকা ৳</label>
-            <input value={dhakaCharge} onChange={e => setDhakaCharge(e.target.value)}
-              onFocus={() => setF3(true)} onBlur={() => setF3(false)}
-              placeholder="60" type="number" style={inputStyle(f3)} />
-          </div>
-          <div>
-            <label style={{ fontSize: 12.5, color: muted, fontWeight: 600, display: 'block', marginBottom: 5 }}>ডেলিভারি — ঢাকার বাইরে ৳</label>
-            <input value={outsideCharge} onChange={e => setOutsideCharge(e.target.value)}
-              onFocus={() => setF4(true)} onBlur={() => setF4(false)}
-              placeholder="120" type="number" style={inputStyle(f4)} />
-          </div>
-        </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <ToggleRow label="Bot Automation" sub={automationOn ? '● বট চালু' : '● বট বন্ধ'} value={automationOn} onChange={setAutomationOn} />
+        <ToggleRow label="Order Mode" sub={orderModeOn ? '● কাস্টমার থেকে order নেবে' : '● Order নেবে না'} value={orderModeOn} onChange={setOrderModeOn} />
+        <ToggleRow label="Info Mode" sub={infoModeOn ? '● Product code দিলে তথ্য দেবে' : '● Product info দেবে না'} value={infoModeOn} onChange={setInfoModeOn} />
 
-        {/* Bot toggle */}
-        <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          background: dark ? '#252640' : '#f3f4f6', borderRadius: 12, padding: '14px 16px',
-        }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 4 }}>
           <div>
-            <div style={{ fontWeight: 600, color: text, fontSize: 14 }}>Bot Automation</div>
-            <div style={{ color: botOn ? '#22c55e' : '#ef4444', fontSize: 12.5, marginTop: 2 }}>
-              {botOn ? '● বট চালু আছে' : '● বট বন্ধ'}
-            </div>
+            <label style={{ fontSize: 12.5, color: muted, fontWeight: 600, display: 'block', marginBottom: 5 }}>ডেলিভারি ঢাকা ৳</label>
+            <input value={dhakaCharge} onChange={e => setDhakaCharge(e.target.value)}
+              onFocus={() => setF1(true)} onBlur={() => setF1(false)}
+              type="number" placeholder="60" style={inp(f1)} />
           </div>
-          <div
-            onClick={() => setBotOn(v => !v)}
-            style={{
-              width: 60, height: 32, borderRadius: 16, cursor: 'pointer', flexShrink: 0, position: 'relative',
-              background: botOn ? 'linear-gradient(135deg,#6366f1,#8b5cf6)' : (dark ? '#333' : '#ccc'),
-              transition: 'background 300ms',
-            }}
-          >
-            <div style={{
-              position: 'absolute', top: 3,
-              left: botOn ? 31 : 3,
-              width: 26, height: 26, borderRadius: '50%',
-              background: '#fff', boxShadow: '0 2px 6px rgba(0,0,0,0.25)',
-              transition: 'left 250ms cubic-bezier(0.34,1.56,0.64,1)',
-            }} />
+          <div>
+            <label style={{ fontSize: 12.5, color: muted, fontWeight: 600, display: 'block', marginBottom: 5 }}>ডেলিভারি ঢাকার বাইরে ৳</label>
+            <input value={outsideCharge} onChange={e => setOutsideCharge(e.target.value)}
+              onFocus={() => setF2(true)} onBlur={() => setF2(false)}
+              type="number" placeholder="120" style={inp(f2)} />
           </div>
         </div>
 
         {error && <div style={{ color: '#ef4444', fontSize: 13, animation: 'ob-fade-in 200ms ease' }}>⚠️ {error}</div>}
 
         <button onClick={handleSave} disabled={loading} style={{
-          padding: '12px', background: loading ? (dark ? '#2e3050' : '#e5e7eb') : `linear-gradient(135deg,${accent},#8b5cf6)`,
+          padding: '12px',
+          background: loading ? (dark ? '#2e3050' : '#e5e7eb') : `linear-gradient(135deg,${accent},#8b5cf6)`,
           border: 'none', borderRadius: 10, color: '#fff',
           fontWeight: 700, fontSize: 14, cursor: loading ? 'not-allowed' : 'pointer',
           transition: 'background 200ms',
         }}>
-          {loading ? '...' : 'সম্পন্ন করুন →'}
+          {loading ? '...' : 'সেভ করুন →'}
         </button>
       </div>
 
@@ -723,9 +697,9 @@ function Step3BotSetup({ dark, panel: _panel, border, text, muted, accent, activ
 
 function Step4Complete({ dark, text, muted, accent, accentSoft, pageConnected, productAdded: _productAdded, productSkipped, botSaved, onFinish }: any) {
   const badges = [
-    { label: '✅ পেজ সংযুক্ত', done: pageConnected, delay: '1600ms' },
+    { label: pageConnected ? '✅ ব্যবসার প্রোফাইল সেভ হয়েছে' : '⚠️ ব্যবসার প্রোফাইল এখনো সেভ হয়নি', done: pageConnected, delay: '1600ms' },
     { label: productSkipped ? '⚠️ পণ্য এখনো যোগ হয়নি' : '✅ পণ্য যোগ করা হয়েছে', done: !productSkipped, delay: '1800ms' },
-    { label: '✅ বট সক্রিয়', done: botSaved, delay: '2000ms' },
+    { label: botSaved ? '✅ বট কনফিগারেশন সেভ হয়েছে' : '⚠️ বট কনফিগারেশন এখনো সেভ হয়নি', done: botSaved, delay: '2000ms' },
   ];
 
   return (
