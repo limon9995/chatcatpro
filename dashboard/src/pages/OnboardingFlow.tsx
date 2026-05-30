@@ -4,9 +4,8 @@ import { API_BASE, useApi } from '../hooks/useApi';
 interface Props {
   dark: boolean;
   user: { id: string; name: string; role: string };
-  activePage: { id: number; pageId: string; pageName?: string };
+  activePage: { id: number; pageId: string; pageName?: string } | null;
   onComplete: () => void;
-  onSkip: () => void;
 }
 
 type OBStep = 1 | 2 | 3 | 4;
@@ -28,7 +27,7 @@ const MASCOT = [
 ];
 const STEP_LABELS = ['পেজ', 'পণ্য', 'বট', 'সম্পন্ন'];
 
-export function OnboardingFlow({ dark, user, activePage, onComplete, onSkip }: Props) {
+export function OnboardingFlow({ dark, user, activePage, onComplete }: Props) {
   const [step, setStep] = useState<OBStep>(1);
   const [animating, setAnimating] = useState(false);
   const [exiting, setExiting] = useState(false);
@@ -37,8 +36,8 @@ export function OnboardingFlow({ dark, user, activePage, onComplete, onSkip }: P
   const [productAdded, setProductAdded] = useState(false);
   const [productSkipped, setProductSkipped] = useState(false);
   const [botSaved, setBotSaved] = useState(false);
-  const [showSkipConfirm, setShowSkipConfirm] = useState(false);
   const [justCompleted, setJustCompleted] = useState<OBStep | null>(null);
+  const [localPage, setLocalPage] = useState<any>(activePage);
   const { request } = useApi();
 
   const bg = dark ? '#0f0f1a' : '#f8fafc';
@@ -67,10 +66,14 @@ export function OnboardingFlow({ dark, user, activePage, onComplete, onSkip }: P
     setTimeout(onComplete, 500);
   };
 
-  const handleSkipConfirm = () => {
-    if (wizardExiting) return;
-    setWizardExiting(true);
-    setTimeout(onSkip, 500);
+  const handleStep1Connected = async () => {
+    try {
+      const pages = await request(`${API_BASE}/facebook/my-pages`);
+      const page = (pages as any[]).find((p) => p.isActive);
+      if (page) setLocalPage(page);
+    } catch {}
+    setPageConnected(true);
+    advanceStep(2);
   };
 
   return (
@@ -141,14 +144,6 @@ export function OnboardingFlow({ dark, user, activePage, onComplete, onSkip }: P
           <div style={{ fontWeight: 800, fontSize: 20, color: accent, letterSpacing: -0.5 }}>
             🐱 Chatcat
           </div>
-          {step < 4 && (
-            <button onClick={() => setShowSkipConfirm(true)} style={{
-              background: 'none', border: 'none', color: muted,
-              cursor: 'pointer', fontSize: 13, padding: '6px 10px',
-            }}>
-              এখন না →
-            </button>
-          )}
         </div>
 
         {/* Progress bar */}
@@ -205,9 +200,8 @@ export function OnboardingFlow({ dark, user, activePage, onComplete, onSkip }: P
               <Step1PageConnect
                 dark={dark} panel={panel} border={border} text={text} muted={muted}
                 accent={accent} accentSoft={accentSoft}
-                activePage={activePage}
-                onConnected={() => { setPageConnected(true); advanceStep(2); }}
-                onSkip={() => advanceStep(2)}
+                activePage={localPage}
+                onConnected={handleStep1Connected}
                 request={request}
               />
             )}
@@ -215,7 +209,7 @@ export function OnboardingFlow({ dark, user, activePage, onComplete, onSkip }: P
               <Step2AddProduct
                 dark={dark} panel={panel} border={border} text={text} muted={muted}
                 accent={accent} accentSoft={accentSoft}
-                activePage={activePage}
+                activePage={localPage}
                 onAdded={() => { setProductAdded(true); advanceStep(3); }}
                 onSkip={() => { setProductSkipped(true); advanceStep(3); }}
               />
@@ -224,7 +218,7 @@ export function OnboardingFlow({ dark, user, activePage, onComplete, onSkip }: P
               <Step3BotSetup
                 dark={dark} panel={panel} border={border} text={text} muted={muted}
                 accent={accent}
-                activePage={activePage}
+                activePage={localPage}
                 userName={user.name}
                 onSaved={() => { setBotSaved(true); advanceStep(4); }}
                 onSkip={() => advanceStep(4)}
@@ -265,42 +259,6 @@ export function OnboardingFlow({ dark, user, activePage, onComplete, onSkip }: P
         </div>
       )}
 
-      {/* Skip confirm dialog */}
-      {showSkipConfirm && (
-        <div style={{
-          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          zIndex: 10103, animation: 'ob-fade-in 200ms ease both',
-        }}>
-          <div style={{
-            background: panel, borderRadius: 16, padding: 28,
-            maxWidth: 360, width: '90%',
-            boxShadow: '0 8px 40px rgba(0,0,0,0.3)',
-          }}>
-            <div style={{ fontSize: 24, textAlign: 'center', marginBottom: 12 }}>⏭️</div>
-            <p style={{ color: text, lineHeight: 1.6, marginBottom: 8, fontWeight: 600 }}>
-              Onboarding এড়িয়ে যাবেন?
-            </p>
-            <p style={{ color: muted, fontSize: 13.5, lineHeight: 1.6, marginBottom: 24 }}>
-              আপনি পরে Settings থেকে এটি সম্পন্ন করতে পারবেন।
-            </p>
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-              <button onClick={() => setShowSkipConfirm(false)} style={{
-                padding: '9px 18px', borderRadius: 8, cursor: 'pointer', fontSize: 13.5,
-                background: 'none', border: `1px solid ${border}`, color: text,
-              }}>
-                বাতিল করুন
-              </button>
-              <button onClick={handleSkipConfirm} style={{
-                padding: '9px 18px', borderRadius: 8, cursor: 'pointer', fontSize: 13.5,
-                background: 'none', border: '1px solid #ef4444', color: '#ef4444',
-              }}>
-                এড়িয়ে যান
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

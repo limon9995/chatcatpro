@@ -873,16 +873,13 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect }: {
         <Section title="📸 Instagram Connection" desc="Instagram Business API দিয়ে DM ও post comment automation চালু করুন">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <Toggle
-              label={<div><div style={{ fontSize: 13, fontWeight: 700 }}>Instagram Automation</div>
-                <div style={{ fontSize: 11.5, color: th.muted }}>
-                  {s.igTokenSet
-                    ? (s.igBusinessAccountId ? `IG Account ID: ${s.igBusinessAccountId}` : 'Token saved — IG Account ID নেই')
-                    : 'Instagram DM ও comment reply automation'}
-                </div>
-              </div>}
+              th={th}
+              label="Instagram Automation"
+              sub={s.igTokenSet
+                ? (s.igBusinessAccountId ? `IG Account ID: ${s.igBusinessAccountId}` : 'Token saved — IG Account ID নেই')
+                : 'Instagram DM ও comment reply automation'}
               checked={s.igEnabled}
               onChange={v => setS(prev => ({ ...prev, igEnabled: v }))}
-              dark={dark}
             />
             <div>
               <label style={{ fontSize: 12, color: th.muted, fontWeight: 600, display: 'block', marginBottom: 5 }}>
@@ -930,7 +927,7 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect }: {
                     const rand = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
                     setS(prev => ({ ...prev, igVerifyToken: rand }));
                   }}
-                  style={{ ...th.btnSecondary, whiteSpace: 'nowrap', fontSize: 12 }}
+                  style={{ ...th.btnPrimary, whiteSpace: 'nowrap', fontSize: 12 }}
                 >
                   Generate
                 </button>

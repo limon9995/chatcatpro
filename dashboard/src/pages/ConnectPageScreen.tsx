@@ -133,7 +133,7 @@ function ChannelStatusCards({ page, dark, text, muted, border, copy, onSetup }: 
   );
 }
 
-function DevAccountGuide({ dark, panel: _panel, border, text, muted, copy }: {
+function DevAccountGuide({ dark, panel: _panel, border: _border, text, muted, copy }: {
   dark: boolean; panel: string; border: string; text: string; muted: string;
   copy: (bn: string, en: string) => string;
 }) {
