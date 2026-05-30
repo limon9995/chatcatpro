@@ -28,6 +28,11 @@ export class SupportChatController {
         content: String(m.content).slice(0, 500),
       }));
 
-    return this.service.chat(message, pageContext, history);
+    const liveData =
+      body?.liveData && typeof body.liveData === 'object'
+        ? body.liveData
+        : undefined;
+
+    return this.service.chat(message, pageContext, history, liveData);
   }
 }

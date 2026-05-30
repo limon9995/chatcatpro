@@ -135,8 +135,9 @@ export class SupportChatService {
     message: string,
     pageContext: string,
     history: ChatMessage[],
+    liveData?: Record<string, any>,
   ): Promise<{ reply: string }> {
-    const systemPrompt = this.buildSystemPrompt(pageContext);
+    const systemPrompt = this.buildSystemPrompt(pageContext, liveData);
 
     try {
       const reply = await this.callGemini(message, history, systemPrompt);
@@ -157,12 +158,38 @@ export class SupportChatService {
     }
   }
 
-  private buildSystemPrompt(pageContext: string): string {
+  private buildSystemPrompt(
+    pageContext: string,
+    liveData?: Record<string, any>,
+  ): string {
     const pageName = PAGE_NAMES[pageContext] ?? '';
     const contextLine = pageName
       ? `\n\n## বর্তমান পেজ:\nব্যবহারকারী এখন "${pageName}" পেজে আছেন। এই পেজ সংক্রান্ত প্রশ্নে বিশেষভাবে সাহায্য করুন।`
       : '';
-    return BASE_SYSTEM_PROMPT + contextLine;
+
+    let liveDataLine = '';
+    if (liveData) {
+      const m = liveData?.metrics ?? {};
+      const pageName2 = liveData?.page?.businessName || liveData?.page?.pageName || '';
+      const uniqueSenders = liveData?.uniqueSenders ?? 0;
+      liveDataLine = `
+
+## লাইভ ড্যাশবোর্ড ডেটা (এই তথ্য সরাসরি ব্যবহার করো):
+- ব্যবসার নাম: ${pageName2 || 'অজানা'}
+- মোট অর্ডার: ${m.totalOrders ?? 0}
+- কনফার্মড অর্ডার: ${m.confirmedOrders ?? 0}
+- পেন্ডিং অর্ডার: ${m.pendingOrders ?? 0}
+- ইস্যু অর্ডার: ${m.issueOrders ?? 0}
+- মোট প্রোডাক্ট: ${m.products ?? 0}
+- পেন্ডিং কল: ${m.pendingCalls ?? 0}
+- কনফার্মড কল: ${m.confirmedCalls ?? 0}
+- ফেইলড কল: ${m.failedCalls ?? 0}
+- ইউনিক মেসেঞ্জার: ${uniqueSenders}
+
+এই তথ্য দিয়ে সরাসরি উত্তর দাও। অন্য পেজে যেতে বলো না।`;
+    }
+
+    return BASE_SYSTEM_PROMPT + contextLine + liveDataLine;
   }
 
   private async callGemini(

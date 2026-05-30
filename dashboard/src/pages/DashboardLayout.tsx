@@ -1210,7 +1210,7 @@ export function DashboardLayout({
           .mobile-scroll-x { overflow-x: auto; -webkit-overflow-scrolling: touch; }
         }
       `}</style>
-      <ChatbotWidget currentPage={nav} dark={dark} />
+      <ChatbotWidget currentPage={nav} dark={dark} pageId={pageId} />
     </div>
   );
 }

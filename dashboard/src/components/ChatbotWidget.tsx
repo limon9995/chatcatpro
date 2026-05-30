@@ -17,6 +17,7 @@ interface Message {
 interface Props {
   currentPage: NavKey;
   dark: boolean;
+  pageId?: number;
 }
 
 const PAGE_LABELS: Record<NavKey, string> = {
@@ -217,12 +218,13 @@ const PAGE_SUGGESTIONS: Record<NavKey, string[]> = {
   ],
 };
 
-export function ChatbotWidget({ currentPage, dark }: Props) {
+export function ChatbotWidget({ currentPage, dark, pageId }: Props) {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(true);
+  const [liveSummary, setLiveSummary] = useState<any>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const { request } = useApi();
@@ -266,6 +268,7 @@ export function ChatbotWidget({ currentPage, dark }: Props) {
           message: trimmed,
           pageContext: currentPage,
           history: messages.slice(-10),
+          liveData: liveSummary ?? undefined,
         }),
       });
       setMessages((prev) => [
@@ -293,11 +296,22 @@ export function ChatbotWidget({ currentPage, dark }: Props) {
     }
   };
 
-  const handleOpen = () => {
+  const handleOpen = async () => {
     setOpen(true);
     setMessages([]);
     setShowSuggestions(true);
     setInput('');
+    if (pageId) {
+      try {
+        const [summary, senders] = await Promise.all([
+          request<any>(`${API_BASE}/client-dashboard/${pageId}/summary`),
+          request<any>(`${API_BASE}/client-dashboard/${pageId}/sender-count`),
+        ]);
+        setLiveSummary({ ...summary, uniqueSenders: senders?.uniqueSenders ?? 0 });
+      } catch {
+        // non-critical — chatbot still works without live data
+      }
+    }
   };
 
   const handleClose = () => setOpen(false);
