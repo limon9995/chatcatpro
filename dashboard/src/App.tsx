@@ -315,8 +315,8 @@ export function AppContent() {
         dark={dark}
         user={user}
         activePage={activePage}
-        onComplete={() => { localStorage.setItem('chatcat_onboarding_v1', 'done'); setScreen('dashboard'); }}
-        onSkip={() => { localStorage.setItem('chatcat_onboarding_v1', 'done'); setScreen('dashboard'); }}
+        onComplete={() => { localStorage.setItem('chatcat_onboarding_v1', 'done'); void loadMyPages(); }}
+        onSkip={() => { localStorage.setItem('chatcat_onboarding_v1', 'done'); void loadMyPages(); }}
       />
     );
   }
