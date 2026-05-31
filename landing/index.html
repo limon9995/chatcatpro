@@ -66,32 +66,33 @@
 
 <meta name="dashboard-url" content="https://app.chatcat.pro"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;0,9..40,900&family=Noto+Sans+Bengali:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&family=Noto+Sans+Bengali:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#080b14;--surface:#0f1422;--surface2:#161c2e;
-  --border:rgba(255,255,255,0.08);--border2:rgba(255,255,255,0.13);
-  --text:#f1f5f9;--muted:rgba(148,163,184,0.7);
-  --accent:#6366f1;--accent2:#818cf8;--accent3:#22d3ee;
-  --gold:#f59e0b;--green:#10b981;--amber:#f59e0b;--radius:18px;
+  --bg:#0A0700;--surface:#130E05;--surface2:#1E170A;
+  --border:rgba(255,145,40,.09);--border2:rgba(255,145,40,.17);
+  --text:#FFF6E8;--muted:rgba(255,190,110,.52);
+  --accent:#FF6F00;--accent2:#FFAA00;--accent3:#00C896;
+  --gold:#FFAA00;--green:#00C896;--amber:#FFAA00;--radius:18px;
 }
 html{scroll-behavior:smooth;scroll-padding-top:80px}
-body{font-family:'DM Sans','Noto Sans Bengali',system-ui,sans-serif;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+body{font-family:'Plus Jakarta Sans','Noto Sans Bengali',system-ui,sans-serif;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;overflow-x:hidden}
 
 /* ══ Scrollbar ══ */
-::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:rgba(91,76,245,.3);border-radius:99px}
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:rgba(255,111,0,.35);border-radius:99px}
 
 /* ══ Nav ══ */
-nav{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:100;width:calc(100% - 48px);max-width:1100px;padding:0 20px;height:54px;display:flex;justify-content:space-between;align-items:center;background:rgba(8,11,20,0.76);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:1px solid var(--border2);border-radius:14px;box-shadow:0 4px 24px rgba(0,0,0,0.4),inset 0 1px 0 rgba(255,255,255,0.06)}
+nav{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:100;width:calc(100% - 48px);max-width:1100px;padding:0 20px;height:54px;display:flex;justify-content:space-between;align-items:center;background:rgba(10,7,0,0.82);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:1px solid var(--border2);border-radius:14px;box-shadow:0 4px 24px rgba(0,0,0,0.4),inset 0 1px 0 rgba(255,255,255,0.06)}
 .logo{display:flex;align-items:center;gap:10px}
-.logo-icon{width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:900;color:#fff;box-shadow:0 2px 12px rgba(91,76,245,.5)}
-.logo-text{font-size:16px;font-weight:800;letter-spacing:-0.03em}
+.logo-icon{width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:900;color:#fff;box-shadow:0 2px 14px rgba(255,111,0,.55)}
+.logo-text{font-size:16px;font-weight:800;letter-spacing:-0.03em;font-family:'Archivo Black','Plus Jakarta Sans',sans-serif}
 .nav-links{display:flex;align-items:center;gap:4px}
 .nav-link{padding:7px 14px;border-radius:8px;text-decoration:none;color:var(--muted);font-size:13px;font-weight:500;transition:color .15s,background .15s}
 .nav-link:hover{color:var(--text);background:rgba(255,255,255,.05)}
-.nav-cta{padding:8px 18px;border-radius:9px;background:var(--accent);color:#fff;font-weight:700;font-size:13px;text-decoration:none;transition:all .2s;box-shadow:0 2px 12px rgba(91,76,245,.4)}
-.nav-cta:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(91,76,245,.5)}
+.nav-cta{padding:8px 18px;border-radius:9px;background:var(--accent);color:#fff;font-weight:700;font-size:13px;text-decoration:none;transition:all .2s;box-shadow:0 2px 14px rgba(255,111,0,.45)}
+.nav-cta:hover{transform:translateY(-1px);box-shadow:0 6px 22px rgba(255,111,0,.55)}
 .nav-login{padding:7px 16px;border-radius:9px;border:1px solid var(--border2);color:var(--text);font-weight:600;font-size:13px;text-decoration:none;transition:all .15s;background:rgba(255,255,255,.04)}
 .nav-login:hover{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.2)}
 
@@ -100,55 +101,55 @@ nav{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:100;widt
 
 /* Mesh gradient background */
 .hero::before{content:'';position:absolute;inset:0;background:
-  radial-gradient(ellipse 80% 60% at 20% 10%,rgba(99,102,241,.20),transparent),
-  radial-gradient(ellipse 60% 50% at 80% 20%,rgba(34,211,238,.12),transparent),
-  radial-gradient(ellipse 50% 40% at 50% 80%,rgba(99,102,241,.08),transparent);pointer-events:none}
+  radial-gradient(ellipse 80% 60% at 20% 10%,rgba(255,111,0,.16),transparent),
+  radial-gradient(ellipse 60% 50% at 80% 20%,rgba(0,200,150,.09),transparent),
+  radial-gradient(ellipse 50% 40% at 50% 80%,rgba(255,80,0,.07),transparent);pointer-events:none}
 
 .orb{position:absolute;border-radius:50%;filter:blur(90px);pointer-events:none;will-change:transform}
-.orb-1{width:580px;height:580px;top:-120px;left:-120px;background:radial-gradient(circle,rgba(91,76,245,.28),transparent 65%);animation:orbFloat 9s ease-in-out infinite}
-.orb-2{width:440px;height:440px;bottom:-80px;right:-100px;background:radial-gradient(circle,rgba(139,92,246,.22),transparent 65%);animation:orbFloat 12s ease-in-out infinite reverse}
-.orb-3{width:300px;height:300px;top:40%;left:60%;background:radial-gradient(circle,rgba(6,182,212,.14),transparent 65%);animation:orbFloat 15s ease-in-out infinite 2s}
+.orb-1{width:580px;height:580px;top:-120px;left:-120px;background:radial-gradient(circle,rgba(255,111,0,.26),transparent 65%);animation:orbFloat 9s ease-in-out infinite}
+.orb-2{width:440px;height:440px;bottom:-80px;right:-100px;background:radial-gradient(circle,rgba(255,160,0,.20),transparent 65%);animation:orbFloat 12s ease-in-out infinite reverse}
+.orb-3{width:300px;height:300px;top:40%;left:60%;background:radial-gradient(circle,rgba(0,200,150,.13),transparent 65%);animation:orbFloat 15s ease-in-out infinite 2s}
 
 @keyframes orbFloat{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-28px) scale(1.05)}}
 
-.hero-badge{display:inline-flex;align-items:center;gap:8px;padding:6px 16px 6px 8px;border-radius:999px;background:rgba(91,76,245,.10);border:1px solid rgba(91,76,245,.28);font-size:12.5px;font-weight:600;color:#a5b4fc;margin-bottom:32px;animation:fadeUp .5s ease both}
-.hero-badge-dot{width:22px;height:22px;border-radius:50%;background:rgba(91,76,245,.2);display:flex;align-items:center;justify-content:center}
+.hero-badge{display:inline-flex;align-items:center;gap:8px;padding:6px 16px 6px 8px;border-radius:999px;background:rgba(255,111,0,.10);border:1px solid rgba(255,111,0,.30);font-size:12.5px;font-weight:600;color:#FFB870;margin-bottom:32px;animation:fadeUp .5s ease both}
+.hero-badge-dot{width:22px;height:22px;border-radius:50%;background:rgba(255,111,0,.2);display:flex;align-items:center;justify-content:center}
 .hero-badge-dot::after{content:'';width:7px;height:7px;border-radius:50%;background:#4ade80;display:block;box-shadow:0 0 10px #4ade80;animation:pulse 2s ease infinite}
 @keyframes pulse{0%,100%{opacity:1;box-shadow:0 0 10px #4ade80}50%{opacity:.7;box-shadow:0 0 20px #4ade80,0 0 40px rgba(74,222,128,.3)}}
 
-.hero h1{font-size:clamp(38px,7.5vw,84px);font-weight:900;letter-spacing:-0.045em;line-height:1.0;margin-bottom:24px;animation:fadeUp .6s .1s ease both}
-.hero h1 .grad{background:linear-gradient(135deg,#6366f1 0%,#22d3ee 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.hero h1{font-family:'Archivo Black','Noto Sans Bengali',sans-serif;font-size:clamp(36px,7.8vw,90px);font-weight:900;letter-spacing:-0.03em;line-height:1.0;margin-bottom:24px;animation:fadeUp .6s .1s ease both}
+.hero h1 .grad{background:linear-gradient(135deg,#FF8C00 0%,#FFCC00 55%,#00D4A0 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
 .hero-sub{font-size:clamp(15px,2.2vw,19px);color:var(--muted);max-width:600px;line-height:1.75;margin-bottom:44px;animation:fadeUp .6s .2s ease both}
 .hero-btns{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;animation:fadeUp .6s .3s ease both}
-.btn-primary{padding:14px 30px;border-radius:11px;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-weight:700;font-size:15px;text-decoration:none;transition:all .22s;box-shadow:0 4px 24px rgba(91,76,245,.5);display:inline-flex;align-items:center;gap:9px}
-.btn-primary:hover{transform:translateY(-3px);box-shadow:0 10px 36px rgba(91,76,245,.55)}
-.btn-ghost{padding:14px 28px;border-radius:11px;border:1px solid var(--border2);color:var(--text);font-weight:600;font-size:15px;text-decoration:none;transition:all .2s;display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,.04)}
-.btn-ghost:hover{background:rgba(255,255,255,.09);border-color:rgba(255,255,255,.22);transform:translateY(-2px)}
+.btn-primary{padding:14px 30px;border-radius:11px;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-weight:700;font-size:15px;text-decoration:none;transition:all .22s;box-shadow:0 4px 24px rgba(255,111,0,.48);display:inline-flex;align-items:center;gap:9px}
+.btn-primary:hover{transform:translateY(-3px);box-shadow:0 10px 36px rgba(255,111,0,.55)}
+.btn-ghost{padding:14px 28px;border-radius:11px;border:1px solid var(--border2);color:var(--text);font-weight:600;font-size:15px;text-decoration:none;transition:all .2s;display:inline-flex;align-items:center;gap:8px;background:rgba(255,145,40,.05)}
+.btn-ghost:hover{background:rgba(255,145,40,.10);border-color:rgba(255,145,40,.30);transform:translateY(-2px)}
 
 /* ══ Hero mockup ══ */
-.hero-img{position:relative;margin-top:72px;width:100%;max-width:960px;border-radius:20px;overflow:hidden;border:1px solid rgba(255,255,255,.10);box-shadow:0 40px 100px rgba(0,0,0,.7),0 0 0 1px rgba(255,255,255,.04),inset 0 1px 0 rgba(255,255,255,.08);will-change:transform;transform-origin:center center;animation:fadeUp .7s .4s ease both;transition:transform .08s ease,box-shadow .3s ease}
-.mockup-bar{background:rgba(13,13,22,.95);height:44px;display:flex;align-items:center;padding:0 16px;gap:8px;border-bottom:1px solid var(--border)}
+.hero-img{position:relative;margin-top:72px;width:100%;max-width:960px;border-radius:20px;overflow:hidden;border:1px solid rgba(255,145,40,.14);box-shadow:0 40px 100px rgba(0,0,0,.75),0 0 0 1px rgba(255,145,40,.06),inset 0 1px 0 rgba(255,200,100,.08);will-change:transform;transform-origin:center center;animation:fadeUp .7s .4s ease both;transition:transform .08s ease,box-shadow .3s ease}
+.mockup-bar{background:rgba(15,10,2,.97);height:44px;display:flex;align-items:center;padding:0 16px;gap:8px;border-bottom:1px solid var(--border)}
 .dot{width:11px;height:11px;border-radius:50%}
-.mockup-content{background:rgba(10,10,18,.97);padding:20px;display:grid;grid-template-columns:190px 1fr;gap:16px;min-height:340px}
+.mockup-content{background:rgba(12,8,0,.98);padding:20px;display:grid;grid-template-columns:190px 1fr;gap:16px;min-height:340px}
 .mock-sidebar{display:flex;flex-direction:column;gap:5px}
-.mock-nav{height:32px;border-radius:8px;background:rgba(255,255,255,.04)}
-.mock-nav.active{background:rgba(91,76,245,.18);border:1px solid rgba(91,76,245,.2)}
+.mock-nav{height:32px;border-radius:8px;background:rgba(255,145,40,.05)}
+.mock-nav.active{background:rgba(255,111,0,.16);border:1px solid rgba(255,111,0,.22)}
 .mock-main{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;align-content:start}
-.mock-card{background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:12px;padding:16px;transition:all .2s}
-.mock-card:hover{background:rgba(255,255,255,.06);transform:translateY(-2px)}
-.mock-num{font-size:24px;font-weight:900;letter-spacing:-0.04em}
+.mock-card{background:rgba(255,145,40,.04);border:1px solid var(--border);border-radius:12px;padding:16px;transition:all .2s}
+.mock-card:hover{background:rgba(255,145,40,.07);transform:translateY(-2px)}
+.mock-num{font-size:24px;font-weight:900;letter-spacing:-0.04em;font-family:'Archivo Black',sans-serif}
 .mock-label{font-size:10px;color:var(--muted);margin-top:5px;font-weight:600;text-transform:uppercase;letter-spacing:.06em}
 .mock-trend{font-size:11px;margin-top:8px;font-weight:600}
 
 /* ══ Floating badge ══ */
-.float-badge{position:absolute;background:rgba(13,13,25,.9);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.10);border-radius:12px;padding:10px 14px;font-size:12px;font-weight:700;animation:floatBadge 4s ease-in-out infinite;box-shadow:0 8px 24px rgba(0,0,0,.4)}
+.float-badge{position:absolute;background:rgba(14,9,1,.92);backdrop-filter:blur(12px);border:1px solid rgba(255,145,40,.14);border-radius:12px;padding:10px 14px;font-size:12px;font-weight:700;animation:floatBadge 4s ease-in-out infinite;box-shadow:0 8px 24px rgba(0,0,0,.4)}
 @keyframes floatBadge{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
 .badge-tl{top:60px;left:-20px;animation-delay:0s}
 .badge-tr{top:40px;right:-20px;animation-delay:1.5s}
 .badge-bl{bottom:60px;left:-30px;animation-delay:.8s}
 
 /* ══ Trusted bar ══ */
-.trusted{padding:28px 5%;display:flex;align-items:center;justify-content:center;gap:10px;border-top:1px solid var(--border);border-bottom:1px solid var(--border);background:rgba(255,255,255,.015);font-size:12.5px;color:var(--muted);flex-wrap:wrap;text-align:center}
+.trusted{padding:28px 5%;display:flex;align-items:center;justify-content:center;gap:10px;border-top:1px solid var(--border);border-bottom:1px solid var(--border);background:rgba(255,145,40,.018);font-size:12.5px;color:var(--muted);flex-wrap:wrap;text-align:center}
 .trusted strong{color:var(--text)}
 
 /* ══ Stats bar ══ */
@@ -162,25 +163,25 @@ nav{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:100;widt
 .section{padding:110px 5%}
 .section-label{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:0.10em;margin-bottom:16px}
 .section-label::before{content:'';width:18px;height:2px;background:var(--accent);border-radius:2px;display:block}
-.section-title{font-size:clamp(30px,5vw,52px);font-weight:900;letter-spacing:-0.045em;line-height:1.08;margin-bottom:16px}
+.section-title{font-family:'Archivo Black','Noto Sans Bengali',sans-serif;font-size:clamp(28px,4.8vw,54px);font-weight:900;letter-spacing:-0.02em;line-height:1.06;margin-bottom:16px}
 .section-sub{font-size:17px;color:var(--muted);max-width:520px;line-height:1.72}
 
 .features-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:14px;margin-top:60px}
 .feature-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:28px 26px;transition:all .28s cubic-bezier(.22,1,.36,1);position:relative;overflow:hidden;cursor:default}
-.feature-card::before{content:'';position:absolute;top:-60px;right:-60px;width:160px;height:160px;border-radius:50%;background:var(--fc-color,rgba(91,76,245,.12));filter:blur(40px);opacity:0;transition:opacity .28s;pointer-events:none}
-.feature-card:hover{transform:translateY(-5px) scale(1.012);border-color:rgba(91,76,245,.28);box-shadow:0 16px 48px rgba(0,0,0,.3),0 0 0 1px rgba(91,76,245,.12)}
+.feature-card::before{content:'';position:absolute;top:-60px;right:-60px;width:160px;height:160px;border-radius:50%;background:var(--fc-color,rgba(255,111,0,.12));filter:blur(40px);opacity:0;transition:opacity .28s;pointer-events:none}
+.feature-card:hover{transform:translateY(-5px) scale(1.012);border-color:rgba(255,111,0,.28);box-shadow:0 16px 48px rgba(0,0,0,.35),0 0 0 1px rgba(255,111,0,.10)}
 .feature-card:hover::before{opacity:1}
 .feature-icon-wrap{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;margin-bottom:16px;font-size:20px;position:relative}
 .feature-title{font-size:16px;font-weight:800;letter-spacing:-0.02em;margin-bottom:9px}
 .feature-desc{font-size:13.5px;color:var(--muted);line-height:1.72}
-.feature-tag{display:inline-flex;align-items:center;gap:5px;margin-top:16px;padding:4px 11px;border-radius:999px;font-size:11px;font-weight:700;border:1px solid rgba(91,76,245,.22);color:#818cf8;background:rgba(91,76,245,.08)}
+.feature-tag{display:inline-flex;align-items:center;gap:5px;margin-top:16px;padding:4px 11px;border-radius:999px;font-size:11px;font-weight:700;border:1px solid rgba(255,111,0,.24);color:#FFB870;background:rgba(255,111,0,.09)}
 
 /* ══ Steps ══ */
 .steps-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));margin-top:60px;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--surface)}
 .step{padding:36px 32px;position:relative;border-right:1px solid var(--border);transition:background .2s}
 .step:last-child{border-right:none}
 .step:hover{background:rgba(255,255,255,.025)}
-.step-num{width:42px;height:42px;border-radius:11px;background:rgba(91,76,245,.12);border:1px solid rgba(91,76,245,.22);display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:900;color:var(--accent);margin-bottom:18px}
+.step-num{width:42px;height:42px;border-radius:11px;background:rgba(255,111,0,.12);border:1px solid rgba(255,111,0,.24);display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:900;color:var(--accent);margin-bottom:18px}
 .step-title{font-size:16px;font-weight:800;letter-spacing:-0.02em;margin-bottom:9px}
 .step-desc{font-size:13.5px;color:var(--muted);line-height:1.7}
 .step-connector{position:absolute;top:57px;right:-1px;width:1px;height:24px;background:linear-gradient(to bottom,transparent,var(--accent),transparent);display:none}
@@ -198,7 +199,7 @@ nav{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:100;widt
 
 /* ══ Pricing ══ */
 .pricing-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:36px;transition:all .25s;position:relative;overflow:hidden}
-.pricing-card.featured{background:linear-gradient(145deg,rgba(91,76,245,.10),rgba(139,92,246,.06));border-color:rgba(91,76,245,.36);box-shadow:0 0 0 1px rgba(91,76,245,.10) inset}
+.pricing-card.featured{background:linear-gradient(145deg,rgba(255,111,0,.10),rgba(255,170,0,.06));border-color:rgba(255,111,0,.36);box-shadow:0 0 0 1px rgba(255,111,0,.09) inset}
 .pricing-name{font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px}
 .pricing-price{font-size:48px;font-weight:900;letter-spacing:-0.05em;margin-bottom:4px}
 .pricing-period{font-size:13px;color:var(--muted);margin-bottom:28px}
@@ -206,17 +207,17 @@ nav{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:100;widt
 .pricing-features li{font-size:13.5px;color:rgba(240,240,248,.75);display:flex;align-items:flex-start;gap:9px;line-height:1.5}
 .pricing-features li::before{content:'✓';color:var(--green);font-weight:900;flex-shrink:0;margin-top:1px}
 .pricing-btn{display:block;text-align:center;padding:13px;border-radius:10px;font-weight:700;font-size:14px;text-decoration:none;transition:all .18s;letter-spacing:-.01em}
-.pricing-btn.primary{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;box-shadow:0 4px 20px rgba(91,76,245,.45)}
-.pricing-btn.primary:hover{transform:translateY(-2px);box-shadow:0 8px 32px rgba(91,76,245,.55)}
+.pricing-btn.primary{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;box-shadow:0 4px 20px rgba(255,111,0,.42)}
+.pricing-btn.primary:hover{transform:translateY(-2px);box-shadow:0 8px 32px rgba(255,111,0,.52)}
 .pricing-btn.ghost{border:1px solid var(--border2);color:var(--text);background:rgba(255,255,255,.04)}
 .pricing-btn.ghost:hover{background:rgba(255,255,255,.08)}
-.badge-popular{display:inline-flex;align-items:center;gap:6px;padding:5px 14px;border-radius:999px;background:rgba(91,76,245,.15);color:#a5b4fc;font-size:11.5px;font-weight:700;border:1px solid rgba(91,76,245,.3);margin-bottom:12px}
+.badge-popular{display:inline-flex;align-items:center;gap:6px;padding:5px 14px;border-radius:999px;background:rgba(255,111,0,.14);color:#FFB870;font-size:11.5px;font-weight:700;border:1px solid rgba(255,111,0,.32);margin-bottom:12px}
 @media(max-width:640px){#pricing .pricing-grid-2{grid-template-columns:1fr!important}}
 
 /* ══ CTA ══ */
-.cta-section{margin:0 5% 80px;padding:72px;text-align:center;background:linear-gradient(145deg,var(--surface),rgba(91,76,245,.07));border:1px solid rgba(91,76,245,.22);border-radius:24px;position:relative;overflow:hidden}
-.cta-section::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 80% 80% at 50% 50%,rgba(91,76,245,.08),transparent);pointer-events:none}
-.cta-section h2{font-size:clamp(26px,5vw,48px);font-weight:900;letter-spacing:-0.04em;margin-bottom:16px;position:relative}
+.cta-section{margin:0 5% 80px;padding:72px;text-align:center;background:linear-gradient(145deg,var(--surface),rgba(255,111,0,.07));border:1px solid rgba(255,111,0,.22);border-radius:24px;position:relative;overflow:hidden}
+.cta-section::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 80% 80% at 50% 50%,rgba(255,111,0,.08),transparent);pointer-events:none}
+.cta-section h2{font-family:'Archivo Black','Noto Sans Bengali',sans-serif;font-size:clamp(26px,5vw,52px);font-weight:900;letter-spacing:-0.02em;margin-bottom:16px;position:relative}
 .cta-section p{font-size:16.5px;color:var(--muted);margin-bottom:36px;max-width:480px;margin-left:auto;margin-right:auto;line-height:1.7;position:relative}
 
 /* ══ Footer ══ */
@@ -238,20 +239,20 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
 /* ══ Live 3D Demo Scene ══ */
 .demo-sec{padding:110px 5% 80px;overflow:hidden;position:relative;background:rgba(255,255,255,.012);border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
 .demo-inner{max-width:1100px;margin:0 auto;text-align:center}
-.demo-title{font-size:clamp(28px,4.5vw,48px);font-weight:900;letter-spacing:-0.04em;margin-bottom:12px}
+.demo-title{font-family:'Archivo Black','Noto Sans Bengali',sans-serif;font-size:clamp(28px,4.5vw,52px);font-weight:900;letter-spacing:-0.02em;margin-bottom:12px}
 .demo-sub{font-size:16px;color:var(--muted);margin:0 auto 64px;line-height:1.7;max-width:480px}
 
 /* Scene container */
 .scene-root{position:relative;width:100%;max-width:680px;height:640px;margin:0 auto;transform-style:preserve-3d;will-change:transform}
 .scene-bg-orb{position:absolute;border-radius:50%;filter:blur(80px);pointer-events:none}
-.s-orb-1{width:380px;height:380px;top:-40px;left:-60px;background:radial-gradient(circle,rgba(91,76,245,.26),transparent 65%)}
-.s-orb-2{width:300px;height:300px;bottom:20px;right:-40px;background:radial-gradient(circle,rgba(139,92,246,.2),transparent 65%)}
-.s-orb-3{width:180px;height:180px;top:38%;left:57%;background:radial-gradient(circle,rgba(6,182,212,.15),transparent 65%)}
-.scene-grid-layer{position:absolute;inset:0;background-image:linear-gradient(rgba(91,76,245,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(91,76,245,.045) 1px,transparent 1px);background-size:48px 48px;mask-image:radial-gradient(ellipse 72% 52% at 50% 50%,black 20%,transparent);-webkit-mask-image:radial-gradient(ellipse 72% 52% at 50% 50%,black 20%,transparent)}
+.s-orb-1{width:380px;height:380px;top:-40px;left:-60px;background:radial-gradient(circle,rgba(255,111,0,.24),transparent 65%)}
+.s-orb-2{width:300px;height:300px;bottom:20px;right:-40px;background:radial-gradient(circle,rgba(255,170,0,.18),transparent 65%)}
+.s-orb-3{width:180px;height:180px;top:38%;left:57%;background:radial-gradient(circle,rgba(0,200,150,.14),transparent 65%)}
+.scene-grid-layer{position:absolute;inset:0;background-image:linear-gradient(rgba(255,111,0,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(255,111,0,.04) 1px,transparent 1px);background-size:48px 48px;mask-image:radial-gradient(ellipse 72% 52% at 50% 50%,black 20%,transparent);-webkit-mask-image:radial-gradient(ellipse 72% 52% at 50% 50%,black 20%,transparent)}
 
 /* Phone */
-.phone-scene-wrap{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);filter:drop-shadow(0 50px 90px rgba(0,0,0,.75)) drop-shadow(0 0 50px rgba(91,76,245,.18))}
-.phone-body{width:264px;background:linear-gradient(155deg,#1c1c2e,#0f0f1c 60%,#141428);border-radius:46px;padding:14px 14px 10px;border:1px solid rgba(255,255,255,.13);box-shadow:inset 0 1px 0 rgba(255,255,255,.09),inset 0 -1px 0 rgba(0,0,0,.4),0 0 0 1px rgba(0,0,0,.6);position:relative}
+.phone-scene-wrap{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);filter:drop-shadow(0 50px 90px rgba(0,0,0,.8)) drop-shadow(0 0 50px rgba(255,111,0,.16))}
+.phone-body{width:264px;background:linear-gradient(155deg,#1E1408,#120A02 60%,#1A1006);border-radius:46px;padding:14px 14px 10px;border:1px solid rgba(255,200,100,.14);box-shadow:inset 0 1px 0 rgba(255,200,100,.09),inset 0 -1px 0 rgba(0,0,0,.5),0 0 0 1px rgba(0,0,0,.7);position:relative}
 .p-notch{width:106px;height:26px;background:#07070f;border-radius:0 0 18px 18px;margin:0 auto 10px;display:flex;align-items:center;justify-content:center;gap:8px}
 .p-notch-cam{width:9px;height:9px;border-radius:50%;background:#1a1a2e;border:1px solid rgba(255,255,255,.09)}
 .p-notch-bar{width:44px;height:4px;background:rgba(255,255,255,.06);border-radius:99px}
@@ -265,13 +266,13 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
 /* Messenger */
 .ms-hd{background:linear-gradient(135deg,#1877f2,#0d6fe8);padding:11px 13px;display:flex;align-items:center;gap:9px;flex-shrink:0}
 .ms-back-ic{color:rgba(255,255,255,.85);font-size:20px;font-weight:300;line-height:1}
-.ms-av{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#4f46e5,#7c3aed);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:#fff;border:2px solid rgba(255,255,255,.28);flex-shrink:0}
+.ms-av{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#FF6F00,#FFAA00);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:#fff;border:2px solid rgba(255,255,255,.28);flex-shrink:0}
 .ms-nm{font-size:13px;font-weight:700;color:#fff;line-height:1.2}.ms-ac{display:flex;align-items:center;gap:4px;font-size:10px;color:rgba(255,255,255,.7);margin-top:1px}
 .ms-gdot{width:6px;height:6px;border-radius:50%;background:#4ade80;box-shadow:0 0 6px #4ade80;animation:pulse 2s ease infinite;flex-shrink:0}
-.ms-chat-area{flex:1;overflow:hidden;padding:10px 9px;display:flex;flex-direction:column;gap:5px;background:#0c0c1a}
-.ms-bbl{max-width:80%;padding:8px 12px;border-radius:17px;font-size:11.5px;line-height:1.55;font-weight:500;animation:bubbleIn .32s cubic-bezier(.34,1.5,.64,1) both;opacity:0;font-family:'DM Sans','Noto Sans Bengali',sans-serif}
+.ms-chat-area{flex:1;overflow:hidden;padding:10px 9px;display:flex;flex-direction:column;gap:5px;background:#0C0800}
+.ms-bbl{max-width:80%;padding:8px 12px;border-radius:17px;font-size:11.5px;line-height:1.55;font-weight:500;animation:bubbleIn .32s cubic-bezier(.34,1.5,.64,1) both;opacity:0;font-family:'Plus Jakarta Sans','Noto Sans Bengali',sans-serif}
 .ms-bbl.u{align-self:flex-end;background:linear-gradient(135deg,#1877f2,#0d6fe8);color:#fff;border-bottom-right-radius:3px}
-.ms-bbl.b{align-self:flex-start;background:rgba(255,255,255,.1);color:rgba(235,235,255,.88);border:1px solid rgba(255,255,255,.07);border-bottom-left-radius:3px}
+.ms-bbl.b{align-self:flex-start;background:rgba(255,145,40,.1);color:rgba(255,230,190,.90);border:1px solid rgba(255,145,40,.08);border-bottom-left-radius:3px}
 .ms-bbl.b.confirm{background:rgba(16,185,129,.13);border-color:rgba(16,185,129,.22);color:#6ee7b7}
 .ms-typing-d{align-self:flex-start;padding:9px 14px;background:rgba(255,255,255,.1);border-radius:17px;border-bottom-left-radius:3px;display:flex;align-items:center;gap:4px;animation:bubbleIn .2s ease both;opacity:0}
 .ms-typing-d span{width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,.4);animation:typingBounce 1s ease infinite;display:block}
@@ -285,11 +286,11 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
 .sc-ic{width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
 .sc-lbl{font-size:10px;color:var(--muted);font-weight:600;margin-bottom:1px;line-height:1}
 .sc-val{font-size:13px;font-weight:800;letter-spacing:-0.02em;line-height:1.2}
-.chip-a{top:4%;right:-6%;color:#10b981;animation-delay:0s}.chip-a .sc-ic{background:rgba(16,185,129,.14);color:#10b981}
-.chip-b{top:35%;left:-18%;color:#818cf8;animation-delay:1.3s}.chip-b .sc-ic{background:rgba(91,76,245,.14);color:#818cf8}
+.chip-a{top:4%;right:-6%;color:#00C896;animation-delay:0s}.chip-a .sc-ic{background:rgba(0,200,150,.14);color:#00C896}
+.chip-b{top:35%;left:-18%;color:#FFB870;animation-delay:1.3s}.chip-b .sc-ic{background:rgba(255,111,0,.14);color:#FFB870}
 .chip-c{bottom:26%;right:-14%;color:#4ade80;border-radius:99px;padding:9px 16px;animation-delay:.7s;display:flex;gap:8px;align-items:center}
 .chip-c-dot{width:8px;height:8px;border-radius:50%;background:#4ade80;box-shadow:0 0 10px #4ade80;animation:pulse 2s ease infinite;flex-shrink:0}
-.chip-d{bottom:6%;left:-12%;color:#f59e0b;animation-delay:2s}.chip-d .sc-ic{background:rgba(245,158,11,.14);color:#f59e0b}
+.chip-d{bottom:6%;left:-12%;color:#FFAA00;animation-delay:2s}.chip-d .sc-ic{background:rgba(255,170,0,.14);color:#FFAA00}
 
 @media(max-width:768px){.demo-sec{padding:72px 5% 56px}.scene-root{height:460px;transform:none!important}.sc-chip{display:none}.phone-body{width:224px}.p-screen{height:400px}}
 
@@ -297,20 +298,20 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
 @media(pointer:fine){
   body,a,button,.feature-card,.tcard,.step,.pricing-card,.stat,.mock-card{cursor:none!important}
 }
-#cur-dot{position:fixed;width:8px;height:8px;border-radius:50%;background:var(--accent);pointer-events:none;z-index:99999;transform:translate(-50%,-50%);box-shadow:0 0 10px var(--accent),0 0 22px rgba(91,76,245,.55);transition:width .15s,height .15s,background .15s,box-shadow .15s;opacity:0;will-change:left,top}
-#cur-ring{position:fixed;width:38px;height:38px;border-radius:50%;border:1.5px solid rgba(91,76,245,.45);pointer-events:none;z-index:99998;transform:translate(-50%,-50%);transition:width .22s cubic-bezier(.22,1,.36,1),height .22s cubic-bezier(.22,1,.36,1),border-color .2s,opacity .3s;opacity:0;will-change:left,top}
+#cur-dot{position:fixed;width:8px;height:8px;border-radius:50%;background:var(--accent);pointer-events:none;z-index:99999;transform:translate(-50%,-50%);box-shadow:0 0 10px var(--accent),0 0 22px rgba(255,111,0,.55);transition:width .15s,height .15s,background .15s,box-shadow .15s;opacity:0;will-change:left,top}
+#cur-ring{position:fixed;width:38px;height:38px;border-radius:50%;border:1.5px solid rgba(255,111,0,.45);pointer-events:none;z-index:99998;transform:translate(-50%,-50%);transition:width .22s cubic-bezier(.22,1,.36,1),height .22s cubic-bezier(.22,1,.36,1),border-color .2s,opacity .3s;opacity:0;will-change:left,top}
 #cur-trail{position:fixed;pointer-events:none;z-index:99990;top:0;left:0;width:100%;height:100%;overflow:hidden}
 .trail-dot{position:absolute;border-radius:50%;background:var(--accent);pointer-events:none;transform:translate(-50%,-50%);animation:trailFade .5s ease forwards}
 @keyframes trailFade{from{opacity:.5;width:6px;height:6px}to{opacity:0;width:2px;height:2px}}
 
 /* ══ 3D card enhancements ══ */
 .tcard{transform-style:preserve-3d;transition:transform .28s cubic-bezier(.22,1,.36,1),box-shadow .28s,border-color .28s}
-.tcard:hover{box-shadow:0 20px 60px rgba(91,76,245,.18),0 0 0 1px rgba(91,76,245,.14);border-color:rgba(91,76,245,.25)}
+.tcard:hover{box-shadow:0 20px 60px rgba(255,111,0,.15),0 0 0 1px rgba(255,111,0,.14);border-color:rgba(255,111,0,.26)}
 .stat{transform-style:preserve-3d;transition:transform .25s cubic-bezier(.22,1,.36,1),background .2s}
-.stat:hover{background:rgba(91,76,245,.07);transform:translateY(-4px) scale(1.04)}
+.stat:hover{background:rgba(255,111,0,.07);transform:translateY(-4px) scale(1.04)}
 .pricing-card{transform-style:preserve-3d;transition:transform .28s cubic-bezier(.22,1,.36,1),box-shadow .28s}
 .step{transform-style:preserve-3d;transition:transform .22s cubic-bezier(.22,1,.36,1),background .2s}
-.step:hover{transform:translateY(-3px) perspective(600px) rotateX(2deg);background:rgba(91,76,245,.05)}
+.step:hover{transform:translateY(-3px) perspective(600px) rotateX(2deg);background:rgba(255,111,0,.05)}
 
 /* ══ Magnetic button glow ══ */
 .btn-primary,.btn-ghost,.nav-cta{position:relative;overflow:hidden}
@@ -402,7 +403,7 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
       <div style="font-size:11px;opacity:.7;margin-bottom:2px">আজকের Revenue</div>
       <div style="font-size:18px;letter-spacing:-0.04em">৳ ৮৪,৩২০</div>
     </div>
-    <div class="float-badge badge-tr" style="color:#a5b4fc">
+    <div class="float-badge badge-tr" style="color:#FFB870">
       <div style="display:flex;align-items:center;gap:6px">
         <div style="width:8px;height:8px;background:#4ade80;border-radius:50%;box-shadow:0 0 8px #4ade80"></div>
         <span style="font-size:12px">Bot Active</span>
@@ -443,9 +444,9 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
               <div class="mock-trend" style="color:#10b981">↑ 23%</div>
             </div>
             <div class="mock-card">
-              <div class="mock-num" style="color:#818cf8">১৪৭</div>
+              <div class="mock-num" style="color:#FFB870">১৪৭</div>
               <div class="mock-label">Orders</div>
-              <div class="mock-trend" style="color:#818cf8">↑ 18%</div>
+              <div class="mock-trend" style="color:#FFB870">↑ 18%</div>
             </div>
             <div class="mock-card">
               <div class="mock-num" style="color:#f59e0b">23</div>
@@ -453,7 +454,7 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
               <div class="mock-trend" style="color:rgba(245,158,11,.6)">→ same</div>
             </div>
           </div>
-          <div class="mock-card" style="margin-top:12px;background:rgba(91,76,245,.06);border-color:rgba(91,76,245,.18)">
+          <div class="mock-card" style="margin-top:12px;background:rgba(255,111,0,.06);border-color:rgba(255,111,0,.16)">
             <div style="font-size:10px;font-weight:700;opacity:.38;text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px">Recent Orders</div>
             <div style="display:flex;flex-direction:column;gap:9px">
               <div style="display:flex;justify-content:space-between;font-size:12.5px;align-items:center"><span>Rahim Hossain</span><span style="padding:2px 8px;background:rgba(16,185,129,.12);color:#10b981;border-radius:6px;font-weight:700;font-size:11px">Confirmed</span><span style="color:var(--muted)">৳1,250</span></div>
@@ -483,7 +484,7 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
 <!-- ══ Stats ══ -->
 <div class="stats-bar" style="margin-top:40px">
   <div class="stat">
-    <div class="stat-num" style="background:linear-gradient(135deg,#818cf8,#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">৯৯%</div>
+    <div class="stat-num" style="background:linear-gradient(135deg,#FF8C00,#FFCC00);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">৯৯%</div>
     <div class="stat-label">Order Accuracy</div>
   </div>
   <div class="stat">
@@ -498,12 +499,12 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
     <div class="stat-num" style="color:#06b6d4">4+</div>
     <div class="stat-label">Courier Integrated</div>
   </div>
-  <div class="stat" style="background:linear-gradient(135deg,rgba(16,185,129,.1),rgba(52,211,153,.05));border-radius:12px;border:1px solid rgba(16,185,129,.25);position:relative;overflow:hidden">
-    <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 50% 110%,rgba(16,185,129,.22),transparent 65%);pointer-events:none"></div>
-    <div style="position:absolute;bottom:0;left:15%;right:15%;height:2px;background:linear-gradient(90deg,transparent,#34d399,transparent);border-radius:99px"></div>
-    <div class="stat-num" style="font-size:34px;background:linear-gradient(135deg,#6ee7b7,#34d399,#10b981);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;filter:drop-shadow(0 0 16px rgba(52,211,153,.55))">৯০p</div>
-    <div class="stat-label" style="color:#34d399;font-weight:700;font-size:12.5px">প্রতি অর্ডার খরচ</div>
-    <div style="position:absolute;top:8px;right:10px;width:7px;height:7px;background:#34d399;border-radius:50%;box-shadow:0 0 10px #34d399;animation:pulse 1.5s ease infinite"></div>
+  <div class="stat" style="background:linear-gradient(135deg,rgba(0,200,150,.10),rgba(0,200,150,.05));border-radius:12px;border:1px solid rgba(0,200,150,.25);position:relative;overflow:hidden">
+    <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 50% 110%,rgba(0,200,150,.20),transparent 65%);pointer-events:none"></div>
+    <div style="position:absolute;bottom:0;left:15%;right:15%;height:2px;background:linear-gradient(90deg,transparent,#00C896,transparent);border-radius:99px"></div>
+    <div class="stat-num" style="font-size:34px;background:linear-gradient(135deg,#6ee7b7,#00C896,#00A07A);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;filter:drop-shadow(0 0 16px rgba(0,200,150,.55))">৯০p</div>
+    <div class="stat-label" style="color:#00C896;font-weight:700;font-size:12.5px">প্রতি অর্ডার খরচ</div>
+    <div style="position:absolute;top:8px;right:10px;width:7px;height:7px;background:#00C896;border-radius:50%;box-shadow:0 0 10px #00C896;animation:pulse 1.5s ease infinite"></div>
   </div>
 </div>
 
@@ -601,16 +602,16 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
     <div style="background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);border-radius:20px;padding:30px 32px;margin-bottom:28px">
       <div style="font-size:12px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;text-align:center;margin-bottom:22px">📊 হিসাবটা এইভাবে হয়</div>
       <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;justify-content:center">
-        <div style="flex:1;min-width:120px;text-align:center;padding:18px 14px;background:rgba(99,102,241,.07);border-radius:16px;border:1px solid rgba(99,102,241,.15)">
+        <div style="flex:1;min-width:120px;text-align:center;padding:18px 14px;background:rgba(255,111,0,.07);border-radius:16px;border:1px solid rgba(255,111,0,.14)">
           <div style="font-size:30px;margin-bottom:8px">🖼️</div>
           <div style="font-size:11px;color:var(--muted);margin-bottom:7px">১টি customer photo</div>
-          <div style="font-size:22px;font-weight:900;color:#a5b4fc">৳ ০.২০</div>
+          <div style="font-size:22px;font-weight:900;color:#FFB870">৳ ০.২০</div>
         </div>
         <div style="font-size:26px;color:var(--muted);font-weight:200;flex-shrink:0">+</div>
-        <div style="flex:1;min-width:120px;text-align:center;padding:18px 14px;background:rgba(99,102,241,.07);border-radius:16px;border:1px solid rgba(99,102,241,.15)">
+        <div style="flex:1;min-width:120px;text-align:center;padding:18px 14px;background:rgba(255,111,0,.07);border-radius:16px;border:1px solid rgba(255,111,0,.14)">
           <div style="font-size:30px;margin-bottom:8px">💬</div>
           <div style="font-size:11px;color:var(--muted);margin-bottom:7px">৫টি AI reply</div>
-          <div style="font-size:22px;font-weight:900;color:#a5b4fc">৳ ০.৬০</div>
+          <div style="font-size:22px;font-weight:900;color:#FFB870">৳ ০.৬০</div>
         </div>
         <div style="font-size:26px;color:var(--muted);font-weight:200;flex-shrink:0">=</div>
         <div style="flex:1;min-width:120px;text-align:center;padding:20px 14px;background:rgba(16,185,129,.1);border-radius:16px;border:2px solid rgba(16,185,129,.38)">
@@ -633,11 +634,11 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
 </section>
 
 <!-- ══ FREE Features Highlight ══ -->
-<section style="padding:80px 5%;background:rgba(99,102,241,0.04);border-top:1px solid rgba(99,102,241,0.15);border-bottom:1px solid rgba(99,102,241,0.15)" id="value">
+<section style="padding:80px 5%;background:rgba(255,111,0,0.04);border-top:1px solid rgba(255,111,0,0.12);border-bottom:1px solid rgba(255,111,0,0.12)" id="value">
   <div style="max-width:1000px;margin:0 auto">
     <div style="text-align:center;margin-bottom:44px">
-      <div style="display:inline-block;background:rgba(34,211,238,0.1);border:1px solid rgba(34,211,238,0.3);border-radius:999px;padding:6px 20px;font-size:12.5px;font-weight:700;color:#22d3ee;margin-bottom:16px">💰 What's Included</div>
-      <h2 style="font-size:clamp(26px,4.5vw,44px);font-weight:900;letter-spacing:-0.04em;line-height:1.1;margin-bottom:12px">৳৬৯৯/মাসে যা যা পাচ্ছেন —<br/><span style="color:#22d3ee">সব included, সব FREE</span></h2>
+      <div style="display:inline-block;background:rgba(0,200,150,0.10);border:1px solid rgba(0,200,150,0.30);border-radius:999px;padding:6px 20px;font-size:12.5px;font-weight:700;color:#00C896;margin-bottom:16px">💰 What's Included</div>
+      <h2 style="font-size:clamp(26px,4.5vw,44px);font-weight:900;letter-spacing:-0.04em;line-height:1.1;margin-bottom:12px">৳৬৯৯/মাসে যা যা পাচ্ছেন —<br/><span style="color:#00C896">সব included, সব FREE</span></h2>
       <p style="font-size:16px;color:var(--muted);max-width:480px;margin:0 auto;line-height:1.7">Platform fee এর মধ্যেই সব major feature।<br/>শুধু AI reply ব্যবহার করলে সামান্য usage চার্জ।</p>
     </div>
 
@@ -695,7 +696,7 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
 
         <!-- AI Usage (small extra charge) -->
         <div style="background:var(--surface);border:1px solid rgba(34,211,238,0.2);border-radius:18px;padding:28px">
-          <div style="font-size:13px;font-weight:700;color:#22d3ee;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:16px">⚡ শুধু AI Reply এর ছোট charge</div>
+          <div style="font-size:13px;font-weight:700;color:#00C896;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:16px">⚡ শুধু AI Reply এর ছোট charge</div>
           <div style="display:flex;flex-direction:column;gap:10px">
             <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-radius:10px;background:rgba(255,255,255,0.04);border:1px solid var(--border)">
               <div style="font-size:13px;font-weight:600">💬 Text reply</div>
@@ -735,7 +736,7 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
         </div>
 
         <!-- CTA -->
-        <a id="value-signup" href="#" style="display:block;text-align:center;padding:15px;background:linear-gradient(135deg,var(--accent),var(--accent3));color:#fff;border-radius:12px;font-weight:800;font-size:15px;text-decoration:none;box-shadow:0 4px 20px rgba(99,102,241,0.4);transition:all .2s">মাত্র ৳৬৯৯/মাসে শুরু করুন →</a>
+        <a id="value-signup" href="#" style="display:block;text-align:center;padding:15px;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border-radius:12px;font-weight:800;font-size:15px;text-decoration:none;box-shadow:0 4px 20px rgba(255,111,0,0.42);transition:all .2s">মাত্র ৳৬৯৯/মাসে শুরু করুন →</a>
       </div>
 
     </div>
@@ -818,9 +819,9 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
     <p class="section-sub">Manual কাজ কমান। Bot দিয়ে বেশি order নিন। সব automation এক জায়গায়।</p>
     <div class="features-grid">
 
-      <div class="feature-card" style="--fc-color:rgba(91,76,245,.2)">
-        <div class="feature-icon-wrap" style="background:rgba(91,76,245,.14)">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="m8 21 4-4 4 4"/><path d="M12 17v4"/></svg>
+      <div class="feature-card" style="--fc-color:rgba(255,111,0,.18)">
+        <div class="feature-icon-wrap" style="background:rgba(255,111,0,.13)">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#FFB870" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="m8 21 4-4 4 4"/><path d="M12 17v4"/></svg>
         </div>
         <div class="feature-title">Smart Bot Automation</div>
         <div class="feature-desc">Customer message করলে bot product info দেবে, order নেবে, confirm করবে। ২৪/৭ কোনো break নেই।</div>
@@ -863,8 +864,8 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
         <span class="feature-tag">Built-in CRM</span>
       </div>
 
-      <div class="feature-card" style="--fc-color:rgba(139,92,246,.2)">
-        <div class="feature-icon-wrap" style="background:rgba(139,92,246,.14)">
+      <div class="feature-card" style="--fc-color:rgba(255,170,0,.18)">
+        <div class="feature-icon-wrap" style="background:rgba(255,170,0,.13)">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
         </div>
         <div class="feature-title">Broadcast & Follow-up</div>
@@ -910,9 +911,9 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
         <span class="feature-tag" style="background:rgba(34,197,94,.12);color:#22c55e;border-color:rgba(34,197,94,.3)">AI Comment Reply</span>
       </div>
 
-      <div class="feature-card" style="--fc-color:rgba(99,102,241,.2)">
-        <div class="feature-icon-wrap" style="background:rgba(99,102,241,.14)">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      <div class="feature-card" style="--fc-color:rgba(255,111,0,.18)">
+        <div class="feature-icon-wrap" style="background:rgba(255,111,0,.13)">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#FF6F00" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
         </div>
         <div class="feature-title">Secure & Reliable</div>
         <div class="feature-desc">AES-256 encryption, webhook HMAC verification, rate limiting। Multi-tenant, production-grade।</div>
@@ -961,8 +962,8 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
     <h2 class="section-title">যারা ব্যবহার করছেন,<br>তারা কী বলেন</h2>
     <div class="testimonials-grid">
 
-      <div class="tcard" style="border-left:3px solid rgba(99,102,241,0.5)">
-        <div style="font-size:28px;color:rgba(99,102,241,0.4);margin-bottom:12px;line-height:1">"</div>
+      <div class="tcard" style="border-left:3px solid rgba(255,111,0,0.5)">
+        <div style="font-size:28px;color:rgba(255,111,0,0.4);margin-bottom:12px;line-height:1">"</div>
         <div class="tcard-text" style="font-style:normal;font-size:15px;line-height:1.75">আগে প্রতিদিন রাত ২টা পর্যন্ত manually order নিতাম। এখন bot সব করে, আমি শুধু confirm করি।</div>
         <div class="tcard-author" style="margin-top:18px">
           <div class="tcard-avatar">র</div>
@@ -1019,7 +1020,7 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
 
       <!-- Step 1: Base fee -->
       <div class="pricing-card featured" style="padding:32px">
-        <div style="position:absolute;top:-60px;right:-60px;width:220px;height:220px;background:radial-gradient(circle,rgba(91,76,245,.18),transparent 70%);pointer-events:none"></div>
+        <div style="position:absolute;top:-60px;right:-60px;width:220px;height:220px;background:radial-gradient(circle,rgba(255,111,0,.16),transparent 70%);pointer-events:none"></div>
         <div class="badge-popular">① Monthly Platform Fee</div>
         <div class="pricing-price" style="margin-top:12px">৳৬৯৯<span style="font-size:17px;font-weight:500;color:var(--muted)">/মাস</span></div>
         <div class="pricing-period">প্রতি Facebook Page এর জন্য</div>
@@ -1053,13 +1054,13 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
               <div style="font-size:10px;color:var(--muted)">per message</div>
             </div>
           </div>
-          <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-radius:10px;background:rgba(91,76,245,.07);border:1px solid rgba(91,76,245,.25)">
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-radius:10px;background:rgba(255,111,0,.07);border:1px solid rgba(255,111,0,.22)">
             <div>
               <div style="font-size:13px;font-weight:600">🤖 AI Bot Reply</div>
               <div style="font-size:11px;color:var(--muted)">Gemini AI — keyword থেকে full SmartBot পর্যন্ত</div>
             </div>
             <div style="text-align:right;flex-shrink:0">
-              <div style="font-size:15px;font-weight:900;color:#a5b4fc">৳০.০৪–০.০৮</div>
+              <div style="font-size:15px;font-weight:900;color:#FFB870">৳০.০৪–০.০৮</div>
               <div style="font-size:10px;color:var(--muted)">per message</div>
             </div>
           </div>
@@ -1132,15 +1133,15 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
           <div style="font-weight:800;font-size:16px">৳০</div>
           <div style="font-size:11px;color:var(--muted)">সম্পূর্ণ FREE</div>
         </div>
-        <div style="background:linear-gradient(135deg,rgba(99,102,241,.15),rgba(34,211,238,.1));border:1px solid rgba(99,102,241,.3);border-radius:10px;padding:12px 14px">
-          <div style="font-size:11px;color:#a5b4fc;margin-bottom:4px">মোট খরচ/মাস</div>
+        <div style="background:linear-gradient(135deg,rgba(255,111,0,.15),rgba(255,170,0,.10));border:1px solid rgba(255,111,0,.30);border-radius:10px;padding:12px 14px">
+          <div style="font-size:11px;color:#FFB870;margin-bottom:4px">মোট খরচ/মাস</div>
           <div style="font-weight:900;font-size:20px">৳৭২৪</div>
-          <div style="font-size:11px;color:#a5b4fc">৬৯৯ + ২৫ মাত্র!</div>
+          <div style="font-size:11px;color:#FFB870">৬৯৯ + ২৫ মাত্র!</div>
         </div>
       </div>
     </div>
-    <div style="background:rgba(91,76,245,.06);border:1px solid rgba(91,76,245,.22);border-radius:16px;padding:22px 28px;margin-bottom:28px;text-align:left">
-      <div style="font-weight:800;font-size:14px;color:#a5b4fc;margin-bottom:4px">🧠 Example ২ — মাসে ৫০০ SmartBot reply (ChatGPT-style)</div>
+    <div style="background:rgba(255,111,0,.05);border:1px solid rgba(255,111,0,.18);border-radius:16px;padding:22px 28px;margin-bottom:28px;text-align:left">
+      <div style="font-weight:800;font-size:14px;color:#FFB870;margin-bottom:4px">🧠 Example ২ — মাসে ৫০০ SmartBot reply (ChatGPT-style)</div>
       <div style="font-size:12px;color:var(--muted);margin-bottom:14px">SmartBot — customer নিজে নিজে order করে, কোনো manual reply লাগে না</div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px">
         <div style="background:rgba(255,255,255,.04);border-radius:10px;padding:12px 14px">
@@ -1158,23 +1159,23 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
           <div style="font-weight:800;font-size:16px">৳০</div>
           <div style="font-size:11px;color:var(--muted)">সম্পূর্ণ FREE</div>
         </div>
-        <div style="background:linear-gradient(135deg,rgba(91,76,245,.18),rgba(139,92,246,.12));border:1px solid rgba(91,76,245,.35);border-radius:10px;padding:12px 14px">
-          <div style="font-size:11px;color:#a5b4fc;margin-bottom:4px">মোট খরচ/মাস</div>
+        <div style="background:linear-gradient(135deg,rgba(255,111,0,.16),rgba(255,170,0,.10));border:1px solid rgba(255,111,0,.32);border-radius:10px;padding:12px 14px">
+          <div style="font-size:11px;color:#FFB870;margin-bottom:4px">মোট খরচ/মাস</div>
           <div style="font-weight:900;font-size:20px">৳৭৪৯</div>
-          <div style="font-size:11px;color:#a5b4fc">৬৯৯ + ৫০ মাত্র!</div>
+          <div style="font-size:11px;color:#FFB870">৬৯৯ + ৫০ মাত্র!</div>
         </div>
       </div>
     </div>
 
     <!-- ── CTA contact box ── -->
-    <div style="margin:0 auto;max-width:560px;background:linear-gradient(135deg,rgba(91,76,245,.08),rgba(139,92,246,.05));border:1px solid rgba(91,76,245,.22);border-radius:16px;padding:22px 28px;display:flex;align-items:center;gap:18px;text-align:left;flex-wrap:wrap;justify-content:center">
+    <div style="margin:0 auto;max-width:560px;background:linear-gradient(135deg,rgba(255,111,0,.08),rgba(255,170,0,.05));border:1px solid rgba(255,111,0,.22);border-radius:16px;padding:22px 28px;display:flex;align-items:center;gap:18px;text-align:left;flex-wrap:wrap;justify-content:center">
       <div style="font-size:28px">💬</div>
       <div style="flex:1;min-width:200px">
         <div style="font-weight:800;font-size:14.5px;color:var(--text);margin-bottom:4px">শুরু করতে WhatsApp করুন</div>
         <div style="font-size:13px;color:var(--muted);line-height:1.6">৳৬৯৯ monthly fee + wallet recharge — bKash/Nagad-এ payment। ২৪ঘণ্টার মধ্যে activate।</div>
       </div>
       <div style="display:flex;flex-direction:column;gap:8px;flex-shrink:0">
-        <a href="https://wa.me/8801720450797" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:7px;padding:11px 22px;background:var(--accent);color:#fff;border-radius:10px;font-weight:700;font-size:13.5px;text-decoration:none;white-space:nowrap;box-shadow:0 2px 12px rgba(91,76,245,.35);transition:all .15s">
+        <a href="https://wa.me/8801720450797" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:7px;padding:11px 22px;background:var(--accent);color:#fff;border-radius:10px;font-weight:700;font-size:13.5px;text-decoration:none;white-space:nowrap;box-shadow:0 2px 12px rgba(255,111,0,.42);transition:all .15s">
           💚 WhatsApp করুন ✦
         </a>
         <a href="https://m.me/Chatcatpro" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:7px;padding:11px 22px;background:rgba(255,255,255,.06);color:var(--text);border:1px solid var(--border2);border-radius:10px;font-weight:700;font-size:13.5px;text-decoration:none;white-space:nowrap;transition:all .15s">
@@ -1197,7 +1198,7 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
     <a href="https://wa.me/8801720450797" target="_blank" rel="noopener" class="btn-ghost">💬 WhatsApp এ জিজ্ঞেস করুন</a>
     <a id="cta-login" href="#" class="btn-ghost">Login করুন</a>
   </div>
-  <p style="margin-top:20px;font-size:13.5px;opacity:.6;position:relative">যোগাযোগ: <a href="mailto:info@chatcat.pro" style="color:#a5b4fc;text-decoration:none;font-weight:600">info@chatcat.pro</a></p>
+  <p style="margin-top:20px;font-size:13.5px;opacity:.6;position:relative">যোগাযোগ: <a href="mailto:info@chatcat.pro" style="color:#FFB870;text-decoration:none;font-weight:600">info@chatcat.pro</a></p>
 </div>
 
 <!-- ══ FAQ ══ -->
@@ -1663,10 +1664,10 @@ document.querySelectorAll('.btn-primary,.nav-cta').forEach(function(btn) {
   document.querySelectorAll(interactors).forEach(function(el) {
     el.addEventListener('mouseenter', function() {
       dot.style.width = '14px'; dot.style.height = '14px';
-      dot.style.background = '#a78bfa';
-      dot.style.boxShadow = '0 0 16px #a78bfa, 0 0 32px rgba(167,139,250,.6)';
+      dot.style.background = '#FFAA00';
+      dot.style.boxShadow = '0 0 16px #FFAA00, 0 0 32px rgba(255,170,0,.6)';
       ring.style.width = '58px'; ring.style.height = '58px';
-      ring.style.borderColor = 'rgba(167,139,250,.7)';
+      ring.style.borderColor = 'rgba(255,170,0,.7)';
     });
     el.addEventListener('mouseleave', function() {
       dot.style.width = ''; dot.style.height = '';
@@ -1694,20 +1695,20 @@ document.querySelectorAll('.btn-primary,.nav-cta').forEach(function(btn) {
   #cc-bubble {
     position: fixed; bottom: 28px; right: 28px; z-index: 9999;
     width: 56px; height: 56px; border-radius: 50%;
-    background: linear-gradient(135deg, #6366f1, #22d3ee);
-    box-shadow: 0 4px 24px rgba(99,102,241,.5);
+    background: linear-gradient(135deg, #FF6F00, #FFAA00);
+    box-shadow: 0 4px 24px rgba(255,111,0,.5);
     border: none; cursor: pointer;
     display: flex; align-items: center; justify-content: center;
     transition: transform .2s, box-shadow .2s;
   }
-  #cc-bubble:hover { transform: scale(1.08); box-shadow: 0 6px 32px rgba(99,102,241,.65); }
+  #cc-bubble:hover { transform: scale(1.08); box-shadow: 0 6px 32px rgba(255,111,0,.65); }
   #cc-bubble svg { width: 26px; height: 26px; fill: #fff; }
 
   #cc-panel {
     position: fixed; bottom: 96px; right: 28px; z-index: 9998;
     width: 340px; height: 520px;
-    background: #0f1422; border-radius: 18px;
-    border: 1px solid rgba(255,255,255,0.1);
+    background: #130E05; border-radius: 18px;
+    border: 1px solid rgba(255,145,40,0.12);
     box-shadow: 0 16px 64px rgba(0,0,0,.7);
     display: flex; flex-direction: column; overflow: hidden;
     opacity: 0; transform: translateY(20px) scale(0.97);
@@ -1720,21 +1721,21 @@ document.querySelectorAll('.btn-primary,.nav-cta').forEach(function(btn) {
 
   /* Header */
   #cc-header {
-    background: #161c2e;
+    background: #1E170A;
     padding: 14px 16px;
     display: flex; align-items: center; gap: 10px;
-    border-bottom: 1px solid rgba(255,255,255,0.08);
+    border-bottom: 1px solid rgba(255,145,40,0.09);
     flex-shrink: 0;
   }
   #cc-avatar {
     width: 38px; height: 38px; border-radius: 50%;
-    background: linear-gradient(135deg,#6366f1,#22d3ee);
+    background: linear-gradient(135deg,#FF6F00,#FFAA00);
     display: flex; align-items: center; justify-content: center;
     font-size: 18px; flex-shrink: 0;
   }
   #cc-header-info { flex: 1; }
-  #cc-header-name { font-weight: 700; font-size: 14px; color: #f1f5f9; }
-  #cc-header-status { font-size: 11.5px; color: #10b981; display: flex; align-items: center; gap: 4px; margin-top: 1px; }
+  #cc-header-name { font-weight: 700; font-size: 14px; color: #FFF6E6; }
+  #cc-header-status { font-size: 11.5px; color: #00C896; display: flex; align-items: center; gap: 4px; margin-top: 1px; }
   #cc-header-status::before { content:''; width:7px; height:7px; border-radius:50%; background:#10b981; display:inline-block; }
   #cc-close {
     background: none; border: none; cursor: pointer;
@@ -1758,12 +1759,12 @@ document.querySelectorAll('.btn-primary,.nav-cta').forEach(function(btn) {
     word-break: break-word; white-space: pre-wrap;
   }
   .cc-msg.bot .cc-bubble-text {
-    background: #161c2e; color: #e2e8f0;
+    background: #1E170A; color: #e2e8f0;
     border-bottom-left-radius: 4px;
     border: 1px solid rgba(255,255,255,0.07);
   }
   .cc-msg.user .cc-bubble-text {
-    background: #6366f1; color: #fff;
+    background: #FF6F00; color: #fff;
     border-bottom-right-radius: 4px;
   }
 
@@ -1771,7 +1772,7 @@ document.querySelectorAll('.btn-primary,.nav-cta').forEach(function(btn) {
   #cc-typing { display: none; align-self: flex-start; }
   #cc-typing.show { display: flex; }
   #cc-typing .cc-bubble-text {
-    background: #161c2e; border: 1px solid rgba(255,255,255,0.07);
+    background: #1E170A; border: 1px solid rgba(255,255,255,0.07);
     padding: 12px 16px;
   }
   .cc-dots { display: flex; gap: 4px; align-items: center; }
@@ -1790,10 +1791,10 @@ document.querySelectorAll('.btn-primary,.nav-cta').forEach(function(btn) {
   /* Input */
   #cc-footer {
     padding: 12px 14px; border-top: 1px solid rgba(255,255,255,0.08);
-    background: #161c2e; display: flex; gap: 8px; align-items: flex-end; flex-shrink: 0;
+    background: #1E170A; display: flex; gap: 8px; align-items: flex-end; flex-shrink: 0;
   }
   #cc-input {
-    flex: 1; background: #0f1422; border: 1px solid rgba(255,255,255,0.1);
+    flex: 1; background: #0f1422; border: 1px solid rgba(255,145,40,0.12);
     border-radius: 20px; padding: 9px 14px; color: #f1f5f9;
     font-size: 13.5px; font-family: 'DM Sans', sans-serif;
     resize: none; outline: none; max-height: 96px; min-height: 38px;
@@ -1801,17 +1802,17 @@ document.querySelectorAll('.btn-primary,.nav-cta').forEach(function(btn) {
     scrollbar-width: none;
     transition: border-color .15s;
   }
-  #cc-input:focus { border-color: rgba(99,102,241,.5); }
+  #cc-input:focus { border-color: rgba(255,111,0,.5); }
   #cc-input::placeholder { color: rgba(148,163,184,0.4); }
   #cc-send {
     width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0;
-    background: #6366f1; border: none; cursor: pointer;
+    background: #FF6F00; border: none; cursor: pointer;
     display: flex; align-items: center; justify-content: center;
     transition: background .15s, transform .1s;
   }
-  #cc-send:hover { background: #4f46e5; }
+  #cc-send:hover { background: #E65000; }
   #cc-send:active { transform: scale(0.93); }
-  #cc-send:disabled { background: rgba(99,102,241,.35); cursor: not-allowed; }
+  #cc-send:disabled { background: rgba(255,111,0,.35); cursor: not-allowed; }
   #cc-send svg { width: 17px; height: 17px; fill: #fff; }
 
   @media (max-width: 400px) {
