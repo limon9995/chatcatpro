@@ -52,7 +52,7 @@ class PageErrorBoundary extends Component<{ children: any; name: string }, { err
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-type NavKey = 'OVERVIEW' | 'AGENT_TASKS' | 'ORDERS' | 'PRODUCTS' | 'ACCOUNTING' | 'ANALYTICS' |
+type NavKey = 'OVERVIEW' | 'AGENT_TASKS' | 'ORDERS' | 'PRODUCTS' | 'ACCOUNTING' |
   'BOT_KNOWLEDGE' | 'PRINT' | 'MEMO_TEMPLATE' | 'CRM' | 'COURIER' |
   'BROADCAST' | 'FOLLOWUP' | 'CATALOG' | 'FRAUD_CHECKER' | 'AUTO_POST' |
   'WALLET' | 'CONNECT_FB_PAGE' |
@@ -80,7 +80,6 @@ const NAV: NavItem[] = [
   { key: 'PRODUCTS',           bn: 'প্রোডান্ট',           en: 'Products',            icon: '🏷', group: 'store' },
   { key: 'CATALOG',            bn: 'ওয়েবসাইট',            en: 'Website',             icon: '🌐', group: 'store' },
   { key: 'ACCOUNTING',         bn: 'হিসাব',               en: 'Accounting',          icon: '💼', group: 'store' },
-  { key: 'ANALYTICS',          bn: 'অ্যানালিটিক্স',       en: 'Analytics',           icon: '📊', group: 'store' },
   // ── Bot & Customers ──────────────────────────────────────────────────
   { key: 'BOT_KNOWLEDGE',      bn: 'বট নলেজ',            en: 'Bot Knowledge',       icon: '🧠', group: 'bot' },
   { key: 'CRM',                bn: 'কাস্টমার',            en: 'Customers',           icon: '👥', group: 'bot' },
@@ -471,13 +470,6 @@ export function DashboardLayout({
         <PageErrorBoundary name="AccountingPage">
           <Suspense fallback={pageFallback}>
             <AccountingPage th={th} pageId={pageId} onToast={showToast} preset={accountingPreset} />
-          </Suspense>
-        </PageErrorBoundary>
-      );
-      case 'ANALYTICS':   return (
-        <PageErrorBoundary name="AnalyticsPage">
-          <Suspense fallback={pageFallback}>
-            <AnalyticsPage th={th} pageId={pageId} onToast={showToast} />
           </Suspense>
         </PageErrorBoundary>
       );
