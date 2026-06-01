@@ -199,6 +199,11 @@ export class AdminController {
     return this.svc.getAllRechargeRequests(status);
   }
 
+  @Get('wallet/pricing/global')
+  getGlobalPricing() {
+    return this.svc.getGlobalPricing();
+  }
+
   @Post('wallet/pricing/apply-all')
   applyPricingToAll(@Body() b: any) {
     return this.svc.applyPricingToAll({

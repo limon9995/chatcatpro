@@ -750,6 +750,26 @@ export class AdminService {
     return { success: true };
   }
 
+  async getGlobalPricing() {
+    const page = await this.prisma.page.findFirst({
+      select: {
+        costPerTextMsgBdt: true,
+        costPerVoiceMsgBdt: true,
+        costPerImageBdt: true,
+        costPerImageLocalBdt: true,
+        costPerAnalyzeBdt: true,
+      },
+      orderBy: { id: 'asc' },
+    });
+    return {
+      costPerTextMsgBdt: page?.costPerTextMsgBdt ?? 0.05,
+      costPerVoiceMsgBdt: page?.costPerVoiceMsgBdt ?? 0.5,
+      costPerImageBdt: page?.costPerImageBdt ?? 0.5,
+      costPerImageLocalBdt: page?.costPerImageLocalBdt ?? 0.3,
+      costPerAnalyzeBdt: page?.costPerAnalyzeBdt ?? 0.5,
+    };
+  }
+
   async applyPricingToAll(pricing: {
     costPerTextMsgBdt?: number;
     costPerVoiceMsgBdt?: number;

@@ -358,6 +358,19 @@ export function AdminPanel({ th, onToast, onLogout }: {
     finally { setWalletDirectSaving(false); }
   };
 
+  const loadPricing = useCallback(async () => {
+    try {
+      const data = await request<any>(`${BASE}/wallet/pricing/global`);
+      if (data) setPricingForm({
+        costPerTextMsgBdt:      data.costPerTextMsgBdt      ?? DEFAULT_PRICING.costPerTextMsgBdt,
+        costPerVoiceMsgBdt:     data.costPerVoiceMsgBdt     ?? DEFAULT_PRICING.costPerVoiceMsgBdt,
+        costPerImageBdt:        data.costPerImageBdt        ?? DEFAULT_PRICING.costPerImageBdt,
+        costPerImageLocalBdt:   data.costPerImageLocalBdt   ?? DEFAULT_PRICING.costPerImageLocalBdt,
+        costPerAnalyzeBdt:      data.costPerAnalyzeBdt      ?? DEFAULT_PRICING.costPerAnalyzeBdt,
+      });
+    } catch { /* silent — fallback to defaults */ }
+  }, [BASE]);
+
   const applyPricingToAll = async () => {
     setPricingSaving(true);
     try {
@@ -443,12 +456,19 @@ export function AdminPanel({ th, onToast, onLogout }: {
     if (tab === 'learning-log')                                    loadLog();
     if (tab === 'courier-tutorials')                               loadTutorials();
     if (tab === 'call-servers')                                    loadGlobalCfgCall();
-    if (tab === 'billing')                                         loadBilling();
     if (tab === 'wallet')                                          loadWallet();
     if (tab === 'subscriptions') loadSubscriptions();
     if (tab === 'page-requests' || tab === 'overview') loadPageRequests();
     if (tab === 'customers') loadCustomers('', 0);
     if (tab === 'domain-setup') loadDomainTab();
+  }, [tab]);
+
+  useEffect(() => {
+    if (tab === 'billing') loadBilling();
+  }, [tab, billingSubFilter]);
+
+  useEffect(() => {
+    if (tab === 'pricing') loadPricing();
   }, [tab]);
 
   const loadDomainTab = async () => {
