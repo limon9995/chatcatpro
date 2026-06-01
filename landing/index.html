@@ -64,7 +64,103 @@
 }
 </script>
 
+<!-- Organization Schema -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "name": "Chatcat",
+  "url": "https://chatcat.pro",
+  "logo": "https://chatcat.pro/og-image.png",
+  "contactPoint": {
+    "@type": "ContactPoint",
+    "contactType": "customer support",
+    "availableLanguage": ["Bengali", "English"],
+    "contactOption": "TollFree"
+  },
+  "sameAs": [
+    "https://wa.me/8801720450797",
+    "https://m.me/Chatcatpro"
+  ]
+}
+</script>
+
+<!-- FAQ Schema -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "Chatcat কি শুধু Facebook Messenger-এ কাজ করে, নাকি WhatsApp ও Instagram-এও?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "না! Chatcat এখন Facebook Messenger, WhatsApp ও Instagram — তিনটি প্ল্যাটফর্মেই কাজ করে। যেকোনো চ্যানেলে customer message করলে bot automatically reply দেবে, order নেবে, product info দেবে এবং courier booking করবে।"
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Bot কি বাংলা ভাষায় কথা বলতে পারে?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "অবশ্যই। Chatcat-এর bot বাংলা, Banglish (বাংলা Latin হরফে) এবং English তিনটিতেই বোঝে ও reply দেয়। lagbe, kinbo, ডেলিভারি কত, ki ki ase — সব ধরনের কথা bot হ্যান্ডেল করতে পারে।"
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "OCR মানে কী? Product screenshot থেকে কীভাবে order হয়?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "OCR (Optical Character Recognition) মানে ছবি থেকে text বের করা। Customer যখন আপনার product-এর screenshot দেয়, Chatcat সেই ছবি থেকে product code বের করে — তারপর database থেকে product খুঁজে order শুরু করে। Customer-কে আলাদা করে code type করতে হয় না।"
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Pathao, Steadfast, RedX courier booking কীভাবে কাজ করে?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Order confirm হওয়ার পর dashboard থেকে এক-ক্লিকে courier booking করতে পারবেন। Chatcat সরাসরি Pathao, Steadfast, RedX ও Paperfly-এর API-এ connected। Consignment number automatic save হয়, tracking update আসে।"
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Chatcat কি ব্যবহার করতে technical knowledge লাগে?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "না। Chatcat setup করতে মাত্র ২০-৩০ মিনিট লাগে — Facebook Page connect, product add, delivery charge set, bot চালু। কোনো coding বা technical skill দরকার নেই।"
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "৳৬৯৯/মাসে কী কী পাব? কোনো hidden charge আছে কি?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "৳৬৯৯/মাসে পাবেন: unlimited order, unlimited product, courier integration, CRM, accounting, broadcast — সব features। আলাদা charge শুধু AI usage-এ (image analysis ও AI reply) — যা pay-as-you-go ভিত্তিতে wallet থেকে কাটে। অনেক seller-এর AI cost মাসে ৳১০০-২০০-এর মধ্যে থাকে।"
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Trial বা refund policy কী?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "আমরা বিশ্বাস করি product ভালো কাজ না করলে আপনার টাকা নেওয়া উচিত না। যেকোনো সময় cancel করতে পারবেন — পরের cycle charge হবে না।"
+      }
+    }
+  ]
+}
+</script>
+
 <meta name="dashboard-url" content="https://app.chatcat.pro"/>
+
+<!-- Favicon & App Icons -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%23FF6F00'/><text x='50%' y='54%' dominant-baseline='middle' text-anchor='middle' font-family='Arial Black,sans-serif' font-size='18' font-weight='900' fill='white'>C</text></svg>"/>
+<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect width='180' height='180' rx='40' fill='%23FF6F00'/><text x='50%' y='54%' dominant-baseline='middle' text-anchor='middle' font-family='Arial Black,sans-serif' font-size='100' font-weight='900' fill='white'>C</text></svg>"/>
+<meta name="theme-color" content="#FF6F00"/>
+<meta name="msapplication-TileColor" content="#FF6F00"/>
+
+<!-- Preload critical font -->
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Plus+Jakarta+Sans:wght@400;600;700;800&family=Noto+Sans+Bengali:wght@400;600;700;800&display=swap"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&family=Noto+Sans+Bengali:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
