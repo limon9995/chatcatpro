@@ -151,9 +151,9 @@ export class AuthController {
   @Roles('admin')
   @Post('admin/migrate-from-json')
   migrateFromJson(@Body('filePath') filePath: string) {
-    const safePath =
-      filePath ||
-      require('path').join(process.cwd(), 'storage', 'auth', 'users.json');
+    const path = require('path');
+    const base = path.basename(filePath || 'users.json').replace(/[^a-zA-Z0-9._-]/g, '');
+    const safePath = path.join(process.cwd(), 'storage', 'auth', base || 'users.json');
     return this.authService.migrateFromJsonFile(safePath);
   }
 }

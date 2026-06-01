@@ -355,7 +355,7 @@ export class FacebookService {
     const data: any = await res.json();
     if (!data.access_token)
       throw new BadRequestException(
-        `FB token exchange failed: ${JSON.stringify(data)}`,
+        `FB token exchange failed: ${data?.error?.message || data?.error?.type || 'unknown error'}`,
       );
     return this.exchangeForLongLivedToken(data.access_token);
   }
@@ -365,7 +365,7 @@ export class FacebookService {
     const res = await fetch(url);
     const data: any = await res.json();
     if (!data.access_token) {
-      this.logger.warn(`[Facebook] Long-lived token exchange failed, using short-lived: ${JSON.stringify(data)}`);
+      this.logger.warn(`[Facebook] Long-lived token exchange failed, using short-lived. Error: ${data?.error?.message || data?.error?.type || 'unknown'}`);
       return shortLivedToken;
     }
     this.logger.log('[Facebook] Exchanged for long-lived user token successfully');

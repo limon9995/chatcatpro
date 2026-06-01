@@ -30,7 +30,7 @@ async function bootstrap() {
       contentSecurityPolicy: {
         directives: {
           defaultSrc: ["'self'"],
-          scriptSrc: ["'self'", "'unsafe-inline'"],
+          scriptSrc: ["'self'"],
           styleSrc: [
             "'self'",
             "'unsafe-inline'",
@@ -68,7 +68,8 @@ async function bootstrap() {
   // ── Static file serving ───────────────────────────────────────────────────
   const storageDir = path.join(process.cwd(), 'storage');
   fs.mkdirSync(storageDir, { recursive: true });
-  app.use('/storage/dev.db', (_req: any, res: any) => {
+  // Block direct access to SQLite DB and WAL/SHM journal files
+  app.use(/^\/storage\/.*\.db(-shm|-wal)?$/, (_req: any, res: any) => {
     res.status(403).json({ message: 'Forbidden' });
   });
   app.useStaticAssets(storageDir, { prefix: '/storage' });

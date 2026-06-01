@@ -17,11 +17,11 @@ export class EncryptionService {
       this.logger.warn(
         '[Encryption] FB_TOKEN_ENCRYPTION_KEY not set — tokens will NOT be encrypted. Set this env var immediately in production!',
       );
-      // Use a zero key for dev only — clearly insecure, will log warning on each op
       this.key = Buffer.alloc(32, 0);
     } else {
-      // Derive a 32-byte key from the env string (SHA-256)
-      this.key = crypto.createHash('sha256').update(raw).digest();
+      // scrypt KDF: work factor N=2^14, fixed salt derived from key material
+      const salt = crypto.createHash('sha256').update('chatcat-enc-salt-v1').digest();
+      this.key = crypto.scryptSync(raw, salt, 32, { N: 16384, r: 8, p: 1 });
     }
   }
 
