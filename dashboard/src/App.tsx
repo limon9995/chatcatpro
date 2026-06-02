@@ -182,7 +182,7 @@ export function AppContent() {
       const nextPage = found || activePages[0];
       setActivePage(nextPage);
       localStorage.setItem('dfbot_active_page', String(nextPage.id));
-      if (localStorage.getItem('chatcat_onboarding_v1') !== 'done') {
+      if (localStorage.getItem(`chatcat_onboarding_${nextPage.id}`) !== 'done') {
         setScreen('onboarding');
         return;
       }
@@ -315,8 +315,8 @@ export function AppContent() {
         dark={dark}
         user={user}
         activePage={activePage}
-        onComplete={() => { localStorage.setItem('chatcat_onboarding_v1', 'done'); void loadMyPages(); }}
-        onSkip={() => { localStorage.setItem('chatcat_onboarding_v1', 'done'); void loadMyPages(); }}
+        onComplete={() => { localStorage.setItem(`chatcat_onboarding_${activePage.id}`, 'done'); void loadMyPages(); }}
+        onSkip={() => { localStorage.setItem(`chatcat_onboarding_${activePage.id}`, 'done'); void loadMyPages(); }}
       />
     );
   }
