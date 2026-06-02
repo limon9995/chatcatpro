@@ -212,7 +212,17 @@ export class OrdersService {
         const botMuted = o.customerPsid
           ? await this.ctx.isAgentHandling(o.pageIdRef, o.customerPsid)
           : false;
-        return { ...o, botMuted, issueType: 'payment' as const };
+        let agentHandlingAt: string | null = null;
+        let lastCustomerMsg: string | null = null;
+        if (o.customerPsid) {
+          const sess = await this.prisma.conversationSession.findUnique({
+            where: { pageIdRef_customerPsid: { pageIdRef: o.pageIdRef, customerPsid: o.customerPsid } },
+            select: { agentHandlingAt: true, lastCustomerMsg: true },
+          });
+          agentHandlingAt = sess?.agentHandlingAt?.toISOString() ?? null;
+          lastCustomerMsg = sess?.lastCustomerMsg ?? null;
+        }
+        return { ...o, botMuted, issueType: 'payment' as const, agentHandlingAt, lastCustomerMsg };
       }),
     );
 
@@ -251,6 +261,8 @@ export class OrdersService {
           orderNote: '🤖 Bot বুঝতে পারেনি — agent review দরকার',
           paymentStatus: 'unmatched',
           createdAt: s.updatedAt.toISOString(),
+          agentHandlingAt: s.agentHandlingAt?.toISOString() ?? null,
+          lastCustomerMsg: s.lastCustomerMsg ?? null,
           items: [],
           botMuted: true,
           issueType: 'unmatched' as const,

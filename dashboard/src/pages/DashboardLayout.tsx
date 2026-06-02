@@ -182,6 +182,7 @@ export function DashboardLayout({
   const [toasts, setToasts]         = useState<ToastItem[]>([]);
   const [billingStatus, setBillingStatus] = useState<any>(null);
   const [pageSubStatus, setPageSubStatus] = useState<any>(null);
+  const [agentMutedCount, setAgentMutedCount] = useState(0);
   const [billingOpen, setBillingOpen] = useState(false);
   const [billingLoading, setBillingLoading] = useState(false);
   const [billingContact, setBillingContact] = useState<BillingAdminContact | null>(null);
@@ -252,6 +253,18 @@ export function DashboardLayout({
   useEffect(() => {
     request(`${API_BASE}/billing/status`).then(setBillingStatus).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!activePage?.id) return;
+    const fetchAgentCount = () => {
+      request<any[]>(`${API_BASE}/orders/agent-issues?pageId=${activePage.id}`)
+        .then((items) => setAgentMutedCount(Array.isArray(items) ? items.filter((i) => i.botMuted).length : 0))
+        .catch(() => {});
+    };
+    fetchAgentCount();
+    const interval = setInterval(fetchAgentCount, 60_000);
+    return () => clearInterval(interval);
+  }, [activePage?.id]);
 
   useEffect(() => {
     if (!activePage?.id) return;
@@ -856,12 +869,14 @@ export function DashboardLayout({
                       transition: 'background .12s',
                     }}>{item.icon}</span>
                     <span style={{ flex: 1, fontSize: 13 }}>{language === 'en' ? item.en : item.bn}</span>
-                    {item.badge && (
+                    {(item.badge || (item.key === 'AGENT_TASKS' && agentMutedCount > 0)) && (
                       <span style={{
                         fontSize: 9, fontWeight: 800, padding: '2px 6px',
-                        borderRadius: 5, background: th.accentSoft,
-                        color: th.accentText, letterSpacing: '0.05em',
-                      }}>{item.badge}</span>
+                        borderRadius: 5,
+                        background: item.key === 'AGENT_TASKS' && agentMutedCount > 0 ? '#f59e0b' : th.accentSoft,
+                        color: item.key === 'AGENT_TASKS' && agentMutedCount > 0 ? '#000' : th.accentText,
+                        letterSpacing: '0.05em',
+                      }}>{item.key === 'AGENT_TASKS' && agentMutedCount > 0 ? agentMutedCount : item.badge}</span>
                     )}
                     {isActive && (
                       <span style={{ width: 5, height: 16, borderRadius: 3, background: th.accent, flexShrink: 0, boxShadow: `0 0 8px ${th.accent}99` }} />

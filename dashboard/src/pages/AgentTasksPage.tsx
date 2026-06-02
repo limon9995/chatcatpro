@@ -44,6 +44,8 @@ interface AgentMutedItem {
   customerName: string | null;
   phone: string | null;
   issueType: string;
+  agentHandlingAt: string | null;
+  lastCustomerMsg: string | null;
 }
 
 interface RefundQueueItem {
@@ -773,34 +775,62 @@ export function AgentTasksPage({ th, pageId, onToast, onOpenOrders, onOpenPrint,
         </div>
 
         {agentMuted.length > 0 ? (
-          <div style={{ display: 'grid', gap: 8 }}>
-            {agentMuted.map((item) => (
-              <div key={item.customerPsid} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 10, background: th.surface, border: `1px solid #f59e0b33` }}>
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: 13.5 }}>
-                    {item.customerName || copy('নাম নেই', 'No name')}
+          <div style={{ display: 'grid', gap: 10 }}>
+            {agentMuted.map((item) => {
+              const mutedAgo = item.agentHandlingAt
+                ? (() => {
+                    const ms = Date.now() - new Date(item.agentHandlingAt).getTime();
+                    const min = Math.floor(ms / 60000);
+                    if (min < 60) return copy(`${min} মিনিট আগে`, `${min}m ago`);
+                    const hr = Math.floor(min / 60);
+                    return copy(`${hr} ঘন্টা আগে`, `${hr}h ago`);
+                  })()
+                : null;
+              const issueLabel =
+                item.issueType === 'payment'
+                  ? copy('পেমেন্ট সমস্যা', 'Payment issue')
+                  : copy('Bot বুঝতে পারেনি', 'Bot could not understand');
+              return (
+                <div key={item.customerPsid} style={{ padding: '14px 16px', borderRadius: 12, background: th.surface, border: `1px solid #f59e0b44`, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <span style={{ fontWeight: 700, fontSize: 14 }}>
+                          {item.customerName || copy('নাম নেই', 'No name')}
+                        </span>
+                        <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 20, background: item.issueType === 'payment' ? '#ef444420' : '#f59e0b20', color: item.issueType === 'payment' ? '#ef4444' : '#f59e0b' }}>
+                          {issueLabel}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: 12, color: th.muted, marginTop: 3 }}>
+                        {item.phone || item.customerPsid}
+                        {mutedAgo && <span style={{ marginLeft: 10, color: '#f59e0b' }}>• {mutedAgo}</span>}
+                      </div>
+                    </div>
+                    <button
+                      style={{ ...th.btnPrimary, background: '#16a34a', fontSize: 12.5, flexShrink: 0 }}
+                      disabled={resumingPsid === item.customerPsid}
+                      onClick={() => resumeBot(item.customerPsid)}
+                    >
+                      {resumingPsid === item.customerPsid
+                        ? <Spinner size={13} />
+                        : copy('Automation চালু করো', 'Resume Automation')}
+                    </button>
                   </div>
-                  <div style={{ fontSize: 12, color: th.muted, marginTop: 3 }}>
-                    {item.phone || item.customerPsid}
-                  </div>
+                  {item.lastCustomerMsg && (
+                    <div style={{ fontSize: 12.5, color: th.muted, background: th.bg, borderRadius: 8, padding: '8px 12px', borderLeft: '3px solid #f59e0b', fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      "{item.lastCustomerMsg}"
+                    </div>
+                  )}
                 </div>
-                <button
-                  style={{ ...th.btnPrimary, background: '#16a34a', fontSize: 12.5 }}
-                  disabled={resumingPsid === item.customerPsid}
-                  onClick={() => resumeBot(item.customerPsid)}
-                >
-                  {resumingPsid === item.customerPsid
-                    ? <Spinner size={13} />
-                    : copy('Bot চালু করো', 'Resume Bot')}
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <EmptyState
             icon="✅"
             title={copy('কোনো muted conversation নেই', 'No muted conversations')}
-            sub={copy('Agent reply করলে এখানে দেখাবে', 'Conversations will appear here after an agent replies')}
+            sub={copy('Bot বুঝতে না পারলে বা agent reply করলে এখানে দেখাবে', 'Appears when bot cannot understand or agent replies')}
           />
         )}
       </div>

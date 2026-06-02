@@ -401,7 +401,8 @@ model ConversationSession {
   awaitingField             String?
   lastIntent                String?
   referencedMessageId       String?
-  agentHandling             Boolean @default(false) // true = bot stays silent, agent is handling
+  agentHandling             Boolean   @default(false) // true = bot stays silent, agent is handling
+  agentHandlingAt           DateTime? // when agentHandling was set to true (for auto-expire)
 
   // Loop / stuck detection
   lastCustomerMsg String? // last message text customer sent

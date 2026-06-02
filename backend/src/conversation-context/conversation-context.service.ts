@@ -58,6 +58,7 @@ export class ConversationContextService {
       lastIntent?: string | null;
       referencedMessageId?: string | null;
       agentHandling?: boolean;
+      agentHandlingAt?: Date | null;
       lastCustomerMsg?: string | null;
       lastDraftStep?: string | null;
       loopCount?: number;
@@ -155,7 +156,10 @@ export class ConversationContextService {
     customerPsid: string,
     value: boolean,
   ) {
-    await this.upsertSession(pageIdRef, customerPsid, { agentHandling: value });
+    const patch: any = { agentHandling: value };
+    if (value) patch.agentHandlingAt = new Date();
+    else patch.agentHandlingAt = null;
+    await this.upsertSession(pageIdRef, customerPsid, patch);
   }
 
   async isAgentHandling(
@@ -163,7 +167,16 @@ export class ConversationContextService {
     customerPsid: string,
   ): Promise<boolean> {
     const session = await this.getSession(pageIdRef, customerPsid);
-    return session?.agentHandling ?? false;
+    if (!session?.agentHandling) return false;
+    // Auto-expire after 2 hours
+    if (session.agentHandlingAt) {
+      const ageMs = Date.now() - new Date(session.agentHandlingAt).getTime();
+      if (ageMs > 2 * 60 * 60 * 1000) {
+        await this.setAgentHandling(pageIdRef, customerPsid, false);
+        return false;
+      }
+    }
+    return true;
   }
 
   async clearDraft(pageIdRef: number, customerPsid: string) {
