@@ -119,7 +119,9 @@ export class FacebookService {
 
     const verifyToken =
       pageInfo.verifyToken || `dfbot_${verifiedPage.pageId}_${Date.now()}`;
-    const encryptedToken = this.encryption.encryptIfNeeded(submittedPageToken);
+    // Exchange for a never-expiring permanent page access token
+    const permanentToken = await this.exchangeForPermanentPageToken(submittedPageToken, verifiedPage.pageId);
+    const encryptedToken = this.encryption.encryptIfNeeded(permanentToken);
     const existing = await this.prisma.page.findUnique({
       where: { pageId: verifiedPage.pageId },
       select: { id: true, ownerId: true, verifyToken: true },
@@ -201,7 +203,7 @@ export class FacebookService {
     );
 
     // Subscribe the page to this app's webhook so Facebook delivers messages
-    await this.subscribePageToWebhook(verifiedPage.pageId, submittedPageToken).catch((err: any) =>
+    await this.subscribePageToWebhook(verifiedPage.pageId, permanentToken).catch((err: any) =>
       this.logger.warn(`[Facebook] Webhook subscription failed for ${verifiedPage.pageId}: ${err?.message}`),
     );
 
@@ -370,6 +372,39 @@ export class FacebookService {
     }
     this.logger.log('[Facebook] Exchanged for long-lived user token successfully');
     return data.access_token;
+  }
+
+  /**
+   * Exchange any token for a never-expiring permanent page access token.
+   * Steps: short-lived token → long-lived user token → permanent page token.
+   * Falls back to the original token if exchange fails (e.g. already a page token).
+   */
+  async exchangeForPermanentPageToken(token: string, pageId: string): Promise<string> {
+    if (!this.appId || !this.appSecret) {
+      this.logger.warn('[Facebook] No appId/appSecret — cannot exchange for permanent token');
+      return token;
+    }
+    try {
+      // Step 1: exchange for long-lived user token
+      const longLivedUrl = `https://graph.facebook.com/v19.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${this.appId}&client_secret=${this.appSecret}&fb_exchange_token=${token}`;
+      const llRes = await fetch(longLivedUrl);
+      const llData: any = await llRes.json();
+      const userToken = llData.access_token || token;
+
+      // Step 2: fetch the page's own never-expiring page access token
+      const pageUrl = `https://graph.facebook.com/v19.0/${pageId}?fields=access_token&access_token=${encodeURIComponent(userToken)}`;
+      const pgRes = await fetch(pageUrl);
+      const pgData: any = await pgRes.json();
+      if (pgData.access_token) {
+        this.logger.log(`[Facebook] Obtained permanent page token for page ${pageId}`);
+        return pgData.access_token;
+      }
+      this.logger.warn(`[Facebook] Could not get permanent page token, using long-lived token. ${pgData?.error?.message || ''}`);
+      return userToken;
+    } catch (err: any) {
+      this.logger.warn(`[Facebook] Permanent token exchange error: ${err?.message}`);
+      return token;
+    }
   }
 
   private async getUserPages(userToken: string): Promise<FacebookPageInfo[]> {
