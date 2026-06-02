@@ -385,7 +385,7 @@ export class FacebookService {
   }
 
   async subscribePageToWebhook(pageId: string, pageToken: string): Promise<void> {
-    const fields = 'messages,messaging_postbacks,messaging_optins,message_deliveries,message_reads,messaging_referrals';
+    const fields = 'messages,messaging_postbacks,messaging_optins,message_deliveries,message_reads,messaging_referrals,feed';
     const url = `https://graph.facebook.com/v19.0/${pageId}/subscribed_apps?subscribed_fields=${encodeURIComponent(fields)}&access_token=${encodeURIComponent(pageToken)}`;
     const res = await fetch(url, { method: 'POST' });
     const data: any = await res.json().catch(() => ({}));

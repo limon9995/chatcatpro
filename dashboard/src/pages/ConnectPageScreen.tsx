@@ -908,6 +908,30 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
                     {copy('✅ Page সফলভাবে Connected হয়েছে!', '✅ Page connected successfully!')}
                   </div>
 
+                  {/* Webhook subscription reminder — shown for all users */}
+                  <div style={{ background: dark ? 'rgba(34,197,94,0.07)' : 'rgba(34,197,94,0.05)', border: '1px solid rgba(34,197,94,0.3)', borderRadius: 12, padding: '12px 15px', fontSize: 12.5, color: text, lineHeight: 1.8 }}>
+                    <div style={{ fontWeight: 800, fontSize: 13, color: '#16a34a', marginBottom: 6 }}>
+                      ✅ {copy('Webhook Subscription স্বয়ংক্রিয়ভাবে হয়ে গেছে', 'Webhook subscription done automatically')}
+                    </div>
+                    <div style={{ color: muted }}>
+                      {copy(
+                        'আমাদের সিস্টেম আপনার page-এ নিচের events subscribe করে দিয়েছে:',
+                        'Our system has subscribed the following events to your page:',
+                      )}
+                    </div>
+                    <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                      {['messages', 'messaging_postbacks', 'messaging_optins', 'message_deliveries', 'message_reads', 'messaging_referrals', 'feed'].map(f => (
+                        <code key={f} style={{ background: dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)', padding: '2px 7px', borderRadius: 5, fontSize: 11, fontWeight: 600 }}>{f}</code>
+                      ))}
+                    </div>
+                    <div style={{ marginTop: 8, fontSize: 11.5, color: muted }}>
+                      ⚠️ {copy(
+                        'যদি Facebook Developer Console-এ "No fields subscribed" দেখায়, তাহলে manually "Add Subscriptions" থেকে উপরের fields গুলো add করুন।',
+                        'If Facebook Developer Console shows "No fields subscribed", manually add the above fields from "Add Subscriptions".',
+                      )}
+                    </div>
+                  </div>
+
                   {/* Webhook setup instructions — shown only for custom app users */}
                   {connectResult?.hasCustomApp && connectResult.verifyToken && (
                     <div style={{ background: dark ? 'rgba(251,191,36,0.07)' : 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.35)', borderRadius: 12, padding: '16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
