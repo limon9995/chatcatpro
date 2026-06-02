@@ -1258,7 +1258,7 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect }: {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             <Toggle th={th}
               label="SmartBot চালু করুন"
-              sub="Keyword matching বন্ধ — AI সরাসরি customer-এর সব message বুঝে reply দেবে এবং order নেবে। OPENAI_API_KEY প্রয়োজন।"
+              sub="Keyword matching বন্ধ — AI সরাসরি customer-এর সব message বুঝে reply দেবে এবং order নেবে।"
               checked={s.smartBotOn}
               onChange={v => saveMode('smartBotOn', v)} />
             {s.smartBotOn && (
@@ -1312,12 +1312,12 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect }: {
               onChange={v => setS(p => ({ ...p, imageRecognitionOn: v }))} />
             <Toggle th={th}
               label={copy('Image AI Fallback চালু', 'Enable Image AI Fallback')}
-              sub={copy('ছবিতে low confidence হলে AI fallback reply দেবে। OPENAI_API_KEY প্রয়োজন।', 'Use AI to generate a reply when image confidence is too low. Requires OPENAI_API_KEY in server .env')}
+              sub={copy('ছবিতে low confidence হলে AI fallback reply দেবে।', 'Use AI to generate a reply when image confidence is too low.')}
               checked={s.imageFallbackAiOn}
               onChange={v => setS(p => ({ ...p, imageFallbackAiOn: v }))} />
             <Toggle th={th}
               label={copy('Text AI Fallback চালু', 'Enable Text AI Fallback')}
-              sub={copy('Bot বুঝতে না পারলে OpenAI context বুঝে জবাব দেবে। OPENAI_API_KEY প্রয়োজন।', 'When the bot cannot match a message, OpenAI will understand the context and reply. Requires OPENAI_API_KEY in server .env')}
+              sub={copy('Bot বুঝতে না পারলে AI context বুঝে জবাব দেবে।', 'When the bot cannot match a message, AI will understand the context and reply.')}
               checked={s.textFallbackAiOn}
               onChange={v => setS(p => ({ ...p, textFallbackAiOn: v }))} />
             {s.imageRecognitionOn && (
@@ -1337,7 +1337,7 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect }: {
               </div>
             )}
             <div style={{ fontSize: 12, color: th.muted, padding: '8px 12px', borderRadius: 8, background: th.surface, border: `1px solid ${th.border}` }}>
-              {copy('Note: Server-এ VISION_PROVIDER=openai এবং OPENAI_API_KEY set না থাকলে এই feature কাজ করবে না। Product এর Category, Color, Keywords field fill করুন matching ভালো হওয়ার জন্য।', 'Note: This feature requires VISION_PROVIDER=openai and OPENAI_API_KEY set in the server .env file. Fill in Category, Color, and Keywords on each product for better matching accuracy.')}
+              {copy('Note: Product এর Category, Color, Keywords field fill করুন — matching আরো ভালো হবে।', 'Note: Fill in Category, Color, and Keywords on each product for better matching accuracy.')}
             </div>
 
           </div>
