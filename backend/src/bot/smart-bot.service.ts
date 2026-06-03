@@ -28,7 +28,7 @@ export interface SmartBotCollected {
 
 export interface SmartBotResponse {
   reply: string;
-  action: 'CHAT' | 'COLLECT' | 'CONFIRM_ORDER' | 'CANCEL_ORDER' | 'AGENT';
+  action: 'CHAT' | 'COLLECT' | 'CONFIRM_ORDER' | 'CANCEL_ORDER' | 'AGENT' | 'CAPTURE_LEAD' | 'CONFIRM_LEAD';
   collected: SmartBotCollected;
 }
 
@@ -38,6 +38,8 @@ const VALID_ACTIONS = new Set([
   'CONFIRM_ORDER',
   'CANCEL_ORDER',
   'AGENT',
+  'CAPTURE_LEAD',
+  'CONFIRM_LEAD',
 ]);
 
 @Injectable()
@@ -183,6 +185,39 @@ export class SmartBotService {
         return parsed.reply;
       }
 
+      case 'CAPTURE_LEAD': {
+        // Start or continue lead collection — just need name + whatsapp phone
+        let leadDraft = updatedDraft;
+        if (!leadDraft) {
+          leadDraft = this.ctx.emptyDraft('FACEBOOK');
+          leadDraft.isLead = true;
+          leadDraft.items = [];
+        }
+        leadDraft.isLead = true;
+        if (parsed.collected.customerName) leadDraft.customerName = parsed.collected.customerName;
+        if (parsed.collected.phone) {
+          leadDraft.phone = parsed.collected.phone;
+          leadDraft.whatsappNumber = parsed.collected.phone;
+        }
+        await this.ctx.saveDraft(pageId, psid, leadDraft);
+        return parsed.reply;
+      }
+
+      case 'CONFIRM_LEAD': {
+        const ld = updatedDraft;
+        if (!ld || !ld.customerName || !ld.phone) {
+          return parsed.reply; // Still collecting
+        }
+        try {
+          await draftHandler.finalizeDraftOrder(pageId, psid, { ...ld, isLead: true }, page);
+          await this.ctx.clearDraft(pageId, psid);
+          await this.ctx.clearHistory(pageId, psid);
+        } catch (err: any) {
+          this.logger.error(`[SmartBot] finalizeLead failed: ${err?.message}`);
+        }
+        return parsed.reply;
+      }
+
       default: // CHAT or COLLECT
         return parsed.reply;
     }
@@ -271,33 +306,49 @@ export class SmartBotService {
     const stillNeeded: string[] = [];
 
     if (draft) {
-      const items =
-        draft.items.length > 0
-          ? draft.items
-              .map((i) => `[${i.productCode}] x${i.qty} — ৳${i.unitPrice}`)
-              .join(', ')
-          : null;
+      // Lead mode — only name + WhatsApp needed
+      if ((draft as any).isLead) {
+        const collected: string[] = [];
+        if (draft.customerName) collected.push(`✅ নাম: ${draft.customerName}`);
+        else stillNeeded.push('নাম');
+        if (draft.phone) collected.push(`✅ WhatsApp: ${draft.phone}`);
+        else stillNeeded.push('WhatsApp নম্বর');
 
-      const collected: string[] = [];
-      if (items) collected.push(`✅ Products: ${items}`);
-      else stillNeeded.push('product code');
-      if (draft.customerName) collected.push(`✅ নাম: ${draft.customerName}`);
-      else stillNeeded.push('নাম');
-      if (draft.phone) collected.push(`✅ ফোন: ${draft.phone}`);
-      else stillNeeded.push('ফোন নম্বর');
-      if (draft.address) collected.push(`✅ ঠিকানা: ${draft.address}`);
-      else stillNeeded.push('পূর্ণ ঠিকানা');
-      if (this.requiresAdvancePayment(draft, page)) {
-        if (draft.paymentProof)
-          collected.push(`✅ Payment: ${draft.paymentProof}`);
-        else stillNeeded.push('advance payment proof');
-      }
-
-      draftCtx = `\n\n## Current Order Draft (এখন পর্যন্ত collected)\n${collected.join('\n')}`;
-      if (stillNeeded.length > 0) {
-        draftCtx += `\n\n⚠️ এখনো পাওয়া যায়নি (ONLY এগুলো চাও): ${stillNeeded.join(', ')}`;
+        draftCtx = `\n\n## Current Lead Draft (Trial/Setup Inquiry)\n${collected.join('\n')}`;
+        if (stillNeeded.length > 0) {
+          draftCtx += `\n\n⚠️ এখনো পাওয়া যায়নি (ONLY এগুলো চাও): ${stillNeeded.join(', ')}`;
+        } else {
+          draftCtx += `\n\n✅ সব তথ্য আছে — CONFIRM_LEAD action দাও এবং বলো "আমাদের প্রতিনিধি আপনাকে call করবেন"।`;
+        }
       } else {
-        draftCtx += `\n\n✅ সব তথ্য আছে — customer confirm করলেই order হবে।`;
+        const items =
+          draft.items.length > 0
+            ? draft.items
+                .map((i) => `[${i.productCode}] x${i.qty} — ৳${i.unitPrice}`)
+                .join(', ')
+            : null;
+
+        const collected: string[] = [];
+        if (items) collected.push(`✅ Products: ${items}`);
+        else stillNeeded.push('product code');
+        if (draft.customerName) collected.push(`✅ নাম: ${draft.customerName}`);
+        else stillNeeded.push('নাম');
+        if (draft.phone) collected.push(`✅ ফোন: ${draft.phone}`);
+        else stillNeeded.push('ফোন নম্বর');
+        if (draft.address) collected.push(`✅ ঠিকানা: ${draft.address}`);
+        else stillNeeded.push('পূর্ণ ঠিকানা');
+        if (this.requiresAdvancePayment(draft, page)) {
+          if (draft.paymentProof)
+            collected.push(`✅ Payment: ${draft.paymentProof}`);
+          else stillNeeded.push('advance payment proof');
+        }
+
+        draftCtx = `\n\n## Current Order Draft (এখন পর্যন্ত collected)\n${collected.join('\n')}`;
+        if (stillNeeded.length > 0) {
+          draftCtx += `\n\n⚠️ এখনো পাওয়া যায়নি (ONLY এগুলো চাও): ${stillNeeded.join(', ')}`;
+        } else {
+          draftCtx += `\n\n✅ সব তথ্য আছে — customer confirm করলেই order হবে।`;
+        }
       }
     }
 
@@ -326,7 +377,7 @@ Customer-এর message দেখে **strictly valid JSON** return করো:
 
 {
   "reply": "<Bangla/Banglish natural reply>",
-  "action": "<CHAT|COLLECT|CONFIRM_ORDER|CANCEL_ORDER|AGENT>",
+  "action": "<CHAT|COLLECT|CONFIRM_ORDER|CANCEL_ORDER|AGENT|CAPTURE_LEAD|CONFIRM_LEAD>",
   "collected": {
     "productCodes": [],
     "qty": {},
@@ -343,6 +394,8 @@ Customer-এর message দেখে **strictly valid JSON** return করো:
 - CONFIRM_ORDER — customer "হ্যাঁ/confirm/ঠিক আছে" বলেছে
 - CANCEL_ORDER — customer "lagbe na/cancel/বাতিল" বলেছে
 - AGENT — complaint/payment issue → human agent দরকার
+- CAPTURE_LEAD — customer free trial / service নিতে আগ্রহী → নাম + WhatsApp নম্বর collect করো
+- CONFIRM_LEAD — নাম ও WhatsApp দুটোই পাওয়া গেছে → বলো "আমাদের প্রতিনিধি শীঘ্রই আপনাকে WhatsApp-এ call করবেন 🎉"
 
 ### CRITICAL RULES:
 1. "⚠️ এখনো পাওয়া যায়নি" list দেখো — শুধু সেই fields চাও। ✅ collected fields আর কখনো চাইবে না।
@@ -355,7 +408,9 @@ Customer-এর message দেখে **strictly valid JSON** return করো:
 8. **Advance payment**: Customer-এর ঠিকানা দেখে ঢাকার ভিতরে/বাইরে বুঝো, তারপর সেই zone-এর payment rule দেখো। ঢাকার ভিতরে COD হলে advance চাইবে না। Order confirm করার আগে আগে ঠিকানা collect করো।
 9. **Order already confirmed**: যদি draft আগেই confirm হয়ে গিয়ে থাকে এবং customer "ok/ধন্যবাদ/received" বলে, তাহলে CHAT action দিয়ে সাধারণ reply করো — আর order confirm করো না।
 10. **Delivery সময় ও fee**: "## Delivery & Payment" section-এ যা **হুবহু** লেখা আছে তাই বলো। নিজে কোনো unit (ঘণ্টা/দিন/কার্যদিবস), সংখ্যা, বা estimate যোগ করবে না, বাদ দেবে না, পরিবর্তন করবে না। যদি delivery সময় "৩-৪ কার্যদিবস" লেখা থাকে, তাহলে ঠিক সেটাই বলো — "4 ঘণ্টা" বা অন্য কিছু বলো না।
-11. **Order status**: Customer "কবে পাবো / order কোথায় / cancel হয়েছে কিনা / status কী" জিজ্ঞেস করলে "## Customer-এর সর্বশেষ Order (DB থেকে)" section দেখো এবং সেই **DB status** অনুযায়ী reply দাও। নিজে কোনো status অনুমান করবে না। যদি CANCELLED হয় তাহলে বলো অর্ডার বাতিল হয়েছে; PACKED হলে বলো প্যাক হয়ে গেছে; SHIPPED হলে বলো কুরিয়ারে গেছে।`;
+11. **Order status**: Customer "কবে পাবো / order কোথায় / cancel হয়েছে কিনা / status কী" জিজ্ঞেস করলে "## Customer-এর সর্বশেষ Order (DB থেকে)" section দেখো এবং সেই **DB status** অনুযায়ী reply দাও। নিজে কোনো status অনুমান করবে না। যদি CANCELLED হয় তাহলে বলো অর্ডার বাতিল হয়েছে; PACKED হলে বলো প্যাক হয়ে গেছে; SHIPPED হলে বলো কুরিয়ারে গেছে।
+12. **Lead capture**: Customer "trial নিতে চাই / setup করতে চাই / দাম কত / কীভাবে শুরু করব / interested" ইত্যাদি বললে CAPTURE_LEAD action দাও। শুধু নাম এবং WhatsApp নম্বর collect করো — address বা product code চাইবে না।
+13. **Lead confirm**: Lead draft এ নাম ও WhatsApp দুটোই ✅ হলে CONFIRM_LEAD action দাও এবং বলো "আমাদের প্রতিনিধি শীঘ্রই আপনার WhatsApp-এ যোগাযোগ করবেন। ধন্যবাদ! 🎉"`;
 
     return `তুমি ${shop}-এর Facebook Messenger AI sales assistant।${deliveryCtx}${paymentCtx}${productCtx}${knowledgeCtx}${catalogCtx}${draftCtx}${orderTrackCtx}${taskRules}`;
   }

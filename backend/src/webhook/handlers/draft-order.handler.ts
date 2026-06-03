@@ -515,6 +515,26 @@ export class DraftOrderHandler {
       }
     }
 
+    // Lead shortcut — skip stock check, create order with source=LEAD
+    if ((draft as any).isLead) {
+      const lead = await this.prisma.order.create({
+        data: {
+          pageIdRef: pageId,
+          customerPsid: psid,
+          customerName: draft.customerName || 'Lead',
+          phone: draft.phone ?? null,
+          address: '',
+          status: 'RECEIVED',
+          source: 'LEAD',
+          orderNote: `WhatsApp: ${draft.phone ?? '-'} | Trial/Setup inquiry`,
+          paymentStatus: 'not_required',
+          items: { create: [] },
+        },
+      });
+      this.logger.log(`[DraftOrder] Lead saved orderId=${lead.id} name=${lead.customerName} phone=${lead.phone}`);
+      return lead.id;
+    }
+
     // C-3: Create order AND decrement stock atomically
     const order = await this.prisma.$transaction(async (tx) => {
       const created = await tx.order.create({

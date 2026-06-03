@@ -36,6 +36,9 @@ export interface DraftSession {
   paymentIssueNote?: string; // Customer's problem message — marks order for agent review
   // Platform the order is being placed from (FACEBOOK | INSTAGRAM | WHATSAPP)
   platform?: string;
+  // Lead capture mode — only name + phone (whatsapp) needed, no products/address
+  isLead?: boolean;
+  whatsappNumber?: string | null;
 }
 
 @Injectable()
