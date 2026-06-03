@@ -182,10 +182,7 @@ export function AppContent() {
       const nextPage = found || activePages[0];
       setActivePage(nextPage);
       localStorage.setItem('dfbot_active_page', String(nextPage.id));
-      if (localStorage.getItem(`chatcat_onboarding_${nextPage.id}`) !== 'done') {
-        setScreen('onboarding');
-        return;
-      }
+      localStorage.setItem(`chatcat_onboarding_${nextPage.id}`, 'done');
       setScreen('dashboard');
     } catch {
       setMyPages([]);
