@@ -241,6 +241,9 @@ model Page {
   liveSessions LiveSession[]
   autoPosts    AutoPost[]
 
+  // Payment credentials for auto-verification
+  paymentCredentials PaymentCredential[]
+
   costPerMemoPrintBdt  Float @default(0.10)
 
   @@index([masterPageId])
@@ -826,6 +829,43 @@ model AutoPost {
 
   @@index([pageId])
   @@index([status, scheduledAt])
+}
+
+// ── PAYMENT VERIFICATION ─────────────────────────────────────────────────────
+
+/// Per-page payment credentials (bKash/Nagad direct or gateway like SSLCommerz/ShurjoPay)
+model PaymentCredential {
+  id        String   @id @default(cuid())
+  pageId    Int
+  page      Page     @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  method    String   // "bkash" | "nagad" | "sslcommerz" | "shurjopay" | "zinipay"
+  type      String   // "direct" | "gateway"
+  isActive  Boolean  @default(false)
+  credJson  String   // AES-256 encrypted JSON blob of credentials
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([pageId, method])
+  @@index([pageId])
+}
+
+/// Tracks pending gateway payment links until IPN confirms payment
+model PendingPayment {
+  id           String   @id @default(cuid())
+  pageId       Int
+  psid         String   // Facebook/IG sender ID
+  draftJson    String   // serialized DraftSession snapshot
+  amount       Float
+  method       String   // gateway method used
+  gatewayTxId  String?  // gateway's own transaction reference
+  sessionToken String   @unique // random UUID in payment link for IPN matching
+  status       String   @default("pending") // pending | paid | expired | failed
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+
+  @@index([pageId])
+  @@index([sessionToken])
+  @@index([status])
 }
 
 model LiveSession {

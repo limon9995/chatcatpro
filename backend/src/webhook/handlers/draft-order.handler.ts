@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { BotIntentService } from '../../bot/bot-intent.service';
 import { AiIntentService } from '../../bot/ai-intent.service';
@@ -14,6 +14,7 @@ import { CrmService } from '../../crm/crm.service';
 import { FollowUpService } from '../../followup/followup.service';
 import { BillingService } from '../../billing/billing.service';
 import { SpamCheckerService } from '../../spam-checker/spam-checker.service';
+import { PaymentVerifyService } from '../../payment-verify/payment-verify.service';
 
 @Injectable()
 export class DraftOrderHandler {
@@ -31,6 +32,7 @@ export class DraftOrderHandler {
     private readonly followUpSvc: FollowUpService,
     private readonly billing: BillingService,
     private readonly spamChecker: SpamCheckerService,
+    @Optional() private readonly paymentVerify?: PaymentVerifyService,
   ) {}
 
   normalizeVariantOptions(raw: any): CustomFieldDef[] {
@@ -271,10 +273,42 @@ export class DraftOrderHandler {
       if (!screenshotAlreadySent && !this.isValidTransactionId(proofText)) {
         return 'Transaction ID টা সঠিকভাবে দিন 💖\nযেমন: *8N7G3DKXYZ* বা screenshot পাঠান।';
       }
+
+      // ── Auto-verify via bKash/Nagad API if credentials configured ──────────
+      if (this.paymentVerify && !screenshotAlreadySent) {
+        const activeCred = await this.paymentVerify.getActiveCredential(pageId);
+        if (activeCred?.type === 'direct') {
+          const expectedAmount = this.calcAdvanceAmount(draft, page);
+          const result = await this.paymentVerify.verifyDirect(
+            pageId,
+            activeCred.method,
+            proofText,
+            expectedAmount,
+          );
+          if (result.verified) {
+            draft.paymentProof = proofText.slice(0, 200);
+            draft.paymentVerified = true;
+            draft.currentStep = 'confirm';
+            await this.ctx.saveDraft(pageId, psid, draft);
+            return `✅ Payment verify হয়েছে! (${activeCred.method.toUpperCase()})\n\n` + this.buildSummary(draft, page);
+          } else if (!result.needsManual && result.errorMessage && !result.errorMessage.startsWith('credentials')) {
+            // Transaction genuinely not found — ask customer to retry
+            return `❌ Transaction ID টি verify হয়নি। সঠিক ID দিন অথবা screenshot পাঠান 💖`;
+          }
+          // needsManual or API error → fall through to manual proof collection
+        }
+      }
+      // ── End auto-verify ─────────────────────────────────────────────────────
+
       draft.paymentProof = proofText.slice(0, 200);
       draft.currentStep = 'confirm';
       await this.ctx.saveDraft(pageId, psid, draft);
       return this.buildSummary(draft, page);
+    }
+
+    // ── AWAITING GATEWAY PAYMENT ──────────────────────────────────────────────
+    if (step === 'awaiting_gateway_payment') {
+      return 'পেমেন্ট লিংকে ক্লিক করে payment করুন 💖\nপেমেন্ট হলে অর্ডার automatically confirm হবে।';
     }
 
     // ── CUSTOM FIELD (cf:FieldLabel) ──────────────────────────────────────────
@@ -370,6 +404,30 @@ export class DraftOrderHandler {
 
     // All collected → check if advance payment required
     if (this.isAdvanceNeeded(draft, page)) {
+      // If gateway credentials configured → send payment link instead of asking for TxID
+      if (this.paymentVerify) {
+        const activeCred = await this.paymentVerify.getActiveCredential(pageId);
+        if (activeCred?.type === 'gateway') {
+          const amount = this.calcAdvanceAmount(draft, page);
+          const apiBaseUrl = process.env.API_BASE_URL || `https://api.chatcat.pro`;
+          try {
+            const pending = await this.paymentVerify.createPendingPayment(
+              pageId, psid, draft, amount, activeCred.method,
+            );
+            const paymentLink = await this.paymentVerify.generateGatewayLink(
+              pageId, activeCred.method, pending.sessionToken, amount, apiBaseUrl,
+            );
+            if (paymentLink) {
+              draft.currentStep = 'awaiting_gateway_payment';
+              draft.pendingPaymentId = pending.id;
+              await this.ctx.saveDraft(pageId, psid, draft);
+              return `💳 এই লিংকে ক্লিক করে ${page.currencySymbol || '৳'}${amount} পেমেন্ট করুন:\n${paymentLink}\n\nপেমেন্ট হলে অর্ডার automatically confirm হবে ✅`;
+            }
+          } catch (err) {
+            this.logger.error(`[DraftOrder] gateway link error: ${err.message}`);
+          }
+        }
+      }
       draft.currentStep = 'advance_payment';
       await this.ctx.saveDraft(pageId, psid, draft);
       return this.buildAdvancePrompt(page, draft);
@@ -696,6 +754,16 @@ export class DraftOrderHandler {
   }
 
   // ── Payment mode helpers ──────────────────────────────────────────────────
+
+  calcAdvanceAmount(draft: DraftSession, page: any): number {
+    const sym = page.currencySymbol || '৳';
+    const isOut = !this.isInsideDhaka(draft.address || '', page);
+    const fee = Number(isOut ? (page.deliveryFeeOutsideDhaka ?? 120) : (page.deliveryFeeInsideDhaka ?? 80));
+    const subtotal = draft.items.reduce((s: number, i: any) => s + i.unitPrice * i.qty, 0);
+    const mode = (page.paymentMode as string) || 'cod';
+    if (mode === 'full_advance') return subtotal + fee;
+    return page.advanceAmount && Number(page.advanceAmount) > 0 ? Number(page.advanceAmount) : fee;
+  }
 
   private isAdvanceNeeded(draft: DraftSession, page: any): boolean {
     const mode = (page.paymentMode as string) || 'cod';

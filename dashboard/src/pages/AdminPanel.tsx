@@ -3,7 +3,7 @@ import { CardHeader, EmptyState, FieldWithInfo, InfoButton, Spinner } from '../c
 import type { Theme } from '../components/ui';
 import { API_BASE, useApi } from '../hooks/useApi';
 
-type AdminTab = 'overview' | 'clients' | 'global-questions' | 'global-replies' | 'learning-log' | 'courier-tutorials' | 'billing' | 'call-servers' | 'wallet' | 'pricing' | 'subscriptions' | 'page-requests' | 'customers' | 'domain-setup';
+type AdminTab = 'overview' | 'clients' | 'global-questions' | 'global-replies' | 'learning-log' | 'courier-tutorials' | 'billing' | 'call-servers' | 'wallet' | 'pricing' | 'subscriptions' | 'page-requests' | 'customers' | 'domain-setup' | 'api-keys';
 
 interface TutorialsConfig {
   courier?: { pathao?: string; steadfast?: string; redx?: string; paperfly?: string };
@@ -63,6 +63,7 @@ const ADMIN_TABS: { key: AdminTab; label: string; icon: string; help: string }[]
   { key: 'pricing',           label: 'Pricing',           icon: '🏷️', help: 'Global usage cost rates edit করুন এবং সব client এ একসাথে apply করুন।' },
   { key: 'subscriptions',     label: 'Subscriptions',     icon: '📅', help: 'প্রতিটি page এর server subscription expiry set করুন। Expired হলে bot বন্ধ হয়ে যায়।' },
   { key: 'domain-setup',      label: 'Custom Domains',    icon: '🌐', help: 'Customer-দের নিজের domain set করুন — Nginx config + SSL সব automatic হবে।' },
+  { key: 'api-keys',          label: 'API Keys',          icon: '🔑', help: 'সব third-party API key গুলো এখান থেকে manage করুন। .env ফাইল edit না করেও চলবে।' },
 ];
 
 const SECRET_TAB: { key: AdminTab; label: string; icon: string; help: string } =
@@ -89,7 +90,7 @@ export function AdminPanel({ th, onToast, onLogout }: {
   const { request } = useApi();
   const [tab, setTab] = useState<AdminTab>(() => {
     const saved = localStorage.getItem('admin_tab') as AdminTab | null;
-    const valid: AdminTab[] = ['overview','clients','customers','global-questions','global-replies','learning-log','courier-tutorials','billing','call-servers','wallet','pricing','subscriptions','page-requests','domain-setup'];
+    const valid: AdminTab[] = ['overview','clients','customers','global-questions','global-replies','learning-log','courier-tutorials','billing','call-servers','wallet','pricing','subscriptions','page-requests','domain-setup','api-keys'];
     return saved && valid.includes(saved) ? saved : 'overview';
   });
   const [pageRequests, setPageRequests] = useState<any[]>([]);
@@ -168,6 +169,12 @@ export function AdminPanel({ th, onToast, onLogout }: {
   const [customerSearch, setCustomerSearch] = useState('');
   const [customerOffset, setCustomerOffset] = useState(0);
   const CUSTOMER_LIMIT = 50;
+
+  // API Keys tab state
+  const [apiKeys, setApiKeys] = useState<Record<string, string>>({});
+  const [apiKeysDraft, setApiKeysDraft] = useState<Record<string, string>>({});
+  const [apiKeysSaving, setApiKeysSaving] = useState(false);
+  const [apiKeysLoaded, setApiKeysLoaded] = useState(false);
 
   // Domain Setup tab state
   const [domainPages, setDomainPages]         = useState<any[]>([]);
@@ -461,6 +468,7 @@ export function AdminPanel({ th, onToast, onLogout }: {
     if (tab === 'page-requests' || tab === 'overview') loadPageRequests();
     if (tab === 'customers') loadCustomers('', 0);
     if (tab === 'domain-setup') loadDomainTab();
+    if (tab === 'api-keys' && !apiKeysLoaded) loadApiKeys();
   }, [tab]);
 
   useEffect(() => {
@@ -470,6 +478,26 @@ export function AdminPanel({ th, onToast, onLogout }: {
   useEffect(() => {
     if (tab === 'pricing') loadPricing();
   }, [tab]);
+
+  const loadApiKeys = async () => {
+    try {
+      const data = await request<Record<string, string>>(`${BASE}/api-keys`);
+      setApiKeys(data || {});
+      setApiKeysDraft(data || {});
+      setApiKeysLoaded(true);
+    } catch (e: any) { onToast(e.message, 'error'); }
+  };
+
+  const saveApiKeys = async () => {
+    setApiKeysSaving(true);
+    try {
+      await request(`${BASE}/api-keys`, { method: 'PATCH', body: JSON.stringify(apiKeysDraft) });
+      onToast('✅ API Keys সংরক্ষিত হয়েছে', 'success');
+      setApiKeysLoaded(false);
+      loadApiKeys();
+    } catch (e: any) { onToast(e.message, 'error'); }
+    finally { setApiKeysSaving(false); }
+  };
 
   const loadDomainTab = async () => {
     try {
@@ -1104,6 +1132,13 @@ export function AdminPanel({ th, onToast, onLogout }: {
                       ))}
                     </div>
                   </div>
+
+                  {/* Auto Payment Verification */}
+                  <PaymentGatewaySection
+                    th={th}
+                    pageId={selectedPage.id}
+                    request={request}
+                  />
 
                   {/* Catalog link */}
                   <div>
@@ -1831,6 +1866,111 @@ export function AdminPanel({ th, onToast, onLogout }: {
             </div>
           </div>
         )}
+        {tab === 'api-keys' && (
+          <div style={{ maxWidth: 800, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 24 }}>
+            <div style={{ ...th.card, borderRadius: 14, padding: 20 }}>
+              <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>🔑 API Keys Manager</div>
+              <div style={{ fontSize: 13, color: th.muted, marginBottom: 20 }}>এখানে সংরক্ষিত values .env ফাইলের চেয়ে priority পাবে। কোনো field খালি রাখলে .env এর value ব্যবহার হবে।</div>
+
+              {(
+                [
+                  { group: '🤖 AI / Gemini', fields: [
+                    { key: 'geminiApiKey', label: 'Gemini API Key', secret: true },
+                    { key: 'aiIntentProvider', label: 'AI Intent Provider', placeholder: 'gemini / openai' },
+                    { key: 'aiIntentModel', label: 'AI Intent Model', placeholder: 'gemini-2.0-flash' },
+                  ]},
+                  { group: '🧠 OpenAI', fields: [
+                    { key: 'openaiApiKey', label: 'OpenAI API Key', secret: true },
+                    { key: 'openaiModel', label: 'OpenAI Chat Model', placeholder: 'gpt-4o' },
+                    { key: 'openaiVisionModel', label: 'OpenAI Vision Model', placeholder: 'gpt-4o' },
+                    { key: 'fallbackAiProvider', label: 'Fallback AI Provider', placeholder: 'openai / gemini' },
+                    { key: 'fallbackAiModel', label: 'Fallback AI Model', placeholder: 'gpt-4o-mini' },
+                  ]},
+                  { group: '👁 Vision', fields: [
+                    { key: 'visionProvider', label: 'Vision Provider', placeholder: 'gemini-with-fallback / openai / gemini' },
+                    { key: 'visionModel', label: 'Vision Model (Gemini)', placeholder: 'gemini-2.0-flash' },
+                    { key: 'visionConfidenceThreshold', label: 'Vision Confidence Threshold', placeholder: '0.15' },
+                  ]},
+                  { group: '🦙 Ollama (Local)', fields: [
+                    { key: 'ollamaBaseUrl', label: 'Ollama Base URL', placeholder: 'http://localhost:11434' },
+                    { key: 'ollamaChatModel', label: 'Ollama Chat Model', placeholder: 'qwen2.5:0.5b' },
+                    { key: 'ollamaVisionModel', label: 'Ollama Vision Model', placeholder: 'llava:7b' },
+                  ]},
+                  { group: '📧 Gmail (OTP/Email)', fields: [
+                    { key: 'gmailUser', label: 'Gmail Address' },
+                    { key: 'gmailAppPassword', label: 'Gmail App Password', secret: true },
+                  ]},
+                  { group: '📱 Facebook OAuth (Global App)', fields: [
+                    { key: 'fbAppId', label: 'FB App ID' },
+                    { key: 'fbAppSecret', label: 'FB App Secret', secret: true },
+                    { key: 'fbRedirectUri', label: 'FB Redirect URI', placeholder: 'https://api.chatcat.pro/facebook/callback' },
+                    { key: 'fbOauthStateSecret', label: 'FB OAuth State Secret', secret: true },
+                  ]},
+                  { group: '🖼 Image Generation', fields: [
+                    { key: 'falApiKey', label: 'Fal.ai API Key 1', secret: true },
+                    { key: 'falApiKey2', label: 'Fal.ai API Key 2', secret: true },
+                    { key: 'falApiKey3', label: 'Fal.ai API Key 3', secret: true },
+                    { key: 'ideogramApiKey', label: 'Ideogram API Key', secret: true },
+                  ]},
+                  { group: '🔊 TTS / Voice', fields: [
+                    { key: 'elevenlabsApiKey', label: 'ElevenLabs API Key', secret: true },
+                    { key: 'googleTtsKeyFile', label: 'Google TTS Key File Path', placeholder: '/path/to/key.json' },
+                  ]},
+                  { group: '📞 Call Integrations', fields: [
+                    { key: 'twilioAccountSid', label: 'Twilio Account SID' },
+                    { key: 'twilioAuthToken', label: 'Twilio Auth Token', secret: true },
+                    { key: 'twilioFromNumber', label: 'Twilio From Number', placeholder: '+1234567890' },
+                    { key: 'twilioTwimlBase', label: 'Twilio TwiML Base URL' },
+                    { key: 'sslWirelessApiKey', label: 'SSL Wireless API Key', secret: true },
+                    { key: 'sslWirelessApiUrl', label: 'SSL Wireless API URL' },
+                    { key: 'sslWirelessCallerId', label: 'SSL Wireless Caller ID' },
+                    { key: 'bdCallingApiKey', label: 'BDCalling API Key', secret: true },
+                    { key: 'bdCallingApiUrl', label: 'BDCalling API URL' },
+                    { key: 'bdCallingCallerId', label: 'BDCalling Caller ID' },
+                  ]},
+                  { group: '🌐 URLs', fields: [
+                    { key: 'landingPageUrl', label: 'Landing Page URL', placeholder: 'https://chatcat.pro' },
+                    { key: 'catalogBaseUrl', label: 'Catalog Base URL' },
+                    { key: 'storagePublicUrl', label: 'Storage Public URL' },
+                    { key: 'apiBaseUrl', label: 'API Base URL' },
+                  ]},
+                ] as { group: string; fields: { key: string; label: string; placeholder?: string; secret?: boolean }[] }[]
+              ).map(({ group, fields }) => (
+                <div key={group} style={{ marginBottom: 24 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: th.accent, marginBottom: 10, borderBottom: `1px solid ${th.border}`, paddingBottom: 6 }}>{group}</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 12 }}>
+                    {fields.map(({ key, label, placeholder, secret }) => (
+                      <div key={key}>
+                        <div style={{ fontSize: 12, color: th.muted, marginBottom: 4 }}>{label}</div>
+                        <input
+                          type={secret && apiKeysDraft[key] === '***SAVED***' ? 'password' : 'text'}
+                          value={apiKeysDraft[key] ?? ''}
+                          placeholder={placeholder || (secret ? '••••••• (সংরক্ষিত)' : '')}
+                          onChange={e => setApiKeysDraft(d => ({ ...d, [key]: e.target.value }))}
+                          onFocus={e => { if (secret && e.target.value === '***SAVED***') setApiKeysDraft(d => ({ ...d, [key]: '' })); }}
+                          style={{ ...th.input, width: '100%', fontSize: 13, fontFamily: 'monospace', boxSizing: 'border-box' }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+
+              <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
+                <button
+                  style={{ ...th.btn, opacity: apiKeysSaving ? 0.6 : 1 }}
+                  onClick={saveApiKeys}
+                  disabled={apiKeysSaving}
+                >
+                  {apiKeysSaving ? 'Saving...' : '💾 Save All API Keys'}
+                </button>
+                <button style={th.btnGhost} onClick={() => { setApiKeysDraft(apiKeys); }}>↩ Reset</button>
+                <button style={th.btnGhost} onClick={() => { setApiKeysLoaded(false); loadApiKeys(); }}>🔄 Reload</button>
+              </div>
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
   );
@@ -3297,3 +3437,148 @@ function AdminCustomersTab({ th, data, loading, search, offset, limit, onSearch,
   );
 }
 
+
+// ── Payment Gateway Section ────────────────────────────────────────────────
+
+const PAYMENT_METHODS = [
+  { key: 'bkash', label: 'bKash (Direct API)', type: 'direct', fields: [
+    { key: 'app_key', label: 'App Key', ph: 'bKash App Key' },
+    { key: 'app_secret', label: 'App Secret', ph: 'bKash App Secret' },
+    { key: 'username', label: 'Username', ph: 'bKash Username' },
+    { key: 'password', label: 'Password', ph: 'bKash Password', secret: true },
+  ]},
+  { key: 'nagad', label: 'Nagad (Direct API)', type: 'direct', fields: [
+    { key: 'merchant_id', label: 'Merchant ID', ph: 'Nagad Merchant ID' },
+    { key: 'api_key', label: 'API Key', ph: 'Nagad API Key', secret: true },
+  ]},
+  { key: 'sslcommerz', label: 'SSLCommerz Gateway', type: 'gateway', fields: [
+    { key: 'store_id', label: 'Store ID', ph: 'SSLCommerz Store ID' },
+    { key: 'store_passwd', label: 'Store Password', ph: 'SSLCommerz Store Password', secret: true },
+  ]},
+  { key: 'shurjopay', label: 'ShurjoPay Gateway', type: 'gateway', fields: [
+    { key: 'username', label: 'Username', ph: 'ShurjoPay Username' },
+    { key: 'password', label: 'Password', ph: 'ShurjoPay Password', secret: true },
+    { key: 'prefix', label: 'Prefix', ph: 'e.g. SP' },
+  ]},
+  { key: 'zinipay', label: 'ZiniPay Gateway', type: 'gateway', fields: [
+    { key: 'store_id', label: 'Store ID', ph: 'ZiniPay Store ID' },
+    { key: 'api_key', label: 'API Key', ph: 'ZiniPay API Key', secret: true },
+  ]},
+];
+
+function PaymentGatewaySection({ th, pageId, request }: { th: any; pageId: number; request: any }) {
+  const BASE = (window as any).__API_BASE__ || '';
+  const [configured, setConfigured] = useState<string[]>([]);
+  const [selected, setSelected] = useState('bkash');
+  const [creds, setCreds] = useState<Record<string, string>>({});
+  const [sandbox, setSandbox] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  useEffect(() => {
+    request(`${BASE}/pages/${pageId}/payment-credentials`)
+      .then((r: any) => {
+        if (Array.isArray(r)) setConfigured(r.filter((x: any) => x.isActive).map((x: any) => x.method));
+      })
+      .catch(() => {});
+  }, [pageId]);
+
+  const selectedDef = PAYMENT_METHODS.find(m => m.key === selected)!;
+
+  const handleSave = async () => {
+    setSaving(true); setMsg(null);
+    try {
+      await request(`${BASE}/pages/${pageId}/payment-credentials`, {
+        method: 'POST',
+        body: JSON.stringify({
+          method: selected,
+          credentials: { ...creds, sandbox: sandbox ? 'true' : 'false' },
+          isActive: true,
+        }),
+      });
+      setConfigured(prev => prev.includes(selected) ? prev : [...prev, selected]);
+      setMsg({ ok: true, text: 'Credentials saved!' });
+    } catch (e: any) {
+      setMsg({ ok: false, text: e.message || 'Failed' });
+    } finally { setSaving(false); }
+  };
+
+  const handleTest = async () => {
+    setTesting(true); setMsg(null);
+    try {
+      const r = await request(`${BASE}/pages/${pageId}/payment-credentials/${selected}/test`, { method: 'POST' });
+      setMsg({ ok: r.ok, text: r.message });
+    } catch (e: any) {
+      setMsg({ ok: false, text: e.message || 'Test failed' });
+    } finally { setTesting(false); }
+  };
+
+  const handleRemove = async (method: string) => {
+    await request(`${BASE}/pages/${pageId}/payment-credentials/${method}`, { method: 'DELETE' });
+    setConfigured(prev => prev.filter(m => m !== method));
+  };
+
+  return (
+    <div>
+      <div style={{ fontSize: 11, fontWeight: 800, color: th.muted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>
+        Auto Payment Verification
+      </div>
+      {configured.length > 0 && (
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+          {configured.map(m => (
+            <div key={m} style={{ ...th.card2, display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', borderRadius: 8, fontSize: 12.5, fontWeight: 600 }}>
+              <span style={{ color: '#22c55e' }}>✓</span> {m.toUpperCase()}
+              <button onClick={() => handleRemove(m)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: th.muted, fontSize: 13, padding: 0 }}>✕</button>
+            </div>
+          ))}
+        </div>
+      )}
+      <div style={{ ...th.card2, borderRadius: 10, padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: th.muted, marginBottom: 4, textTransform: 'uppercase' }}>Payment Method</div>
+          <select style={th.input} value={selected} onChange={e => { setSelected(e.target.value); setCreds({}); setMsg(null); }}>
+            {PAYMENT_METHODS.map(m => (
+              <option key={m.key} value={m.key}>{m.label} {configured.includes(m.key) ? '✓' : ''}</option>
+            ))}
+          </select>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          {selectedDef.fields.map(f => (
+            <div key={f.key}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: th.muted, marginBottom: 4, textTransform: 'uppercase' }}>{f.label}</div>
+              <input
+                style={th.input}
+                type={(f as any).secret ? 'password' : 'text'}
+                placeholder={f.ph}
+                value={creds[f.key] ?? ''}
+                onChange={e => setCreds(p => ({ ...p, [f.key]: e.target.value }))}
+              />
+            </div>
+          ))}
+        </div>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+          <input type="checkbox" checked={sandbox} onChange={e => setSandbox(e.target.checked)} />
+          Sandbox / Test Mode
+        </label>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button style={{ ...th.btnPrimary, padding: '8px 18px', fontSize: 13 }} onClick={handleSave} disabled={saving}>
+            {saving ? 'Saving…' : '💾 Save'}
+          </button>
+          <button style={{ ...th.btnGhost, padding: '8px 18px', fontSize: 13 }} onClick={handleTest} disabled={testing}>
+            {testing ? 'Testing…' : '🔌 Test Connection'}
+          </button>
+        </div>
+        {msg && (
+          <div style={{ fontSize: 13, fontWeight: 600, color: msg.ok ? '#22c55e' : '#ef4444' }}>
+            {msg.ok ? '✓' : '✗'} {msg.text}
+          </div>
+        )}
+      </div>
+      <div style={{ fontSize: 12, color: th.muted, marginTop: 8 }}>
+        <strong>Direct API</strong> (bKash/Nagad): Customer transaction ID automatically verify হবে।{' '}
+        <strong>Gateway</strong> (SSLCommerz/ShurjoPay/ZiniPay): Bot payment link পাঠাবে।
+      </div>
+    </div>
+  );
+}

@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
 import { MessengerModule } from '../messenger/messenger.module';
 import { BotKnowledgeModule } from '../bot-knowledge/bot-knowledge.module';
@@ -19,6 +19,7 @@ import { SpamCheckerModule } from '../spam-checker/spam-checker.module';
 import { EmbeddingModule } from '../embedding/embedding.module';
 import { MessageQueueModule } from '../message-queue/message-queue.module';
 import { ProductNameMatchModule } from '../product-name-match/product-name-match.module';
+import { PaymentVerifyModule } from '../payment-verify/payment-verify.module';
 import { WebhookController } from './webhook.controller';
 import { WebhookService } from './webhook.service';
 import { SmartBotService } from '../bot/smart-bot.service';
@@ -52,6 +53,7 @@ import {
     MessageQueueModule,
     EmbeddingModule,
     ProductNameMatchModule,
+    forwardRef(() => PaymentVerifyModule),
   ],
   controllers: [WebhookController],
   providers: [
@@ -67,5 +69,6 @@ import {
     },
     MessageWorker,
   ],
+  exports: [DraftOrderHandler],
 })
 export class WebhookModule {}

@@ -19,6 +19,7 @@ import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { AdminService } from './admin.service';
 import { GlobalSettingsService } from '../common/global-settings.service';
+import { ApiKeysService } from '../common/api-keys.service';
 
 @SkipThrottle({ global: true, auth: true })
 @Controller('admin')
@@ -28,7 +29,18 @@ export class AdminController {
   constructor(
     private readonly svc: AdminService,
     private readonly globalSettings: GlobalSettingsService,
+    private readonly apiKeys: ApiKeysService,
   ) {}
+
+  @Get('api-keys')
+  getApiKeys() {
+    return this.apiKeys.getAllMasked();
+  }
+
+  @Patch('api-keys')
+  setApiKeys(@Body() b: any) {
+    return this.apiKeys.set(b || {});
+  }
 
   @Get('laptop-ai')
   getLaptopAi() {

@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { GlobalSettingsService } from '../common/global-settings.service';
+import { ApiKeysService } from '../common/api-keys.service';
 import { WalletService } from '../wallet/wallet.service';
 import { BusinessContext } from './bot-context.service';
 
@@ -78,21 +79,22 @@ export class AiIntentService {
   constructor(
     private readonly walletService: WalletService,
     private readonly globalSettings: GlobalSettingsService,
+    private readonly apiKeysService: ApiKeysService,
   ) {
-    this.apiKey = process.env.OPENAI_API_KEY ?? '';
-    this.geminiApiKey = process.env.GEMINI_API_KEY ?? '';
+    this.apiKey = apiKeysService.getSync('openaiApiKey');
+    this.geminiApiKey = apiKeysService.getSync('geminiApiKey');
     this.ollamaBaseUrl = (
-      process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434'
+      apiKeysService.getSync('ollamaBaseUrl') || 'http://localhost:11434'
     ).replace(/\/$/, '');
-    this.ollamaModel = process.env.OLLAMA_CHAT_MODEL ?? 'qwen2:1.5b';
+    this.ollamaModel = apiKeysService.getSync('ollamaChatModel') || 'qwen2:1.5b';
 
-    const providerEnv = (process.env.AI_INTENT_PROVIDER ?? '').toLowerCase();
+    const providerEnv = (apiKeysService.getSync('aiIntentProvider')).toLowerCase();
     if (providerEnv === 'gemini' || (!providerEnv && this.geminiApiKey)) {
       this.provider = 'gemini';
-      this.model = process.env.AI_INTENT_MODEL ?? 'gemini-2.0-flash';
+      this.model = apiKeysService.getSync('aiIntentModel') || 'gemini-2.0-flash';
     } else {
       this.provider = 'openai';
-      this.model = process.env.AI_INTENT_MODEL ?? 'gpt-4o-mini';
+      this.model = apiKeysService.getSync('aiIntentModel') || 'gpt-4o-mini';
     }
 
     const activeKey =

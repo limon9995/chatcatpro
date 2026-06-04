@@ -39,6 +39,10 @@ export interface DraftSession {
   // Lead capture mode — only name + phone (whatsapp) needed, no products/address
   isLead?: boolean;
   whatsappNumber?: string | null;
+  // Auto-verified payment flag (set by PaymentVerifyService)
+  paymentVerified?: boolean;
+  // PendingPayment id — set when gateway payment link was sent to customer
+  pendingPaymentId?: string;
 }
 
 @Injectable()

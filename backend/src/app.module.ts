@@ -42,6 +42,7 @@ import { InstagramModule } from './instagram/instagram.module';
 import { EmbeddingModule } from './embedding/embedding.module';
 import { AutoPostModule } from './auto-post/auto-post.module';
 import { SupportChatModule } from './support-chat/support-chat.module';
+import { PaymentVerifyModule } from './payment-verify/payment-verify.module';
 
 @Module({
   imports: [
@@ -105,6 +106,7 @@ import { SupportChatModule } from './support-chat/support-chat.module';
     EmbeddingModule,
     AutoPostModule,
     SupportChatModule,
+    PaymentVerifyModule,
   ],
   controllers: [AppController],
   providers: [

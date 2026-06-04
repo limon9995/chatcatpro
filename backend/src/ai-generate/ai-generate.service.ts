@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { GlobalSettingsService } from '../common/global-settings.service';
+import { ApiKeysService } from '../common/api-keys.service';
 import { WalletService } from '../wallet/wallet.service';
 
 @Injectable()
@@ -12,13 +13,14 @@ export class AiGenerateService {
 
   constructor(
     private readonly globalSettings: GlobalSettingsService,
+    private readonly apiKeysService: ApiKeysService,
     private readonly walletService: WalletService,
   ) {
     this.ollamaBaseUrl = (
-      process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434'
+      apiKeysService.getSync('ollamaBaseUrl') || 'http://localhost:11434'
     ).replace(/\/$/, '');
-    this.ollamaChatModel = process.env.OLLAMA_CHAT_MODEL ?? 'qwen2:1.5b';
-    this.openaiApiKey = process.env.OPENAI_API_KEY ?? '';
+    this.ollamaChatModel = apiKeysService.getSync('ollamaChatModel') || 'qwen2:1.5b';
+    this.openaiApiKey = apiKeysService.getSync('openaiApiKey');
   }
 
   private async callOllama(

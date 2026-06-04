@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ApiKeysService } from '../../common/api-keys.service';
 import axios from 'axios';
 import { readFile } from 'fs/promises';
 import { join, extname } from 'path';
@@ -14,12 +15,11 @@ export class OpenAIVisionProvider implements VisionAnalysisProvider {
   private readonly model: string;
   private readonly confidenceThreshold: number;
 
-  constructor() {
-    this.apiKey = process.env.OPENAI_API_KEY ?? '';
-    // Use OPENAI_VISION_MODEL to avoid conflict when VISION_MODEL is set to a Gemini model name
-    this.model = process.env.OPENAI_VISION_MODEL ?? 'gpt-4o';
+  constructor(private readonly apiKeysService: ApiKeysService) {
+    this.apiKey = apiKeysService.getSync('openaiApiKey');
+    this.model = apiKeysService.getSync('openaiVisionModel') || 'gpt-4o';
     this.confidenceThreshold = Number(
-      process.env.VISION_CONFIDENCE_THRESHOLD ?? 0.15,
+      apiKeysService.getSync('visionConfidenceThreshold') || 0.15,
     );
   }
 

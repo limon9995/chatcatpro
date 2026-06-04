@@ -4,22 +4,29 @@ import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import { PrismaService } from '../prisma/prisma.service';
+import { ApiKeysService } from '../common/api-keys.service';
 
 @Injectable()
 export class OtpService {
   private readonly logger = new Logger(OtpService.name);
-  private readonly transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 465,
-    secure: true,
-    family: 4,
-    auth: {
-      user: process.env.GMAIL_USER,
-      pass: process.env.GMAIL_APP_PASSWORD,
-    },
-  } as any);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly apiKeysService: ApiKeysService,
+  ) {}
+
+  private getTransporter() {
+    return nodemailer.createTransport({
+      host: 'smtp.gmail.com',
+      port: 465,
+      secure: true,
+      family: 4,
+      auth: {
+        user: this.apiKeysService.getSync('gmailUser'),
+        pass: this.apiKeysService.getSync('gmailAppPassword'),
+      },
+    } as any);
+  }
 
   /** Generate and send a 6-digit OTP to the given email. */
   async sendOtp(email: string, purpose: 'signup' | 'reset'): Promise<void> {
@@ -39,8 +46,8 @@ export class OtpService {
     ]);
 
     const isSignup = purpose === 'signup';
-    await this.transporter.sendMail({
-      from: `"ChatCat Pro" <${process.env.GMAIL_USER}>`,
+    await this.getTransporter().sendMail({
+      from: `"ChatCat Pro" <${this.apiKeysService.getSync('gmailUser')}>`,
       to: email,
       subject: isSignup
         ? 'ChatCat Pro — Email Verification OTP'

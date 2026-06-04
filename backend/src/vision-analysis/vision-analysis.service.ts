@@ -9,6 +9,7 @@ import { LocalVisionProvider } from './providers/local.vision.provider';
 import { OllamaVisionProvider } from './providers/ollama.vision.provider';
 import { GeminiVisionProvider } from './providers/gemini.vision.provider';
 import { GlobalSettingsService } from '../common/global-settings.service';
+import { ApiKeysService } from '../common/api-keys.service';
 
 type VisionMode =
   | 'gemini'
@@ -36,10 +37,11 @@ export class VisionAnalysisService {
     private readonly ollamaProvider: OllamaVisionProvider,
     private readonly geminiProvider: GeminiVisionProvider,
     private readonly globalSettings: GlobalSettingsService,
+    private readonly apiKeysService: ApiKeysService,
   ) {
-    const raw = (process.env.VISION_PROVIDER ?? '').toLowerCase().trim();
+    const raw = apiKeysService.getSync('visionProvider').toLowerCase().trim();
     this.confidenceThreshold = Number(
-      process.env.VISION_CONFIDENCE_THRESHOLD ?? 0.15,
+      apiKeysService.getSync('visionConfidenceThreshold') || 0.15,
     );
 
     if (raw === 'gemini') this.mode = 'gemini';
@@ -50,15 +52,14 @@ export class VisionAnalysisService {
     else if (raw === 'local-with-fallback') this.mode = 'local-with-fallback';
     else if (raw === 'ollama') this.mode = 'ollama';
     else if (raw === 'ollama-with-fallback') this.mode = 'ollama-with-fallback';
-    else if (process.env.GEMINI_API_KEY)
-      // Auto-detect: prefer fallback mode when OpenAI key is also available
-      this.mode = process.env.OPENAI_API_KEY
+    else if (apiKeysService.getSync('geminiApiKey'))
+      this.mode = apiKeysService.getSync('openaiApiKey')
         ? 'gemini-with-openai-fallback'
         : 'gemini';
-    else if (process.env.OLLAMA_BASE_URL)
-      this.mode = 'ollama-with-fallback'; // auto-detect Ollama
-    else if (process.env.OPENAI_API_KEY)
-      this.mode = 'openai'; // auto-detect OpenAI
+    else if (apiKeysService.getSync('ollamaBaseUrl'))
+      this.mode = 'ollama-with-fallback';
+    else if (apiKeysService.getSync('openaiApiKey'))
+      this.mode = 'openai';
     else this.mode = 'mock';
 
     if (this.mode === 'gemini' || this.mode === 'gemini-with-openai-fallback')
@@ -328,7 +329,7 @@ export class VisionAnalysisService {
     prefix: string,
   ): Promise<{ codes: string[]; usedApi: boolean }> {
     // 1. Try Gemini first (throws on API failure, returns [] if no codes found)
-    if (process.env.GEMINI_API_KEY) {
+    if (this.apiKeysService.getSync('geminiApiKey')) {
       try {
         const codes = await this.geminiProvider.extractProductCodes(imageUrl, prefix);
         // Gemini worked — trust its result ([] means no codes in image)
@@ -341,7 +342,7 @@ export class VisionAnalysisService {
     }
 
     // 2. OpenAI fallback — only reached if Gemini is not configured or errored
-    if (process.env.OPENAI_API_KEY) {
+    if (this.apiKeysService.getSync('openaiApiKey')) {
       try {
         const codes = await this.openaiProvider.extractProductCodes(imageUrl, prefix);
         return { codes, usedApi: true };

@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ApiKeysService } from '../common/api-keys.service';
 
 /**
  * WhisperService — transcribes Facebook Messenger audio messages via OpenAI Whisper API.
@@ -21,8 +22,8 @@ export class WhisperService {
   private readonly MAX_FAILS = 3;
   private cooldownUntil = 0;
 
-  constructor() {
-    this.apiKey = process.env.OPENAI_API_KEY ?? '';
+  constructor(private readonly apiKeysService: ApiKeysService) {
+    this.apiKey = apiKeysService.getSync('openaiApiKey');
     if (this.apiKey) {
       this.logger.log('[Whisper] Enabled — model=whisper-1');
     } else {

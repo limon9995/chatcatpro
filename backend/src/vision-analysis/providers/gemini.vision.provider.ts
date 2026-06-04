@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ApiKeysService } from '../../common/api-keys.service';
 import axios from 'axios';
 import { readFile } from 'fs/promises';
 import { join, extname } from 'path';
@@ -13,9 +14,9 @@ export class GeminiVisionProvider implements VisionAnalysisProvider {
   private readonly apiKey: string;
   private readonly model: string;
 
-  constructor() {
-    this.apiKey = process.env.GEMINI_API_KEY ?? '';
-    this.model = process.env.VISION_MODEL ?? 'gemini-2.0-flash';
+  constructor(private readonly apiKeysService: ApiKeysService) {
+    this.apiKey = apiKeysService.getSync('geminiApiKey');
+    this.model = apiKeysService.getSync('visionModel') || 'gemini-2.0-flash';
   }
 
   private buildCodeExtractionPrompt(prefix: string): string {

@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ApiKeysService } from '../../common/api-keys.service';
 import {
   BotFallbackProvider,
   FallbackContext,
@@ -32,10 +33,9 @@ export class OpenAIFallbackProvider implements BotFallbackProvider {
       'advance payment-এর transaction ID বা screenshot চাওয়া হচ্ছিল',
   };
 
-  constructor() {
-    this.apiKey = process.env.OPENAI_API_KEY ?? '';
-    // Default to gpt-4o-mini — much cheaper, sufficient for recovery replies
-    this.model = process.env.FALLBACK_AI_MODEL ?? 'gpt-4o-mini';
+  constructor(private readonly apiKeysService: ApiKeysService) {
+    this.apiKey = apiKeysService.getSync('openaiApiKey');
+    this.model = apiKeysService.getSync('fallbackAiModel') || 'gpt-4o-mini';
   }
 
   async generateReply(context: FallbackContext): Promise<FallbackResponse> {

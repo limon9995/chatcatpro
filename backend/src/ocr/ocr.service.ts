@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ApiKeysService } from '../common/api-keys.service';
 import * as Tesseract from 'tesseract.js';
 import sharp from 'sharp';
 import axios from 'axios';
@@ -40,6 +41,8 @@ export class OcrService {
     family: 4,
     rejectUnauthorized: false,
   });
+
+  constructor(private readonly apiKeysService: ApiKeysService) {}
 
   // ── Public entry point ──────────────────────────────────────────────────────
   async extractTextFromImageUrl(imageUrl: string): Promise<string> {
@@ -979,7 +982,7 @@ export class OcrService {
    * Cost: ~$0.00005 per call (Gemini 2.0 Flash).
    */
   async extractTextViaGemini(imageUrl: string): Promise<string> {
-    const apiKey = process.env.GEMINI_API_KEY ?? '';
+    const apiKey = this.apiKeysService.getSync('geminiApiKey');
     if (!apiKey) {
       this.logger.warn('[OCR/Gemini] GEMINI_API_KEY not set — skipping');
       return '';
@@ -993,7 +996,7 @@ export class OcrService {
     }
 
     const base64 = rawBuffer.toString('base64');
-    const model = process.env.VISION_MODEL ?? 'gemini-2.0-flash';
+    const model = this.apiKeysService.getSync('visionModel') || 'gemini-2.0-flash';
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
     try {

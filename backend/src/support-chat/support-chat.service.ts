@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ApiKeysService } from '../common/api-keys.service';
 
 interface ChatMessage {
   role: 'user' | 'assistant';
@@ -126,9 +127,9 @@ export class SupportChatService {
   private readonly geminiKey: string;
   private readonly openaiKey: string;
 
-  constructor() {
-    this.geminiKey = process.env.GEMINI_API_KEY ?? '';
-    this.openaiKey = process.env.OPENAI_API_KEY ?? '';
+  constructor(private readonly apiKeysService: ApiKeysService) {
+    this.geminiKey = apiKeysService.getSync('geminiApiKey');
+    this.openaiKey = apiKeysService.getSync('openaiApiKey');
   }
 
   async chat(
