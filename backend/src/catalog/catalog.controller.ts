@@ -547,9 +547,11 @@ export class CatalogController {
         customDomain: true,
         websiteUrl: true,
         websiteEnabled: true,
+        owner: { select: { isActive: true } },
       },
     });
     if (!page) return { error: 'Page not found' };
+    if ((page as any).owner?.isActive === false) return { error: 'Account is disabled' };
     if ((page as any).websiteEnabled === false) return { error: 'Website is currently unavailable' };
 
     const where: any = {

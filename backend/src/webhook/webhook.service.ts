@@ -98,13 +98,18 @@ export class WebhookService implements OnModuleDestroy {
 
     for (const entry of body.entry ?? []) {
       const rows = await this.prisma.$queryRaw<any[]>`
-        SELECT * FROM "Page" WHERE "pageId" = ${String(entry.id)} AND "isActive" = true LIMIT 1
+        SELECT p.* FROM "Page" p
+        LEFT JOIN "User" u ON u.id = p."ownerId"
+        WHERE p."pageId" = ${String(entry.id)}
+          AND p."isActive" = true
+          AND (u.id IS NULL OR u."isActive" = true)
+        LIMIT 1
       `;
       const page = rows[0] ?? null;
 
       if (!page) {
         this.logger.warn(
-          `[Webhook] Entry id=${entry.id} — no active page found`,
+          `[Webhook] Entry id=${entry.id} — no active page found (or owner account disabled)`,
         );
         continue;
       }
