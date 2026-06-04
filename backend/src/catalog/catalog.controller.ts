@@ -546,9 +546,11 @@ export class CatalogController {
         catalogViews: true,
         customDomain: true,
         websiteUrl: true,
+        websiteEnabled: true,
       },
     });
     if (!page) return { error: 'Page not found' };
+    if ((page as any).websiteEnabled === false) return { error: 'Website is currently unavailable' };
 
     const where: any = {
       pageId: page.id,

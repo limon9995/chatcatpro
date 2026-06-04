@@ -173,11 +173,11 @@ export class AdminService {
     return { success: true, isActive };
   }
 
-  async setPageWebsiteStatus(pageId: number, isActive: boolean) {
+  async setPageWebsiteStatus(pageId: number, enabled: boolean) {
     const page = await this.prisma.page.findUnique({ where: { id: pageId } });
     if (!page) throw new Error('Page not found');
-    await this.prisma.page.update({ where: { id: pageId }, data: { isActive } });
-    return { success: true, isActive };
+    await this.prisma.page.update({ where: { id: pageId }, data: { websiteEnabled: enabled } });
+    return { success: true, websiteEnabled: enabled };
   }
 
   async clientDetails(userId: string) {

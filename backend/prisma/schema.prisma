@@ -132,6 +132,7 @@ model Page {
 
   // V23: Web ordering
   webOrderEnabled Boolean @default(false) // merchant can enable direct web checkout from catalog
+  websiteEnabled  Boolean @default(true)  // admin can disable the public catalog website (bot still works)
 
   callConfirmModeOn       Boolean @default(false)
   callConfirmModeAllowed  Boolean @default(true)

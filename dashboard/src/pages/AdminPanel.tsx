@@ -39,7 +39,7 @@ const DEFAULT_FEATURE_ACCESS = Object.fromEntries(
 
 interface ClientPage {
   id: number; pageId: string; pageName: string;
-  isActive: boolean; automationOn: boolean; webOrderEnabled?: boolean;
+  isActive: boolean; automationOn: boolean; webOrderEnabled?: boolean; websiteEnabled?: boolean;
   masterPageId?: number | null;
   lastReconnectedAt?: string | null;
   previousPageId?: string | null;
@@ -978,7 +978,7 @@ export function AdminPanel({ th, onToast, onLogout }: {
                       {pg.owner?.isActive === false && (
                         <span style={{ ...th.pill, background: 'rgba(239,68,68,.15)', color: '#ef4444', fontSize: 10 }}>🚫 Account OFF</span>
                       )}
-                      {!pg.isActive && (
+                      {pg.websiteEnabled === false && (
                         <span style={{ ...th.pill, background: 'rgba(245,158,11,.15)', color: '#d97706', fontSize: 10 }}>⏸ Website OFF</span>
                       )}
                       <span style={{ fontSize: 10, color: th.muted }}>#{pg.id}</span>
@@ -1053,23 +1053,23 @@ export function AdminPanel({ th, onToast, onLogout }: {
                   style={{
                     padding: '6px 14px', borderRadius: 8, border: 'none', cursor: 'pointer',
                     fontWeight: 800, fontSize: 12, fontFamily: 'inherit',
-                    background: selectedPage.isActive ? 'rgba(245,158,11,.12)' : 'rgba(22,163,74,.12)',
-                    color: selectedPage.isActive ? '#d97706' : '#16a34a',
+                    background: selectedPage.websiteEnabled !== false ? 'rgba(245,158,11,.12)' : 'rgba(22,163,74,.12)',
+                    color: selectedPage.websiteEnabled !== false ? '#d97706' : '#16a34a',
                   }}
                   onClick={async () => {
-                    const newVal = !selectedPage.isActive;
+                    const newVal = selectedPage.websiteEnabled === false;
                     try {
                       await request(`${BASE}/pages/${selectedPage.id}/website-status`, {
                         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ isActive: newVal }),
+                        body: JSON.stringify({ enabled: newVal }),
                       });
-                      setPages(prev => prev.map(p => p.id === selectedPage.id ? { ...p, isActive: newVal } : p));
-                      setSelectedPage(prev => prev ? { ...prev, isActive: newVal } : prev);
+                      setPages(prev => prev.map(p => p.id === selectedPage.id ? { ...p, websiteEnabled: newVal } : p));
+                      setSelectedPage(prev => prev ? { ...prev, websiteEnabled: newVal } : prev);
                       onToast(newVal ? 'Website চালু করা হয়েছে' : 'Website বন্ধ করা হয়েছে', 'success');
                     } catch (e: any) { onToast(e.message, 'error'); }
                   }}
                 >
-                  {selectedPage.isActive ? '⏸ Website OFF করুন' : '▶ Website ON করুন'}
+                  {selectedPage.websiteEnabled !== false ? '⏸ Website OFF করুন' : '▶ Website ON করুন'}
                 </button>
               </div>
             </div>

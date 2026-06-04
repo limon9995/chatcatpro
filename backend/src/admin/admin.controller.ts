@@ -81,9 +81,9 @@ export class AdminController {
   @Patch('pages/:pageId/website-status')
   setWebsiteStatus(
     @Param('pageId') p: string,
-    @Body() b: { isActive: boolean },
+    @Body() b: { enabled: boolean },
   ) {
-    return this.svc.setPageWebsiteStatus(this.parsePageId(p), b.isActive);
+    return this.svc.setPageWebsiteStatus(this.parsePageId(p), b.enabled);
   }
   @Get('pages') allPages() {
     return this.svc.getAllPages();
