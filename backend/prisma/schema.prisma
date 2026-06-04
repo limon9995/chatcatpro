@@ -130,6 +130,9 @@ model Page {
   advanceNagad          String? // Nagad number shown to customer
   advancePaymentMessage String? // Custom advance payment message template (supports {{amount}}, {{bkash}}, {{nagad}}, {{currency}})
 
+  // V23: Web ordering
+  webOrderEnabled Boolean @default(false) // merchant can enable direct web checkout from catalog
+
   callConfirmModeOn       Boolean @default(false)
   callConfirmModeAllowed  Boolean @default(true)
   callMode                String  @default("MANUAL")

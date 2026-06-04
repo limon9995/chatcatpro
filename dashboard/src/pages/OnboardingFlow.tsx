@@ -9,7 +9,7 @@ interface Props {
   onSkip: () => void;
 }
 
-type OBStep = 1 | 2 | 3 | 4;
+type OBStep = 1 | 2 | 3 | 4 | 5;
 
 const CONFETTI_COLORS = ['#6366f1', '#8b5cf6', '#f59e0b', '#10b981', '#ef4444', '#3b82f6', '#ec4899', '#f97316'];
 const CONFETTI = Array.from({ length: 36 }, (_, i) => ({
@@ -26,6 +26,7 @@ const STEP_CONFIG = [
   { icon: '🏪', label: 'প্রোফাইল', mascot: 'ব্যবসার তথ্য দিন —\nবট এটি ব্যবহার করবে!' },
   { icon: '🛍️', label: 'পণ্য',     mascot: 'একটি পণ্য যোগ করুন,\nবট সেটি চিনবে!' },
   { icon: '🤖', label: 'বট',       mascot: 'বটের mode ও delivery\nচার্জ ঠিক করুন!' },
+  { icon: '💳', label: 'পেমেন্ট',  mascot: 'Payment auto-verify\nসেট করুন!' },
   { icon: '🎉', label: 'সম্পন্ন', mascot: 'দারুণ! সব ঠিক আছে!' },
 ];
 
@@ -76,7 +77,7 @@ export function OnboardingFlow({ dark, user, activePage, onComplete, onSkip }: P
     setTimeout(onSkip, 550);
   };
 
-  const progress = ((step - 1) / 3) * 100;
+  const progress = ((step - 1) / 4) * 100;
 
   return (
     <div style={{
@@ -291,7 +292,16 @@ export function OnboardingFlow({ dark, user, activePage, onComplete, onSkip }: P
               />
             )}
             {step === 4 && (
-              <Step4Complete
+              <Step4PaymentSetup
+                dark={dark} border={border} text={text} muted={muted} accent={accent}
+                activePage={activePage}
+                request={request}
+                onSaved={() => advanceStep(5)}
+                onSkip={() => advanceStep(5)}
+              />
+            )}
+            {step === 5 && (
+              <Step5Complete
                 dark={dark} text={text} muted={muted} accent={accent} accentSoft={accentSoft}
                 pageConnected={pageConnected}
                 productAdded={productAdded}
@@ -305,7 +315,7 @@ export function OnboardingFlow({ dark, user, activePage, onComplete, onSkip }: P
       </div>
 
       {/* Mascot */}
-      {step < 4 && (
+      {step < 5 && (
         <div style={{
           position: 'fixed', bottom: 24, left: 20, zIndex: 10102,
           display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 8,
@@ -914,9 +924,349 @@ function Step3BotConfig({ dark, border, text, muted, accent, activePage, onSaved
   );
 }
 
-// ─── Step 4: Celebration ──────────────────────────────────────────────────────
+// ─── Step 4: Payment Setup ────────────────────────────────────────────────────
 
-function Step4Complete({ dark, text, muted, accent, accentSoft, pageConnected, productSkipped, botSaved, onFinish }: any) {
+const PAYMENT_OPTIONS = [
+  {
+    key: 'bkash',
+    icon: '📱',
+    title: 'bKash Merchant (Direct)',
+    badge: 'RECOMMENDED',
+    badgeColor: '#22c55e',
+    description: 'আপনার bKash merchant account থাকলে — customer Transaction ID দিলে bot automatically verify করবে।',
+    flow: 'Customer TxID দেয় → Bot bKash API-তে verify করে → Order auto-confirm ✅',
+    steps: [
+      { num: '১', title: 'bKash Merchant Account খুলুন', detail: 'bKash-এর website (merchant.bkash.com) বা নিকটবর্তী bKash agent point-এ গিয়ে Merchant Account-এর জন্য আবেদন করুন। Trade License ও NID লাগবে।' },
+      { num: '২', title: 'Developer Portal-এ যান', detail: 'developer.bkash.com এ login করুন। "My Apps" → "Create New App" click করুন।' },
+      { num: '৩', title: 'App তৈরি করুন', detail: 'App Name দিন (যেমন: MyShop Payment), Environment হিসেবে "Sandbox" (test) বা "Production" (live) বেছে নিন।' },
+      { num: '৪', title: 'Credentials কপি করুন', detail: 'App তৈরি হলে App Key, App Secret পাবেন। Username ও Password হবে আপনার merchant portal login credential।' },
+    ],
+    fields: [
+      { key: 'app_key', label: 'App Key', ph: 'bKash App Key', where: 'developer.bkash.com → My Apps → আপনার App' },
+      { key: 'app_secret', label: 'App Secret', ph: 'bKash App Secret', where: 'developer.bkash.com → My Apps → আপনার App' },
+      { key: 'username', label: 'Username', ph: 'Merchant Portal Username', where: 'merchant.bkash.com এর login username' },
+      { key: 'password', label: 'Password', ph: 'Merchant Portal Password', where: 'merchant.bkash.com এর login password', secret: true },
+    ],
+  },
+  {
+    key: 'nagad',
+    icon: '💰',
+    title: 'Nagad Merchant (Direct)',
+    badge: null,
+    badgeColor: '',
+    description: 'Nagad merchant account থাকলে — customer Transaction ID দিলে bot automatically verify করবে।',
+    flow: 'Customer TxID দেয় → Bot Nagad API-তে verify করে → Order auto-confirm ✅',
+    steps: [
+      { num: '১', title: 'Nagad Merchant Account খুলুন', detail: 'nagad.com.bd/merchant অথবা Nagad helpline 16167-তে যোগাযোগ করুন। Trade License ও NID দিয়ে merchant account এর জন্য apply করুন।' },
+      { num: '২', title: 'Merchant Dashboard-এ login করুন', detail: 'merchant.nagad.com.bd এ আপনার credentials দিয়ে login করুন।' },
+      { num: '৩', title: 'API Credentials নিন', detail: '"Developer Tools" বা "API Settings" সেকশনে যান। Merchant ID এবং API Key দেখতে পাবেন।' },
+    ],
+    fields: [
+      { key: 'merchant_id', label: 'Merchant ID', ph: 'Nagad Merchant ID', where: 'merchant.nagad.com.bd → API Settings' },
+      { key: 'api_key', label: 'API Key', ph: 'Nagad API Key', where: 'merchant.nagad.com.bd → Developer Tools', secret: true },
+    ],
+  },
+  {
+    key: 'sslcommerz',
+    icon: '🌐',
+    title: 'SSLCommerz Gateway',
+    badge: 'POPULAR',
+    badgeColor: '#3b82f6',
+    description: 'নিজস্ব merchant account নেই? SSLCommerz দিয়ে বিকাশ/নগদ/কার্ড সব একসাথে accept করুন। Bot payment link পাঠাবে।',
+    flow: 'Bot payment link পাঠায় → Customer link-এ click করে pay করে (bKash/Nagad/Card) → Order auto-confirm ✅',
+    steps: [
+      { num: '১', title: 'SSLCommerz-এ account খুলুন', detail: 'sslcommerz.com → "Join Now" click করুন। ব্যবসার তথ্য, Trade License, Bank Account নম্বর দিয়ে registration করুন।' },
+      { num: '২', title: 'Verification এর জন্য অপেক্ষা করুন', detail: 'SSLCommerz টিম ২-৩ কার্যদিবসে আপনার account verify করবে। Sandbox (test) account তাৎক্ষণিক পাবেন।' },
+      { num: '৩', title: 'Merchant Panel-এ login করুন', detail: 'merchant.sslcommerz.com এ login করুন। "Stores" → আপনার Store-এ click করুন।' },
+      { num: '৪', title: 'Store ID ও Password নিন', detail: '"API Credentials" বা "Integration" section-এ Store ID এবং Store Password পাবেন।' },
+    ],
+    fields: [
+      { key: 'store_id', label: 'Store ID', ph: 'SSLCommerz Store ID', where: 'merchant.sslcommerz.com → Stores → Integration' },
+      { key: 'store_passwd', label: 'Store Password', ph: 'SSLCommerz Store Password', where: 'merchant.sslcommerz.com → Stores → Integration', secret: true },
+    ],
+  },
+];
+
+function Step4PaymentSetup({ dark, border, text, muted, accent, activePage, request, onSaved, onSkip }: any) {
+  const [selectedOption, setSelectedOption] = useState<string | null>(null);
+  const [expandedSteps, setExpandedSteps] = useState(false);
+  const [creds, setCreds] = useState<Record<string, string>>({});
+  const [sandbox, setSandbox] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState('');
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
+
+  const opt = PAYMENT_OPTIONS.find(o => o.key === selectedOption);
+
+  const handleSave = async () => {
+    if (!opt) return;
+    setSaving(true); setError(''); setTestResult(null);
+    try {
+      await request(`${API_BASE}/pages/${activePage.id}/payment-credentials`, {
+        method: 'POST',
+        body: JSON.stringify({
+          method: opt.key,
+          credentials: { ...creds, sandbox: sandbox ? 'true' : 'false' },
+          isActive: true,
+        }),
+      });
+      setSaved(true);
+      setTimeout(onSaved, 1400);
+    } catch (e: any) {
+      setError(e?.message || 'সংযোগ সমস্যা হয়েছে।');
+    } finally { setSaving(false); }
+  };
+
+  const handleTest = async () => {
+    if (!opt) return;
+    setTesting(true); setTestResult(null); setError('');
+    try {
+      // Save first, then test
+      await request(`${API_BASE}/pages/${activePage.id}/payment-credentials`, {
+        method: 'POST',
+        body: JSON.stringify({
+          method: opt.key,
+          credentials: { ...creds, sandbox: sandbox ? 'true' : 'false' },
+          isActive: true,
+        }),
+      });
+      const r = await request(`${API_BASE}/pages/${activePage.id}/payment-credentials/${opt.key}/test`, { method: 'POST' });
+      setTestResult({ ok: r.ok, message: r.message });
+    } catch (e: any) {
+      setTestResult({ ok: false, message: e?.message || 'Test failed' });
+    } finally { setTesting(false); }
+  };
+
+  const inp = (focused: boolean): React.CSSProperties => inputStyle(dark, border, accent, text, focused);
+  const [focusMap, setFocusMap] = useState<Record<string, boolean>>({});
+
+  if (saved) {
+    return (
+      <div style={{ textAlign: 'center', padding: '20px 0' }}>
+        <div style={{ fontSize: 52, marginBottom: 16, animation: 'ob-check-bounce 500ms cubic-bezier(0.34,1.56,0.64,1) both' }}>✅</div>
+        <h3 style={{ fontSize: 20, fontWeight: 900, color: text, marginBottom: 8 }}>Payment Setup সম্পন্ন!</h3>
+        <p style={{ color: muted, fontSize: 14 }}>এখন থেকে payment automatically verify হবে।</p>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div style={{ fontSize: 32, marginBottom: 10 }}>💳</div>
+      <h2 style={{ fontSize: 22, fontWeight: 900, color: text, margin: '0 0 6px', letterSpacing: -0.5 }}>
+        Payment Auto-Verification
+      </h2>
+      <p style={{ color: muted, fontSize: 13.5, marginBottom: 22, lineHeight: 1.65 }}>
+        Customer payment করলে bot automatically verify করে order confirm করবে। কোনো manual check লাগবে না।
+      </p>
+
+      {/* Option cards */}
+      {!selectedOption && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, animation: 'ob-field-in 350ms ease both' }}>
+          {PAYMENT_OPTIONS.map((o, i) => (
+            <div
+              key={o.key}
+              onClick={() => setSelectedOption(o.key)}
+              style={{
+                borderRadius: 14, padding: '16px 18px', cursor: 'pointer',
+                border: `2px solid ${border}`,
+                background: dark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
+                transition: 'all 200ms cubic-bezier(0.34,1.56,0.64,1)',
+                animation: `ob-field-in 350ms ease ${i * 80}ms both`,
+              }}
+              onMouseEnter={e => {
+                (e.currentTarget as HTMLDivElement).style.borderColor = accent;
+                (e.currentTarget as HTMLDivElement).style.background = dark ? 'rgba(99,102,241,0.1)' : 'rgba(99,102,241,0.06)';
+                (e.currentTarget as HTMLDivElement).style.transform = 'translateX(4px)';
+              }}
+              onMouseLeave={e => {
+                (e.currentTarget as HTMLDivElement).style.borderColor = border;
+                (e.currentTarget as HTMLDivElement).style.background = dark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)';
+                (e.currentTarget as HTMLDivElement).style.transform = 'translateX(0)';
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                <span style={{ fontSize: 24 }}>{o.icon}</span>
+                <span style={{ fontWeight: 800, color: text, fontSize: 15 }}>{o.title}</span>
+                {o.badge && (
+                  <span style={{
+                    fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20,
+                    background: o.badgeColor + '20', color: o.badgeColor, letterSpacing: 0.5,
+                  }}>{o.badge}</span>
+                )}
+              </div>
+              <p style={{ color: muted, fontSize: 13, lineHeight: 1.55, margin: 0 }}>{o.description}</p>
+              <div style={{ marginTop: 8, fontSize: 12, color: accent, fontWeight: 600 }}>→ {o.flow}</div>
+            </div>
+          ))}
+          <SkipBtn onClick={onSkip} muted={muted} />
+        </div>
+      )}
+
+      {/* Selected option detail */}
+      {selectedOption && opt && (
+        <div style={{ animation: 'ob-in-fwd 300ms cubic-bezier(0,0,0.2,1) both' }}>
+          {/* Back button */}
+          <button onClick={() => { setSelectedOption(null); setCreds({}); setTestResult(null); setError(''); }} style={{
+            background: 'none', border: 'none', color: accent, cursor: 'pointer',
+            fontSize: 13, fontWeight: 700, padding: 0, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 4,
+          }}>← পিছনে যান</button>
+
+          {/* Header */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+            <span style={{ fontSize: 28 }}>{opt.icon}</span>
+            <div>
+              <div style={{ fontWeight: 800, color: text, fontSize: 16 }}>{opt.title}</div>
+              <div style={{ color: muted, fontSize: 12.5, marginTop: 2 }}>{opt.flow}</div>
+            </div>
+          </div>
+
+          {/* Step-by-step instructions */}
+          <div style={{
+            borderRadius: 12, overflow: 'hidden',
+            border: `1px solid ${dark ? 'rgba(99,102,241,0.2)' : 'rgba(99,102,241,0.15)'}`,
+            marginBottom: 18,
+          }}>
+            <div
+              onClick={() => setExpandedSteps(!expandedSteps)}
+              style={{
+                padding: '12px 16px', cursor: 'pointer',
+                background: dark ? 'rgba(99,102,241,0.12)' : 'rgba(99,102,241,0.08)',
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              }}
+            >
+              <span style={{ fontWeight: 700, color: accent, fontSize: 13.5 }}>
+                📋 Credentials কোথায় পাবেন? Step-by-step দেখুন
+              </span>
+              <span style={{ color: accent, fontSize: 16, transition: 'transform 200ms', transform: expandedSteps ? 'rotate(180deg)' : 'rotate(0)' }}>▾</span>
+            </div>
+            {expandedSteps && (
+              <div style={{ padding: '0 16px 16px', background: dark ? 'rgba(99,102,241,0.05)' : 'rgba(99,102,241,0.03)' }}>
+                {opt.steps.map((s, i) => (
+                  <div key={i} style={{
+                    display: 'flex', gap: 12, marginTop: 14,
+                    animation: `ob-field-in 250ms ease ${i * 60}ms both`,
+                  }}>
+                    <div style={{
+                      width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+                      background: 'linear-gradient(135deg,#6366f1,#8b5cf6)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      color: '#fff', fontWeight: 800, fontSize: 12,
+                    }}>{s.num}</div>
+                    <div>
+                      <div style={{ fontWeight: 700, color: text, fontSize: 13.5, marginBottom: 3 }}>{s.title}</div>
+                      <div style={{ color: muted, fontSize: 12.5, lineHeight: 1.6 }}>{s.detail}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Credential fields */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {opt.fields.map((f, i) => (
+              <div key={f.key} style={{ animation: `ob-field-in 300ms ease ${i * 60}ms both` }}>
+                <FieldLabel muted={muted}>
+                  {f.label}
+                  {(f as any).where && (
+                    <span style={{ fontWeight: 400, fontSize: 11, marginLeft: 6, color: accent }}>
+                      → {(f as any).where}
+                    </span>
+                  )}
+                </FieldLabel>
+                <input
+                  className="ob-input"
+                  type={(f as any).secret ? 'password' : 'text'}
+                  placeholder={f.ph}
+                  value={creds[f.key] ?? ''}
+                  onChange={e => setCreds(p => ({ ...p, [f.key]: e.target.value }))}
+                  onFocus={() => setFocusMap(p => ({ ...p, [f.key]: true }))}
+                  onBlur={() => setFocusMap(p => ({ ...p, [f.key]: false }))}
+                  style={inp(!!focusMap[f.key])}
+                />
+              </div>
+            ))}
+
+            {/* Sandbox toggle */}
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', padding: '10px 14px', borderRadius: 11, border: `1.5px solid ${border}`, marginTop: 2 }}>
+              <div onClick={() => setSandbox(!sandbox)} style={{
+                width: 44, height: 24, borderRadius: 12, cursor: 'pointer', position: 'relative', flexShrink: 0,
+                background: !sandbox ? 'linear-gradient(135deg,#6366f1,#8b5cf6)' : (dark ? '#333' : '#d1d5db'),
+                transition: 'background 300ms',
+              }}>
+                <div style={{
+                  position: 'absolute', top: 3, left: !sandbox ? 22 : 3,
+                  width: 18, height: 18, borderRadius: '50%', background: '#fff',
+                  boxShadow: '0 1px 4px rgba(0,0,0,0.3)',
+                  transition: 'left 240ms cubic-bezier(0.34,1.56,0.64,1)',
+                }} />
+              </div>
+              <div>
+                <div style={{ fontWeight: 700, color: text, fontSize: 13 }}>
+                  {sandbox ? '🧪 Sandbox Mode (Test)' : '🚀 Live Mode (Production)'}
+                </div>
+                <div style={{ color: muted, fontSize: 11.5, marginTop: 1 }}>
+                  {sandbox ? 'প্রথমে test করুন, সব ঠিক হলে Live-এ switch করুন' : 'Real payment এখন process হবে'}
+                </div>
+              </div>
+            </label>
+
+            {/* Test result */}
+            {testResult && (
+              <div style={{
+                padding: '10px 14px', borderRadius: 10, fontSize: 13, fontWeight: 600,
+                background: testResult.ok ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)',
+                color: testResult.ok ? '#22c55e' : '#ef4444',
+                border: `1px solid ${testResult.ok ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'}`,
+                animation: 'ob-fade-up 200ms ease',
+              }}>
+                {testResult.ok ? '✓' : '✗'} {testResult.message}
+              </div>
+            )}
+
+            {error && (
+              <div style={{ color: '#ef4444', fontSize: 13, background: 'rgba(239,68,68,0.08)', padding: '8px 12px', borderRadius: 8 }}>
+                ⚠️ {error}
+              </div>
+            )}
+
+            {/* Buttons */}
+            <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+              <button
+                onClick={handleTest}
+                disabled={testing || Object.keys(creds).length === 0}
+                style={{
+                  flex: 1, padding: '12px', borderRadius: 12, cursor: Object.keys(creds).length === 0 ? 'not-allowed' : 'pointer',
+                  background: 'none', border: `1.5px solid ${accent}`, color: accent,
+                  fontWeight: 700, fontSize: 14, opacity: Object.keys(creds).length === 0 ? 0.4 : 1,
+                  transition: 'opacity 200ms',
+                }}
+              >
+                {testing ? '🔄 Testing…' : '🔌 Test করুন'}
+              </button>
+              <PrimaryBtn
+                onClick={handleSave}
+                disabled={Object.keys(creds).length === 0}
+                loading={saving}
+              >
+                💾 Save ও পরবর্তী →
+              </PrimaryBtn>
+            </div>
+          </div>
+
+          <SkipBtn onClick={onSkip} muted={muted} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Step 5: Celebration ──────────────────────────────────────────────────────
+
+function Step5Complete({ dark, text, muted, accent, accentSoft, pageConnected, productSkipped, botSaved, onFinish }: any) {
   const badges = [
     { label: pageConnected ? '✅ ব্যবসার প্রোফাইল সেভ হয়েছে' : '⚠️ ব্যবসার প্রোফাইল এখনো সেভ হয়নি', done: pageConnected, delay: '1.5s' },
     { label: productSkipped ? '⚠️ পণ্য এখনো যোগ হয়নি' : '✅ পণ্য যোগ করা হয়েছে', done: !productSkipped, delay: '1.75s' },
