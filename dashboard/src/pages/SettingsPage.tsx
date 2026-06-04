@@ -1262,46 +1262,48 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect }: {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <Label text="Business সম্পর্কে বিস্তারিত তথ্য" hint="আপনার business-এর নাম, কী সেবা দেন, যোগাযোগ, ঠিকানা, সময়সূচি, FAQ — সব লিখুন। এই তথ্য থেকে AI customer-দের reply করবে।" />
 
-                {/* ChatCat service info quick-add */}
+                {/* ChatCat service info smart-merge */}
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   <button
                     style={{ ...th.btnPrimary, fontSize: 11.5, padding: '6px 12px' }}
                     onClick={() => {
-                      if (s.businessInfo.includes('## ChatCat — আমাদের Service ও Pricing')) return;
-                      const chatcatTemplate = `## ChatCat — আমাদের Service ও Pricing
+                      // Each section has a unique marker so only changed parts get replaced
+                      const sections: Record<string, string> = {
+                        'chatcat-intro': `আমরা Facebook Messenger automation সেবা দিই। আপনার page এর bot automatically order নেবে, reply করবে, courier booking করবে।`,
+                        'platform-fee': `## Platform Fee\nআলোচনা সাপেক্ষ — আপনার পেজের size ও ব্যবহার অনুযায়ী admin এর সাথে কথা বলে deal হবে।`,
+                        'ai-pricing': `## AI Usage Pricing (Pay-as-you-go)\n- Keyword reply: ৳০.০২/message\n- AI text reply: ৳০.০৫/message\n- AI SmartBot: ৳০.০৮/message\n- Customer image (Vision AI): ৳০.২০/image\n- OCR scan: ৳০.০২–০.০৫\n- Voice note (STT): ৳১.০০/voice\n- Broadcast: ৳০.০৫/message\n- Subscriber notification: ৳০.১০/message\n- Memo print: ৳০.১০`,
+                        'free-features': `## বিনামূল্যে\nCourier booking (Pathao, Steadfast, RedX, Paperfly), Accounting, CRM, Analytics, Order management`,
+                        'subscriber-feature': `## Special Feature: Subscriber Notification\nOrder complete/cancel হলে bot customer কে subscribe করতে বলে।\nSubscribed customer দের যেকোনো সময় নতুন পণ্যের message পাঠানো যায়।\nFacebook Ad ছাড়া — মাত্র ৳০.১০/message। ১০০০ জন = মাত্র ৳১০০।`,
+                        'payment-trial': `## Payment ও Trial\n- Payment: bKash, Nagad, Rocket, Bank transfer\n- ৭ দিন সম্পূর্ণ free trial — কোনো credit card লাগে না\n- Contact: WhatsApp — wa.me/8801720450797`,
+                      };
 
-আমরা Facebook Messenger automation সেবা দিই। আপনার page এর bot automatically order নেবে, reply করবে, courier booking করবে।
+                      let text = s.businessInfo;
+                      let changed = false;
 
-## Platform Fee
-আলোচনা সাপেক্ষ — আপনার পেজের size ও ব্যবহার অনুযায়ী admin এর সাথে কথা বলে deal হবে।
+                      for (const [key, newContent] of Object.entries(sections)) {
+                        const start = `<!--CC:${key}-->`;
+                        const end = `<!--/CC:${key}-->`;
+                        const block = `${start}\n${newContent}\n${end}`;
+                        const si = text.indexOf(start);
+                        const ei = text.indexOf(end);
+                        if (si !== -1 && ei !== -1) {
+                          // Section exists — replace only if content changed
+                          const existing = text.slice(si + start.length + 1, ei - 1);
+                          if (existing.trim() !== newContent.trim()) {
+                            text = text.slice(0, si) + block + text.slice(ei + end.length);
+                            changed = true;
+                          }
+                        } else {
+                          // Section missing — append it
+                          text = text.trim() + (text.trim() ? '\n\n' : '') + block;
+                          changed = true;
+                        }
+                      }
 
-## AI Usage Pricing (Pay-as-you-go)
-- Keyword reply: ৳০.০২/message
-- AI text reply: ৳০.০৫/message
-- AI SmartBot: ৳০.০৮/message
-- Customer image: ৳০.২০/image
-- Voice note: ৳১.০০/voice
-- Broadcast: ৳০.০৫/message
-- Subscriber notification: ৳০.১০/message
-- Memo print: ৳০.১০
-
-## বিনামূল্যে
-Courier booking, Accounting, CRM, Analytics, Order management
-
-## Special Feature: Subscriber Notification
-Order পরে customer subscribe করলে যেকোনো সময় নতুন পণ্যের message পাঠানো যাবে।
-Facebook Ad ছাড়া — মাত্র ৳০.১০/message।
-
-## Payment ও Trial
-- Payment: bKash, Nagad, Rocket, Bank
-- ৭ দিন সম্পূর্ণ free trial
-- Contact: WhatsApp — wa.me/8801720450797`;
-                      const existing = s.businessInfo.trim();
-                      const combined = existing ? existing + '\n\n' + chatcatTemplate : chatcatTemplate;
-                      setS(p => ({ ...p, businessInfo: combined.slice(0, 5000) }));
+                      if (changed) setS(p => ({ ...p, businessInfo: text.slice(0, 5000) }));
                     }}
                   >
-                    ➕ ChatCat Service Info Add করুন
+                    🔄 ChatCat Info Sync করুন
                   </button>
                   <button
                     style={{ ...th.btnGhost, fontSize: 11.5, padding: '6px 12px', color: '#ef4444', borderColor: 'rgba(239,68,68,0.3)' }}
@@ -1309,6 +1311,9 @@ Facebook Ad ছাড়া — মাত্র ৳০.১০/message।
                   >
                     🗑️ Clear
                   </button>
+                </div>
+                <div style={{ fontSize: 11, color: th.muted, marginTop: -4 }}>
+                  💡 "Sync" button — শুধু changed বা নতুন section update করে। আপনার custom লেখা অক্ষুণ্ণ থাকে।
                 </div>
 
                 <textarea
@@ -1474,54 +1479,36 @@ Facebook Ad ছাড়া — মাত্র ৳০.১০/message।
               <button
                 style={{ ...th.btnPrimary, fontSize: 12, padding: '7px 14px' }}
                 onClick={() => {
-                  if (s.knowledgeText.includes('## ChatCat Service Information')) return;
-                  const chatcatInfo = `## ChatCat Service Information
-
-প্ল্যাটফর্ম ফি: আলোচনা সাপেক্ষ — পেজের size ও ব্যবহার অনুযায়ী admin এর সাথে deal হবে।
-
-## AI Usage Pricing (Wallet থেকে কাটে)
-- Keyword/Template reply: ৳০.০২ per message (কোনো AI নেই)
-- AI text reply: ৳০.০৫ per message
-- AI SmartBot reply: ৳০.০৮ per message
-- Customer image (Vision AI): ৳০.২০ per image
-- OCR — Local scan: ৳০.০২ per scan
-- OCR — AI Gemini: ৳০.০৫ per scan
-- Voice note (STT/Whisper): ৳১.০০ per voice note
-- Product auto-analyze: ৳০.২০ per product
-- Broadcast message: ৳০.০৫ per message
-- Subscriber notification: ৳০.১০ per message
-- Comment reply: ৳০.০৫ per reply
-- Memo/Invoice print: ৳০.১০ per memo
-
-## বিনামূল্যে (Wallet থেকে কাটে না)
-- Courier booking (Pathao, Steadfast, RedX, Paperfly)
-- Order management ও tracking
-- Accounting ও profit calculation
-- CRM (customer database)
-- Analytics ও reports
-- Product catalog
-
-## Real Example
-১টি customer image + ৫টি AI reply = ৳০.২০ + (৫ × ৳০.০৮) = মাত্র ৳০.৬০
-
-## Subscriber Notification Feature
-Order complete বা cancel হলে bot customer কে subscribe করতে বলে।
-Subscribed customer দের যেকোনো সময় নতুন পণ্যের message পাঠানো যায়।
-Facebook Ad ছাড়াই — মাত্র ৳০.১০/message।
-১০০০ subscriber = ৳১০০ (Facebook Ad এ লাগত ৳৫০০–২০০০)
-
-## Payment ও Billing
-- Wallet recharge: bKash, Nagad, Rocket, Bank
-- ৭ দিন সম্পূর্ণ free trial — কোনো credit card লাগে না
-- Balance শেষ হলে AI বন্ধ হবে — courier ও order নেওয়া চলবে`;
-                  const existing = s.knowledgeText.trim();
-                  const newText = existing
-                    ? existing + '\n\n' + chatcatInfo
-                    : chatcatInfo;
-                  setS(p => ({ ...p, knowledgeText: newText.slice(0, 3000) }));
+                  const sections: Record<string, string> = {
+                    'cc-pricing': `## ChatCat AI Pricing (Wallet)\n- Keyword reply: ৳০.০২/msg\n- AI text reply: ৳০.০৫/msg\n- AI SmartBot: ৳০.০৮/msg\n- Customer image (Vision AI): ৳০.২০/image\n- OCR: ৳০.০২–০.০৫/scan\n- Voice note (STT): ৳১.০০/voice\n- Product analyze: ৳০.২০\n- Broadcast: ৳০.০৫/msg\n- Subscriber notification: ৳০.১০/msg\n- Comment reply: ৳০.০৫\n- Memo print: ৳০.১০`,
+                    'cc-free': `## বিনামূল্যে\nCourier (Pathao/Steadfast/RedX/Paperfly), Order management, Accounting, CRM, Analytics, Product catalog`,
+                    'cc-example': `## Real Example\n১ image + ৫ AI reply = ৳০.২০ + (৫×৳০.০৮) = মাত্র ৳০.৬০`,
+                    'cc-subscriber': `## Subscriber Notification\nOrder পরে subscribe করা customer দের যেকোনো সময় নতুন পণ্যের message — ৳০.১০/msg। Facebook Ad ছাড়া।`,
+                    'cc-payment': `## Payment ও Trial\nbKash, Nagad, Rocket, Bank | ৭ দিন free trial | Balance শেষ হলে AI বন্ধ, courier চলবে`,
+                  };
+                  let text = s.knowledgeText;
+                  let changed = false;
+                  for (const [key, newContent] of Object.entries(sections)) {
+                    const start = `<!--CC:${key}-->`;
+                    const end = `<!--/CC:${key}-->`;
+                    const block = `${start}\n${newContent}\n${end}`;
+                    const si = text.indexOf(start);
+                    const ei = text.indexOf(end);
+                    if (si !== -1 && ei !== -1) {
+                      const existing = text.slice(si + start.length + 1, ei - 1);
+                      if (existing.trim() !== newContent.trim()) {
+                        text = text.slice(0, si) + block + text.slice(ei + end.length);
+                        changed = true;
+                      }
+                    } else {
+                      text = text.trim() + (text.trim() ? '\n\n' : '') + block;
+                      changed = true;
+                    }
+                  }
+                  if (changed) setS(p => ({ ...p, knowledgeText: text.slice(0, 3000) }));
                 }}
               >
-                ➕ ChatCat Info Knowledge এ Add করুন
+                🔄 ChatCat Info Sync করুন
               </button>
             </div>
 
