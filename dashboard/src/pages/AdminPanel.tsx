@@ -133,7 +133,21 @@ export function AdminPanel({ th, onToast, onLogout }: {
   const [walletDirectSaving, setWalletDirectSaving] = useState(false);
 
   // Pricing tab state
-  const DEFAULT_PRICING = { costPerTextMsgBdt: 0.05, costPerVoiceMsgBdt: 0.50, costPerImageBdt: 0.50, costPerImageLocalBdt: 0.30, costPerAnalyzeBdt: 0.50 };
+  const DEFAULT_PRICING = {
+    costPerKeywordReplyBdt: 0.02,
+    costPerTextMsgBdt: 0.05,
+    costPerImageBdt: 0.20,
+    costPerImageLocalBdt: 0.10,
+    costPerOcrLocalBdt: 0.02,
+    costPerOcrAiBdt: 0.05,
+    costPerVoiceMsgBdt: 1.00,
+    costPerAnalyzeBdt: 0.20,
+    costPerAiGenerateBdt: 0.10,
+    costPerBroadcastMsgBdt: 0.05,
+    costPerRecurringNotifBdt: 0.10,
+    costPerCommentReplyBdt: 0.05,
+    costPerMemoPrintBdt: 0.10,
+  };
   const [pricingForm, setPricingForm] = useState(DEFAULT_PRICING);
   const [pricingSaving, setPricingSaving] = useState(false);
 
@@ -144,6 +158,11 @@ export function AdminPanel({ th, onToast, onLogout }: {
   // Laptop AI mode state
   const [localAiMode, setLocalAiMode] = useState<'all' | 'generate_only' | 'none'>('none');
   const [laptopAiSaving, setLaptopAiSaving] = useState(false);
+
+  // Image provider order state
+  type ImageProvider = 'gemini' | 'openai' | 'fal' | 'ideogram';
+  const [imageProviderOrder, setImageProviderOrder] = useState<ImageProvider[]>(['gemini', 'openai', 'fal', 'ideogram']);
+  const [imgProviderSaving, setImgProviderSaving] = useState(false);
 
   // Secret reveal state
   const [secretUnlocked, setSecretUnlocked] = useState(false);
@@ -203,6 +222,7 @@ export function AdminPanel({ th, onToast, onLogout }: {
       setOverview(ov);
       const mode = ai?.localAiMode;
       setLocalAiMode(mode === 'all' || mode === 'generate_only' ? mode : 'none');
+      if (Array.isArray(ai?.imageProviderOrder)) setImageProviderOrder(ai.imageProviderOrder);
     }
     catch (e: any) { onToast(e.message, 'error'); }
     finally { setLoading(false); }
@@ -221,6 +241,23 @@ export function AdminPanel({ th, onToast, onLogout }: {
       onToast(msg, 'success');
     } catch (e: any) { onToast(e.message, 'error'); }
     finally { setLaptopAiSaving(false); }
+  };
+
+  const moveImageProvider = (index: number, dir: -1 | 1) => {
+    const next = [...imageProviderOrder];
+    const swap = index + dir;
+    if (swap < 0 || swap >= next.length) return;
+    [next[index], next[swap]] = [next[swap], next[index]];
+    setImageProviderOrder(next);
+  };
+
+  const saveImageProviderOrder = async () => {
+    setImgProviderSaving(true);
+    try {
+      await request(`${BASE}/laptop-ai`, { method: 'PATCH', body: JSON.stringify({ imageProviderOrder }) });
+      onToast('Image provider order সেভ হয়েছে ✅', 'success');
+    } catch (e: any) { onToast(e.message, 'error'); }
+    finally { setImgProviderSaving(false); }
   };
 
   const loadClients = useCallback(async () => {
@@ -369,11 +406,19 @@ export function AdminPanel({ th, onToast, onLogout }: {
     try {
       const data = await request<any>(`${BASE}/wallet/pricing/global`);
       if (data) setPricingForm({
-        costPerTextMsgBdt:      data.costPerTextMsgBdt      ?? DEFAULT_PRICING.costPerTextMsgBdt,
-        costPerVoiceMsgBdt:     data.costPerVoiceMsgBdt     ?? DEFAULT_PRICING.costPerVoiceMsgBdt,
-        costPerImageBdt:        data.costPerImageBdt        ?? DEFAULT_PRICING.costPerImageBdt,
-        costPerImageLocalBdt:   data.costPerImageLocalBdt   ?? DEFAULT_PRICING.costPerImageLocalBdt,
-        costPerAnalyzeBdt:      data.costPerAnalyzeBdt      ?? DEFAULT_PRICING.costPerAnalyzeBdt,
+        costPerKeywordReplyBdt:     data.costPerKeywordReplyBdt     ?? DEFAULT_PRICING.costPerKeywordReplyBdt,
+        costPerTextMsgBdt:          data.costPerTextMsgBdt          ?? DEFAULT_PRICING.costPerTextMsgBdt,
+        costPerImageBdt:            data.costPerImageBdt            ?? DEFAULT_PRICING.costPerImageBdt,
+        costPerImageLocalBdt:       data.costPerImageLocalBdt       ?? DEFAULT_PRICING.costPerImageLocalBdt,
+        costPerOcrLocalBdt:         data.costPerOcrLocalBdt         ?? DEFAULT_PRICING.costPerOcrLocalBdt,
+        costPerOcrAiBdt:            data.costPerOcrAiBdt            ?? DEFAULT_PRICING.costPerOcrAiBdt,
+        costPerVoiceMsgBdt:         data.costPerVoiceMsgBdt         ?? DEFAULT_PRICING.costPerVoiceMsgBdt,
+        costPerAnalyzeBdt:          data.costPerAnalyzeBdt          ?? DEFAULT_PRICING.costPerAnalyzeBdt,
+        costPerAiGenerateBdt:       data.costPerAiGenerateBdt       ?? DEFAULT_PRICING.costPerAiGenerateBdt,
+        costPerBroadcastMsgBdt:     data.costPerBroadcastMsgBdt     ?? DEFAULT_PRICING.costPerBroadcastMsgBdt,
+        costPerRecurringNotifBdt:   data.costPerRecurringNotifBdt   ?? DEFAULT_PRICING.costPerRecurringNotifBdt,
+        costPerCommentReplyBdt:     data.costPerCommentReplyBdt     ?? DEFAULT_PRICING.costPerCommentReplyBdt,
+        costPerMemoPrintBdt:        data.costPerMemoPrintBdt        ?? DEFAULT_PRICING.costPerMemoPrintBdt,
       });
     } catch { /* silent — fallback to defaults */ }
   }, [BASE]);
@@ -813,6 +858,50 @@ export function AdminPanel({ th, onToast, onLogout }: {
           <div style={{ fontSize: 11, color: th.muted, marginTop: 10 }}>
             Generated: {new Date(overview.generatedAt).toLocaleString()}
           </div>
+        </div>
+
+        {/* Image Provider Order */}
+        <div style={th.card}>
+          <div style={{ fontSize: 11.5, fontWeight: 800, color: th.muted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 14 }}>
+            🎨 Image Generation Provider Order
+          </div>
+          <div style={{ fontSize: 12.5, color: th.muted, marginBottom: 14 }}>
+            উপরে যেটা থাকবে সেটা আগে call হবে। সেটা fail করলে পরেরটা try করবে।
+          </div>
+          {(() => {
+            const PROVIDER_INFO: Record<string, { icon: string; name: string; desc: string; color: string }> = {
+              gemini:   { icon: '✨', name: 'Gemini Imagen 3',  desc: 'Google — Free tier available',       color: '#4285f4' },
+              openai:   { icon: '🤖', name: 'OpenAI DALL-E 3',  desc: '$0.04/image — High quality',         color: '#10a37f' },
+              fal:      { icon: '⚡', name: 'fal.ai FLUX',      desc: '$0.003/image — Fastest & cheapest',  color: '#8b5cf6' },
+              ideogram: { icon: '🖼️', name: 'Ideogram V2',      desc: '$0.08/image — Best text in image',   color: '#f59e0b' },
+            };
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
+                {imageProviderOrder.map((p, i) => {
+                  const info = PROVIDER_INFO[p];
+                  return (
+                    <div key={p} style={{ display: 'flex', alignItems: 'center', gap: 10, background: th.surface, borderRadius: 10, padding: '10px 14px', border: `1.5px solid ${i === 0 ? info.color : th.border}` }}>
+                      <span style={{ fontSize: 18, width: 28, textAlign: 'center' }}>{info.icon}</span>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ fontWeight: 700, fontSize: 13, color: th.text }}>{info.name}</span>
+                          {i === 0 && <span style={{ background: `${info.color}22`, color: info.color, fontSize: 10, fontWeight: 700, borderRadius: 10, padding: '1px 8px' }}>PRIMARY</span>}
+                        </div>
+                        <div style={{ fontSize: 11, color: th.muted, marginTop: 2 }}>{info.desc}</div>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        <button onClick={() => moveImageProvider(i, -1)} disabled={i === 0} style={{ background: 'none', border: `1px solid ${th.border}`, borderRadius: 5, cursor: i === 0 ? 'not-allowed' : 'pointer', color: th.muted, fontSize: 11, padding: '2px 8px', opacity: i === 0 ? 0.3 : 1 }}>▲</button>
+                        <button onClick={() => moveImageProvider(i, 1)} disabled={i === imageProviderOrder.length - 1} style={{ background: 'none', border: `1px solid ${th.border}`, borderRadius: 5, cursor: i === imageProviderOrder.length - 1 ? 'not-allowed' : 'pointer', color: th.muted, fontSize: 11, padding: '2px 8px', opacity: i === imageProviderOrder.length - 1 ? 0.3 : 1 }}>▼</button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
+          <button onClick={saveImageProviderOrder} disabled={imgProviderSaving} style={{ ...th.btnPrimary, opacity: imgProviderSaving ? 0.6 : 1 }}>
+            {imgProviderSaving ? 'সেভ হচ্ছে...' : '💾 Order সেভ করো'}
+          </button>
         </div>
 
         {/* Laptop AI Mode */}
@@ -3072,14 +3161,36 @@ function AdminWalletTab({ th, loading, pages, requests, reqFilter, setReqFilter,
 }
 
 // ── Admin Pricing Tab ─────────────────────────────────────────────────────────
-type PricingForm = { costPerTextMsgBdt: number; costPerVoiceMsgBdt: number; costPerImageBdt: number; costPerImageLocalBdt: number; costPerAnalyzeBdt: number };
+type PricingForm = {
+  costPerKeywordReplyBdt: number;
+  costPerTextMsgBdt: number;
+  costPerImageBdt: number;
+  costPerImageLocalBdt: number;
+  costPerOcrLocalBdt: number;
+  costPerOcrAiBdt: number;
+  costPerVoiceMsgBdt: number;
+  costPerAnalyzeBdt: number;
+  costPerAiGenerateBdt: number;
+  costPerBroadcastMsgBdt: number;
+  costPerRecurringNotifBdt: number;
+  costPerCommentReplyBdt: number;
+  costPerMemoPrintBdt: number;
+};
 
 const PRICING_FIELDS: { key: keyof PricingForm; label: string; help: string }[] = [
-  { key: 'costPerTextMsgBdt',    label: 'Text Message (৳)',       help: 'প্রতিটি AI text message reply এর charge' },
-  { key: 'costPerVoiceMsgBdt',   label: 'Voice Message (৳)',      help: 'প্রতিটি voice note STT processing এর charge' },
-  { key: 'costPerImageBdt',      label: 'Image — API (৳)',        help: 'OpenAI Vision API ব্যবহার হলে প্রতিটি customer image এর charge' },
-  { key: 'costPerImageLocalBdt', label: 'Image — Local CLIP (৳)', help: 'Local CLIP model ব্যবহার হলে প্রতিটি customer image এর charge' },
-  { key: 'costPerAnalyzeBdt',    label: 'Admin Analyze (৳)',      help: 'Admin product photo analyze এর charge' },
+  { key: 'costPerKeywordReplyBdt',   label: 'Keyword/Template Reply (৳)',    help: 'Pure keyword/rule-based reply — AI call নেই' },
+  { key: 'costPerTextMsgBdt',        label: 'AI Text Reply (৳)',             help: 'প্রতিটি AI text message reply এর charge' },
+  { key: 'costPerImageBdt',          label: 'Customer Image — Vision (৳)',   help: 'Gemini Vision API দিয়ে customer image analyze' },
+  { key: 'costPerImageLocalBdt',     label: 'Customer Image — Local (৳)',    help: 'Local CLIP model দিয়ে customer image search' },
+  { key: 'costPerOcrLocalBdt',       label: 'OCR — Local Tesseract (৳)',     help: 'Local Tesseract দিয়ে image থেকে text extract' },
+  { key: 'costPerOcrAiBdt',          label: 'OCR — AI Gemini Fallback (৳)', help: 'Gemini Flash দিয়ে OCR fallback — বেশি accurate' },
+  { key: 'costPerVoiceMsgBdt',       label: 'Voice Note STT (৳)',            help: 'OpenAI Whisper দিয়ে voice → text, actual cost ~৳0.39–0.78/msg' },
+  { key: 'costPerAnalyzeBdt',        label: 'Product Auto-Analyze (৳)',      help: 'Admin product upload এ vision analysis' },
+  { key: 'costPerAiGenerateBdt',     label: 'AI Generate (Caption/Desc) (৳)', help: 'AI দিয়ে product description বা broadcast message তৈরি' },
+  { key: 'costPerBroadcastMsgBdt',   label: 'Broadcast Message (৳)',         help: 'প্রতিটি broadcast message পাঠানোর charge' },
+  { key: 'costPerRecurringNotifBdt', label: 'Subscriber Notification (৳)',   help: 'Recurring subscriber দের offer/product broadcast — Facebook free, আমাদের charge' },
+  { key: 'costPerCommentReplyBdt',   label: 'Comment Reply (৳)',             help: 'Facebook post comment এ auto-reply' },
+  { key: 'costPerMemoPrintBdt',      label: 'Memo Print (৳)',                help: 'প্রতিটি invoice/memo print এর charge' },
 ];
 
 function AdminPricingTab({ th, form, setForm, saving, onApplyAll }: {
@@ -3148,19 +3259,27 @@ function AdminPricingTab({ th, form, setForm, saving, onApplyAll }: {
       </div>
 
       <div style={{ ...th.card }}>
-        <CardHeader th={th} title="Default Rates (Reference)" sub="System default values" />
+        <CardHeader th={th} title="Default Rates (Reference)" sub="Recommended rates — actual API cost vs charge" />
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 12 }}>
           {[
-            { label: 'Text Message', value: '৳0.05' },
-            { label: 'Voice Message', value: '৳0.50' },
-            { label: 'Image — API (OpenAI)', value: '৳0.50' },
-            { label: 'Image — Local CLIP', value: '৳0.30' },
-            { label: 'Admin Analyze', value: '৳0.50' },
-            { label: 'Uniqueness Check', value: '৳0.02 (fixed)' },
-          ].map(({ label, value }) => (
-            <div key={label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, padding: '4px 0', borderBottom: `1px solid ${th.border}` }}>
+            { label: 'Keyword Reply', value: '৳0.02', cost: '~৳0.001' },
+            { label: 'AI Text Reply', value: '৳0.05', cost: '~৳0.018' },
+            { label: 'Customer Image (Vision)', value: '৳0.20', cost: '~৳0.052' },
+            { label: 'OCR — Local', value: '৳0.02', cost: '~৳0.001' },
+            { label: 'OCR — AI Gemini', value: '৳0.05', cost: '~৳0.006' },
+            { label: 'Voice Note (STT)', value: '৳1.00', cost: '~৳0.39–0.78 ⚠️' },
+            { label: 'Product Analyze', value: '৳0.20', cost: '~৳0.052' },
+            { label: 'Broadcast/msg', value: '৳0.05', cost: '~৳0' },
+            { label: 'Subscriber Notif', value: '৳0.10', cost: '~৳0' },
+            { label: 'Comment Reply', value: '৳0.05', cost: '~৳0.018' },
+            { label: 'Memo Print', value: '৳0.10', cost: '~৳0.001' },
+          ].map(({ label, value, cost }) => (
+            <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12.5, padding: '4px 0', borderBottom: `1px solid ${th.border}` }}>
               <span style={{ color: th.muted }}>{label}</span>
-              <span style={{ color: th.text, fontWeight: 600 }}>{value}</span>
+              <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <span style={{ color: th.muted, fontSize: 11 }}>cost: {cost}</span>
+                <span style={{ color: th.text, fontWeight: 700 }}>{value}</span>
+              </span>
             </div>
           ))}
         </div>

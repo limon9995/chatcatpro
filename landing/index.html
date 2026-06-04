@@ -1106,108 +1106,127 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
 <section class="section" id="pricing">
   <div style="max-width:1100px;margin:0 auto;text-align:center">
     <span class="section-label">Pricing</span>
-    <h2 class="section-title">সহজ pricing,<br>কোনো hidden charge নেই</h2>
-    <p class="section-sub" style="margin:0 auto 28px">Fixed monthly fee + actual usage অনুযায়ী pay। বেশি order হলে বেশি pay করবেন না — শুধু AI ব্যবহার হলেই charge।</p>
+    <h2 class="section-title">সম্পূর্ণ Pay-as-you-go,<br>কোনো hidden charge নেই</h2>
+    <p class="section-sub" style="margin:0 auto 28px">শুধু যা ব্যবহার করবেন তার charge। বেশি order হলে বেশি pay না — শুধু AI use করলেই charge।</p>
 
     <!-- ── 90 poysha banner ── -->
     <div style="text-align:center;padding:18px 28px;border-radius:14px;background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.25);margin-bottom:36px;display:inline-block">
-      <div style="font-size:24px;font-weight:900;color:#34d399">মাত্র ৯০ পয়সায় ১টি অর্ডার</div>
-      <div style="font-size:13px;color:var(--muted);margin-top:6px">১টি customer image + ৫টি AI reply — সব মিলিয়ে মাত্র ৮০ পয়সা</div>
+      <div style="font-size:24px;font-weight:900;color:#34d399">মাত্র ৬০–৯০ পয়সায় ১টি পূর্ণ customer interaction</div>
+      <div style="font-size:13px;color:var(--muted);margin-top:6px">১টি customer image + ৫টি AI reply — সব মিলিয়ে মাত্র ৬০–৮০ পয়সা</div>
     </div>
 
-    <!-- ── How it works ── -->
+    <!-- ── Two column: Platform Fee + Wallet ── -->
     <div class="pricing-grid-2" style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:28px;text-align:left">
 
-      <!-- Step 1: Base fee -->
+      <!-- Platform Fee card -->
       <div class="pricing-card featured" style="padding:32px">
         <div style="position:absolute;top:-60px;right:-60px;width:220px;height:220px;background:radial-gradient(circle,rgba(79,110,247,.16),transparent 70%);pointer-events:none"></div>
         <div class="badge-popular">① Monthly Platform Fee</div>
-        <div class="pricing-price" style="margin-top:12px">৳৬৯৯<span style="font-size:17px;font-weight:500;color:var(--muted)">/মাস</span></div>
-        <div class="pricing-period">প্রতি Facebook Page এর জন্য</div>
-        <ul class="pricing-features">
+        <div style="margin-top:16px;margin-bottom:6px">
+          <div style="font-size:28px;font-weight:900;color:var(--text)">আলোচনা সাপেক্ষ</div>
+          <div style="font-size:13px;color:var(--muted);margin-top:4px">পেজের size ও ব্যবহার অনুযায়ী admin এর সাথে কথা বলে deal হবে</div>
+        </div>
+        <ul class="pricing-features" style="margin-top:20px">
           <li>AI Bot Automation — ২৪/৭ automatic reply</li>
           <li>Voice Message transcription — audio থেকে text</li>
           <li>Image recognition — customer photo থেকে product search</li>
-          <li>Memo / Invoice generation + printing</li>
+          <li>OCR — screenshot থেকে product code detect</li>
+          <li>🔔 Subscriber Notification — order পরে auto subscribe</li>
           <li>CRM, Orders, Broadcast, Follow-up</li>
           <li>Courier Integration (Pathao, Steadfast, RedX, Paperfly)</li>
-          <li>Full Accounting + Product Catalog</li>
-          <li>Memo / Invoice generation</li>
+          <li>Full Accounting + Product Catalog + Memo/Invoice</li>
         </ul>
+        <a href="#contact" class="pricing-btn primary" style="margin-top:20px">Admin এর সাথে কথা বলুন →</a>
       </div>
 
-      <!-- Step 2: Wallet -->
+      <!-- Wallet / Pay-as-you-go card -->
       <div class="pricing-card" style="padding:32px">
-        <div class="badge-popular" style="background:rgba(16,185,129,.12);color:#34d399;border-color:rgba(16,185,129,.3)">② Prepaid AI Wallet</div>
-        <div class="pricing-price" style="margin-top:12px;font-size:36px">Pay-as-<br>you-go</div>
-        <div class="pricing-period" style="margin-bottom:24px">শুধু actual AI usage এর জন্য</div>
+        <div class="badge-popular" style="background:rgba(16,185,129,.12);color:#34d399;border-color:rgba(16,185,129,.3)">② Prepaid AI Wallet — Pay-as-you-go</div>
+        <div style="margin-top:12px;margin-bottom:20px;font-size:12px;color:var(--muted);line-height:1.6">শুধু actual AI usage এর জন্য। Wallet recharge করুন — balance শেষ না হলে charge নেই।</div>
 
         <!-- Usage pricing table -->
-        <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:28px">
-          <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-radius:10px;background:rgba(255,255,255,.04);border:1px solid var(--border)">
+        <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px">
+
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;border-radius:9px;background:rgba(255,255,255,.04);border:1px solid var(--border)">
             <div>
-              <div style="font-size:13px;font-weight:600">⚡ Keyword / Template Reply</div>
-              <div style="font-size:11px;color:var(--muted)">Set করা reply — bot automatic পাঠায়</div>
+              <div style="font-size:12.5px;font-weight:600">⚡ Keyword / Template Reply</div>
+              <div style="font-size:10.5px;color:var(--muted)">Set করা reply — no AI</div>
             </div>
             <div style="text-align:right;flex-shrink:0">
-              <div style="font-size:16px;font-weight:900;color:var(--green)">৳০.০২</div>
-              <div style="font-size:10px;color:var(--muted)">per message</div>
+              <div style="font-size:15px;font-weight:900;color:var(--green)">৳০.০২</div>
+              <div style="font-size:10px;color:var(--muted)">/message</div>
             </div>
           </div>
-          <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-radius:10px;background:rgba(79,110,247,.07);border:1px solid rgba(79,110,247,.22)">
+
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;border-radius:9px;background:rgba(79,110,247,.07);border:1px solid rgba(79,110,247,.22)">
             <div>
-              <div style="font-size:13px;font-weight:600">🤖 AI Bot Reply</div>
-              <div style="font-size:11px;color:var(--muted)">Gemini AI — keyword থেকে full SmartBot পর্যন্ত</div>
+              <div style="font-size:12.5px;font-weight:600">🤖 AI Bot / SmartBot Reply</div>
+              <div style="font-size:10.5px;color:var(--muted)">Gemini AI — intent থেকে SmartBot</div>
             </div>
             <div style="text-align:right;flex-shrink:0">
-              <div style="font-size:15px;font-weight:900;color:#A5BEFF">৳০.০৪–০.০৮</div>
-              <div style="font-size:10px;color:var(--muted)">per message</div>
+              <div style="font-size:14px;font-weight:900;color:#A5BEFF">৳০.০৫–০.০৮</div>
+              <div style="font-size:10px;color:var(--muted)">/message</div>
             </div>
           </div>
-          <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-radius:10px;background:rgba(255,255,255,.04);border:1px solid var(--border)">
+
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;border-radius:9px;background:rgba(255,255,255,.04);border:1px solid var(--border)">
             <div>
-              <div style="font-size:13px;font-weight:600">🎙️ Voice Message (STT)</div>
-              <div style="font-size:11px;color:var(--muted)">AI — audio থেকে text convert</div>
+              <div style="font-size:12.5px;font-weight:600">🖼️ Customer Image (Vision AI)</div>
+              <div style="font-size:10.5px;color:var(--muted)">Photo থেকে product match</div>
             </div>
             <div style="text-align:right;flex-shrink:0">
-              <div style="font-size:16px;font-weight:900;color:var(--green)">৳০.৫০</div>
-              <div style="font-size:10px;color:var(--muted)">per voice note</div>
+              <div style="font-size:15px;font-weight:900;color:var(--green)">৳০.২০</div>
+              <div style="font-size:10px;color:var(--muted)">/image</div>
             </div>
           </div>
-          <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-radius:10px;background:rgba(255,255,255,.04);border:1px solid var(--border)">
+
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;border-radius:9px;background:rgba(255,255,255,.04);border:1px solid var(--border)">
             <div>
-              <div style="font-size:13px;font-weight:600">🖼️ Customer Image (Gemini Vision)</div>
-              <div style="font-size:11px;color:var(--muted)">Customer photo থেকে product match</div>
+              <div style="font-size:12.5px;font-weight:600">🔍 OCR (Text from image)</div>
+              <div style="font-size:10.5px;color:var(--muted)">Local: ৳০.০২ | AI Fallback: ৳০.০৫</div>
             </div>
             <div style="text-align:right;flex-shrink:0">
-              <div style="font-size:16px;font-weight:900;color:var(--green)">৳০.২০</div>
-              <div style="font-size:10px;color:var(--muted)">per image</div>
+              <div style="font-size:15px;font-weight:900;color:var(--green)">৳০.০২</div>
+              <div style="font-size:10px;color:var(--muted)">/scan</div>
             </div>
           </div>
-          <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-radius:10px;background:rgba(255,255,255,.04);border:1px solid var(--border)">
+
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;border-radius:9px;background:rgba(255,255,255,.04);border:1px solid var(--border)">
             <div>
-              <div style="font-size:13px;font-weight:600">📦 Product Auto-Analyze</div>
-              <div style="font-size:11px;color:var(--muted)">Admin product upload — AI tag generation</div>
+              <div style="font-size:12.5px;font-weight:600">🎙️ Voice Message (STT)</div>
+              <div style="font-size:10.5px;color:var(--muted)">Audio → text, OpenAI Whisper</div>
             </div>
             <div style="text-align:right;flex-shrink:0">
-              <div style="font-size:16px;font-weight:900;color:var(--green)">৳০.২০</div>
-              <div style="font-size:10px;color:var(--muted)">per product</div>
+              <div style="font-size:15px;font-weight:900;color:var(--green)">৳১.০০</div>
+              <div style="font-size:10px;color:var(--muted)">/voice note</div>
             </div>
           </div>
-          <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-radius:10px;background:rgba(255,255,255,.04);border:1px solid var(--border)">
+
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;border-radius:9px;background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.2)">
             <div>
-              <div style="font-size:13px;font-weight:600">🧾 Memo / Invoice Print</div>
-              <div style="font-size:11px;color:var(--muted)">প্রতি ১০টি নতুন memo — একই memo বারবার free</div>
+              <div style="font-size:12.5px;font-weight:600">🔔 Subscriber Notification</div>
+              <div style="font-size:10.5px;color:var(--muted)">Order পরে subscribed customer — Facebook Ad ছাড়া!</div>
             </div>
             <div style="text-align:right;flex-shrink:0">
-              <div style="font-size:16px;font-weight:900;color:var(--green)">৳১.০০</div>
-              <div style="font-size:10px;color:var(--muted)">per 10 memos</div>
+              <div style="font-size:15px;font-weight:900;color:#34d399">৳০.১০</div>
+              <div style="font-size:10px;color:var(--muted)">/message</div>
             </div>
           </div>
+
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;border-radius:9px;background:rgba(255,255,255,.04);border:1px solid var(--border)">
+            <div>
+              <div style="font-size:12.5px;font-weight:600">📦 Product Analyze + 🧾 Memo + 📣 Broadcast</div>
+              <div style="font-size:10.5px;color:var(--muted)">৳০.২০ / ৳০.১০ / ৳০.০৫</div>
+            </div>
+            <div style="text-align:right;flex-shrink:0">
+              <div style="font-size:12px;font-weight:700;color:var(--green)">see rates</div>
+            </div>
+          </div>
+
         </div>
 
-        <div style="font-size:12px;color:var(--muted);line-height:1.6">
-          ✦ Dashboard থেকে bKash/Nagad-এ recharge করুন। Balance শেষ হলে AI বন্ধ — order নেওয়া, OCR, courier সব চলবে। Memo print-এও wallet লাগবে।
+        <div style="font-size:11.5px;color:var(--muted);line-height:1.7;padding:10px 12px;border-radius:8px;background:rgba(255,255,255,.03);border:1px solid var(--border)">
+          ✦ bKash/Nagad-এ recharge করুন। Balance শেষ হলে AI বন্ধ — order নেওয়া, courier, accounting চলবে।
         </div>
       </div>
 
@@ -1215,18 +1234,18 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
 
     <!-- ── Real cost example ── -->
     <div style="background:rgba(16,185,129,.06);border:1px solid rgba(16,185,129,.2);border-radius:16px;padding:22px 28px;margin-bottom:16px;text-align:left">
-      <div style="font-weight:800;font-size:14px;color:#34d399;margin-bottom:4px">📊 Example ১ — মাসে ৫০০ Keyword AI reply (basic)</div>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:14px">Courier, Accounting, CRM — কোনো আলাদা চার্জ নেই</div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px">
+      <div style="font-weight:800;font-size:14px;color:#34d399;margin-bottom:4px">📊 Example — মাসে ১০০০ customer (realistic mix)</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:14px">৭০০ জন text — ৩০০ জন product photo পাঠিয়েছে</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px">
         <div style="background:rgba(255,255,255,.04);border-radius:10px;padding:12px 14px">
-          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Platform Fee</div>
-          <div style="font-weight:800;font-size:16px">৳৬৯৯</div>
-          <div style="font-size:11px;color:var(--muted)">fixed/মাস</div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">700 text customer</div>
+          <div style="font-weight:800;font-size:16px">~৳১১২</div>
+          <div style="font-size:11px;color:var(--muted)">৫ reply avg</div>
         </div>
         <div style="background:rgba(255,255,255,.04);border-radius:10px;padding:12px 14px">
-          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">৫০০ AI text reply</div>
-          <div style="font-weight:800;font-size:16px">৳২৫</div>
-          <div style="font-size:11px;color:var(--muted)">৫০০ × ৳০.০৫</div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">300 image customer</div>
+          <div style="font-weight:800;font-size:16px">~৳১৮০</div>
+          <div style="font-size:11px;color:var(--muted)">1 img + 5 AI reply</div>
         </div>
         <div style="background:rgba(255,255,255,.04);border-radius:10px;padding:12px 14px">
           <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Courier + Accounting</div>
@@ -1234,35 +1253,26 @@ footer{border-top:1px solid var(--border);padding:44px 5%;display:flex;justify-c
           <div style="font-size:11px;color:var(--muted)">সম্পূর্ণ FREE</div>
         </div>
         <div style="background:linear-gradient(135deg,rgba(79,110,247,.15),rgba(124,157,255,.10));border:1px solid rgba(79,110,247,.30);border-radius:10px;padding:12px 14px">
-          <div style="font-size:11px;color:#A5BEFF;margin-bottom:4px">মোট খরচ/মাস</div>
-          <div style="font-weight:900;font-size:20px">৳৭২৪</div>
-          <div style="font-size:11px;color:#A5BEFF">৬৯৯ + ২৫ মাত্র!</div>
+          <div style="font-size:11px;color:#A5BEFF;margin-bottom:4px">মোট wallet charge</div>
+          <div style="font-weight:900;font-size:20px">~৳২৯২</div>
+          <div style="font-size:11px;color:#A5BEFF">+ platform fee</div>
         </div>
       </div>
     </div>
-    <div style="background:rgba(79,110,247,.05);border:1px solid rgba(79,110,247,.18);border-radius:16px;padding:22px 28px;margin-bottom:28px;text-align:left">
-      <div style="font-weight:800;font-size:14px;color:#A5BEFF;margin-bottom:4px">🧠 Example ২ — মাসে ৫০০ SmartBot reply (ChatGPT-style)</div>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:14px">SmartBot — customer নিজে নিজে order করে, কোনো manual reply লাগে না</div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px">
-        <div style="background:rgba(255,255,255,.04);border-radius:10px;padding:12px 14px">
-          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Platform Fee</div>
-          <div style="font-weight:800;font-size:16px">৳৬৯৯</div>
-          <div style="font-size:11px;color:var(--muted)">fixed/মাস</div>
+
+    <!-- Subscriber notification advantage -->
+    <div style="background:rgba(16,185,129,.05);border:1px solid rgba(16,185,129,.18);border-radius:16px;padding:22px 28px;margin-bottom:28px;text-align:left">
+      <div style="font-weight:800;font-size:14px;color:#34d399;margin-bottom:8px">🔔 Subscriber Notification — Facebook Ad ছাড়াই পুরনো customer কে reach করুন</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;font-size:13px">
+        <div>
+          <div style="color:var(--muted);margin-bottom:4px">❌ Facebook Ads দিয়ে ১০০০ জনকে reach</div>
+          <div style="font-weight:800;font-size:18px;color:#ef4444">৳৫০০–২০০০</div>
+          <div style="font-size:11px;color:var(--muted)">strangers — conversion কম</div>
         </div>
-        <div style="background:rgba(255,255,255,.04);border-radius:10px;padding:12px 14px">
-          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">৫০০ SmartBot reply</div>
-          <div style="font-weight:800;font-size:16px">৳৫০</div>
-          <div style="font-size:11px;color:var(--muted)">৫০০ × ৳০.১০</div>
-        </div>
-        <div style="background:rgba(255,255,255,.04);border-radius:10px;padding:12px 14px">
-          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Courier + Accounting</div>
-          <div style="font-weight:800;font-size:16px">৳০</div>
-          <div style="font-size:11px;color:var(--muted)">সম্পূর্ণ FREE</div>
-        </div>
-        <div style="background:linear-gradient(135deg,rgba(79,110,247,.16),rgba(124,157,255,.10));border:1px solid rgba(79,110,247,.32);border-radius:10px;padding:12px 14px">
-          <div style="font-size:11px;color:#A5BEFF;margin-bottom:4px">মোট খরচ/মাস</div>
-          <div style="font-weight:900;font-size:20px">৳৭৪৯</div>
-          <div style="font-size:11px;color:#A5BEFF">৬৯৯ + ৫০ মাত্র!</div>
+        <div>
+          <div style="color:var(--muted);margin-bottom:4px">✅ ChatCat Subscriber দের reach</div>
+          <div style="font-weight:800;font-size:18px;color:#34d399">মাত্র ৳১০০</div>
+          <div style="font-size:11px;color:var(--muted)">১০০০ × ৳০.১০ — আগের order করা customer!</div>
         </div>
       </div>
     </div>

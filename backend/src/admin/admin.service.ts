@@ -680,10 +680,19 @@ export class AdminService {
         pageId: true,
         pageName: true,
         walletBalanceBdt: true,
+        costPerKeywordReplyBdt: true,
         costPerTextMsgBdt: true,
         costPerVoiceMsgBdt: true,
         costPerImageBdt: true,
+        costPerImageLocalBdt: true,
+        costPerOcrLocalBdt: true,
+        costPerOcrAiBdt: true,
         costPerAnalyzeBdt: true,
+        costPerAiGenerateBdt: true,
+        costPerBroadcastMsgBdt: true,
+        costPerRecurringNotifBdt: true,
+        costPerCommentReplyBdt: true,
+        costPerMemoPrintBdt: true,
         subscriptionStatus: true,
         nextBillingDate: true,
       },
@@ -743,6 +752,14 @@ export class AdminService {
       costPerImageBdt?: number;
       costPerImageLocalBdt?: number;
       costPerAnalyzeBdt?: number;
+      costPerOcrLocalBdt?: number;
+      costPerOcrAiBdt?: number;
+      costPerRecurringNotifBdt?: number;
+      costPerBroadcastMsgBdt?: number;
+      costPerKeywordReplyBdt?: number;
+      costPerAiGenerateBdt?: number;
+      costPerMemoPrintBdt?: number;
+      costPerCommentReplyBdt?: number;
     },
   ) {
     const page = await this.prisma.page.findUnique({
@@ -751,16 +768,19 @@ export class AdminService {
     });
     if (!page) throw new NotFoundException('Page not found');
     const data: any = {};
-    if (pricing.costPerTextMsgBdt !== undefined)
-      data.costPerTextMsgBdt = pricing.costPerTextMsgBdt;
-    if (pricing.costPerVoiceMsgBdt !== undefined)
-      data.costPerVoiceMsgBdt = pricing.costPerVoiceMsgBdt;
-    if (pricing.costPerImageBdt !== undefined)
-      data.costPerImageBdt = pricing.costPerImageBdt;
-    if (pricing.costPerImageLocalBdt !== undefined)
-      data.costPerImageLocalBdt = pricing.costPerImageLocalBdt;
-    if (pricing.costPerAnalyzeBdt !== undefined)
-      data.costPerAnalyzeBdt = pricing.costPerAnalyzeBdt;
+    if (pricing.costPerTextMsgBdt !== undefined) data.costPerTextMsgBdt = pricing.costPerTextMsgBdt;
+    if (pricing.costPerVoiceMsgBdt !== undefined) data.costPerVoiceMsgBdt = pricing.costPerVoiceMsgBdt;
+    if (pricing.costPerImageBdt !== undefined) data.costPerImageBdt = pricing.costPerImageBdt;
+    if (pricing.costPerImageLocalBdt !== undefined) data.costPerImageLocalBdt = pricing.costPerImageLocalBdt;
+    if (pricing.costPerAnalyzeBdt !== undefined) data.costPerAnalyzeBdt = pricing.costPerAnalyzeBdt;
+    if (pricing.costPerOcrLocalBdt !== undefined) data.costPerOcrLocalBdt = pricing.costPerOcrLocalBdt;
+    if (pricing.costPerOcrAiBdt !== undefined) data.costPerOcrAiBdt = pricing.costPerOcrAiBdt;
+    if (pricing.costPerRecurringNotifBdt !== undefined) data.costPerRecurringNotifBdt = pricing.costPerRecurringNotifBdt;
+    if (pricing.costPerBroadcastMsgBdt !== undefined) data.costPerBroadcastMsgBdt = pricing.costPerBroadcastMsgBdt;
+    if (pricing.costPerKeywordReplyBdt !== undefined) data.costPerKeywordReplyBdt = pricing.costPerKeywordReplyBdt;
+    if (pricing.costPerAiGenerateBdt !== undefined) data.costPerAiGenerateBdt = pricing.costPerAiGenerateBdt;
+    if (pricing.costPerMemoPrintBdt !== undefined) data.costPerMemoPrintBdt = pricing.costPerMemoPrintBdt;
+    if (pricing.costPerCommentReplyBdt !== undefined) data.costPerCommentReplyBdt = pricing.costPerCommentReplyBdt;
     await this.prisma.page.update({ where: { id: pageId }, data });
     return { success: true };
   }
@@ -773,15 +793,31 @@ export class AdminService {
         costPerImageBdt: true,
         costPerImageLocalBdt: true,
         costPerAnalyzeBdt: true,
+        costPerOcrLocalBdt: true,
+        costPerOcrAiBdt: true,
+        costPerRecurringNotifBdt: true,
+        costPerBroadcastMsgBdt: true,
+        costPerKeywordReplyBdt: true,
+        costPerAiGenerateBdt: true,
+        costPerMemoPrintBdt: true,
+        costPerCommentReplyBdt: true,
       },
       orderBy: { id: 'asc' },
     });
     return {
       costPerTextMsgBdt: page?.costPerTextMsgBdt ?? 0.05,
-      costPerVoiceMsgBdt: page?.costPerVoiceMsgBdt ?? 0.5,
-      costPerImageBdt: page?.costPerImageBdt ?? 0.5,
-      costPerImageLocalBdt: page?.costPerImageLocalBdt ?? 0.3,
-      costPerAnalyzeBdt: page?.costPerAnalyzeBdt ?? 0.5,
+      costPerVoiceMsgBdt: page?.costPerVoiceMsgBdt ?? 1.00,
+      costPerImageBdt: page?.costPerImageBdt ?? 0.20,
+      costPerImageLocalBdt: page?.costPerImageLocalBdt ?? 0.10,
+      costPerAnalyzeBdt: page?.costPerAnalyzeBdt ?? 0.20,
+      costPerOcrLocalBdt: page?.costPerOcrLocalBdt ?? 0.02,
+      costPerOcrAiBdt: page?.costPerOcrAiBdt ?? 0.05,
+      costPerRecurringNotifBdt: page?.costPerRecurringNotifBdt ?? 0.10,
+      costPerBroadcastMsgBdt: page?.costPerBroadcastMsgBdt ?? 0.05,
+      costPerKeywordReplyBdt: page?.costPerKeywordReplyBdt ?? 0.02,
+      costPerAiGenerateBdt: page?.costPerAiGenerateBdt ?? 0.10,
+      costPerMemoPrintBdt: page?.costPerMemoPrintBdt ?? 0.10,
+      costPerCommentReplyBdt: page?.costPerCommentReplyBdt ?? 0.05,
     };
   }
 
@@ -792,20 +828,28 @@ export class AdminService {
     costPerImageLocalBdt?: number;
     costPerAnalyzeBdt?: number;
     costPerAiGenerateBdt?: number;
+    costPerOcrLocalBdt?: number;
+    costPerOcrAiBdt?: number;
+    costPerRecurringNotifBdt?: number;
+    costPerBroadcastMsgBdt?: number;
+    costPerKeywordReplyBdt?: number;
+    costPerMemoPrintBdt?: number;
+    costPerCommentReplyBdt?: number;
   }) {
     const data: any = {};
-    if (pricing.costPerTextMsgBdt !== undefined)
-      data.costPerTextMsgBdt = pricing.costPerTextMsgBdt;
-    if (pricing.costPerVoiceMsgBdt !== undefined)
-      data.costPerVoiceMsgBdt = pricing.costPerVoiceMsgBdt;
-    if (pricing.costPerImageBdt !== undefined)
-      data.costPerImageBdt = pricing.costPerImageBdt;
-    if (pricing.costPerImageLocalBdt !== undefined)
-      data.costPerImageLocalBdt = pricing.costPerImageLocalBdt;
-    if (pricing.costPerAnalyzeBdt !== undefined)
-      data.costPerAnalyzeBdt = pricing.costPerAnalyzeBdt;
-    if (pricing.costPerAiGenerateBdt !== undefined)
-      data.costPerAiGenerateBdt = pricing.costPerAiGenerateBdt;
+    if (pricing.costPerTextMsgBdt !== undefined) data.costPerTextMsgBdt = pricing.costPerTextMsgBdt;
+    if (pricing.costPerVoiceMsgBdt !== undefined) data.costPerVoiceMsgBdt = pricing.costPerVoiceMsgBdt;
+    if (pricing.costPerImageBdt !== undefined) data.costPerImageBdt = pricing.costPerImageBdt;
+    if (pricing.costPerImageLocalBdt !== undefined) data.costPerImageLocalBdt = pricing.costPerImageLocalBdt;
+    if (pricing.costPerAnalyzeBdt !== undefined) data.costPerAnalyzeBdt = pricing.costPerAnalyzeBdt;
+    if (pricing.costPerAiGenerateBdt !== undefined) data.costPerAiGenerateBdt = pricing.costPerAiGenerateBdt;
+    if (pricing.costPerOcrLocalBdt !== undefined) data.costPerOcrLocalBdt = pricing.costPerOcrLocalBdt;
+    if (pricing.costPerOcrAiBdt !== undefined) data.costPerOcrAiBdt = pricing.costPerOcrAiBdt;
+    if (pricing.costPerRecurringNotifBdt !== undefined) data.costPerRecurringNotifBdt = pricing.costPerRecurringNotifBdt;
+    if (pricing.costPerBroadcastMsgBdt !== undefined) data.costPerBroadcastMsgBdt = pricing.costPerBroadcastMsgBdt;
+    if (pricing.costPerKeywordReplyBdt !== undefined) data.costPerKeywordReplyBdt = pricing.costPerKeywordReplyBdt;
+    if (pricing.costPerMemoPrintBdt !== undefined) data.costPerMemoPrintBdt = pricing.costPerMemoPrintBdt;
+    if (pricing.costPerCommentReplyBdt !== undefined) data.costPerCommentReplyBdt = pricing.costPerCommentReplyBdt;
     if (!Object.keys(data).length) return { success: false, updated: 0 };
     const result = await this.prisma.page.updateMany({ data });
     return { success: true, updated: result.count };

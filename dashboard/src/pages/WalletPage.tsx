@@ -168,16 +168,30 @@ export default function WalletPage({
           marginTop: 16, padding: '10px 14px', borderRadius: 10,
           background: 'rgba(255,255,255,0.12)', fontSize: 12,
         }}>
-          <div style={{ fontWeight: 700, marginBottom: 6, opacity: 0.9 }}>Usage Pricing (BDT)</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3px 12px' }}>
-            <span style={{ opacity: 0.8 }}>Text AI Message</span>
-            <span>৳ {wallet?.costPerTextMsgBdt ?? 0.05}</span>
-            <span style={{ opacity: 0.8 }}>Voice Message STT</span>
-            <span>৳ {wallet?.costPerVoiceMsgBdt ?? 0.40}</span>
-            <span style={{ opacity: 0.8 }}>Customer Image</span>
-            <span>৳ {wallet?.costPerImageBdt ?? 0.50}</span>
-            <span style={{ opacity: 0.8 }}>Product Auto-Analyze</span>
-            <span>৳ {wallet?.costPerAnalyzeBdt ?? 0.50}</span>
+          <div style={{ fontWeight: 700, marginBottom: 6, opacity: 0.9 }}>💰 Usage Pricing (BDT)</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '4px 16px', fontSize: 11.5 }}>
+            <span style={{ opacity: 0.75 }}>Keyword/Template Reply</span>
+            <span style={{ fontWeight: 700 }}>৳ {wallet?.costPerKeywordReplyBdt ?? 0.02}</span>
+            <span style={{ opacity: 0.75 }}>AI Text Reply</span>
+            <span style={{ fontWeight: 700 }}>৳ {wallet?.costPerTextMsgBdt ?? 0.05}</span>
+            <span style={{ opacity: 0.75 }}>Customer Image (Vision)</span>
+            <span style={{ fontWeight: 700 }}>৳ {wallet?.costPerImageBdt ?? 0.20}</span>
+            <span style={{ opacity: 0.75 }}>OCR (Local Scan)</span>
+            <span style={{ fontWeight: 700 }}>৳ {wallet?.costPerOcrLocalBdt ?? 0.02}</span>
+            <span style={{ opacity: 0.75 }}>OCR (AI Fallback)</span>
+            <span style={{ fontWeight: 700 }}>৳ {wallet?.costPerOcrAiBdt ?? 0.05}</span>
+            <span style={{ opacity: 0.75 }}>Voice Note (STT)</span>
+            <span style={{ fontWeight: 700 }}>৳ {wallet?.costPerVoiceMsgBdt ?? 1.00}</span>
+            <span style={{ opacity: 0.75 }}>Product Auto-Analyze</span>
+            <span style={{ fontWeight: 700 }}>৳ {wallet?.costPerAnalyzeBdt ?? 0.20}</span>
+            <span style={{ opacity: 0.75 }}>Broadcast (per msg)</span>
+            <span style={{ fontWeight: 700 }}>৳ {wallet?.costPerBroadcastMsgBdt ?? 0.05}</span>
+            <span style={{ opacity: 0.75 }}>Subscriber Notification</span>
+            <span style={{ fontWeight: 700 }}>৳ {wallet?.costPerRecurringNotifBdt ?? 0.10}</span>
+            <span style={{ opacity: 0.75 }}>Comment Reply</span>
+            <span style={{ fontWeight: 700 }}>৳ {wallet?.costPerCommentReplyBdt ?? 0.05}</span>
+            <span style={{ opacity: 0.75 }}>Memo Print</span>
+            <span style={{ fontWeight: 700 }}>৳ {wallet?.costPerMemoPrintBdt ?? 0.10}</span>
           </div>
         </div>
       </div>

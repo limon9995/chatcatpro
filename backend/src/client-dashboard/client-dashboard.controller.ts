@@ -1114,6 +1114,21 @@ export class ClientDashboardController {
     return this.broadcast.delete(this.pid(r, p), Number(id));
   }
 
+  // ── Recurring Subscribers ─────────────────────────────────────────────────
+  @Get(':pageId/subscribers')
+  getSubscribers(@Param('pageId') p: string, @Req() r: any) {
+    return this.broadcast.getSubscribers(this.pid(r, p));
+  }
+
+  @Post(':pageId/subscribers/broadcast')
+  sendRecurringBroadcast(
+    @Param('pageId') p: string,
+    @Body() b: any,
+    @Req() r: any,
+  ) {
+    return this.broadcast.sendRecurringBroadcast(this.pid(r, p), b.message);
+  }
+
   // ── V10: Courier tutorial videos ─────────────────────────────────────────
   @Get(':pageId/courier/tutorials')
   courierTutorials(@Param('pageId') p: string, @Req() r: any) {

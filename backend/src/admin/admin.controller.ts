@@ -49,9 +49,18 @@ export class AdminController {
 
   @Patch('laptop-ai')
   setLaptopAi(@Body() b: any) {
-    const valid = ['all', 'generate_only', 'none'];
-    const mode = valid.includes(b?.localAiMode) ? b.localAiMode : 'none';
-    return this.globalSettings.set({ localAiMode: mode });
+    const patch: any = {};
+    const validModes = ['all', 'generate_only', 'none'];
+    const validProviders = ['gemini', 'openai', 'fal', 'ideogram'];
+
+    if (b?.localAiMode !== undefined) {
+      patch.localAiMode = validModes.includes(b.localAiMode) ? b.localAiMode : 'none';
+    }
+    if (Array.isArray(b?.imageProviderOrder)) {
+      const filtered = b.imageProviderOrder.filter((p: any) => validProviders.includes(p));
+      if (filtered.length > 0) patch.imageProviderOrder = filtered;
+    }
+    return this.globalSettings.set(patch);
   }
 
   private parsePageId(raw: string): number {
@@ -232,27 +241,21 @@ export class AdminController {
 
   @Post('wallet/pricing/apply-all')
   applyPricingToAll(@Body() b: any) {
+    const n = (v: any) => (v !== undefined ? Number(v) : undefined);
     return this.svc.applyPricingToAll({
-      costPerTextMsgBdt:
-        b?.costPerTextMsgBdt !== undefined
-          ? Number(b.costPerTextMsgBdt)
-          : undefined,
-      costPerVoiceMsgBdt:
-        b?.costPerVoiceMsgBdt !== undefined
-          ? Number(b.costPerVoiceMsgBdt)
-          : undefined,
-      costPerImageBdt:
-        b?.costPerImageBdt !== undefined
-          ? Number(b.costPerImageBdt)
-          : undefined,
-      costPerImageLocalBdt:
-        b?.costPerImageLocalBdt !== undefined
-          ? Number(b.costPerImageLocalBdt)
-          : undefined,
-      costPerAnalyzeBdt:
-        b?.costPerAnalyzeBdt !== undefined
-          ? Number(b.costPerAnalyzeBdt)
-          : undefined,
+      costPerTextMsgBdt: n(b?.costPerTextMsgBdt),
+      costPerVoiceMsgBdt: n(b?.costPerVoiceMsgBdt),
+      costPerImageBdt: n(b?.costPerImageBdt),
+      costPerImageLocalBdt: n(b?.costPerImageLocalBdt),
+      costPerAnalyzeBdt: n(b?.costPerAnalyzeBdt),
+      costPerOcrLocalBdt: n(b?.costPerOcrLocalBdt),
+      costPerOcrAiBdt: n(b?.costPerOcrAiBdt),
+      costPerRecurringNotifBdt: n(b?.costPerRecurringNotifBdt),
+      costPerBroadcastMsgBdt: n(b?.costPerBroadcastMsgBdt),
+      costPerKeywordReplyBdt: n(b?.costPerKeywordReplyBdt),
+      costPerAiGenerateBdt: n(b?.costPerAiGenerateBdt),
+      costPerMemoPrintBdt: n(b?.costPerMemoPrintBdt),
+      costPerCommentReplyBdt: n(b?.costPerCommentReplyBdt),
     });
   }
 
@@ -279,27 +282,21 @@ export class AdminController {
 
   @Patch('wallet/:pageId/pricing')
   updatePricing(@Param('pageId', ParseIntPipe) pageId: number, @Body() b: any) {
+    const n = (v: any) => (v !== undefined ? Number(v) : undefined);
     return this.svc.updatePagePricing(pageId, {
-      costPerTextMsgBdt:
-        b?.costPerTextMsgBdt !== undefined
-          ? Number(b.costPerTextMsgBdt)
-          : undefined,
-      costPerVoiceMsgBdt:
-        b?.costPerVoiceMsgBdt !== undefined
-          ? Number(b.costPerVoiceMsgBdt)
-          : undefined,
-      costPerImageBdt:
-        b?.costPerImageBdt !== undefined
-          ? Number(b.costPerImageBdt)
-          : undefined,
-      costPerImageLocalBdt:
-        b?.costPerImageLocalBdt !== undefined
-          ? Number(b.costPerImageLocalBdt)
-          : undefined,
-      costPerAnalyzeBdt:
-        b?.costPerAnalyzeBdt !== undefined
-          ? Number(b.costPerAnalyzeBdt)
-          : undefined,
+      costPerTextMsgBdt: n(b?.costPerTextMsgBdt),
+      costPerVoiceMsgBdt: n(b?.costPerVoiceMsgBdt),
+      costPerImageBdt: n(b?.costPerImageBdt),
+      costPerImageLocalBdt: n(b?.costPerImageLocalBdt),
+      costPerAnalyzeBdt: n(b?.costPerAnalyzeBdt),
+      costPerOcrLocalBdt: n(b?.costPerOcrLocalBdt),
+      costPerOcrAiBdt: n(b?.costPerOcrAiBdt),
+      costPerRecurringNotifBdt: n(b?.costPerRecurringNotifBdt),
+      costPerBroadcastMsgBdt: n(b?.costPerBroadcastMsgBdt),
+      costPerKeywordReplyBdt: n(b?.costPerKeywordReplyBdt),
+      costPerAiGenerateBdt: n(b?.costPerAiGenerateBdt),
+      costPerMemoPrintBdt: n(b?.costPerMemoPrintBdt),
+      costPerCommentReplyBdt: n(b?.costPerCommentReplyBdt),
     });
   }
 

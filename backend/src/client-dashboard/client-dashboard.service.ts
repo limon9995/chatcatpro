@@ -1220,6 +1220,8 @@ Return ONLY valid JSON (no markdown):
       igBusinessAccountId: page.igBusinessAccountId ?? '',
       igVerifyToken: page.igVerifyToken ?? '',
       igTokenSet: Boolean(page.igToken), // never return the raw token
+      // Recurring Notification Mode
+      recurringNotifMode: Boolean(page.recurringNotifMode),
       // AI Knowledge
       knowledgeText: page.knowledgeText ?? '',
       // Pricing (from bot-knowledge config)
@@ -1304,6 +1306,8 @@ Return ONLY valid JSON (no markdown):
       'textFallbackAiOn',
       'businessBotOn',
       'businessInfo',
+      // Recurring Notification Mode
+      'recurringNotifMode',
     ];
     const pagePatch: any = {};
     for (const k of PAGE_FIELDS) {
@@ -1729,10 +1733,19 @@ Return ONLY valid JSON (no markdown):
       where: { id: pageId },
       select: {
         walletBalanceBdt: true,
+        costPerKeywordReplyBdt: true,
         costPerTextMsgBdt: true,
         costPerVoiceMsgBdt: true,
         costPerImageBdt: true,
+        costPerImageLocalBdt: true,
+        costPerOcrLocalBdt: true,
+        costPerOcrAiBdt: true,
         costPerAnalyzeBdt: true,
+        costPerAiGenerateBdt: true,
+        costPerBroadcastMsgBdt: true,
+        costPerRecurringNotifBdt: true,
+        costPerCommentReplyBdt: true,
+        costPerMemoPrintBdt: true,
         subscriptionStatus: true,
         nextBillingDate: true,
       },

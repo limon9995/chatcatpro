@@ -6,12 +6,17 @@ import { join } from 'path';
 // 'generate_only' → Laptop OFF (Bot): bot uses OpenAI, AI Generate still tries Ollama
 // 'none'          → Laptop OFF (Full): everything uses OpenAI directly
 export type LocalAiMode = 'all' | 'generate_only' | 'none';
+export type ImageProvider = 'gemini' | 'openai' | 'fal' | 'ideogram';
 
 export interface GlobalSettings {
   localAiMode: LocalAiMode;
+  imageProviderOrder: ImageProvider[];
 }
 
-const DEFAULTS: GlobalSettings = { localAiMode: 'none' };
+const DEFAULTS: GlobalSettings = {
+  localAiMode: 'none',
+  imageProviderOrder: ['gemini', 'openai', 'fal', 'ideogram'],
+};
 const FILE = join(process.cwd(), 'storage', 'settings', 'global.json');
 
 @Injectable()

@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { EncryptionService } from '../common/encryption.service';
+import { GlobalSettingsService } from '../common/global-settings.service';
 import { GenerateCaptionDto } from './dto/generate-caption.dto';
 import { GenerateImageDto } from './dto/generate-image.dto';
 import { CreateAutoPostDto } from './dto/create-auto-post.dto';
@@ -46,6 +47,7 @@ export class AutoPostService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly encryption: EncryptionService,
+    private readonly globalSettings: GlobalSettingsService,
   ) {}
 
   // ── Caption generation ────────────────────────────────────────────────────────
@@ -157,8 +159,9 @@ export class AutoPostService {
 
   // ── Image generation (text prompt) ───────────────────────────────────────────
 
-  async generateImage(dto: GenerateImageDto): Promise<{ imageUrls: string[] }> {
+  async generateImage(dto: GenerateImageDto): Promise<{ imageUrls: string[]; usedProvider?: string }> {
     const geminiKey   = process.env.GEMINI_API_KEY;
+    const openaiKey   = process.env.OPENAI_API_KEY;
     const ideogramKey = process.env.IDEOGRAM_API_KEY;
     const falKeys = [
       process.env.FAL_API_KEY,
@@ -166,9 +169,8 @@ export class AutoPostService {
       process.env.FAL_API_KEY_3,
     ].filter(Boolean) as string[];
 
-    if (falKeys.length === 0 && !geminiKey && !ideogramKey) {
-      throw new BadRequestException('FAL_API_KEY বা GEMINI_API_KEY .env ফাইলে set করুন');
-    }
+    const settings = await this.globalSettings.get();
+    const order = settings.imageProviderOrder ?? ['gemini', 'openai', 'fal', 'ideogram'];
 
     const styleModifier = dto.style && STYLE_PROMPTS[dto.style] ? `, ${STYLE_PROMPTS[dto.style]}` : '';
     const enrichedPrompt = `E-commerce product promotional poster, ${dto.prompt}${styleModifier}, high quality, professional`;
@@ -177,38 +179,58 @@ export class AutoPostService {
 
     let urls: string[] = [];
     let lastError = '';
+    let usedProvider = '';
 
-    // 1️⃣ fal.ai — supports num_images
-    for (const key of falKeys) {
-      try {
-        urls = await this.callFalAi(key, enrichedPrompt, imageSize, count);
-        break;
-      } catch (e: any) {
-        lastError = e.message;
-        this.logger.warn(`fal.ai key failed: ${e.message}`);
+    for (const provider of order) {
+      if (urls.length > 0) break;
+
+      if (provider === 'fal' && falKeys.length > 0) {
+        for (const key of falKeys) {
+          try {
+            urls = await this.callFalAi(key, enrichedPrompt, imageSize, count);
+            usedProvider = 'fal';
+            break;
+          } catch (e: any) {
+            lastError = e.message;
+            this.logger.warn(`fal.ai key failed: ${e.message}`);
+          }
+        }
       }
-    }
 
-    // 2️⃣ Gemini Imagen 3 (single image only)
-    if (urls.length === 0 && geminiKey) {
-      try {
-        const b64 = await this.callGeminiImagen(geminiKey, enrichedPrompt);
-        const saved = await this.saveBase64(b64, 'image/png', dto.pageId);
-        urls = [saved];
-      } catch (e: any) {
-        lastError = e.message;
-        this.logger.warn(`Gemini Imagen 3 failed: ${e.message}`);
+      if (provider === 'gemini' && geminiKey && urls.length === 0) {
+        try {
+          const b64 = await this.callGeminiImagen(geminiKey, enrichedPrompt);
+          const saved = await this.saveBase64(b64, 'image/png', dto.pageId);
+          urls = [saved];
+          usedProvider = 'gemini';
+        } catch (e: any) {
+          lastError = e.message;
+          this.logger.warn(`Gemini Imagen 3 failed: ${e.message}`);
+        }
       }
-    }
 
-    // 3️⃣ Ideogram fallback
-    if (urls.length === 0 && ideogramKey) {
-      try {
-        const url = await this.callIdeogram(ideogramKey, dto.prompt);
-        const saved = await this.downloadAndSave(url, dto.pageId);
-        urls = [saved];
-      } catch (e: any) {
-        lastError = e.message;
+      if (provider === 'openai' && openaiKey && urls.length === 0) {
+        try {
+          const url = await this.callOpenAIDalle(openaiKey, enrichedPrompt);
+          const saved = await this.downloadAndSave(url, dto.pageId);
+          urls = [saved];
+          usedProvider = 'openai';
+        } catch (e: any) {
+          lastError = e.message;
+          this.logger.warn(`OpenAI DALL-E failed: ${e.message}`);
+        }
+      }
+
+      if (provider === 'ideogram' && ideogramKey && urls.length === 0) {
+        try {
+          const url = await this.callIdeogram(ideogramKey, dto.prompt);
+          const saved = await this.downloadAndSave(url, dto.pageId);
+          urls = [saved];
+          usedProvider = 'ideogram';
+        } catch (e: any) {
+          lastError = e.message;
+          this.logger.warn(`Ideogram failed: ${e.message}`);
+        }
       }
     }
 
@@ -224,7 +246,7 @@ export class AutoPostService {
       }
     }
 
-    return { imageUrls: savedUrls };
+    return { imageUrls: savedUrls, usedProvider };
   }
 
   // ── Poster from uploaded product photo (image-to-image) ───────────────────────
@@ -402,6 +424,19 @@ export class AutoPostService {
 
   // ── fal.ai helpers ────────────────────────────────────────────────────────────
 
+  private async callOpenAIDalle(apiKey: string, prompt: string): Promise<string> {
+    const res = await fetch('https://api.openai.com/v1/images/generations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({ model: 'dall-e-3', prompt, n: 1, size: '1024x1024', response_format: 'url' }),
+    });
+    if (!res.ok) throw new Error(`DALL-E error: ${res.status}`);
+    const data: any = await res.json();
+    const url = data.data?.[0]?.url;
+    if (!url) throw new Error('DALL-E: no image in response');
+    return url;
+  }
+
   private async callFalAi(apiKey: string, prompt: string, imageSize: string, count = 1): Promise<string[]> {
     const res = await fetch('https://fal.run/fal-ai/flux/schnell', {
       method: 'POST',
@@ -510,9 +545,10 @@ export class AutoPostService {
   async publishToFacebook(pageId: number, caption: string, imageUrl?: string): Promise<string> {
     const page = await this.prisma.page.findUnique({
       where: { id: pageId },
-      select: { id: true, pageId: true, pageToken: true, websiteUrl: true, catalogSlug: true },
+      select: { id: true, pageId: true, pageToken: true, websiteUrl: true, catalogSlug: true, isActive: true },
     });
     if (!page) throw new NotFoundException('Page not found');
+    if (page.isActive === false) throw new BadRequestException('Account বন্ধ আছে, পোস্ট করা যাবে না');
 
     const token = this.encryption.decrypt(page.pageToken);
     const fbPageId = page.pageId;

@@ -341,8 +341,131 @@ export class BroadcastService {
           return [];
         }
       }
+      case 'recurring_subscribers': {
+        const subs = await this.prisma.recurringSubscriber.findMany({
+          where: { pageId, declined: false, tokenExpiresAt: { gt: new Date() } },
+          select: { psid: true },
+        });
+        return subs.map((s) => s.psid);
+      }
       default:
         return [];
     }
+  }
+
+  // ── Recurring Notification: subscribe prompt after order ──────────────────
+
+  async sendSubscribePrompt(pageId: number, psid: string, fbToken: string): Promise<void> {
+    const existing = await this.prisma.recurringSubscriber.findUnique({
+      where: { pageId_psid: { pageId, psid } },
+    });
+    if (existing && !existing.declined && existing.tokenExpiresAt > new Date()) return;
+    if (existing?.declined) return;
+
+    // Throttle: only prompt once per day per customer
+    if (existing?.promptedAt) {
+      const hoursSince = (Date.now() - existing.promptedAt.getTime()) / 3600000;
+      if (hoursSince < 24) return;
+    }
+
+    await this.messenger.sendSubscribeButton(fbToken, psid);
+    await this.prisma.recurringSubscriber.upsert({
+      where: { pageId_psid: { pageId, psid } },
+      create: { pageId, psid, token: '', frequency: 'WEEKLY', tokenExpiresAt: new Date(0), promptedAt: new Date() },
+      update: { promptedAt: new Date() },
+    });
+  }
+
+  async saveSubscriberToken(
+    pageId: number,
+    psid: string,
+    name: string | undefined,
+    token: string,
+    frequency: string,
+  ): Promise<void> {
+    const frequencyMonths: Record<string, number> = { DAILY: 6, WEEKLY: 9, MONTHLY: 12 };
+    const months = frequencyMonths[frequency] ?? 9;
+    const tokenExpiresAt = new Date();
+    tokenExpiresAt.setMonth(tokenExpiresAt.getMonth() + months);
+
+    await this.prisma.recurringSubscriber.upsert({
+      where: { pageId_psid: { pageId, psid } },
+      create: { pageId, psid, name, token, frequency, tokenExpiresAt, promptedAt: new Date() },
+      update: { token, frequency, tokenExpiresAt, declined: false, name: name ?? undefined },
+    });
+  }
+
+  async declineSubscription(pageId: number, psid: string): Promise<void> {
+    await this.prisma.recurringSubscriber.upsert({
+      where: { pageId_psid: { pageId, psid } },
+      create: { pageId, psid, token: '', frequency: 'WEEKLY', tokenExpiresAt: new Date(0), promptedAt: new Date(), declined: true },
+      update: { declined: true },
+    });
+  }
+
+  async sendRecurringBroadcast(pageId: number, message: string, _fbToken?: string): Promise<{ sent: number; skipped: number }> {
+    const page = await this.prisma.page.findUnique({
+      where: { id: pageId },
+      select: { costPerRecurringNotifBdt: true, walletBalanceBdt: true, pageToken: true },
+    });
+    const fbToken = page?.pageToken ?? _fbToken ?? '';
+    if (!page) throw new NotFoundException('Page not found');
+
+    const subs = await this.prisma.recurringSubscriber.findMany({
+      where: { pageId, declined: false, tokenExpiresAt: { gt: new Date() } },
+    });
+
+    const eligible = subs.filter((s) => {
+      if (!s.lastNotifiedAt) return true;
+      const gapHours: Record<string, number> = { DAILY: 20, WEEKLY: 160, MONTHLY: 700 };
+      const gap = gapHours[s.frequency] ?? 160;
+      return (Date.now() - s.lastNotifiedAt.getTime()) / 3600000 >= gap;
+    });
+
+    if (!eligible.length) return { sent: 0, skipped: subs.length };
+
+    const totalCost = eligible.length * (page.costPerRecurringNotifBdt ?? 0.10);
+    if (page.walletBalanceBdt < totalCost) {
+      throw new BadRequestException(`Wallet balance insufficient. Need ৳${totalCost.toFixed(2)}, have ৳${page.walletBalanceBdt.toFixed(2)}`);
+    }
+
+    let sent = 0;
+    for (const sub of eligible) {
+      try {
+        await this.messenger.sendText(fbToken, sub.psid, message, 'POST_PURCHASE_UPDATE');
+        await this.prisma.recurringSubscriber.update({
+          where: { id: sub.id },
+          data: { lastNotifiedAt: new Date() },
+        });
+        sent++;
+      } catch (e) {
+        this.logger.warn(`Recurring notif failed for psid ${sub.psid}: ${e.message}`);
+      }
+    }
+
+    if (sent > 0) {
+      const cost = sent * (page.costPerRecurringNotifBdt ?? 0.10);
+      await this.prisma.page.update({
+        where: { id: pageId },
+        data: { walletBalanceBdt: { decrement: cost } },
+      });
+      await this.prisma.walletTransaction.create({
+        data: {
+          pageId,
+          type: 'DEDUCT_RECURRING_NOTIF',
+          amountBdt: -cost,
+          description: `Recurring notification: ${sent} message(s) sent`,
+        },
+      });
+    }
+
+    return { sent, skipped: subs.length - sent };
+  }
+
+  async getSubscribers(pageId: number) {
+    return this.prisma.recurringSubscriber.findMany({
+      where: { pageId },
+      orderBy: { createdAt: 'desc' },
+    });
   }
 }

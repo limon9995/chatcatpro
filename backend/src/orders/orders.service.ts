@@ -6,6 +6,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { OrderNotificationService } from './order-notification.service';
 import { ConversationContextService } from '../conversation-context/conversation-context.service';
+import { BroadcastService } from '../broadcast/broadcast.service';
 
 export type OrderStatus =
   | 'RECEIVED'
@@ -22,6 +23,7 @@ export class OrdersService {
     private readonly prisma: PrismaService,
     private readonly notification: OrderNotificationService,
     private readonly ctx: ConversationContextService,
+    private readonly broadcast: BroadcastService,
   ) {}
 
   // ── List / Summary ─────────────────────────────────────────────────────────
@@ -165,6 +167,9 @@ export class OrdersService {
     // Fire-and-forget: notify customer via Messenger
     void this.notification.notifyConfirmed(order.pageIdRef, id);
 
+    // Fire-and-forget: send recurring notification subscribe prompt if mode is ON
+    void this.tryRecurringSubscribePrompt(order.pageIdRef, order.customerPsid);
+
     return this.prisma.order.findUnique({
       where: { id },
       include: { items: true },
@@ -172,11 +177,28 @@ export class OrdersService {
   }
 
   async cancelOrder(id: number, pageId?: number) {
-    await this.findOrFail(id, pageId);
-    return this.prisma.order.update({
+    const order = await this.findOrFail(id, pageId);
+    const result = await this.prisma.order.update({
       where: { id },
       data: { status: 'CANCELLED' },
     });
+    // Fire-and-forget: send subscribe prompt even on cancel (customer is still engaged)
+    void this.tryRecurringSubscribePrompt(order.pageIdRef, order.customerPsid);
+    return result;
+  }
+
+  private async tryRecurringSubscribePrompt(pageId: number, psid: string | null): Promise<void> {
+    if (!psid) return;
+    try {
+      const page = await this.prisma.page.findUnique({
+        where: { id: pageId },
+        select: { recurringNotifMode: true, pageToken: true },
+      });
+      if (!page?.recurringNotifMode || !page.pageToken) return;
+      await this.broadcast.sendSubscribePrompt(pageId, psid, page.pageToken);
+    } catch (e) {
+      // silent — non-critical
+    }
   }
 
   async markIssue(id: number, pageId?: number) {

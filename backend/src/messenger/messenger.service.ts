@@ -121,4 +121,36 @@ export class MessengerService {
       }
     }
   }
+
+  async sendSubscribeButton(encryptedToken: string, psid: string): Promise<void> {
+    if (!encryptedToken || !psid) return;
+    const rawToken = this.encryption.decrypt(encryptedToken);
+    const url = `https://graph.facebook.com/v20.0/me/messages?access_token=${encodeURIComponent(rawToken)}`;
+    const payload = {
+      recipient: { id: psid },
+      message: {
+        attachment: {
+          type: 'template',
+          payload: {
+            template_type: 'one_time_notif_req',
+            title: '🔔 নতুন পণ্য ও অফারের আপডেট পেতে চান?',
+            payload: 'RECURRING_SUBSCRIBE_WEEKLY',
+          },
+        },
+      },
+    };
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const err = await res.text().catch(() => '');
+        this.logger.error(`[Messenger] Subscribe button failed: ${err.slice(0, 200)}`);
+      }
+    } catch (err) {
+      this.logger.error(`[Messenger] Subscribe button network error: ${err}`);
+    }
+  }
 }

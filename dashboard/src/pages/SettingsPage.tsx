@@ -23,6 +23,7 @@ interface Settings {
   businessBotOn: boolean;
   businessInfo: string;
   commentReplyOn: boolean;
+  recurringNotifMode: boolean;
   // V18: Image recognition
   imageRecognitionOn: boolean; imageHighConfidence: number;
   imageMediumConfidence: number; imageFallbackAiOn: boolean;
@@ -65,6 +66,7 @@ const S0: Settings = {
   businessBotOn: false,
   businessInfo: '',
   commentReplyOn: false,
+  recurringNotifMode: false,
   imageRecognitionOn: false, imageHighConfidence: 0.75, imageMediumConfidence: 0.45, imageFallbackAiOn: false, textFallbackAiOn: false,
   pricingPolicy: {
     priceMode: 'FIXED', allowCustomerOffer: false, agentApprovalRequired: true,
@@ -1303,7 +1305,8 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect }: {
               { key: 'printModeOn',       label: 'Print Mode',        sub: copy('Invoice/memo print করা যাবে', 'Enable invoice and memo printing') },
               { key: 'memoSaveModeOn',    label: 'Memo Save Mode',    sub: copy('Memo auto-save হবে', 'Memos will be auto-saved') },
               { key: 'callConfirmModeOn', label: 'Call Confirm Mode', sub: copy('Phone call দিয়ে order confirm করবে', 'Confirm orders by phone call') },
-              { key: 'commentReplyOn',   label: 'Comment Reply',     sub: copy('Post-এর comment-এ auto reply দেবে', 'Auto-reply to Facebook post comments') },
+              { key: 'commentReplyOn',      label: 'Comment Reply',            sub: copy('Post-এর comment-এ auto reply দেবে', 'Auto-reply to Facebook post comments') },
+              { key: 'recurringNotifMode',  label: '🔔 Subscriber Notification', sub: copy('Order complete/cancel হলে customer কে subscribe করতে বলবে — ভবিষ্যতে নতুন পণ্যের update পাঠানো যাবে', 'After order complete/cancel, bot asks customer to subscribe for future product/offer updates') },
             ].map(m => (
               <Toggle key={m.key} th={th} label={m.label} sub={m.sub}
                 checked={(s as any)[m.key] ?? false}

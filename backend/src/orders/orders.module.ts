@@ -7,6 +7,7 @@ import { MessengerModule } from '../messenger/messenger.module';
 import { BotKnowledgeModule } from '../bot-knowledge/bot-knowledge.module';
 import { ConversationContextModule } from '../conversation-context/conversation-context.module';
 import { AuthModule } from '../auth/auth.module';
+import { BroadcastModule } from '../broadcast/broadcast.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { AuthModule } from '../auth/auth.module';
     BotKnowledgeModule,
     ConversationContextModule,
     AuthModule,
+    BroadcastModule,
   ],
   controllers: [OrdersController],
   providers: [OrdersService, OrderNotificationService],
