@@ -182,24 +182,19 @@ export function getTheme(dark: boolean) {
     // Navigation
     navBtn: {
       width: '100%', textAlign: 'left' as const,
-      padding: '9px 11px', borderRadius: 10, border: 'none',
-      background: dark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
-      color: dark ? 'rgba(226,232,255,0.92)' : 'rgba(17,24,39,0.82)',
-      cursor: 'pointer', fontWeight: 600, fontSize: 14,
-      transition: 'background .15s, color .15s, box-shadow .15s', fontFamily: 'inherit',
-      display: 'flex', alignItems: 'center', gap: 10,
-      letterSpacing: '-0.01em',
-      boxShadow: dark ? 'inset 0 0 0 1px rgba(255,255,255,0.05)' : 'inset 0 0 0 1px rgba(0,0,0,0.05)',
+      padding: '7px 10px', borderRadius: 9, border: 'none',
+      background: 'transparent', color: textSub,
+      cursor: 'pointer', fontWeight: 500, fontSize: 13,
+      transition: 'background .12s, color .12s', fontFamily: 'inherit',
+      display: 'flex', alignItems: 'center', gap: 9,
+      letterSpacing: '-0.015em',
     } as React.CSSProperties,
     navBtnActive: {
       background: dark
-        ? 'rgba(99,102,241,0.22)'
-        : 'rgba(99,102,241,0.13)',
-      color: dark ? '#c7d2fe' : '#3730a3',
-      fontWeight: 700,
-      boxShadow: dark
-        ? 'inset 0 0 0 1px rgba(99,102,241,0.35)'
-        : 'inset 0 0 0 1px rgba(99,102,241,0.25)',
+        ? 'rgba(99,102,241,0.16)'
+        : 'rgba(99,102,241,0.10)',
+      color: dark ? '#a5b4fc' : '#4338ca',
+      fontWeight: 600,
     } as React.CSSProperties,
 
     // Toggle
