@@ -109,11 +109,28 @@ export class SmartBotService {
       },
     });
 
+    // If customer sent a specific Order ID (e.g. "#1234" or "1234"), look it up
+    let orderById: any = null;
+    const orderIdMatch = text.match(/^#?(\d{1,6})\s*$/) || text.match(/অর্ডার\s*#?(\d{1,6})/i);
+    if (orderIdMatch) {
+      orderById = await this.prisma.order.findFirst({
+        where: { id: parseInt(orderIdMatch[1]), pageIdRef: pageId },
+        select: {
+          id: true,
+          status: true,
+          createdAt: true,
+          items: { select: { productCode: true, qty: true } },
+        },
+      });
+    }
+
     const systemPrompt = this.buildSystemPrompt(
       businessContext,
       draft,
       page,
       lastOrder,
+      orderById,
+      orderIdMatch ? parseInt(orderIdMatch[1]) : null,
     );
     const messages: { role: string; content: string }[] = [
       { role: 'system', content: systemPrompt },
@@ -238,6 +255,8 @@ export class SmartBotService {
     draft: DraftSession | null,
     page: any,
     lastOrder?: any,
+    orderById?: any,
+    queriedOrderId?: number | null,
   ): string {
     const shop = ctx.businessName
       ? `"${ctx.businessName}" নামের Bangladeshi e-commerce shop`
@@ -371,6 +390,26 @@ export class SmartBotService {
       orderTrackCtx = `\n\n## Customer-এর সর্বশেষ Order (DB থেকে)\nOrder #${lastOrder.id} — ${date}\nProducts: ${products || '?'}\nStatus: **${statusBn}**\n\n⚠️ Customer "কবে পাবো / কোথায় আছে / status / order কী হলো / cancel হয়েছে" ইত্যাদি জিজ্ঞেস করলে এই DB status দেখে CHAT action দিয়ে reply করো। অনুমান করবে না।`;
     }
 
+    // Specific Order ID lookup context
+    let orderByIdCtx = '';
+    if (orderById) {
+      const smMap: Record<string, string> = {
+        RECEIVED: '✅ অর্ডার পাওয়া হয়েছে — প্রক্রিয়া চলছে',
+        CONFIRMED: '✅ অর্ডার কনফার্ম হয়েছে — প্রস্তুত হচ্ছে',
+        PACKED: '📦 অর্ডার প্যাক হয়ে গেছে — শীঘ্রই কুরিয়ারে যাবে',
+        SHIPPED: '🚚 কুরিয়ারে পাঠানো হয়েছে — পথে আছে',
+        DELIVERED: '🎉 ডেলিভারি সম্পন্ন হয়েছে',
+        CANCELLED: '❌ অর্ডারটি বাতিল হয়েছে',
+        ISSUE: '⚠️ অর্ডারে সমস্যা আছে',
+      };
+      const snBn = smMap[orderById.status] ?? orderById.status;
+      const snProds = orderById.items.map((i: any) => `${i.productCode} x${i.qty}`).join(', ');
+      const snDate = new Date(orderById.createdAt).toLocaleDateString('bn-BD');
+      orderByIdCtx = `\n\n## Order ID দিয়ে খোঁজা Order (DB থেকে)\nOrder #${orderById.id} — ${snDate}\nProducts: ${snProds || '?'}\nStatus: **${snBn}**\n\n⚠️ Customer এই specific Order ID টি পাঠিয়েছে। উপরের status দেখে CHAT action দিয়ে reply করো।`;
+    } else if (queriedOrderId) {
+      orderByIdCtx = `\n\n## Order ID খোঁজার ফলাফল\nএই page-এ Order #${queriedOrderId} পাওয়া যায়নি। Customer-কে জানাও।`;
+    }
+
     // Task rules
     const taskRules = `\n\n## তোমার কাজ
 Customer-এর message দেখে **strictly valid JSON** return করো:
@@ -409,10 +448,10 @@ Customer-এর message দেখে **strictly valid JSON** return করো:
 9. **Order already confirmed**: যদি draft আগেই confirm হয়ে গিয়ে থাকে এবং customer "ok/ধন্যবাদ/received" বলে, তাহলে CHAT action দিয়ে সাধারণ reply করো — আর order confirm করো না।
 10. **Delivery সময় ও fee**: "## Delivery & Payment" section-এ যা **হুবহু** লেখা আছে তাই বলো। নিজে কোনো unit (ঘণ্টা/দিন/কার্যদিবস), সংখ্যা, বা estimate যোগ করবে না, বাদ দেবে না, পরিবর্তন করবে না। যদি delivery সময় "৩-৪ কার্যদিবস" লেখা থাকে, তাহলে ঠিক সেটাই বলো — "4 ঘণ্টা" বা অন্য কিছু বলো না।
 11. **Order status**: Customer "কবে পাবো / order কোথায় / cancel হয়েছে কিনা / status কী" জিজ্ঞেস করলে "## Customer-এর সর্বশেষ Order (DB থেকে)" section দেখো এবং সেই **DB status** অনুযায়ী reply দাও। নিজে কোনো status অনুমান করবে না। যদি CANCELLED হয় তাহলে বলো অর্ডার বাতিল হয়েছে; PACKED হলে বলো প্যাক হয়ে গেছে; SHIPPED হলে বলো কুরিয়ারে গেছে।
-12. **Lead capture**: Customer "trial নিতে চাই / setup করতে চাই / দাম কত / কীভাবে শুরু করব / interested" ইত্যাদি বললে CAPTURE_LEAD action দাও। শুধু নাম এবং WhatsApp নম্বর collect করো — address বা product code চাইবে না।
+12. **Lead capture**: Customer "trial নিতে চাই / setup করতে চাই / দাম কত / কীভাবে শুরু করব / interested / example দাও / demo দেখাও / কীভাবে কাজ করে / ki ki korte paro / example daw / demo দাও / বুঝিয়ে দাও / শুরু করতে চাই" ইত্যাদি বললে CAPTURE_LEAD action দাও। শুধু নাম এবং WhatsApp নম্বর collect করো — address বা product code চাইবে না।
 13. **Lead confirm**: Lead draft এ নাম ও WhatsApp দুটোই ✅ হলে CONFIRM_LEAD action দাও এবং বলো "আমাদের প্রতিনিধি শীঘ্রই আপনার WhatsApp-এ যোগাযোগ করবেন। ধন্যবাদ! 🎉"`;
 
-    return `তুমি ${shop}-এর Facebook Messenger AI sales assistant।${deliveryCtx}${paymentCtx}${productCtx}${knowledgeCtx}${catalogCtx}${draftCtx}${orderTrackCtx}${taskRules}`;
+    return `তুমি ${shop}-এর Facebook Messenger AI sales assistant।${deliveryCtx}${paymentCtx}${productCtx}${knowledgeCtx}${catalogCtx}${draftCtx}${orderTrackCtx}${orderByIdCtx}${taskRules}`;
   }
 
   private async callOpenAI(
