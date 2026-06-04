@@ -829,13 +829,13 @@ export function DashboardLayout({
                         background: 'transparent',
                         border: 'none',
                         color: th.muted,
-                        padding: '10px 10px 5px',
+                        padding: '12px 10px 6px',
                         cursor: 'pointer',
-                        fontSize: 10,
+                        fontSize: 11,
                         fontWeight: 700,
-                        letterSpacing: '0.09em',
+                        letterSpacing: '0.08em',
                         textTransform: 'uppercase',
-                        opacity: 0.6,
+                        opacity: 0.75,
                       }}
                     >
                       <span>{label}</span>
@@ -860,15 +860,16 @@ export function DashboardLayout({
                     style={{ ...th.navBtn, ...(isActive ? th.navBtnActive : {}), marginBottom: 2 }}
                   >
                     <span style={{
-                      width: 26, height: 26, borderRadius: 7, flexShrink: 0,
+                      width: 30, height: 30, borderRadius: 8, flexShrink: 0,
                       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: 13, lineHeight: 1,
+                      fontSize: 15, lineHeight: 1,
                       background: isActive
-                        ? 'rgba(99,102,241,0.22)'
-                        : 'rgba(255,255,255,0.05)',
-                      transition: 'background .12s',
+                        ? 'rgba(99,102,241,0.28)'
+                        : dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+                      transition: 'background .15s',
+                      boxShadow: isActive ? '0 0 10px rgba(99,102,241,0.35)' : 'none',
                     }}>{item.icon}</span>
-                    <span style={{ flex: 1, fontSize: 13 }}>{language === 'en' ? item.en : item.bn}</span>
+                    <span style={{ flex: 1, fontSize: 14 }}>{language === 'en' ? item.en : item.bn}</span>
                     {(item.badge || (item.key === 'AGENT_TASKS' && agentMutedCount > 0)) && (
                       <span style={{
                         fontSize: 9, fontWeight: 800, padding: '2px 6px',
