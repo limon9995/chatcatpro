@@ -14,7 +14,7 @@ echo "========================================"
 
 # 1. Install ALL dependencies (including devDeps needed for build)
 echo "[1/6] Installing all dependencies..."
-npm ci
+npm install
 
 # 2. Generate Prisma client
 echo "[2/6] Generating Prisma client..."
