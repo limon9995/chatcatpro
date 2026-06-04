@@ -1261,6 +1261,54 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect }: {
             {s.businessBotOn && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <Label text="Business সম্পর্কে বিস্তারিত তথ্য" hint="আপনার business-এর নাম, কী সেবা দেন, যোগাযোগ, ঠিকানা, সময়সূচি, FAQ — সব লিখুন। এই তথ্য থেকে AI customer-দের reply করবে।" />
+
+                {/* ChatCat service info quick-add */}
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <button
+                    style={{ ...th.btnPrimary, fontSize: 11.5, padding: '6px 12px' }}
+                    onClick={() => {
+                      const chatcatTemplate = `## ChatCat — আমাদের Service ও Pricing
+
+আমরা Facebook Messenger automation সেবা দিই। আপনার page এর bot automatically order নেবে, reply করবে, courier booking করবে।
+
+## Platform Fee
+আলোচনা সাপেক্ষ — আপনার পেজের size ও ব্যবহার অনুযায়ী admin এর সাথে কথা বলে deal হবে।
+
+## AI Usage Pricing (Pay-as-you-go)
+- Keyword reply: ৳০.০২/message
+- AI text reply: ৳০.০৫/message
+- AI SmartBot: ৳০.০৮/message
+- Customer image: ৳০.২০/image
+- Voice note: ৳১.০০/voice
+- Broadcast: ৳০.০৫/message
+- Subscriber notification: ৳০.১০/message
+- Memo print: ৳০.১০
+
+## বিনামূল্যে
+Courier booking, Accounting, CRM, Analytics, Order management
+
+## Special Feature: Subscriber Notification
+Order পরে customer subscribe করলে যেকোনো সময় নতুন পণ্যের message পাঠানো যাবে।
+Facebook Ad ছাড়া — মাত্র ৳০.১০/message।
+
+## Payment ও Trial
+- Payment: bKash, Nagad, Rocket, Bank
+- ৭ দিন সম্পূর্ণ free trial
+- Contact: WhatsApp — wa.me/8801720450797`;
+                      const existing = s.businessInfo.trim();
+                      setS(p => ({ ...p, businessInfo: existing ? existing + '\n\n' + chatcatTemplate : chatcatTemplate }));
+                    }}
+                  >
+                    ➕ ChatCat Service Info Add করুন
+                  </button>
+                  <button
+                    style={{ ...th.btnGhost, fontSize: 11.5, padding: '6px 12px', color: '#ef4444', borderColor: 'rgba(239,68,68,0.3)' }}
+                    onClick={() => setS(p => ({ ...p, businessInfo: '' }))}
+                  >
+                    🗑️ Clear
+                  </button>
+                </div>
+
                 <textarea
                   style={{ ...th.input, minHeight: 200, resize: 'vertical', fontFamily: 'inherit', fontSize: 13, lineHeight: 1.7 }}
                   placeholder={`উদাহরণ:\nআমাদের business-এর নাম: Limon Tech Diary\nআমরা যা করি: ওয়েব ডিজাইন, গ্রাফিক্স ডিজাইন, ডিজিটাল মার্কেটিং সেবা প্রদান করি\nযোগাযোগ: 01XXXXXXXXX\nইমেইল: info@example.com\nঅফিস সময়: শনি-বৃহস্পতি, সকাল ১০টা - রাত ৮টা\nঠিকানা: ঢাকা, বাংলাদেশ\n\nকাজের ধরন:\n- ওয়েবসাইট তৈরি: ৳৫,০০০ থেকে শুরু\n- লোগো ডিজাইন: ৳১,৫০০\n- ফেসবুক পেজ ম্যানেজমেন্ট: মাসে ৳৩,০০০`}
@@ -1270,6 +1318,7 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect }: {
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
                   <p style={{ fontSize: 11.5, color: th.muted, margin: 0 }}>
                     💡 যত বেশি তথ্য দেবেন, AI তত ভালো উত্তর দিতে পারবে।
+                    <span style={{ color: s.businessInfo.length > 4500 ? '#f87171' : th.muted }}> ({s.businessInfo.length} chars)</span>
                   </p>
                   <SaveRow onClick={() => save({ businessInfo: s.businessInfo })} saving={saving} />
                 </div>
@@ -1399,6 +1448,79 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect }: {
                 {s.knowledgeText.length}/3000
               </span>
             </div>
+
+            {/* ChatCat Pricing Info Panel */}
+            <div style={{ marginBottom: 10, padding: '12px 14px', borderRadius: 10, background: 'rgba(79,110,247,0.07)', border: `1px solid rgba(79,110,247,0.2)` }}>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: th.accent, marginBottom: 8 }}>📋 ChatCat Service Info — Bot কে শেখান</div>
+              <div style={{ fontSize: 11.5, color: th.muted, marginBottom: 10, lineHeight: 1.6 }}>
+                নিচের বাটনে click করলে ChatCat এর সব নতুন pricing ও service info automatically আপনার knowledge box এ add হবে। তারপর নিজের product info যোগ করুন।
+              </div>
+              <div style={{ background: th.surface, borderRadius: 8, padding: '10px 12px', fontSize: 11.5, color: th.muted, lineHeight: 1.8, border: `1px solid ${th.border}`, marginBottom: 10, maxHeight: 160, overflowY: 'auto' }}>
+                <strong style={{ color: th.text }}>ChatCat — যা bot জানবে:</strong><br/>
+                ✦ Platform fee: আলোচনা সাপেক্ষ (admin এর সাথে কথা বলে deal)<br/>
+                ✦ Keyword reply: ৳০.০২/msg | AI reply: ৳০.০৫/msg | SmartBot: ৳০.০৮/msg<br/>
+                ✦ Customer image (Vision AI): ৳০.২০ | OCR: ৳০.০২–০.০৫<br/>
+                ✦ Voice note (STT): ৳১.০০ | Product analyze: ৳০.২০<br/>
+                ✦ Broadcast: ৳০.০৫/msg | Subscriber notification: ৳০.১০/msg<br/>
+                ✦ Memo print: ৳০.১০ | Comment reply: ৳০.০৫<br/>
+                ✦ Courier, Accounting, CRM — বিনামূল্যে<br/>
+                ✦ ১টি image + ৫ AI reply = মাত্র ৬০–৮০ পয়সা<br/>
+                ✦ Subscriber notification: Facebook Ad ছাড়াই পুরনো customer reach — ৳০.১০/msg<br/>
+                ✦ Payment: bKash/Nagad wallet recharge | ৭ দিন free trial
+              </div>
+              <button
+                style={{ ...th.btnPrimary, fontSize: 12, padding: '7px 14px' }}
+                onClick={() => {
+                  const chatcatInfo = `## ChatCat Service Information
+
+প্ল্যাটফর্ম ফি: আলোচনা সাপেক্ষ — পেজের size ও ব্যবহার অনুযায়ী admin এর সাথে deal হবে।
+
+## AI Usage Pricing (Wallet থেকে কাটে)
+- Keyword/Template reply: ৳০.০২ per message (কোনো AI নেই)
+- AI text reply: ৳০.০৫ per message
+- AI SmartBot reply: ৳০.০৮ per message
+- Customer image (Vision AI): ৳০.২০ per image
+- OCR — Local scan: ৳০.০২ per scan
+- OCR — AI Gemini: ৳০.০৫ per scan
+- Voice note (STT/Whisper): ৳১.০০ per voice note
+- Product auto-analyze: ৳০.২০ per product
+- Broadcast message: ৳০.০৫ per message
+- Subscriber notification: ৳০.১০ per message
+- Comment reply: ৳০.০৫ per reply
+- Memo/Invoice print: ৳০.১০ per memo
+
+## বিনামূল্যে (Wallet থেকে কাটে না)
+- Courier booking (Pathao, Steadfast, RedX, Paperfly)
+- Order management ও tracking
+- Accounting ও profit calculation
+- CRM (customer database)
+- Analytics ও reports
+- Product catalog
+
+## Real Example
+১টি customer image + ৫টি AI reply = ৳০.২০ + (৫ × ৳০.০৮) = মাত্র ৳০.৬০
+
+## Subscriber Notification Feature
+Order complete বা cancel হলে bot customer কে subscribe করতে বলে।
+Subscribed customer দের যেকোনো সময় নতুন পণ্যের message পাঠানো যায়।
+Facebook Ad ছাড়াই — মাত্র ৳০.১০/message।
+১০০০ subscriber = ৳১০০ (Facebook Ad এ লাগত ৳৫০০–২০০০)
+
+## Payment ও Billing
+- Wallet recharge: bKash, Nagad, Rocket, Bank
+- ৭ দিন সম্পূর্ণ free trial — কোনো credit card লাগে না
+- Balance শেষ হলে AI বন্ধ হবে — courier ও order নেওয়া চলবে`;
+                  const existing = s.knowledgeText.trim();
+                  const newText = existing
+                    ? existing + '\n\n' + chatcatInfo
+                    : chatcatInfo;
+                  setS(p => ({ ...p, knowledgeText: newText.slice(0, 3000) }));
+                }}
+              >
+                ➕ ChatCat Info Knowledge এ Add করুন
+              </button>
+            </div>
+
             <textarea
               style={{ ...inp, minHeight: 140, resize: 'vertical', fontFamily: 'inherit', fontSize: 13 }}
               value={s.knowledgeText}
