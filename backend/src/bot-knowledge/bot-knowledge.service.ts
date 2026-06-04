@@ -1596,6 +1596,12 @@ export class BotKnowledgeService {
         fallback:
           'ছবিটা পেয়েছি ✅ মিলিয়ে দেখছি... ⏳\n\nভালো match পেতে একবারে ১টা product-এর clear photo দিন। চাইলে সাথে color/type-ও লিখতে পারেন 💖',
       },
+      ocr_low_confidence: {
+        template:
+          'এই ছবিতে কোনো product পাইনি 😊 এটা কি product-এর ছবি ছিল?\n\nProduct order করতে:\n• Product-এর clear photo বা screenshot দিন\n• অথবা product code সরাসরি লিখুন 💖',
+        fallback:
+          'এই ছবিতে কোনো product পাইনি 😊 Product order করতে product-এর ছবি বা code দিন 💖',
+      },
       ocr_fail: {
         template:
           'দুঃখিত, ছবিটি থেকে code পড়া যায়নি। পরিষ্কার photo/screenshot বা product code দিন।\n\nভালো match পেতে:\n• একবারে ১টা product দিন\n• পুরো product যেন দেখা যায়\n• blur ছাড়া clear photo দিন\n• চাইলে color/type লিখুন 💖',
