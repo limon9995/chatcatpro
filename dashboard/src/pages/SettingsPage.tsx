@@ -1267,6 +1267,7 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect }: {
                   <button
                     style={{ ...th.btnPrimary, fontSize: 11.5, padding: '6px 12px' }}
                     onClick={() => {
+                      if (s.businessInfo.includes('## ChatCat — আমাদের Service ও Pricing')) return;
                       const chatcatTemplate = `## ChatCat — আমাদের Service ও Pricing
 
 আমরা Facebook Messenger automation সেবা দিই। আপনার page এর bot automatically order নেবে, reply করবে, courier booking করবে।
@@ -1296,7 +1297,8 @@ Facebook Ad ছাড়া — মাত্র ৳০.১০/message।
 - ৭ দিন সম্পূর্ণ free trial
 - Contact: WhatsApp — wa.me/8801720450797`;
                       const existing = s.businessInfo.trim();
-                      setS(p => ({ ...p, businessInfo: existing ? existing + '\n\n' + chatcatTemplate : chatcatTemplate }));
+                      const combined = existing ? existing + '\n\n' + chatcatTemplate : chatcatTemplate;
+                      setS(p => ({ ...p, businessInfo: combined.slice(0, 5000) }));
                     }}
                   >
                     ➕ ChatCat Service Info Add করুন
@@ -1310,15 +1312,16 @@ Facebook Ad ছাড়া — মাত্র ৳০.১০/message।
                 </div>
 
                 <textarea
-                  style={{ ...th.input, minHeight: 200, resize: 'vertical', fontFamily: 'inherit', fontSize: 13, lineHeight: 1.7 }}
+                  style={{ ...th.input, minHeight: 200, resize: 'vertical', fontFamily: 'inherit', fontSize: 13, lineHeight: 1.7, borderColor: s.businessInfo.length > 4800 ? '#f87171' : undefined }}
                   placeholder={`উদাহরণ:\nআমাদের business-এর নাম: Limon Tech Diary\nআমরা যা করি: ওয়েব ডিজাইন, গ্রাফিক্স ডিজাইন, ডিজিটাল মার্কেটিং সেবা প্রদান করি\nযোগাযোগ: 01XXXXXXXXX\nইমেইল: info@example.com\nঅফিস সময়: শনি-বৃহস্পতি, সকাল ১০টা - রাত ৮টা\nঠিকানা: ঢাকা, বাংলাদেশ\n\nকাজের ধরন:\n- ওয়েবসাইট তৈরি: ৳৫,০০০ থেকে শুরু\n- লোগো ডিজাইন: ৳১,৫০০\n- ফেসবুক পেজ ম্যানেজমেন্ট: মাসে ৳৩,০০০`}
                   value={s.businessInfo}
-                  onChange={e => setS(p => ({ ...p, businessInfo: e.target.value }))}
+                  maxLength={5000}
+                  onChange={e => setS(p => ({ ...p, businessInfo: e.target.value.slice(0, 5000) }))}
                 />
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
                   <p style={{ fontSize: 11.5, color: th.muted, margin: 0 }}>
                     💡 যত বেশি তথ্য দেবেন, AI তত ভালো উত্তর দিতে পারবে।
-                    <span style={{ color: s.businessInfo.length > 4500 ? '#f87171' : th.muted }}> ({s.businessInfo.length} chars)</span>
+                    <span style={{ color: s.businessInfo.length > 4800 ? '#f87171' : th.muted }}> {s.businessInfo.length}/5000</span>
                   </p>
                   <SaveRow onClick={() => save({ businessInfo: s.businessInfo })} saving={saving} />
                 </div>
@@ -1471,6 +1474,7 @@ Facebook Ad ছাড়া — মাত্র ৳০.১০/message।
               <button
                 style={{ ...th.btnPrimary, fontSize: 12, padding: '7px 14px' }}
                 onClick={() => {
+                  if (s.knowledgeText.includes('## ChatCat Service Information')) return;
                   const chatcatInfo = `## ChatCat Service Information
 
 প্ল্যাটফর্ম ফি: আলোচনা সাপেক্ষ — পেজের size ও ব্যবহার অনুযায়ী admin এর সাথে deal হবে।
