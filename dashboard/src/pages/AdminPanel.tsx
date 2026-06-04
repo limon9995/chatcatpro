@@ -39,12 +39,12 @@ const DEFAULT_FEATURE_ACCESS = Object.fromEntries(
 
 interface ClientPage {
   id: number; pageId: string; pageName: string;
-  isActive: boolean; automationOn: boolean;
+  isActive: boolean; automationOn: boolean; webOrderEnabled?: boolean;
   masterPageId?: number | null;
   lastReconnectedAt?: string | null;
   previousPageId?: string | null;
   createdAt?: string;
-  owner?: { id: string; username: string; name: string };
+  owner?: { id: string; username: string; name: string; isActive?: boolean };
   fbAppId?: string | null;
   hasCustomApp?: boolean;
 }
@@ -975,6 +975,12 @@ export function AdminPanel({ th, onToast, onLogout }: {
                       <span style={{ ...th.pill, ...(pg.automationOn ? th.pillGreen : th.pillRed), fontSize: 10 }}>
                         {pg.automationOn ? '🟢 Bot ON' : '🔴 Bot OFF'}
                       </span>
+                      {pg.owner?.isActive === false && (
+                        <span style={{ ...th.pill, background: 'rgba(239,68,68,.15)', color: '#ef4444', fontSize: 10 }}>🚫 Account OFF</span>
+                      )}
+                      {!pg.isActive && (
+                        <span style={{ ...th.pill, background: 'rgba(245,158,11,.15)', color: '#d97706', fontSize: 10 }}>⏸ Website OFF</span>
+                      )}
                       <span style={{ fontSize: 10, color: th.muted }}>#{pg.id}</span>
                     </div>
                   </div>
@@ -1012,6 +1018,59 @@ export function AdminPanel({ th, onToast, onLogout }: {
               {/* Owner's total page count */}
               <div style={{ marginTop: 4, fontSize: 11, color: th.muted }}>
                 এই owner এর মোট {pages.filter(p => p.owner?.id === selectedPage.owner?.id).length} টি page আছে
+              </div>
+              {/* Account & Website controls */}
+              <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+                {selectedPage.owner && (
+                  <button
+                    style={{
+                      padding: '6px 14px', borderRadius: 8, border: 'none', cursor: 'pointer',
+                      fontWeight: 800, fontSize: 12, fontFamily: 'inherit',
+                      background: selectedPage.owner.isActive !== false ? 'rgba(239,68,68,.12)' : 'rgba(22,163,74,.12)',
+                      color: selectedPage.owner.isActive !== false ? '#ef4444' : '#16a34a',
+                    }}
+                    onClick={async () => {
+                      const newVal = selectedPage.owner!.isActive === false;
+                      try {
+                        await request(`${BASE}/users/${selectedPage.owner!.id}/account-status`, {
+                          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ isActive: newVal }),
+                        });
+                        setPages(prev => prev.map(p =>
+                          p.owner?.id === selectedPage.owner?.id
+                            ? { ...p, owner: { ...p.owner!, isActive: newVal } }
+                            : p
+                        ));
+                        setSelectedPage(prev => prev ? { ...prev, owner: { ...prev.owner!, isActive: newVal } } : prev);
+                        onToast(newVal ? 'Account চালু করা হয়েছে' : 'Account বন্ধ করা হয়েছে', 'success');
+                      } catch (e: any) { onToast(e.message, 'error'); }
+                    }}
+                  >
+                    {selectedPage.owner.isActive !== false ? '🚫 Account OFF করুন' : '✅ Account ON করুন'}
+                  </button>
+                )}
+                <button
+                  style={{
+                    padding: '6px 14px', borderRadius: 8, border: 'none', cursor: 'pointer',
+                    fontWeight: 800, fontSize: 12, fontFamily: 'inherit',
+                    background: selectedPage.isActive ? 'rgba(245,158,11,.12)' : 'rgba(22,163,74,.12)',
+                    color: selectedPage.isActive ? '#d97706' : '#16a34a',
+                  }}
+                  onClick={async () => {
+                    const newVal = !selectedPage.isActive;
+                    try {
+                      await request(`${BASE}/pages/${selectedPage.id}/website-status`, {
+                        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ isActive: newVal }),
+                      });
+                      setPages(prev => prev.map(p => p.id === selectedPage.id ? { ...p, isActive: newVal } : p));
+                      setSelectedPage(prev => prev ? { ...prev, isActive: newVal } : prev);
+                      onToast(newVal ? 'Website চালু করা হয়েছে' : 'Website বন্ধ করা হয়েছে', 'success');
+                    } catch (e: any) { onToast(e.message, 'error'); }
+                  }}
+                >
+                  {selectedPage.isActive ? '⏸ Website OFF করুন' : '▶ Website ON করুন'}
+                </button>
               </div>
             </div>
             <button style={th.btnGhost} onClick={() => { setSelectedPage(null); setClientCfg(null); setPageSettings(null); }}>✕</button>

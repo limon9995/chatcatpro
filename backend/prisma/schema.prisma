@@ -856,8 +856,9 @@ model PaymentCredential {
 model PendingPayment {
   id           String   @id @default(cuid())
   pageId       Int
-  psid         String   // Facebook/IG sender ID
+  psid         String   // Facebook/IG sender ID; "WEB" for web-initiated payments
   draftJson    String   // serialized DraftSession snapshot
+  webOrderId   Int?     // set for web orders — used in IPN to confirm the order directly
   amount       Float
   method       String   // gateway method used
   gatewayTxId  String?  // gateway's own transaction reference

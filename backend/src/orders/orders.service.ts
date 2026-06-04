@@ -370,6 +370,116 @@ export class OrdersService {
     });
   }
 
+  // ── Web Order Methods ──────────────────────────────────────────────────────
+
+  async createWebOrder(data: {
+    pageIdRef: number;
+    customerName: string;
+    phone: string;
+    address: string;
+    orderNote?: string;
+    items: { productCode: string; qty: number; unitPrice: number; productName?: string }[];
+    paymentMode: string;
+  }) {
+    const psid = `WEB-${data.phone.replace(/\D/g, '')}`;
+    const paymentStatus = data.paymentMode === 'cod' ? 'not_required' : 'pending_proof';
+    return this.prisma.order.create({
+      data: {
+        pageIdRef: data.pageIdRef,
+        customerPsid: psid,
+        customerName: data.customerName,
+        phone: data.phone,
+        address: data.address,
+        status: 'RECEIVED',
+        source: 'WEBSITE',
+        orderNote: data.orderNote ?? null,
+        paymentStatus,
+        items: {
+          create: data.items.map((it) => ({
+            productCode: it.productCode,
+            qty: it.qty,
+            unitPrice: it.unitPrice,
+            productName: it.productName ?? null,
+          })),
+        },
+      },
+      include: { items: true },
+    });
+  }
+
+  async confirmWebOrderPayment(orderId: number, pageIdRef: number) {
+    const order = await this.prisma.order.findFirst({ where: { id: orderId, pageIdRef } });
+    if (!order) throw new NotFoundException('Order not found');
+    return this.prisma.order.update({
+      where: { id: orderId },
+      data: {
+        paymentStatus: 'advance_paid',
+        paymentVerifyStatus: 'verified',
+        status: 'CONFIRMED',
+        confirmedAt: new Date(),
+      },
+    });
+  }
+
+  async uploadWebOrderScreenshot(
+    orderId: number,
+    pageIdRef: number,
+    file: any,
+    transactionId?: string,
+  ) {
+    const order = await this.prisma.order.findFirst({ where: { id: orderId, pageIdRef } });
+    if (!order) throw new NotFoundException('Order not found');
+    if (order.paymentStatus !== 'pending_proof') {
+      throw new BadRequestException('Payment proof not expected for this order');
+    }
+
+    const path = require('path') as typeof import('path');
+    const fs = require('fs/promises') as typeof import('fs/promises');
+    const { randomUUID } = require('crypto') as typeof import('crypto');
+
+    const dir = path.join(process.cwd(), 'storage', 'payment-proofs', String(pageIdRef));
+    await fs.mkdir(dir, { recursive: true });
+    const rawExt = path.extname(file.originalname || '').toLowerCase();
+    const ext = ['.jpg', '.jpeg', '.png', '.webp'].includes(rawExt) ? rawExt : '.jpg';
+    const filename = `${Date.now()}-${randomUUID().slice(0, 8)}${ext}`;
+    await fs.writeFile(path.join(dir, filename), file.buffer);
+    const url = `/storage/payment-proofs/${pageIdRef}/${filename}`;
+
+    return this.prisma.order.update({
+      where: { id: orderId },
+      data: {
+        paymentStatus: 'advance_paid',
+        paymentScreenshotUrl: url,
+        transactionId: transactionId ?? null,
+        paymentVerifyStatus: 'pending_review',
+      },
+    });
+  }
+
+  async getWebOrderStatus(orderId: number, pageIdRef: number) {
+    const order = await this.prisma.order.findFirst({
+      where: { id: orderId, pageIdRef },
+      select: {
+        id: true,
+        status: true,
+        paymentStatus: true,
+        createdAt: true,
+        items: { select: { productCode: true, qty: true, productName: true, unitPrice: true } },
+      },
+    });
+    if (!order) throw new NotFoundException('Order not found');
+    const statusMap: Record<string, string> = {
+      RECEIVED: '✅ অর্ডার পাওয়া হয়েছে — প্রক্রিয়া চলছে',
+      PENDING: '⏳ অর্ডার পেন্ডিং আছে',
+      CONFIRMED: '✅ অর্ডার কনফার্ম হয়েছে — প্রস্তুত হচ্ছে',
+      PACKED: '📦 অর্ডার প্যাক হয়ে গেছে — শীঘ্রই কুরিয়ারে যাবে',
+      DELIVERED: '🎉 ডেলিভারি সম্পন্ন হয়েছে',
+      CANCELLED: '❌ অর্ডারটি বাতিল হয়েছে',
+      ISSUE: '⚠️ অর্ডারে সমস্যা আছে — আমাদের সাথে যোগাযোগ করুন',
+    };
+    return { ...order, statusBn: statusMap[order.status] ?? order.status };
+  }
+
   // ── Helpers ────────────────────────────────────────────────────────────────
   async findOrFail(id: number, pageId?: number) {
     const order: any = await this.prisma.order.findUnique({

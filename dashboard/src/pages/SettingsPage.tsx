@@ -13,7 +13,7 @@ interface Settings {
   currencySymbol: string; codLabel: string; productCodePrefix: string;
   deliveryFeeInsideDhaka: number; deliveryFeeOutsideDhaka: number;
   deliveryTimeText: string;
-  paymentMode: string; advanceAmount: number; advanceBkash: string; advanceNagad: string; advancePaymentMessage: string;
+  paymentMode: string; advanceAmount: number; advanceBkash: string; advanceNagad: string; advancePaymentMessage: string; webOrderEnabled: boolean;
   automationOn: boolean; ocrOn: boolean;
   waEnabled: boolean; waPhoneNumberId: string; waVerifyToken: string; waTokenSet: boolean; waFallbackTemplateName: string;
   igEnabled: boolean; igBusinessAccountId: string; igVerifyToken: string; igTokenSet: boolean; igCommentToDmEnabled: boolean;
@@ -54,7 +54,7 @@ const S0: Settings = {
   catalogSlug: '',
   currencySymbol: '৳', codLabel: 'COD', productCodePrefix: 'DF',
   deliveryFeeInsideDhaka: 80, deliveryFeeOutsideDhaka: 120, deliveryTimeText: '',
-  paymentMode: 'cod', advanceAmount: 0, advanceBkash: '', advanceNagad: '', advancePaymentMessage: '',
+  paymentMode: 'cod', advanceAmount: 0, advanceBkash: '', advanceNagad: '', advancePaymentMessage: '', webOrderEnabled: false,
   knowledgeText: '',
   automationOn: false, ocrOn: false,
   waEnabled: false, waPhoneNumberId: '', waVerifyToken: '', waTokenSet: false, waFallbackTemplateName: '',
@@ -1205,6 +1205,28 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect }: {
           )}
         </Section>
 
+        {/* Web Order Toggle */}
+        <Section title="🌐 Website Order" desc={copy('Catalog website থেকে সরাসরি order নেওয়া চালু/বন্ধ করুন। চালু থাকলে product page এ "Website থেকে Order করুন" বাটন দেখাবে।', 'Enable or disable direct web ordering from the catalog website.')}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0' }}>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 14 }}>{copy('Website থেকে Order', 'Order from Website')}</div>
+              <div style={{ fontSize: 12.5, color: th.muted, marginTop: 2 }}>{copy('Customer সরাসরি catalog website থেকে order দিতে পারবে', 'Customers can place orders directly from the catalog website')}</div>
+            </div>
+            <button
+              onClick={() => setS(p => ({ ...p, webOrderEnabled: !p.webOrderEnabled }))}
+              style={{
+                padding: '8px 18px', borderRadius: 10, border: 'none', cursor: 'pointer',
+                fontWeight: 800, fontSize: 13, fontFamily: 'inherit',
+                background: s.webOrderEnabled ? '#059669' : th.border,
+                color: s.webOrderEnabled ? '#fff' : th.muted,
+                transition: 'all .15s',
+              }}
+            >
+              {s.webOrderEnabled ? '✅ চালু' : '⏸ বন্ধ'}
+            </button>
+          </div>
+        </Section>
+
         <SaveRow onClick={() => save({
           deliveryFeeInsideDhaka: s.deliveryFeeInsideDhaka,
           deliveryFeeOutsideDhaka: s.deliveryFeeOutsideDhaka,
@@ -1212,6 +1234,7 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect }: {
           paymentMode: s.paymentMode, advanceAmount: s.advanceAmount,
           advanceBkash: s.advanceBkash, advanceNagad: s.advanceNagad,
           advancePaymentMessage: s.advancePaymentMessage,
+          webOrderEnabled: s.webOrderEnabled,
         })} saving={saving}/>
       </div>
     </div>

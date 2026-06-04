@@ -1,8 +1,24 @@
-import { Controller, Get, Param, Query, Res } from '@nestjs/common';
+import {
+  BadRequestException,
+  Controller,
+  Get,
+  NotFoundException,
+  Param,
+  ParseIntPipe,
+  Post,
+  Query,
+  Res,
+  UploadedFile,
+  UseInterceptors,
+  Body,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { SkipThrottle } from '@nestjs/throttler';
 import type { Response } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProductsService } from '../products/products.service';
+import { OrdersService } from '../orders/orders.service';
+import { PaymentVerifyService } from '../payment-verify/payment-verify.service';
 
 // ── Video URL helpers ─────────────────────────────────────────────────────────
 
@@ -118,6 +134,8 @@ export class CatalogController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly productsService: ProductsService,
+    private readonly ordersService: OrdersService,
+    private readonly paymentVerify: PaymentVerifyService,
   ) {}
 
   private normalizeCodeList(raw?: string): string[] {
@@ -184,6 +202,12 @@ export class CatalogController {
         memoFooterText: true,
         catalogMessengerUrl: true,
         catalogSlug: true,
+        paymentMode: true,
+        advanceAmount: true,
+        advanceBkash: true,
+        advanceNagad: true,
+        advancePaymentMessage: true,
+        webOrderEnabled: true,
       },
     });
     if (!page) {
@@ -233,6 +257,12 @@ export class CatalogController {
         page.pageId,
         page.catalogMessengerUrl,
       ),
+      webOrderEnabled: (page as any).webOrderEnabled ?? false,
+      paymentMode: (page as any).paymentMode ?? 'cod',
+      advanceAmount: (page as any).advanceAmount ?? 0,
+      advanceBkash: (page as any).advanceBkash ?? '',
+      advanceNagad: (page as any).advanceNagad ?? '',
+      advancePaymentMessage: (page as any).advancePaymentMessage ?? '',
     };
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.send(
@@ -273,6 +303,192 @@ export class CatalogController {
     void this.prisma.page.update({ where: { id: page.id }, data: { catalogViews: { increment: 1 } } }).catch(() => {});
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.send(this.buildHtml(data, q || '', { selectionMode: select === '1', shortlistCodes: this.normalizeCodeList(codes) }));
+  }
+
+  // ── Web Order Endpoints ────────────────────────────────────────────────────
+
+  @Post(':pageId/web-order')
+  async createWebOrder(
+    @Param('pageId') pid: string,
+    @Body() body: any,
+  ) {
+    const page = await this.prisma.page.findFirst({
+      where: pageWhere(pid),
+      select: {
+        id: true,
+        paymentMode: true,
+        advanceAmount: true,
+        advanceBkash: true,
+        advanceNagad: true,
+        advancePaymentMessage: true,
+        webOrderEnabled: true,
+      },
+    });
+    if (!page) throw new NotFoundException('Page not found');
+    if (!page.webOrderEnabled) throw new BadRequestException('Web ordering is not enabled for this page');
+
+    const { customerName, phone, address, productCode, qty, price, productName, orderNote } = body;
+    if (!customerName?.trim()) throw new BadRequestException('নাম দিন');
+    if (!phone?.trim()) throw new BadRequestException('ফোন নম্বর দিন');
+    if (!address?.trim()) throw new BadRequestException('ঠিকানা দিন');
+    if (!productCode) throw new BadRequestException('Product code required');
+
+    const order = await this.ordersService.createWebOrder({
+      pageIdRef: page.id,
+      customerName: String(customerName).trim(),
+      phone: String(phone).trim(),
+      address: String(address).trim(),
+      orderNote: orderNote?.trim() || undefined,
+      items: [{
+        productCode: String(productCode).toUpperCase(),
+        qty: Math.max(1, Number(qty) || 1),
+        unitPrice: Number(price) || 0,
+        productName: productName || undefined,
+      }],
+      paymentMode: page.paymentMode,
+    });
+
+    const requiresPayment = order.paymentStatus === 'pending_proof';
+    if (!requiresPayment) {
+      return { orderId: order.id, paymentRequired: false };
+    }
+
+    // Check for gateway / direct credential
+    const credential = await this.paymentVerify.getActiveCredential(page.id);
+    if (credential?.type === 'gateway') {
+      const { randomUUID } = require('crypto') as typeof import('crypto');
+      const sessionToken = randomUUID();
+      const apiBase = process.env.API_BASE_URL || `http://localhost:${process.env.PORT || 3000}`;
+      await this.prisma.pendingPayment.create({
+        data: {
+          pageId: page.id,
+          psid: 'WEB',
+          draftJson: JSON.stringify({ webOrder: true }),
+          amount: page.advanceAmount || 0,
+          method: credential.method,
+          sessionToken,
+          webOrderId: order.id,
+          expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+        },
+      });
+      const paymentUrl = await this.paymentVerify.generateGatewayLink(
+        page.id,
+        credential.method,
+        sessionToken,
+        page.advanceAmount || 0,
+        apiBase,
+      );
+      return { orderId: order.id, paymentRequired: true, method: 'gateway', paymentUrl };
+    }
+
+    if (credential?.type === 'direct') {
+      return {
+        orderId: order.id,
+        paymentRequired: true,
+        method: 'direct',
+        directMethod: credential.method,
+        advanceAmount: page.advanceAmount,
+        advanceBkash: page.advanceBkash,
+        advanceNagad: page.advanceNagad,
+      };
+    }
+
+    return {
+      orderId: order.id,
+      paymentRequired: true,
+      method: 'manual',
+      advanceAmount: page.advanceAmount,
+      advanceBkash: page.advanceBkash,
+      advanceNagad: page.advanceNagad,
+      advancePaymentMessage: page.advancePaymentMessage,
+    };
+  }
+
+  @Post(':pageId/web-order/:orderId/verify-direct')
+  async verifyDirectPayment(
+    @Param('pageId') pid: string,
+    @Param('orderId', ParseIntPipe) orderId: number,
+    @Body() body: any,
+  ) {
+    const page = await this.prisma.page.findFirst({
+      where: pageWhere(pid),
+      select: { id: true, advanceAmount: true },
+    });
+    if (!page) throw new NotFoundException('Page not found');
+
+    const credential = await this.paymentVerify.getActiveCredential(page.id);
+    if (!credential || credential.type !== 'direct') throw new BadRequestException('No direct payment credential configured');
+
+    const result = await this.paymentVerify.verifyDirect(
+      page.id,
+      credential.method,
+      String(body.transactionId || ''),
+      page.advanceAmount || 0,
+    );
+
+    if (result.verified) {
+      await this.ordersService.confirmWebOrderPayment(orderId, page.id);
+      return { success: true, verified: true };
+    }
+
+    return { success: false, verified: false, fallbackToScreenshot: true, message: result.errorMessage };
+  }
+
+  @Post(':pageId/web-order/:orderId/payment-proof')
+  @UseInterceptors(FileInterceptor('screenshot', { limits: { fileSize: 5 * 1024 * 1024 } }))
+  async uploadPaymentProof(
+    @Param('pageId') pid: string,
+    @Param('orderId', ParseIntPipe) orderId: number,
+    @UploadedFile() file: any,
+    @Body('transactionId') transactionId?: string,
+  ) {
+    const page = await this.prisma.page.findFirst({
+      where: pageWhere(pid),
+      select: { id: true },
+    });
+    if (!page) throw new NotFoundException('Page not found');
+    if (!file?.buffer) throw new BadRequestException('Screenshot required');
+    await this.ordersService.uploadWebOrderScreenshot(orderId, page.id, file, transactionId);
+    return { success: true };
+  }
+
+  @Get(':pageId/order-status/:orderId')
+  async getOrderStatus(
+    @Param('pageId') pid: string,
+    @Param('orderId', ParseIntPipe) orderId: number,
+  ) {
+    const page = await this.prisma.page.findFirst({
+      where: pageWhere(pid),
+      select: { id: true },
+    });
+    if (!page) throw new NotFoundException('Page not found');
+    return this.ordersService.getWebOrderStatus(orderId, page.id);
+  }
+
+  @Get(':pageId/track')
+  async getTrackPage(@Param('pageId') pid: string, @Res() res: Response) {
+    const page = await this.prisma.page.findFirst({
+      where: pageWhere(pid),
+      select: { id: true },
+    });
+    if (!page) { res.status(404).send('<h2>Not found</h2>'); return; }
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(this.buildTrackHtml(String(page.id)));
+  }
+
+  @Get(':pageId/order-success/:orderId')
+  async getOrderSuccessPage(
+    @Param('pageId') pid: string,
+    @Param('orderId', ParseIntPipe) orderId: number,
+    @Res() res: Response,
+  ) {
+    const page = await this.prisma.page.findFirst({
+      where: pageWhere(pid),
+      select: { id: true },
+    });
+    if (!page) { res.status(404).send('<h2>Not found</h2>'); return; }
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(this.buildOrderSuccessHtml(String(page.id), orderId));
   }
 
   // Public HTML catalog page
@@ -842,6 +1058,10 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:var(--b
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
             ${inStock ? 'Messenger এ Order করুন' : 'Stock নেই'}
           </a>
+          ${page.webOrderEnabled && inStock ? `<button class="btn-order" style="background:linear-gradient(135deg,#059669,#047857);box-shadow:0 4px 18px rgba(5,150,105,.35)" onclick="woOpen()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
+            Website থেকে Order করুন
+          </button>` : ''}
           <a class="btn-secondary" href="${catalogHref}">
             🛍️ ${shortlistCodes.length ? 'শর্টলিস্টে ফিরে যান' : 'সব Product দেখুন'}
           </a>
@@ -872,11 +1092,14 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:var(--b
 ${
   inStock
     ? `
-<div class="mobile-cta">
-  <a class="btn-order" href="${mmeOrderUrl}" target="_blank" rel="noopener">
+<div class="mobile-cta" style="display:flex;gap:10px;flex-wrap:wrap">
+  <a class="btn-order" href="${mmeOrderUrl}" target="_blank" rel="noopener" style="flex:1;min-width:0">
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-    Messenger এ Order করুন
+    Messenger
   </a>
+  ${page.webOrderEnabled ? `<button class="btn-order" onclick="woOpen()" style="flex:1;min-width:0;background:linear-gradient(135deg,#059669,#047857);box-shadow:0 4px 18px rgba(5,150,105,.35)">
+    🌐 Website Order
+  </button>` : ''}
 </div>`
     : ''
 }
@@ -899,6 +1122,248 @@ ${
     }
   </div>
 </footer>
+
+${page.webOrderEnabled ? `
+<!-- ── Web Order Modal ── -->
+<style>
+.wo-overlay{display:none;position:fixed;inset:0;z-index:600;background:rgba(0,0,0,.55);backdrop-filter:blur(4px);align-items:flex-end;justify-content:center;padding:0}
+@media(min-width:480px){.wo-overlay{align-items:center;padding:16px}}
+.wo-overlay.open{display:flex}
+.wo-sheet{background:var(--surface);border-radius:22px 22px 0 0;width:100%;max-width:480px;max-height:92vh;overflow-y:auto;box-shadow:0 -8px 40px rgba(0,0,0,.18);animation:slideUp .28s ease both}
+@media(min-width:480px){.wo-sheet{border-radius:22px;animation:fadeUp .25s ease both}}
+@keyframes slideUp{from{transform:translateY(60px);opacity:0}to{transform:none;opacity:1}}
+@keyframes fadeUp{from{transform:translateY(20px);opacity:0}to{transform:none;opacity:1}}
+.wo-head{padding:20px 20px 0;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);padding-bottom:14px}
+.wo-title{font-size:16px;font-weight:800;color:var(--text)}
+.wo-close{width:30px;height:30px;border-radius:50%;border:1.5px solid var(--border);background:var(--bg);cursor:pointer;font-size:16px;color:var(--muted);display:flex;align-items:center;justify-content:center}
+.wo-body{padding:18px 20px 24px;display:flex;flex-direction:column;gap:13px}
+.wo-lbl{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px}
+.wo-inp{width:100%;padding:11px 13px;border-radius:11px;border:1.5px solid var(--border);background:var(--bg);color:var(--text);font-size:14px;font-family:inherit;outline:none;transition:border-color .15s}
+.wo-inp:focus{border-color:var(--p)}
+.wo-row2{display:grid;grid-template-columns:1fr 80px;gap:10px}
+.wo-product-info{padding:12px 14px;background:var(--bg);border-radius:12px;border:1px solid var(--border);font-size:13.5px;color:var(--text)}
+.wo-product-info strong{color:var(--p);font-size:15px}
+.wo-btn{width:100%;padding:13px;border-radius:13px;border:none;background:linear-gradient(135deg,#059669,#047857);color:#fff;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 4px 18px rgba(5,150,105,.35)}
+.wo-btn:disabled{opacity:.6;cursor:not-allowed}
+.wo-err{font-size:13px;color:#ef4444;padding:9px 12px;background:#fee2e2;border-radius:8px;border:1px solid #fecaca;display:none}
+.wo-payment-box{padding:15px;background:color-mix(in srgb,var(--p) 8%,transparent);border:1.5px solid color-mix(in srgb,var(--p) 25%,transparent);border-radius:13px;font-size:13.5px;color:var(--text);line-height:1.7}
+.wo-num{font-size:22px;font-weight:900;color:var(--p);letter-spacing:.04em}
+.wo-file-area{display:flex;align-items:center;justify-content:center;gap:8px;padding:14px;border-radius:12px;border:2px dashed var(--border);cursor:pointer;font-size:13.5px;font-weight:600;color:var(--muted);transition:border-color .15s;background:var(--bg)}
+.wo-file-area:hover{border-color:var(--p);color:var(--p)}
+.wo-success{text-align:center;padding:20px 0 8px}
+.wo-success .wo-icon{font-size:52px;margin-bottom:12px}
+.wo-success h3{font-size:18px;font-weight:800;color:#059669;margin-bottom:6px}
+.wo-success .wo-oid{font-size:32px;font-weight:900;color:var(--p);margin:10px 0}
+.wo-success .wo-msg{font-size:13px;color:var(--sub);line-height:1.6;padding:12px 14px;background:var(--bg);border-radius:10px;border:1px solid var(--border);text-align:left;margin-top:10px}
+.wo-step{display:none}.wo-step.active{display:block}
+</style>
+
+<div class="wo-overlay" id="woModal" onclick="if(event.target===this)woClose()">
+  <div class="wo-sheet">
+    <div class="wo-head">
+      <span class="wo-title" id="woTitle">🛒 Order করুন</span>
+      <button class="wo-close" onclick="woClose()">✕</button>
+    </div>
+    <div class="wo-body">
+
+      <!-- Step 0: Order Form -->
+      <div class="wo-step active" id="woStep0">
+        <div class="wo-product-info">
+          <strong>${esc(p.name || p.code)}</strong><br>
+          <span style="font-size:13px;color:var(--sub)">${esc(p.code)} · ${esc(page.currency)}${Number(p.price).toLocaleString('bn-BD')}</span>
+        </div>
+        ${(() => {
+          let varSelects = '';
+          try {
+            const vopts = JSON.parse(p.variantOptions || '[]');
+            if (Array.isArray(vopts) && vopts.length) {
+              varSelects = vopts.map((v: any) => {
+                const label = esc(String(v.label || ''));
+                const choices: string[] = Array.isArray(v.choices) ? v.choices : [];
+                if (!choices.length) return '';
+                const opts = choices.map((c: string) => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+                return `<div><div class="wo-lbl">${label}</div><select class="wo-inp wo-variant" data-label="${label}"><option value="">-- ${label} বেছে নিন --</option>${opts}</select></div>`;
+              }).join('');
+            }
+          } catch { varSelects = ''; }
+          return varSelects;
+        })()}
+        <div class="wo-row2">
+          <div><div class="wo-lbl">পরিমাণ (Qty)</div><input class="wo-inp" id="woQty" type="number" min="1" max="${p.stockQty}" value="1"></div>
+          <div style="display:flex;align-items:flex-end"><div style="font-size:13px;color:var(--sub);padding-bottom:12px">max ${p.stockQty}</div></div>
+        </div>
+        <div><div class="wo-lbl">আপনার নাম *</div><input class="wo-inp" id="woName" type="text" placeholder="পুরো নাম"></div>
+        <div><div class="wo-lbl">ফোন নম্বর *</div><input class="wo-inp" id="woPhone" type="tel" placeholder="01XXXXXXXXX"></div>
+        <div><div class="wo-lbl">ঠিকানা *</div><textarea class="wo-inp" id="woAddr" rows="2" placeholder="বাসা/গ্রাম, উপজেলা, জেলা"></textarea></div>
+        <div><div class="wo-lbl">নোট (ঐচ্ছিক)</div><input class="wo-inp" id="woNote" type="text" placeholder="কোনো বিশেষ নির্দেশনা"></div>
+        <div class="wo-err" id="woErr0"></div>
+        <button class="wo-btn" id="woBtnSubmit" onclick="woSubmit()">অর্ডার দিন →</button>
+      </div>
+
+      <!-- Step 1a: Gateway Payment -->
+      <div class="wo-step" id="woStep1a">
+        <div class="wo-payment-box">
+          <div style="font-size:13px;font-weight:700;margin-bottom:8px">💳 Payment করুন</div>
+          <div style="font-size:13px;margin-bottom:12px">Advance: <strong id="woGwAmount"></strong></div>
+        </div>
+        <button class="wo-btn" id="woBtnGw" onclick="woGoGateway()">পেমেন্ট করুন →</button>
+      </div>
+
+      <!-- Step 1b: Direct (bKash/Nagad TxID) -->
+      <div class="wo-step" id="woStep1b">
+        <div class="wo-payment-box">
+          <div style="font-size:13px;font-weight:700;margin-bottom:8px">💸 Advance পাঠান</div>
+          <div id="woBkashLine" style="display:none">📱 বিকাশ: <span class="wo-num" id="woBkashNum"></span></div>
+          <div id="woNagadLine" style="display:none">📱 নগদ: <span class="wo-num" id="woNagadNum"></span></div>
+          <div style="font-size:13px;margin-top:6px">পরিমাণ: <strong id="woDirectAmt"></strong></div>
+        </div>
+        <div><div class="wo-lbl">Transaction ID *</div><input class="wo-inp" id="woTxId" type="text" placeholder="যেমন: 8N7XXXXXX"></div>
+        <div class="wo-err" id="woErr1b"></div>
+        <button class="wo-btn" id="woBtnVerify" onclick="woVerify()">Verify করুন →</button>
+      </div>
+
+      <!-- Step 1c: Manual Screenshot -->
+      <div class="wo-step" id="woStep1c">
+        <div class="wo-payment-box" id="woManualMsg"></div>
+        <div><div class="wo-lbl">Transaction ID (ঐচ্ছিক)</div><input class="wo-inp" id="woManualTxId" type="text" placeholder="যেমন: 8N7XXXXXX"></div>
+        <div>
+          <div class="wo-lbl">Payment Screenshot *</div>
+          <label class="wo-file-area" for="woScreenshot">
+            <span id="woFileLabel">📸 Screenshot বেছে নিন</span>
+          </label>
+          <input type="file" id="woScreenshot" accept="image/*" style="display:none" onchange="woFileChosen(this)">
+        </div>
+        <div class="wo-err" id="woErr1c"></div>
+        <button class="wo-btn" id="woBtnUpload" onclick="woUpload()">Submit করুন →</button>
+      </div>
+
+      <!-- Step 2: Success -->
+      <div class="wo-step" id="woStep2">
+        <div class="wo-success">
+          <div class="wo-icon">🎉</div>
+          <h3>অর্ডার সম্পন্ন!</h3>
+          <div class="wo-lbl" style="text-align:center">Order ID</div>
+          <div class="wo-oid" id="woOrderId"></div>
+          <div class="wo-msg">
+            📱 <strong>Delivery update পেতে:</strong> Facebook Messenger এ <strong id="woMsgId"></strong> লিখে পাঠান — bot আপনাকে status জানাবে।
+          </div>
+          <a href="/catalog/${esc(String(page.id))}/track" style="display:block;margin-top:12px;text-align:center;font-size:13px;color:var(--p);text-decoration:none">📦 Order Track করুন →</a>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+var WO_PAGE_ID = '${esc(String(page.id))}';
+var WO_CODE = '${esc(p.code)}';
+var WO_PRICE = ${Number(p.price)};
+var WO_NAME = '${esc(String(p.name || p.code))}';
+var WO_CURRENCY = '${esc(page.currency)}';
+var WO_PAY_MODE = '${esc(String(page.paymentMode || 'cod'))}';
+var WO_ADV_AMT = ${Number(page.advanceAmount || 0)};
+var WO_BKASH = '${esc(String(page.advanceBkash || ''))}';
+var WO_NAGAD = '${esc(String(page.advanceNagad || ''))}';
+var WO_ADV_MSG = '${esc(String(page.advancePaymentMessage || '')).replace(/'/g, "\\'")}';
+var woOrderIdVal = null;
+var woPaymentUrl = null;
+
+function woOpen(){ document.getElementById('woModal').classList.add('open'); document.body.style.overflow='hidden'; }
+function woClose(){ document.getElementById('woModal').classList.remove('open'); document.body.style.overflow=''; }
+function woShowStep(n){ ['woStep0','woStep1a','woStep1b','woStep1c','woStep2'].forEach(function(id){ document.getElementById(id).classList.remove('active'); }); document.getElementById('woStep'+n).classList.add('active'); }
+function woSetErr(id,msg){ var el=document.getElementById(id); el.textContent=msg; el.style.display=msg?'block':'none'; }
+function woSetLoading(btnId,v){ var b=document.getElementById(btnId); if(b){ b.disabled=v; if(!v) b.textContent=b.dataset.orig||b.textContent; } }
+
+function woFileChosen(inp){ var lbl=document.getElementById('woFileLabel'); if(inp.files&&inp.files[0]) lbl.textContent='✅ '+inp.files[0].name; else lbl.textContent='📸 Screenshot বেছে নিন'; }
+
+async function woSubmit(){
+  var name=document.getElementById('woName').value.trim();
+  var phone=document.getElementById('woPhone').value.trim();
+  var addr=document.getElementById('woAddr').value.trim();
+  var qty=parseInt(document.getElementById('woQty').value)||1;
+  var note=document.getElementById('woNote').value.trim();
+  if(!name){woSetErr('woErr0','নাম দিন');return;}
+  if(!phone){woSetErr('woErr0','ফোন নম্বর দিন');return;}
+  if(!addr){woSetErr('woErr0','ঠিকানা দিন');return;}
+  woSetErr('woErr0','');
+  var btn=document.getElementById('woBtnSubmit');
+  btn.dataset.orig='অর্ডার দিন →'; btn.disabled=true; btn.textContent='পাঠানো হচ্ছে...';
+  try {
+    var body={customerName:name,phone:phone,address:addr,productCode:WO_CODE,qty:qty,price:WO_PRICE,productName:WO_NAME,orderNote:note};
+    var r=await fetch('/catalog/'+WO_PAGE_ID+'/web-order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    var d=await r.json();
+    if(!r.ok) throw new Error(d.message||'Error');
+    woOrderIdVal=d.orderId;
+    if(!d.paymentRequired){
+      document.getElementById('woOrderId').textContent='#'+d.orderId;
+      document.getElementById('woMsgId').textContent='#'+d.orderId;
+      woShowStep(2);
+    } else if(d.method==='gateway'){
+      woPaymentUrl=d.paymentUrl;
+      document.getElementById('woGwAmount').textContent=WO_CURRENCY+(d.advanceAmount||WO_ADV_AMT);
+      woShowStep('1a'); document.getElementById('woTitle').textContent='💳 Payment করুন';
+    } else if(d.method==='direct'){
+      document.getElementById('woDirectAmt').textContent=WO_CURRENCY+(d.advanceAmount||WO_ADV_AMT);
+      if(d.advanceBkash){document.getElementById('woBkashNum').textContent=d.advanceBkash;document.getElementById('woBkashLine').style.display='block';}
+      if(d.advanceNagad){document.getElementById('woNagadNum').textContent=d.advanceNagad;document.getElementById('woNagadLine').style.display='block';}
+      woShowStep('1b'); document.getElementById('woTitle').textContent='💸 Payment করুন';
+    } else {
+      var msg=WO_ADV_MSG||('Advance '+(WO_ADV_AMT||'')+' পাঠান:\\nবিকাশ: '+WO_BKASH+'\\nনগদ: '+WO_NAGAD);
+      document.getElementById('woManualMsg').innerHTML='<strong style="font-size:13px;font-weight:700">💸 Advance পাঠান</strong><br><div style="margin-top:6px;font-size:13.5px;white-space:pre-line">'+msg+'</div>';
+      woShowStep('1c'); document.getElementById('woTitle').textContent='📸 Payment Proof';
+    }
+  } catch(e){ woSetErr('woErr0',e.message||'কিছু একটা সমস্যা হয়েছে'); }
+  btn.disabled=false; btn.textContent='অর্ডার দিন →';
+}
+
+function woGoGateway(){ if(woPaymentUrl) window.location.href=woPaymentUrl; }
+
+async function woVerify(){
+  var txId=document.getElementById('woTxId').value.trim();
+  if(!txId){woSetErr('woErr1b','Transaction ID দিন');return;}
+  woSetErr('woErr1b','');
+  var btn=document.getElementById('woBtnVerify');
+  btn.disabled=true; btn.textContent='Verify হচ্ছে...';
+  try {
+    var r=await fetch('/catalog/'+WO_PAGE_ID+'/web-order/'+woOrderIdVal+'/verify-direct',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({transactionId:txId})});
+    var d=await r.json();
+    if(d.verified){
+      document.getElementById('woOrderId').textContent='#'+woOrderIdVal;
+      document.getElementById('woMsgId').textContent='#'+woOrderIdVal;
+      woShowStep(2);
+    } else {
+      // fallback to screenshot
+      var msg=WO_ADV_MSG||('Advance পাঠান:\\nবিকাশ: '+WO_BKASH+'\\nনগদ: '+WO_NAGAD);
+      document.getElementById('woManualMsg').innerHTML='<strong style="font-size:13px;font-weight:700">💸 Advance পাঠান</strong><br><div style="margin-top:6px;font-size:13.5px;white-space:pre-line">'+msg+'</div>';
+      woShowStep('1c'); document.getElementById('woTitle').textContent='📸 Payment Proof';
+    }
+  } catch(e){ woSetErr('woErr1b',e.message||'Verify করা যায়নি'); }
+  btn.disabled=false; btn.textContent='Verify করুন →';
+}
+
+async function woUpload(){
+  var file=document.getElementById('woScreenshot').files[0];
+  if(!file){woSetErr('woErr1c','Screenshot বেছে নিন');return;}
+  woSetErr('woErr1c','');
+  var btn=document.getElementById('woBtnUpload');
+  btn.disabled=true; btn.textContent='Upload হচ্ছে...';
+  try {
+    var fd=new FormData();
+    fd.append('screenshot',file);
+    var txId=document.getElementById('woManualTxId').value.trim();
+    if(txId) fd.append('transactionId',txId);
+    var r=await fetch('/catalog/'+WO_PAGE_ID+'/web-order/'+woOrderIdVal+'/payment-proof',{method:'POST',body:fd});
+    var d=await r.json();
+    if(!r.ok) throw new Error(d.message||'Upload failed');
+    document.getElementById('woOrderId').textContent='#'+woOrderIdVal;
+    document.getElementById('woMsgId').textContent='#'+woOrderIdVal;
+    woShowStep(2);
+  } catch(e){ woSetErr('woErr1c',e.message||'Upload করা যায়নি'); }
+  btn.disabled=false; btn.textContent='Submit করুন →';
+}
+</script>
+` : ''}
 
 <script>
 var noImgBlock = '<div class="no-img-card"><div class="no-img-orb no-img-orb-1"></div><div class="no-img-orb no-img-orb-2"></div><div class="no-img-icon">🛍️</div><div class="no-img-code"><div class="no-img-code-lbl">Product Code</div><div class="no-img-code-val">${esc(p.code)}</div></div><div class="no-img-hint">ছবি শীঘ্রই আসছে</div></div>';
@@ -1410,6 +1875,9 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:radial-
     </div>`
         : ''
     }
+    <div class="footer-links" style="margin-top:8px">
+      <a href="/catalog/${esc(page.id.toString())}/track">📦 Order Track করুন</a>
+    </div>
   </div>
 </footer>
 
@@ -1534,6 +2002,121 @@ ${poweredByBadge()}
   apply();
 })();
 </script>
+</body>
+</html>`;
+  }
+
+  private buildTrackHtml(pageId: string): string {
+    return `<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Order Track করুন</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#f5f5f7;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px}
+.card{background:#fff;border-radius:20px;padding:32px 28px;width:100%;max-width:440px;box-shadow:0 8px 32px rgba(0,0,0,.10)}
+h1{font-size:20px;font-weight:800;color:#1a1a2e;margin-bottom:6px}
+p{font-size:13.5px;color:#666;margin-bottom:24px;line-height:1.6}
+label{display:block;font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px}
+input{width:100%;padding:12px 14px;border-radius:12px;border:1.5px solid #e5e7eb;font-size:15px;font-family:inherit;outline:none;transition:border-color .15s}
+input:focus{border-color:#6366f1}
+button{width:100%;margin-top:14px;padding:13px;border-radius:13px;border:none;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit}
+button:disabled{opacity:.6;cursor:not-allowed}
+.result{margin-top:20px;padding:16px;border-radius:14px;font-size:14px;line-height:1.7;display:none}
+.result.ok{background:#f0fdf4;border:1.5px solid #bbf7d0;color:#14532d}
+.result.err{background:#fef2f2;border:1.5px solid #fecaca;color:#991b1b}
+.order-id{font-size:20px;font-weight:800;color:#4f46e5;margin-bottom:8px}
+.status-line{font-size:16px;font-weight:700;margin-bottom:6px}
+.items-list{font-size:13px;color:#555;margin-top:8px}
+.back{display:block;text-align:center;margin-top:20px;font-size:13px;color:#6366f1;text-decoration:none}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>📦 Order Track করুন</h1>
+  <p>আপনার Order ID দিন — আমরা delivery status জানাব।</p>
+  <label>Order ID</label>
+  <input type="number" id="oidInput" placeholder="যেমন: 1234" min="1">
+  <button id="trackBtn" onclick="track()">Track করুন</button>
+  <div class="result" id="result"></div>
+  <a href="/catalog/${esc(pageId)}" class="back">← Catalog এ ফিরে যান</a>
+</div>
+<script>
+var PAGE_ID = '${esc(pageId)}';
+async function track() {
+  var oid = document.getElementById('oidInput').value.trim();
+  if (!oid) return;
+  var btn = document.getElementById('trackBtn');
+  var res = document.getElementById('result');
+  btn.disabled = true; btn.textContent = 'খুঁজছি...';
+  res.style.display = 'none';
+  try {
+    var r = await fetch('/catalog/' + PAGE_ID + '/order-status/' + oid);
+    var d = await r.json();
+    if (!r.ok) throw new Error(d.message || 'Order পাওয়া যায়নি');
+    var items = (d.items || []).map(function(i){ return (i.productName || i.productCode) + ' × ' + i.qty; }).join(', ');
+    var date = new Date(d.createdAt).toLocaleDateString('bn-BD', {day:'numeric',month:'long',year:'numeric'});
+    res.className = 'result ok';
+    res.innerHTML = '<div class="order-id">#' + d.id + '</div><div class="status-line">' + (d.statusBn || d.status) + '</div><div class="items-list">' + (items ? '🛍 ' + items : '') + '</div><div style="font-size:12px;color:#888;margin-top:4px">অর্ডার তারিখ: ' + date + '</div>';
+    res.style.display = 'block';
+  } catch(e) {
+    res.className = 'result err';
+    res.textContent = e.message || 'Order পাওয়া যায়নি। ID টি সঠিক কিনা দেখুন।';
+    res.style.display = 'block';
+  }
+  btn.disabled = false; btn.textContent = 'Track করুন';
+}
+document.getElementById('oidInput').addEventListener('keydown', function(e){ if(e.key==='Enter') track(); });
+</script>
+</body>
+</html>`;
+  }
+
+  private buildOrderSuccessHtml(pageId: string, orderId: number): string {
+    return `<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>অর্ডার সম্পন্ন!</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0fdf4;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px}
+.card{background:#fff;border-radius:24px;padding:40px 28px;width:100%;max-width:440px;text-align:center;box-shadow:0 8px 40px rgba(0,0,0,.10)}
+.icon{font-size:56px;margin-bottom:16px}
+h1{font-size:22px;font-weight:800;color:#15803d;margin-bottom:8px}
+p{font-size:14px;color:#555;line-height:1.7;margin-bottom:20px}
+.order-id-box{background:#f0fdf4;border:2px solid #86efac;border-radius:16px;padding:16px 20px;margin-bottom:24px}
+.oid-label{font-size:11px;font-weight:700;color:#16a34a;text-transform:uppercase;letter-spacing:.1em}
+.oid-value{font-size:36px;font-weight:900;color:#15803d;letter-spacing:.05em}
+.msg-box{background:#eff6ff;border:1.5px solid #bfdbfe;border-radius:14px;padding:14px 16px;font-size:13px;color:#1e40af;line-height:1.6;text-align:left;margin-bottom:20px}
+.msg-box strong{display:block;margin-bottom:4px;font-size:13.5px}
+.btn-row{display:flex;gap:10px;flex-wrap:wrap}
+.btn{flex:1;min-width:120px;padding:13px;border-radius:13px;border:none;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;text-decoration:none;display:block;text-align:center}
+.btn-primary{background:linear-gradient(135deg,#16a34a,#15803d);color:#fff}
+.btn-secondary{background:#f1f5f9;color:#334155;border:1.5px solid #e2e8f0}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="icon">🎉</div>
+  <h1>অর্ডার সম্পন্ন হয়েছে!</h1>
+  <p>আপনার অর্ডার সফলভাবে নেওয়া হয়েছে। নিচের Order ID টি সংরক্ষণ করুন।</p>
+  <div class="order-id-box">
+    <div class="oid-label">Order ID</div>
+    <div class="oid-value">#${orderId}</div>
+  </div>
+  <div class="msg-box">
+    <strong>📱 Messenger এ delivery update পেতে:</strong>
+    Facebook Messenger এ আমাদের page এ গিয়ে শুধু <b>#${orderId}</b> লিখে পাঠান — bot আপনাকে delivery status জানাবে।
+  </div>
+  <div class="btn-row">
+    <a href="/catalog/${esc(pageId)}/track" class="btn btn-secondary">📦 Order Track</a>
+    <a href="/catalog/${esc(pageId)}" class="btn btn-primary">🛍 আরো কেনাকাটা</a>
+  </div>
+</div>
 </body>
 </html>`;
   }

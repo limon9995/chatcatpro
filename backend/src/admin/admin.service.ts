@@ -166,6 +166,20 @@ export class AdminService {
     }));
   }
 
+  async setUserAccountStatus(userId: string, isActive: boolean) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new Error('User not found');
+    await this.prisma.user.update({ where: { id: userId }, data: { isActive } });
+    return { success: true, isActive };
+  }
+
+  async setPageWebsiteStatus(pageId: number, isActive: boolean) {
+    const page = await this.prisma.page.findUnique({ where: { id: pageId } });
+    if (!page) throw new Error('Page not found');
+    await this.prisma.page.update({ where: { id: pageId }, data: { isActive } });
+    return { success: true, isActive };
+  }
+
   async clientDetails(userId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -349,7 +363,8 @@ export class AdminService {
         catalogSlug: true,
         fbAppId: true,
         fbAppSecret: true,
-        owner: { select: { id: true, username: true, name: true } },
+        webOrderEnabled: true,
+        owner: { select: { id: true, username: true, name: true, isActive: true } },
       },
       orderBy: { id: 'desc' },
     });

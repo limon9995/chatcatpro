@@ -42,6 +42,28 @@ export class PaymentVerifyController {
       if (result.paid) {
         const pending = await this.paymentVerify.getPendingPayment(sessionToken);
         if (pending) {
+
+          // Web order path: confirm the order directly and redirect to success page
+          if (pending.webOrderId) {
+            try {
+              await this.prisma.order.update({
+                where: { id: pending.webOrderId },
+                data: {
+                  paymentStatus: 'advance_paid',
+                  paymentVerifyStatus: 'verified',
+                  transactionId: result.gatewayTxId || sessionToken,
+                  status: 'CONFIRMED',
+                  confirmedAt: new Date(),
+                },
+              });
+              this.logger.log(`[IPN] Web order #${pending.webOrderId} auto-confirmed via ${method}`);
+            } catch (err) {
+              this.logger.error(`[IPN] web order confirm failed: ${err.message}`);
+            }
+            return res.redirect(`/catalog/${pending.pageId}/order-success/${pending.webOrderId}`);
+          }
+
+          // Messenger / social channel path
           const draft: DraftSession = JSON.parse(pending.draftJson);
 
           // Mark payment proof on draft

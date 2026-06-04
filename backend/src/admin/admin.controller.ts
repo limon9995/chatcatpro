@@ -71,6 +71,20 @@ export class AdminController {
   @Get('clients/:id') clientDetails(@Param('id') id: string) {
     return this.svc.clientDetails(id);
   }
+  @Patch('users/:userId/account-status')
+  setAccountStatus(
+    @Param('userId') userId: string,
+    @Body() b: { isActive: boolean },
+  ) {
+    return this.svc.setUserAccountStatus(userId, b.isActive);
+  }
+  @Patch('pages/:pageId/website-status')
+  setWebsiteStatus(
+    @Param('pageId') p: string,
+    @Body() b: { isActive: boolean },
+  ) {
+    return this.svc.setPageWebsiteStatus(this.parsePageId(p), b.isActive);
+  }
   @Get('pages') allPages() {
     return this.svc.getAllPages();
   }
