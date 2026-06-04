@@ -436,7 +436,7 @@ export function DashboardLayout({
       return (
         <PageErrorBoundary name="SettingsPage">
           <Suspense fallback={pageFallback}>
-            <SettingsPage th={th} pageId={pageId} tab={nav} onToast={showToast} />
+            <SettingsPage th={th} pageId={pageId} tab={nav} onToast={showToast} userRole={user?.role} />
           </Suspense>
         </PageErrorBoundary>
       );

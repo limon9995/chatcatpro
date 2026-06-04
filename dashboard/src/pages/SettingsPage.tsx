@@ -199,9 +199,10 @@ function extractYouTubeId(url: string): string | null {
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
-export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect }: {
-  th: Theme; pageId: number; tab: string; onToast: (m: string, t?: any) => void; autoOpenReconnect?: boolean;
+export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, userRole }: {
+  th: Theme; pageId: number; tab: string; onToast: (m: string, t?: any) => void; autoOpenReconnect?: boolean; userRole?: string;
 }) {
+  const isAdmin = userRole === 'admin';
   const { copy } = useLanguage();
   const { request } = useApi();
   const [s, setS]       = useState<Settings>(S0);
@@ -1262,8 +1263,8 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect }: {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <Label text="Business সম্পর্কে বিস্তারিত তথ্য" hint="আপনার business-এর নাম, কী সেবা দেন, যোগাযোগ, ঠিকানা, সময়সূচি, FAQ — সব লিখুন। এই তথ্য থেকে AI customer-দের reply করবে।" />
 
-                {/* ChatCat service info smart-merge */}
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {/* ChatCat service info smart-merge — admin only */}
+                {isAdmin && <><div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   <button
                     style={{ ...th.btnPrimary, fontSize: 11.5, padding: '6px 12px' }}
                     onClick={() => {
@@ -1315,6 +1316,7 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect }: {
                 <div style={{ fontSize: 11, color: th.muted, marginTop: -4 }}>
                   💡 "Sync" button — শুধু changed বা নতুন section update করে। আপনার custom লেখা অক্ষুণ্ণ থাকে।
                 </div>
+                </>}
 
                 <textarea
                   style={{ ...th.input, minHeight: 200, resize: 'vertical', fontFamily: 'inherit', fontSize: 13, lineHeight: 1.7, borderColor: s.businessInfo.length > 4800 ? '#f87171' : undefined }}
@@ -1457,8 +1459,8 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect }: {
               </span>
             </div>
 
-            {/* ChatCat Pricing Info Panel */}
-            <div style={{ marginBottom: 10, padding: '12px 14px', borderRadius: 10, background: 'rgba(79,110,247,0.07)', border: `1px solid rgba(79,110,247,0.2)` }}>
+            {/* ChatCat Pricing Info Panel — admin only */}
+            {isAdmin && <div style={{ marginBottom: 10, padding: '12px 14px', borderRadius: 10, background: 'rgba(79,110,247,0.07)', border: `1px solid rgba(79,110,247,0.2)` }}>
               <div style={{ fontSize: 12.5, fontWeight: 700, color: th.accent, marginBottom: 8 }}>📋 ChatCat Service Info — Bot কে শেখান</div>
               <div style={{ fontSize: 11.5, color: th.muted, marginBottom: 10, lineHeight: 1.6 }}>
                 নিচের বাটনে click করলে ChatCat এর সব নতুন pricing ও service info automatically আপনার knowledge box এ add হবে। তারপর নিজের product info যোগ করুন।
@@ -1510,7 +1512,7 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect }: {
               >
                 🔄 ChatCat Info Sync করুন
               </button>
-            </div>
+            </div>}
 
             <textarea
               style={{ ...inp, minHeight: 140, resize: 'vertical', fontFamily: 'inherit', fontSize: 13 }}
