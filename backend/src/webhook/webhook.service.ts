@@ -391,10 +391,46 @@ Rules:
         `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
         { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(10_000) },
       );
-      if (!res.ok) return { productCodes: [], intent: 'other', shouldReply: true };
+      if (!res.ok) return this.classifyCommentOpenAI(products, comment, systemPrompt, productList);
       const data = await res.json();
       const parsed = JSON.parse(data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '{}');
       // Normalise: handle both array and legacy single-string productCode
+      if (!Array.isArray(parsed.productCodes)) {
+        parsed.productCodes = parsed.productCode ? [parsed.productCode] : [];
+      }
+      return parsed;
+    } catch {
+      return this.classifyCommentOpenAI(products, comment, systemPrompt, productList);
+    }
+  }
+
+  private async classifyCommentOpenAI(
+    _products: { code: string; name: string | null; price: number; stockQty: number }[],
+    comment: string,
+    systemPrompt: string,
+    productList: string,
+  ): Promise<{ productCodes: string[]; intent: string; shouldReply: boolean }> {
+    const openaiKey = process.env.OPENAI_API_KEY;
+    if (!openaiKey) return { productCodes: [], intent: 'other', shouldReply: true };
+    try {
+      const res = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${openaiKey}` },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          temperature: 0.1,
+          max_tokens: 150,
+          response_format: { type: 'json_object' },
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: `Available products:\n${productList}\n\nCustomer comment: "${comment}"` },
+          ],
+        }),
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (!res.ok) return { productCodes: [], intent: 'other', shouldReply: true };
+      const data = await res.json();
+      const parsed = JSON.parse(data?.choices?.[0]?.message?.content ?? '{}');
       if (!Array.isArray(parsed.productCodes)) {
         parsed.productCodes = parsed.productCode ? [parsed.productCode] : [];
       }
