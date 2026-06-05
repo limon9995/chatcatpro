@@ -797,8 +797,7 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
             />
           </div>
 
-          {/* Step-by-step guide */}
-          <details style={{ marginBottom: 14 }}>
+          {s.waEnabled && <><details style={{ marginBottom: 14 }}>
             <summary style={{ fontSize: 12, fontWeight: 700, cursor: 'pointer', color: th.accent, userSelect: 'none', marginBottom: 6 }}>
               📋 {copy('কিভাবে WhatsApp token পাবেন? (ধাপে ধাপে)', 'How to get WhatsApp token? (Step by step)')}
             </summary>
@@ -910,12 +909,29 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
             >
               {waSaving ? <><Spinner size={13} /> Saving...</> : '💾 WhatsApp Save করুন'}
             </button>
-          </div>
+          </div></>}
         </Section>
 
         {/* ── Instagram Connection ── */}
         <Section title="📸 Instagram Connection" desc="Instagram Business API দিয়ে DM ও post comment automation চালু করুন">
-          {/* Step-by-step guide */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700 }}>Instagram Automation</div>
+              <div style={{ fontSize: 11.5, color: th.muted }}>
+                {s.igTokenSet
+                  ? (s.igBusinessAccountId ? `IG Account ID: ${s.igBusinessAccountId}` : 'Token saved — IG Account ID নেই')
+                  : 'এখনো connect করা হয়নি'}
+              </div>
+            </div>
+            <Toggle
+              th={th}
+              checked={s.igEnabled}
+              onChange={v => setS(prev => ({ ...prev, igEnabled: v }))}
+              label=""
+            />
+          </div>
+
+          {s.igEnabled && <>{/* Step-by-step guide */}
           <details style={{ marginBottom: 14 }}>
             <summary style={{ fontSize: 12, fontWeight: 700, cursor: 'pointer', color: th.accent, userSelect: 'none', marginBottom: 6 }}>
               📋 {copy('কিভাবে Instagram token পাবেন? (ধাপে ধাপে)', 'How to get Instagram token? (Step by step)')}
@@ -978,15 +994,6 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
           </details>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <Toggle
-              th={th}
-              label="Instagram Automation"
-              sub={s.igTokenSet
-                ? (s.igBusinessAccountId ? `IG Account ID: ${s.igBusinessAccountId}` : 'Token saved — IG Account ID নেই')
-                : 'Instagram DM ও comment reply automation'}
-              checked={s.igEnabled}
-              onChange={v => setS(prev => ({ ...prev, igEnabled: v }))}
-            />
             <div>
               <label style={{ fontSize: 12, color: th.muted, fontWeight: 600, display: 'block', marginBottom: 5 }}>
                 Instagram Business Account ID
@@ -1068,7 +1075,7 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
             >
               {igSaving ? <><Spinner size={13} /> Saving...</> : '💾 Instagram Save করুন'}
             </button>
-          </div>
+          </div></>}
         </Section>
 
         {/* ── Linked Pages ── */}
