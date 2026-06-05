@@ -649,7 +649,9 @@ DUAL_WEARING reply → DUAL PHOTO MODE section থেকে "পরে আছে
 DUAL_HOLDING reply → DUAL PHOTO MODE section থেকে "হাতে ধরা" product-এর name ও price বলো। শেষে বলো "নিতে চাইলে বলুন 💖"।
 UNKNOWN + draft চলছে → draft reminder দিয়ে warmly redirect।
 UNKNOWN + no draft → তারা কী বলতে চাইছে acknowledge করো, suggest করো (product code/screenshot দিতে বলো অথবা delivery/size/payment নিয়ে জিজ্ঞেস করতে পারেন বলো)।
-অন্য সব intent → reply=null`;
+অন্য সব intent → reply=null
+
+⛔ STRICTLY FORBIDDEN in reply: "আমাদের সাথে যোগাযোগ করুন" / "আরও জানতে যোগাযোগ করুন" — customer ইতিমধ্যে message করছে, এটা বলা circular এবং useless। কখনো বলবে না।`;
   }
 
   private buildUserMessage(

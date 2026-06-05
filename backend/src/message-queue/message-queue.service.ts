@@ -22,11 +22,14 @@ export class MessageQueueService implements OnModuleDestroy {
   }
 
   async add(page: any, psid: string, message: any): Promise<void> {
+    // Use Facebook message ID (mid) as jobId to deduplicate retried webhooks.
+    // Fall back to timestamp only if mid is missing (shouldn't happen in practice).
+    const mid: string = message?.mid ?? `${page.id}-${psid}-${Date.now()}`;
     await this.queue.add(
       'process',
       { page, psid, message },
       {
-        jobId: `${page.id}-${psid}-${Date.now()}`,
+        jobId: mid,
       },
     );
   }

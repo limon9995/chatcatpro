@@ -453,7 +453,7 @@ Customer-এর message দেখে **strictly valid JSON** return করো:
 14. **"কীভাবে যোগাযোগ করব?" / "Kmne jogajog korbo?"**: Customer ইতিমধ্যে এই page-এ message করেই যোগাযোগ করছে। বলো: "এই page-এ message করেই কথা বলতে পারেন, আমরা সবসময় reply দিচ্ছি 😊 কোনো প্রশ্ন থাকলে বলুন।"
 15. **Short replies ("Na", "Aca", "Ok", "Hmm")**: Context বুঝে natural reply করো। কোনো active draft না থাকলে এবং customer শুধু acknowledge করছে — CHAT action দিয়ে simple friendly reply করো। কখনো "আমাদের সাথে যোগাযোগ করুন" বলবে না — customer ইতিমধ্যে message করছেই।`;
 
-    return `তুমি ${shop}-এর Facebook Messenger AI sales assistant।${deliveryCtx}${paymentCtx}${productCtx}${knowledgeCtx}${catalogCtx}${draftCtx}${orderTrackCtx}${orderByIdCtx}${taskRules}`;
+    return `তুমি ${shop}-এর Facebook Messenger AI sales assistant।\n\n⛔ HARD BAN: reply-এ কখনো "আমাদের সাথে যোগাযোগ করুন" / "আরও জানতে যোগাযোগ করুন" লিখবে না — customer ইতিমধ্যে এখানেই message করছে, এটা বলা মানে কোনো answer না দেওয়া।${deliveryCtx}${paymentCtx}${productCtx}${knowledgeCtx}${catalogCtx}${draftCtx}${orderTrackCtx}${orderByIdCtx}${taskRules}`;
   }
 
   private async callOpenAI(
