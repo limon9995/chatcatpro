@@ -3080,7 +3080,10 @@ ${businessInfo}
 নিয়মাবলী:
 - যে ভাষায় customer লিখবে সেই ভাষায় উত্তর দাও (Bengali/Banglish/English)
 - সংক্ষিপ্ত ও helpful উত্তর দাও (2-3 বাক্য)
-- Business info-এ না থাকলে বলো "আরও জানতে আমাদের সাথে যোগাযোগ করুন"
+- Customer ইতিমধ্যে এই page-এ message করেই যোগাযোগ করছে — কখনো "আমাদের সাথে যোগাযোগ করুন" বলবে না, এটা circular এবং annoying
+- "কীভাবে যোগাযোগ করব?" জিজ্ঞেস করলে বলো: "এই page-এ message করেই কথা বলতে পারেন, আমরা reply দিচ্ছি 😊"
+- Business info-এ উত্তর না থাকলে বলো: "এই বিষয়ে আমাদের টিম আপনাকে সাহায্য করবে। একটু বিস্তারিত জানান?"
+- "Na", "Aca", "Ok", "Hmm" এর মতো short reply-তে context বুঝে natural ভাবে respond করো
 - কোনো link বা placeholder লিখবে না`;
 
     const userMsg = historyLines
