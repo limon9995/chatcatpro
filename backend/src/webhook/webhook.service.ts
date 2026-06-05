@@ -391,6 +391,7 @@ Rules:
         `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
         { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(10_000) },
       );
+      if (!res.ok) return { productCodes: [], intent: 'other', shouldReply: true };
       const data = await res.json();
       const parsed = JSON.parse(data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '{}');
       // Normalise: handle both array and legacy single-string productCode
