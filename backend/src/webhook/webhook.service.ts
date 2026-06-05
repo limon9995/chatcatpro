@@ -206,9 +206,10 @@ export class WebhookService implements OnModuleDestroy {
         const commentId: string = val.comment_id ?? '';
         const postId: string = val.post_id ?? '';
         const commentText: string = String(val.message ?? '').trim();
+        const commenterName: string = String(val.from?.name ?? '').trim();
         if (!commentId || !commentText) continue;
 
-        this.handleCommentReply(resolvedPage, commentId, postId, commentText)
+        this.handleCommentReply(resolvedPage, commentId, postId, commentText, commenterName)
           .catch(err => this.logger.error(`[Webhook] Comment reply error: ${err}`));
       }
     }
@@ -221,6 +222,7 @@ export class WebhookService implements OnModuleDestroy {
     commentId: string,
     postId: string,
     commentText: string,
+    commenterName: string = '',
   ): Promise<void> {
     if (!page.commentReplyOn || !page.automationOn) return;
     // M-4: skip if page has no token
@@ -249,6 +251,7 @@ export class WebhookService implements OnModuleDestroy {
     if (!classification?.shouldReply) return;
 
     const { productCodes, intent } = classification;
+    const mention = commenterName ? `${commenterName} ` : '';
     const inboxCta = `\n\n📩 Order বা আরও তথ্যের জন্য আমাদের Inbox-এ message করুন।`;
 
     // M-8: deduct wallet before send so cost is always recorded even if send fails
@@ -257,7 +260,7 @@ export class WebhookService implements OnModuleDestroy {
     // All-prices intent: list every post product's price
     if (intent === 'all_prices' || (intent === 'price' && productCodes.length === 0 && products.length > 0)) {
       const lines = products.map((p, i) => `${i + 1}. ${p.name ?? p.code} — ${p.price}৳`).join('\n');
-      const reply = `📦 আমাদের সব product এর দাম:\n${lines}${inboxCta}`;
+      const reply = `${mention}📦 আমাদের সব product এর দাম:\n${lines}${inboxCta}`;
       await deduct();
       await this.messenger.sendCommentReply(page.pageToken, commentId, reply);
       this.logger.log(`[Webhook] All-prices comment reply page=${page.pageId} commentId=${commentId}`);
@@ -266,7 +269,7 @@ export class WebhookService implements OnModuleDestroy {
 
     // Emoji or praise comment → warm appreciation reply
     if (intent === 'emoji_praise') {
-      const reply = `ধন্যবাদ! ❤️ আপনার ভালোবাসাই আমাদের অনুপ্রেরণা! 😊 কোনো product সম্পর্কে জানতে চাইলে Inbox-এ message করুন। 📩`;
+      const reply = `${mention}ধন্যবাদ! ❤️ আপনার ভালোবাসাই আমাদের অনুপ্রেরণা! 😊 কোনো product সম্পর্কে জানতে চাইলে Inbox-এ message করুন। 📩`;
       await deduct();
       await this.messenger.sendCommentReply(page.pageToken, commentId, reply);
       this.logger.log(`[Webhook] Emoji/praise comment reply page=${page.pageId} commentId=${commentId}`);
@@ -276,7 +279,7 @@ export class WebhookService implements OnModuleDestroy {
     // No specific product or general question → generic inbox CTA
     if (productCodes.length === 0 || intent === 'other') {
       await deduct();
-      await this.messenger.sendCommentReply(page.pageToken, commentId, this.getGenericCommentReply());
+      await this.messenger.sendCommentReply(page.pageToken, commentId, mention + this.getGenericCommentReply());
       this.logger.log(`[Webhook] Generic comment reply page=${page.pageId} commentId=${commentId}`);
       return;
     }
@@ -284,7 +287,7 @@ export class WebhookService implements OnModuleDestroy {
     const matched = products.filter(p => productCodes.includes(p.code));
     if (matched.length === 0) {
       await deduct();
-      await this.messenger.sendCommentReply(page.pageToken, commentId, this.getGenericCommentReply());
+      await this.messenger.sendCommentReply(page.pageToken, commentId, mention + this.getGenericCommentReply());
       return;
     }
 
@@ -292,7 +295,7 @@ export class WebhookService implements OnModuleDestroy {
     if (matched.length > 1) {
       const parts = matched.map(p => this.buildProductLine(p, intent, page)).filter(Boolean);
       if (!parts.length) return;
-      const reply = parts.join('\n') + inboxCta;
+      const reply = mention + parts.join('\n') + inboxCta;
       await deduct();
       await this.messenger.sendCommentReply(page.pageToken, commentId, reply);
       this.logger.log(`[Webhook] Multi-product comment reply page=${page.pageId} commentId=${commentId} codes=${productCodes.join(',')}`);
@@ -303,7 +306,7 @@ export class WebhookService implements OnModuleDestroy {
     const reply = this.buildCommentReply(matched[0], intent, page);
     if (!reply) return;
     await deduct();
-    await this.messenger.sendCommentReply(page.pageToken, commentId, reply);
+    await this.messenger.sendCommentReply(page.pageToken, commentId, mention + reply);
     this.logger.log(`[Webhook] Comment replied page=${page.pageId} commentId=${commentId} code=${productCodes[0]} intent=${intent}`);
   }
 
