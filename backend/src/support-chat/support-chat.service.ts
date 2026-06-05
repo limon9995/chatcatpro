@@ -55,8 +55,9 @@ WhatsApp সংযোগ করা সম্পূর্ণ সম্ভব। �
 5. System User → "Generate New Token" → আপনার App select → permissions: whatsapp_business_messaging, whatsapp_business_management, pages_messaging → "Generate Token"
 6. Token (EAAxxxxx...) copy → Settings-এ "Access Token" field-এ দিন
 7. Settings-এ "Generate" করে Webhook Verify Token তৈরি করুন
-8. developers.facebook.com → App → WhatsApp → Configuration → Callback URL: api.chatcat.pro/wa-webhook + Verify Token দিন → "Verify and Save" → "messages" Subscribe
+8. developers.facebook.com → App → বাম sidebar: "Webhooks" click → "Select product" dropdown থেকে "WhatsApp Business Account" select → Callback URL: https://api.chatcat.pro/wa-webhook + Verify Token দিন → "Verify and save" → "messages" field-এ "Subscribe" click
 Webhook URL: https://api.chatcat.pro/wa-webhook
+⚠️ WhatsApp webhook: Webhooks menu → "WhatsApp Business Account" select করতে হয়, "WhatsApp → Configuration" নয়
 
 ### Instagram Setup (Settings > Instagram Connection)
 Instagram automation সম্পূর্ণ সম্ভব। ধাপগুলো:
@@ -64,7 +65,7 @@ Instagram automation সম্পূর্ণ সম্ভব। ধাপগু
 2. developers.facebook.com → App → "Add Product" → "Instagram" → "Set Up" (Graph API, Basic Display নয়)
 3. Instagram Business Account ID পেতে: Graph API Explorer → /me?fields=instagram_business_account → "id" value copy → Settings-এ দিন
 4. Token-এর জন্য: business.facebook.com → System Users → একই System User → "Generate New Token" → permissions: instagram_basic, instagram_manage_messages, instagram_manage_comments, pages_messaging, pages_read_engagement → Token copy → Settings-এ দিন
-5. Webhook: developers.facebook.com → App → Webhooks → "Instagram" → Callback URL: api.chatcat.pro/ig-webhook + Verify Token → Subscribe to "messages" ও "comments"
+5. Webhook: developers.facebook.com → App → বাম sidebar: "Webhooks" → "Select product" dropdown থেকে "Instagram" select → Callback URL: https://api.chatcat.pro/ig-webhook + Verify Token → "Verify and save" → "messages" ও "comments" Subscribe
 Webhook URL: https://api.chatcat.pro/ig-webhook
 
 ### Custom Meta App (প্রতিটা customer-এর নিজের App)
