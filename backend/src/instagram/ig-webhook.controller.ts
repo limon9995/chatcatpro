@@ -15,6 +15,7 @@ import * as crypto from 'crypto';
 import type { Request } from 'express';
 import { IgWebhookService } from './ig-webhook.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { EncryptionService } from '../common/encryption.service';
 
 @SkipThrottle()
 @Controller('ig-webhook')
@@ -24,6 +25,7 @@ export class IgWebhookController {
   constructor(
     private readonly igWebhookService: IgWebhookService,
     private readonly prisma: PrismaService,
+    private readonly encryption: EncryptionService,
   ) {}
 
   // ── GET: Instagram webhook verification ───────────────────────────────────
@@ -56,7 +58,33 @@ export class IgWebhookController {
     @Body() body: any,
     @Headers('x-hub-signature-256') sig: string,
   ) {
-    const secret = process.env.FB_WEBHOOK_SECRET?.trim();
+    // Parse body first so we can do per-page HMAC lookup
+    let parsedBody = body;
+    if (Buffer.isBuffer(body)) {
+      try {
+        parsedBody = JSON.parse(body.toString('utf8'));
+      } catch {
+        this.logger.error('[IG Webhook] Failed to parse body');
+        return 'EVENT_RECEIVED';
+      }
+    }
+
+    // Resolve HMAC secret: prefer per-page fbAppSecret, fall back to global
+    const igAccountId: string | undefined = parsedBody?.entry?.[0]?.id;
+    let secret = process.env.FB_WEBHOOK_SECRET?.trim();
+    if (igAccountId) {
+      const page = await this.prisma.page.findFirst({
+        where: { igBusinessAccountId: igAccountId },
+        select: { fbAppSecret: true },
+      });
+      if (page?.fbAppSecret) {
+        try {
+          secret = this.encryption.decrypt(page.fbAppSecret);
+        } catch {
+          // keep global secret if decrypt fails
+        }
+      }
+    }
 
     if (secret) {
       const rawBody = (req as any).rawBody ?? req.body;
@@ -84,16 +112,6 @@ export class IgWebhookController {
       }
     } else {
       this.logger.warn('[IG Webhook] FB_WEBHOOK_SECRET not set — HMAC verification SKIPPED');
-    }
-
-    let parsedBody = body;
-    if (Buffer.isBuffer(body)) {
-      try {
-        parsedBody = JSON.parse(body.toString('utf8'));
-      } catch {
-        this.logger.error('[IG Webhook] Failed to parse body');
-        return 'EVENT_RECEIVED';
-      }
     }
 
     this.logger.debug(

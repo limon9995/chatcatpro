@@ -513,4 +513,97 @@ export class BotIntentService {
   private includesAny(text: string, keywords: string[]): boolean {
     return keywords.some((k) => text.includes(k));
   }
+
+  // ── AI comment classification (shared by Facebook + Instagram) ───────────
+
+  async classifyComment(
+    products: { code: string; name: string | null; price: number; stockQty: number }[],
+    comment: string,
+  ): Promise<{ productCodes: string[]; intent: string; shouldReply: boolean }> {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) return { productCodes: [], intent: 'other', shouldReply: true };
+    const model = process.env.AI_INTENT_MODEL || 'gemini-2.0-flash';
+
+    const productList = products.length > 0
+      ? products.map((p, i) => `${i + 1}. ${p.code}: ${p.name ?? p.code} (দাম ${p.price}৳, stock: ${p.stockQty > 0 ? p.stockQty + 'টি' : 'নেই'})`).join('\n')
+      : '(কোনো product নেই)';
+
+    const systemPrompt = `You are a Facebook comment handler for a Bengali e-commerce store.
+Given a customer comment and a numbered product list, decide:
+1. Is this worth replying to?
+2. Which product code(s) is the customer asking about?
+3. What info do they want?
+
+Return ONLY valid JSON:
+{
+  "shouldReply": true,
+  "productCodes": [],
+  "intent": "price"|"stock"|"delivery"|"description"|"all_prices"|"emoji_praise"|"other"
+}
+
+Rules:
+- shouldReply=true: ALWAYS — reply to every single comment, no exceptions
+- productCodes=[]: general question, emoji/praise, or intent is "all_prices"
+- productCodes=["X"]: one specific product (identified by name, color, number reference like "৩ নম্বর", or code)
+- productCodes=["X","Y"]: customer asks about multiple specific products
+- intent="all_prices": user wants prices of ALL products ("সবগুলোর দাম কত?" "price list দাও")
+- intent="emoji_praise": pure emojis (❤️🔥😍) or simple praise (nice, wow, সুন্দর, ভালো, great) with no product question
+- intent="other": general question not about a specific product info → inbox CTA`;
+
+    try {
+      const body = {
+        contents: [{ role: 'user', parts: [{ text: `Available products:\n${productList}\n\nCustomer comment: "${comment}"` }] }],
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        generationConfig: { temperature: 0.1, maxOutputTokens: 150, responseMimeType: 'application/json' },
+      };
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(10_000) },
+      );
+      if (!res.ok) return this._classifyCommentOpenAI(systemPrompt, productList, comment);
+      const data = await res.json();
+      const parsed = JSON.parse(data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '{}');
+      if (!Array.isArray(parsed.productCodes)) {
+        parsed.productCodes = parsed.productCode ? [parsed.productCode] : [];
+      }
+      return parsed;
+    } catch {
+      return this._classifyCommentOpenAI(systemPrompt, productList, comment);
+    }
+  }
+
+  private async _classifyCommentOpenAI(
+    systemPrompt: string,
+    productList: string,
+    comment: string,
+  ): Promise<{ productCodes: string[]; intent: string; shouldReply: boolean }> {
+    const openaiKey = process.env.OPENAI_API_KEY;
+    if (!openaiKey) return { productCodes: [], intent: 'other', shouldReply: true };
+    try {
+      const res = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${openaiKey}` },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          temperature: 0.1,
+          max_tokens: 150,
+          response_format: { type: 'json_object' },
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: `Available products:\n${productList}\n\nCustomer comment: "${comment}"` },
+          ],
+        }),
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (!res.ok) return { productCodes: [], intent: 'other', shouldReply: true };
+      const data = await res.json();
+      const parsed = JSON.parse(data?.choices?.[0]?.message?.content ?? '{}');
+      if (!Array.isArray(parsed.productCodes)) {
+        parsed.productCodes = parsed.productCode ? [parsed.productCode] : [];
+      }
+      return parsed;
+    } catch {
+      return { productCodes: [], intent: 'other', shouldReply: true };
+    }
+  }
 }

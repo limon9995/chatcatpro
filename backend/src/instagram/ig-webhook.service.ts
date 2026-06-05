@@ -274,8 +274,6 @@ export class IgWebhookService {
     const rawToken = this.encryption.decrypt(page.igToken as string);
 
     if (!page.automationOn) return;
-    // igCommentToDmEnabled defaults to true — only skip if explicitly false
-    if (page.igCommentToDmEnabled === false) return;
 
     const isBlocked = await this.crm.isBlocked(pageId, commenterId);
     if (isBlocked) return;
@@ -298,58 +296,94 @@ export class IgWebhookService {
       }
     };
 
-    // Product code in comment → reply with product info + invite to DM for ordering
-    if (page.infoModeOn) {
-      const prefix = (page.productCodePrefix as string | undefined) || 'DF';
-      const codes = this.botIntent.extractAllCodes(text, prefix);
-      if (codes.length > 0) {
-        const code = codes[0];
-        const product = await this.prisma.product.findFirst({
-          where: { pageId, code, stockQty: { gt: 0 } },
-        });
+    // Fetch top 15 active products for AI classification
+    const products = await this.prisma.product.findMany({
+      where: { pageId, isActive: true },
+      select: { code: true, name: true, price: true, stockQty: true, description: true },
+      orderBy: { stockQty: 'desc' },
+      take: 15,
+    });
 
-        if (product) {
-          const infoMsg = await this.botKnowledge.resolveSystemReply(pageId, 'product_info', {
-            productCode: product.code,
-            productPrice: product.price,
-            productStock: product.stockQty,
-            productInfoNote: product.description || '',
-          });
-          await safeSendComment(infoMsg.trim());
+    const classification = await this.botIntent.classifyComment(products, text);
+    if (!classification?.shouldReply) return;
 
-          // Send DM invite to order if orderModeOn
-          if (page.orderModeOn) {
-            const dmInvite = await this.botKnowledge.resolveSystemReply(pageId, 'order_prompt') ||
-              `${product.code} order করতে আমাদের Inbox-এ message করুন 💖`;
-            await safeSendDm(dmInvite);
-          }
-          return;
-        }
-      }
-    }
+    const { productCodes, intent } = classification;
+    const mention = commenterId ? `@[${commenterId}] ` : '';
+    const inboxCta = `\n\n📩 Order বা আরও তথ্যের জন্য আমাদের Inbox-এ message করুন।`;
 
-    // Order intent in comment (নেব, কিনব, order etc.) → invite to DM
-    if (page.orderModeOn) {
-      const commentIntent = this.botIntent.detectIntent(text, false);
-      if (
-        commentIntent === 'PRODUCT_INFO_REQUEST' ||
-        commentIntent === 'CONFIRM' ||
-        /\b(নেব|কিনব|order|অর্ডার|buy|want|চাই)\b/i.test(text)
-      ) {
-        const dmInvite = 'Order করতে আমাদের Inbox-এ message করুন 💖';
-        await safeSendComment(dmInvite);
-        return;
-      }
-    }
-
-    // Keyword match from bot knowledge
-    const learned = await this.botKnowledge.resolveReply(pageId, text, commenterId);
-    if (learned?.reply) {
-      await safeSendComment(learned.reply);
+    // All-prices intent
+    if (intent === 'all_prices' || (intent === 'price' && productCodes.length === 0 && products.length > 0)) {
+      const lines = products.map((p, i) => `${i + 1}. ${p.name ?? p.code} — ${p.price}৳`).join('\n');
+      await safeSendComment(`${mention}📦 আমাদের সব product এর দাম:\n${lines}${inboxCta}`);
+      if (page.igCommentToDmEnabled !== false) await safeSendDm(`📦 আমাদের সব product এর দাম:\n${lines}${inboxCta}`);
+      this.logger.log(`[IG] All-prices comment reply commentId=${commentId}`);
       return;
     }
 
-    this.logger.debug(`[IG] No comment reply for commentId=${commentId} text="${text.slice(0, 60)}"`);
+    // Emoji/praise
+    if (intent === 'emoji_praise') {
+      const reply = `${mention}ধন্যবাদ! ❤️ আপনার ভালোবাসাই আমাদের অনুপ্রেরণা! 😊 কোনো product সম্পর্কে জানতে চাইলে Inbox-এ message করুন। 📩`;
+      await safeSendComment(reply);
+      this.logger.log(`[IG] Emoji/praise comment reply commentId=${commentId}`);
+      return;
+    }
+
+    // No specific product or general question
+    if (productCodes.length === 0 || intent === 'other') {
+      await safeSendComment(mention + `আগ্রহের জন্য ধন্যবাদ! 😊 আমাদের Inbox-এ message করুন — দাম, stock ও অর্ডার সম্পর্কে সব তথ্য পাবেন। 📩`);
+      if (page.igCommentToDmEnabled !== false) await safeSendDm(`আমাদের Inbox-এ message করুন — দাম, stock ও অর্ডার সম্পর্কে সব তথ্য পাবেন। 📩`);
+      this.logger.log(`[IG] Generic comment reply commentId=${commentId}`);
+      return;
+    }
+
+    const matched = products.filter(p => productCodes.includes(p.code));
+    if (matched.length === 0) {
+      await safeSendComment(mention + `আগ্রহের জন্য ধন্যবাদ! 😊 আমাদের Inbox-এ message করুন — দাম, stock ও অর্ডার সম্পর্কে সব তথ্য পাবেন। 📩`);
+      return;
+    }
+
+    // Multiple products matched
+    if (matched.length > 1) {
+      const parts = matched.map(p => this.buildProductLine(p, intent, page)).filter(Boolean);
+      if (!parts.length) return;
+      const reply = mention + parts.join('\n') + inboxCta;
+      await safeSendComment(reply);
+      if (page.igCommentToDmEnabled !== false) await safeSendDm(parts.join('\n') + inboxCta);
+      this.logger.log(`[IG] Multi-product comment reply commentId=${commentId} codes=${productCodes.join(',')}`);
+      return;
+    }
+
+    // Single product
+    const reply = this.buildCommentReply(matched[0], intent, page);
+    if (!reply) return;
+    await safeSendComment(mention + reply);
+    if (page.igCommentToDmEnabled !== false) await safeSendDm(reply);
+    this.logger.log(`[IG] Comment replied commentId=${commentId} code=${productCodes[0]} intent=${intent}`);
+  }
+
+  private buildProductLine(product: any, intent: string, page: any): string | null {
+    const label = product.name ?? product.code;
+    switch (intent) {
+      case 'price': return `• ${label} — ${product.price}৳ 🏷️`;
+      case 'stock': return `• ${label} — ${product.stockQty > 0 ? `${product.stockQty}টি stock ✅` : 'stock নেই ❌'}`;
+      case 'delivery': return `• ঢাকার ভেতরে ${page.deliveryFeeInsideDhaka ?? 80}৳, বাইরে ${page.deliveryFeeOutsideDhaka ?? 120}৳ 🚚`;
+      case 'description': return product.description ? `• ${label}: ${product.description}` : null;
+      default: return null;
+    }
+  }
+
+  private buildCommentReply(product: any, intent: string, page: any): string | null {
+    const label = product.name ? `${product.name} (${product.code})` : product.code;
+    const inboxCta = `\n\n📩 Order বা আরও তথ্যের জন্য আমাদের Inbox-এ message করুন।`;
+    switch (intent) {
+      case 'price': return `${label} এর দাম ${product.price}৳ 🏷️${inboxCta}`;
+      case 'stock': return (product.stockQty > 0
+        ? `${label} এ ${product.stockQty} টি stock আছে ✅`
+        : `${label} বর্তমানে stock এ নেই ❌`) + inboxCta;
+      case 'delivery': return `ঢাকার ভেতরে ডেলিভারি ${page.deliveryFeeInsideDhaka ?? 80}৳, বাইরে ${page.deliveryFeeOutsideDhaka ?? 120}৳ 🚚${inboxCta}`;
+      case 'description': return product.description ? `${product.description}${inboxCta}` : null;
+      default: return null;
+    }
   }
 
   // ── Multi-product preview helpers ────────────────────────────────────────────

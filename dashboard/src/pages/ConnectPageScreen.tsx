@@ -670,8 +670,8 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
 
                     {/* Why own app */}
                     <div style={{ paddingTop: 12, fontSize: 12, color: muted, lineHeight: 1.8, background: dark ? 'rgba(34,197,94,0.06)' : 'rgba(34,197,94,0.05)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: 9, padding: '10px 12px', marginTop: 10 }}>
-                      ✅ <strong style={{ color: text }}>{copy('কেন নিজের App বানাবেন?', 'Why create your own App?')}</strong><br />
-                      {copy('নিজের App মানে আপনার Page সম্পূর্ণ আপনার নিয়ন্ত্রণে থাকবে। Messenger bot, comment reply, auto post — সব feature কাজ করবে। হাজার হাজার user একসাথে নিজের App দিয়ে যুক্ত হতে পারবে।', 'Your own App means your Page is fully under your control. Messenger bot, comment reply, auto post — all features will work. Thousands of users can join simultaneously, each with their own App.')}
+                      ✅ <strong style={{ color: text }}>{copy('কেন customer-এর নিজের App?', 'Why use the customer\'s own App?')}</strong><br />
+                      {copy('Customer-এর Facebook account থেকে একটা Meta App বানিয়ে দিলে তাদের Facebook Messenger + WhatsApp + Instagram — তিনটাই সেই একটা App দিয়ে চলবে। App ID ও App Secret দিলে webhook HMAC verification তাদের নিজের secret দিয়ে হবে — সম্পূর্ণ আলাদা ও secure।', 'Creating a Meta App from the customer\'s Facebook account lets Facebook Messenger + WhatsApp + Instagram all run through that single App. With their own App ID and App Secret, webhook HMAC verification uses their own secret — completely isolated and secure.')}
                     </div>
 
                     <div style={{ fontSize: 12.5, fontWeight: 800, color: text, marginTop: 4 }}>
@@ -694,25 +694,25 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
                         step: '২',
                         emoji: '📱',
                         title: copy('নতুন App তৈরি করুন', 'Create a new App'),
-                        desc: copy('"My Apps" → "Create App" click করুন → App type: "Business" বা "Consumer" বেছে নিন → App-এর নাম দিন (যেমন: MyShopBot) → "Create App" button চাপুন।', 'Click "My Apps" → "Create App" → choose App type "Business" or "Consumer" → give your App a name (e.g. MyShopBot) → click "Create App".'),
+                        desc: copy('"My Apps" → "Create App" click করুন → App type: "Business" select করুন (WhatsApp ও Instagram সব একই app-এ চলবে) → App-এর নাম দিন (যেমন: ShopBot) → "Create App" button চাপুন।', 'Click "My Apps" → "Create App" → select App type "Business" (WhatsApp and Instagram all run in the same app) → give your App a name (e.g. ShopBot) → click "Create App".'),
                       },
                       {
                         step: '৩',
                         emoji: '💬',
                         title: copy('Messenger Product যোগ করুন', 'Add Messenger Product'),
-                        desc: copy('App Dashboard-এ যান → "Add Products" section থেকে "Messenger" খুঁজুন → "Set Up" click করুন। এতে Messenger webhook ও সব permission enable হবে।', 'Go to App Dashboard → find "Messenger" in "Add Products" → click "Set Up". This enables Messenger webhook and all permissions.'),
+                        desc: copy('App Dashboard → বাম sidebar: "Add Product" → "Messenger" → "Set Up" click করুন। এরপর WhatsApp-এর জন্য আবার "Add Product" → "WhatsApp" → "Set Up"। Instagram-এর জন্য "Add Product" → "Instagram" → "Set Up"।', 'App Dashboard → left sidebar: "Add Product" → "Messenger" → click "Set Up". Then for WhatsApp: "Add Product" → "WhatsApp" → "Set Up". For Instagram: "Add Product" → "Instagram" → "Set Up".'),
                       },
                       {
                         step: '৪',
                         emoji: '🔑',
                         title: copy('App ID ও App Secret সংগ্রহ করুন', 'Collect App ID and App Secret'),
-                        desc: copy('Settings → Basic এ যান → App ID দেখবেন → App Secret-এর পাশে "Show" click করুন → দুটো কোথাও সংরক্ষণ করুন। এগুলো নিচের form-এ দিতে হবে।', 'Go to Settings → Basic → you will see App ID → click "Show" next to App Secret → save both somewhere. You will need to enter these in the form below.'),
+                        desc: copy('App Settings → Basic এ যান → App ID উপরে দেখাবে — copy করুন → App Secret-এর পাশে "Show" click করুন → password দিন → copy করুন। দুটো নোট করুন — নিচের "App ID" ও "App Secret" field-এ দিতে হবে।', 'Go to App Settings → Basic → copy the App ID shown at the top → click "Show" next to App Secret → enter your password → copy it. Note both — you will enter them in the "App ID" and "App Secret" fields below.'),
                       },
                       {
                         step: '৫',
-                        emoji: '👥',
-                        title: copy('Tester যোগ করুন (Development mode-এ থাকলে)', 'Add Testers (if in Development mode)'),
-                        desc: copy('App যদি Development mode-এ থাকে, তাহলে শুধু Tester হিসেবে যোগ করা accounts কাজ করবে।\n→ App Dashboard → বাম মেনু: Roles → Roles → "Testers" section → "Add Testers"\n→ তাদের Facebook username বা profile link দিন\n→ তারা Facebook notification থেকে Accept করলেই কাজ শুরু হবে\nসব user-এর জন্য কাজ করাতে: Settings → Basic → App Mode: "Live" করুন।', 'If App is in Development mode, only added Tester accounts will work.\n→ App Dashboard → left menu: Roles → Roles → "Testers" section → "Add Testers"\n→ Enter their Facebook username or profile link\n→ Once they accept the Facebook notification, it works\nFor all users: Settings → Basic → App Mode → switch to "Live".'),
+                        emoji: '🔴',
+                        title: copy('App Mode: Live করুন', 'Switch App Mode to Live'),
+                        desc: copy('App Settings → Basic → উপরে "App Mode" toggle দেখাবে — "Development" থেকে "Live" করুন। Live না করলে শুধু Tester হিসেবে add করা accounts কাজ করবে। Live করার পর সব users-এর page connect হবে।', 'App Settings → Basic → you will see the "App Mode" toggle at the top → switch from "Development" to "Live". Without this, only accounts added as Testers will work. After switching to Live, all user pages can connect.'),
                       },
                       {
                         step: '৬',
@@ -721,7 +721,7 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
                         desc: (
                           <span>
                             <a href="https://developers.facebook.com/tools/explorer/" target="_blank" rel="noreferrer" style={{ color: '#6366f1', fontWeight: 700 }}>developers.facebook.com/tools/explorer</a>
-                            {copy(' → "Meta App" dropdown থেকে আপনার App select করুন → "User or Page" থেকে আপনার Page select করুন → নিচের সব permission যোগ করুন → "Generate Access Token" click করুন → সব permission Allow করুন। Token copy করুন।', ' → Select your App from "Meta App" dropdown → Select your Page from "User or Page" dropdown → add all permissions below → click "Generate Access Token" → Allow all permissions. Copy the token.')}
+                            {copy(' → "Meta App" dropdown থেকে customer-এর App select করুন → "User or Page" থেকে customer-এর Facebook Page select করুন → নিচের সব permission যোগ করুন → "Generate Access Token" click করুন → সব permission Allow করুন → Token copy করুন (EAAxxxxx...)। এই token নিচের "Page Access Token" field-এ দিন।', ' → Select the customer\'s App from "Meta App" dropdown → select the customer\'s Facebook Page from "User or Page" → add all permissions below → click "Generate Access Token" → Allow all permissions → copy the token (EAAxxxxx...). Enter this token in the "Page Access Token" field below.')}
                           </span>
                         ),
                       },
@@ -869,15 +869,15 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
                 <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
                   <div style={{ fontSize: 11.5, color: muted, lineHeight: 1.7 }}>
                     {copy(
-                      'নিজের Developer App থাকলে App ID ও App Secret দিন। না দিলে platform-এর default app ব্যবহার হবে।',
-                      'If you have your own Facebook Developer App, enter its App ID and App Secret. Otherwise the platform default app will be used.',
+                      'Customer-এর নিজের Meta App থাকলে App ID ও App Secret এখানে দিন। এই App দিয়েই Facebook Messenger, WhatsApp ও Instagram — তিনটাই চলবে।',
+                      'If the customer has their own Meta App, enter the App ID and App Secret here. This same App will handle Facebook Messenger, WhatsApp, and Instagram.',
                     )}
                     <div style={{ background: dark ? 'rgba(99,102,241,0.08)' : 'rgba(99,102,241,0.05)', padding: '7px 10px', borderRadius: 8, marginTop: 6, border: `1px solid rgba(99,102,241,0.2)` }}>
                       <strong style={{ color: '#6366f1' }}>{copy('কোথায় পাবেন?', 'Where to find?')}</strong>{' '}
                       <a href="https://developers.facebook.com/" target="_blank" rel="noreferrer" style={{ color: text, fontWeight: 600 }}>developers.facebook.com</a>
-                      {copy(' → আপনার App → Settings → Basic', ' → Your App → Settings → Basic')}
+                      {copy(' → customer-এর App → App Settings → Basic → App ID (উপরে) + App Secret ("Show" click করুন)', ' → customer\'s App → App Settings → Basic → App ID (at top) + App Secret (click "Show")')}
                     </div>
-                    <div style={{ marginTop: 5 }}><strong>{copy('App Secret একবার save হলে আর দেখানো হবে না।', 'App Secret is stored encrypted and never shown again.')}</strong></div>
+                    <div style={{ marginTop: 5 }}><strong>{copy('App Secret একবার save হলে আর দেখানো হবে না — encrypted রাখা হয়।', 'App Secret is stored encrypted and never shown again after saving.')}</strong></div>
                   </div>
                   <div>
                     <label style={{ fontSize: 11.5, color: muted, fontWeight: 600, display: 'block', marginBottom: 4 }}>App ID</label>

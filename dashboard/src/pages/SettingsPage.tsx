@@ -803,14 +803,14 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
             </summary>
             <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
               {[
-                copy('১. Meta Developer Console-এ যান: developers.facebook.com', '1. Go to Meta Developer Console: developers.facebook.com'),
-                copy('২. "My Apps" → আপনার App select করুন (অথবা নতুন App তৈরি করুন: "Create App" → "Business" type select করুন)', '2. "My Apps" → select your App (or create one: "Create App" → select "Business" type)'),
-                copy('৩. বাম পাশে "WhatsApp" product add করুন → "WhatsApp" → "Getting Started" click করুন', '3. Add "WhatsApp" product from left sidebar → "WhatsApp" → click "Getting Started"'),
-                copy('৪. "Phone Number ID" copy করুন (নিচের "Phone Number ID" field-এ paste করুন)', '4. Copy the "Phone Number ID" (paste it in the Phone Number ID field below)'),
-                copy('৫. Access Token এর জন্য: Meta Business Suite → business.facebook.com → Settings → System Users → "Add" → নতুন System User তৈরি করুন', '5. For Access Token: Meta Business Suite → business.facebook.com → Settings → System Users → "Add" → create a new System User'),
-                copy('৬. System User-এ: "Generate New Token" click করুন → আপনার App select করুন → Permission: whatsapp_business_messaging, whatsapp_business_management যোগ করুন → "Generate Token" click করুন', '6. On System User: click "Generate New Token" → select your App → add permissions: whatsapp_business_messaging, whatsapp_business_management → click "Generate Token"'),
-                copy('৭. Token copy করুন (EAAxxxxx... দিয়ে শুরু) → নিচের "Access Token" field-এ paste করুন', '7. Copy the token (starts with EAAxxxxx...) → paste it in the "Access Token" field below'),
-                copy('৮. "Webhook Verify Token" Generate করুন → Meta App → WhatsApp → Configuration → Webhook URL ও Verify Token দিন → "messages" subscribe করুন', '8. Generate "Webhook Verify Token" → In Meta App → WhatsApp → Configuration → enter Webhook URL & Verify Token → subscribe to "messages"'),
+                copy('১. developers.facebook.com → আপনার App-এ যান → বাম sidebar: "Add Product" → "WhatsApp" → "Set Up" click করুন', '1. Go to developers.facebook.com → your App → left sidebar: "Add Product" → "WhatsApp" → click "Set Up"'),
+                copy('২. App → WhatsApp → "Getting Started" → "From" section-এ Phone Number ID দেখাবে → Copy করুন → নিচের "Phone Number ID" field-এ paste করুন', '2. App → WhatsApp → "Getting Started" → find Phone Number ID in the "From" section → Copy it → paste in the "Phone Number ID" field below'),
+                copy('৩. business.facebook.com → Settings (গিয়ার আইকন) → Users → System Users → "Add" click করুন → নাম দিন, Role: "Admin" → তৈরি করুন', '3. Go to business.facebook.com → Settings (gear icon) → Users → System Users → click "Add" → enter a name, Role: "Admin" → create'),
+                copy('৪. তৈরি System User-এ click করুন → "Add Assets" → "Pages" → customer-এর Page select করুন → "Manage Page" toggle ON করুন → Save করুন', '4. Click the created System User → "Add Assets" → "Pages" → select the customer\'s Page → turn ON "Manage Page" → Save'),
+                copy('৫. System User-এ "Generate New Token" click করুন → আপনার App select করুন → নিচের permission যোগ করুন: whatsapp_business_messaging, whatsapp_business_management, pages_messaging', '5. Click "Generate New Token" on the System User → select your App → add these permissions: whatsapp_business_messaging, whatsapp_business_management, pages_messaging'),
+                copy('৬. "Generate Token" click করুন → Token copy করুন (EAAxxxxx... দিয়ে শুরু) → নিচের "Access Token" field-এ paste করুন', '6. Click "Generate Token" → Copy the token (starts with EAAxxxxx...) → paste in the "Access Token" field below'),
+                copy('৭. নিচে "🔀 Generate" click করে Webhook Verify Token তৈরি করুন → copy করে রাখুন', '7. Click "🔀 Generate" below to create a Webhook Verify Token → keep a copy of it'),
+                copy('৮. developers.facebook.com → App → WhatsApp → Configuration → "Edit" click → Callback URL দিন (নিচে দেখুন) + Verify Token দিন → "Verify and Save" → Webhook Fields-এ "messages" → Subscribe করুন', '8. developers.facebook.com → App → WhatsApp → Configuration → click "Edit" → enter Callback URL (see below) + Verify Token → "Verify and Save" → Webhook Fields → Subscribe to "messages"'),
               ].map((step, i) => (
                 <div key={i} style={{ display: 'flex', gap: 8, fontSize: 12, padding: '7px 10px', borderRadius: 8, background: th.surface, border: `1px solid ${th.border}` }}>
                   <span style={{ color: th.accent, flexShrink: 0 }}>→</span>
@@ -937,38 +937,17 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
               📋 {copy('কিভাবে Instagram token পাবেন? (ধাপে ধাপে)', 'How to get Instagram token? (Step by step)')}
             </summary>
             <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {/* Meta Developer Instagram product add guide */}
-              <div style={{ padding: '10px 12px', borderRadius: 8, background: 'rgba(234,179,8,0.08)', border: `1px solid rgba(234,179,8,0.3)` }}>
-                <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6, color: '#ca8a04' }}>
-                  ⚙️ {copy('Meta Developer App-এ Instagram product add করুন', 'Add Instagram product in Meta Developer App')}
-                </div>
-                {[
-                  copy('ক. developers.facebook.com → "My Apps" → আপনার App-এ click করুন', 'a. developers.facebook.com → "My Apps" → click your App'),
-                  copy('খ. বাম পাশে "Add Product" বাটনে click করুন', 'b. Click "Add Product" from the left sidebar'),
-                  copy('গ. "Instagram" card খুঁজুন → "Set Up" click করুন', 'c. Find the "Instagram" card → click "Set Up"'),
-                  copy('ঘ. "Instagram Basic Display" নয় — "Instagram" (Business/Graph API) select করুন', 'd. Do NOT select "Instagram Basic Display" — select "Instagram" (Business/Graph API)'),
-                  copy('ঙ. Instagram product add হলে বাম পাশে "Instagram" menu দেখাবে → "Basic Display" বা "API Setup" থেকে আপনার Instagram Business Account connect করুন', 'e. Once added, "Instagram" appears in left menu → connect your Instagram Business Account from "Basic Display" or "API Setup"'),
-                ].map((step, i) => (
-                  <div key={i} style={{ display: 'flex', gap: 8, fontSize: 11.5, padding: '5px 0', borderBottom: i < 4 ? `1px solid rgba(234,179,8,0.15)` : 'none' }}>
-                    <span style={{ color: '#ca8a04', flexShrink: 0 }}>•</span>
-                    <span style={{ color: th.text, lineHeight: 1.5 }}>{step}</span>
-                  </div>
-                ))}
-              </div>
-
-              {/* Instagram + FB Page linking guide */}
+              {/* Step 1: Link Instagram to Facebook Page */}
               <div style={{ padding: '10px 12px', borderRadius: 8, background: 'rgba(99,102,241,0.08)', border: `1px solid rgba(99,102,241,0.25)` }}>
                 <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6, color: th.accent }}>
-                  🔗 {copy('প্রথমে Instagram-কে Facebook Page-এর সাথে link করুন', 'First link your Instagram to a Facebook Page')}
+                  🔗 {copy('ধাপ ১ — Instagram-কে Facebook Page-এর সাথে link করুন (আগে থেকে না থাকলে)', 'Step 1 — Link Instagram to your Facebook Page (if not already linked)')}
                 </div>
                 {[
-                  copy('ক. Instagram app খুলুন → Profile → উপরে ডানে ☰ (তিন লাইন) → Settings and privacy', 'a. Open Instagram app → Profile → ☰ top right → Settings and privacy'),
-                  copy('খ. "Account type and tools" → "Switch to Professional Account" → Business বা Creator select করুন', 'b. "Account type and tools" → "Switch to Professional Account" → select Business or Creator'),
-                  copy('গ. Professional account হওয়ার পর: Settings → "Account" → "Linked accounts" → "Facebook" → আপনার Facebook account দিয়ে login করুন', 'c. After becoming Professional: Settings → "Account" → "Linked accounts" → "Facebook" → log in with your Facebook account'),
-                  copy('ঘ. Facebook-এ আপনার Page select করুন যেটির সাথে Instagram link করতে চান — এই Page-টিই Chatcat-এ connected থাকতে হবে', 'd. Select the Facebook Page you want to link with Instagram — this Page must be the one connected in Chatcat'),
-                  copy('ঙ. Link confirm হলে Instagram Profile → Edit Profile → এ "Page" দেখাবে — confirm করুন', 'e. After linking, go to Instagram Profile → Edit Profile → you will see the "Page" shown — confirm it'),
+                  copy('ক. Instagram app → Profile → ☰ → Settings and privacy → "Account type and tools" → "Switch to Professional Account" → Business বা Creator select করুন', 'a. Instagram app → Profile → ☰ → Settings and privacy → "Account type and tools" → "Switch to Professional Account" → select Business or Creator'),
+                  copy('খ. Settings → Account → "Linked accounts" → Facebook → আপনার Facebook account দিয়ে login করুন → customer-এর Facebook Page select করুন (যেটি Chatcat-এ connected)', 'b. Settings → Account → "Linked accounts" → Facebook → log in with the Facebook account → select the customer\'s Facebook Page (the one connected in Chatcat)'),
+                  copy('গ. Instagram Profile → Edit Profile → "Page" section-এ Page-এর নাম দেখাবে — link confirm', 'c. Instagram Profile → Edit Profile → the Page name will appear in the "Page" section — link confirmed'),
                 ].map((step, i) => (
-                  <div key={i} style={{ display: 'flex', gap: 8, fontSize: 11.5, padding: '5px 0', borderBottom: i < 4 ? `1px solid rgba(99,102,241,0.1)` : 'none' }}>
+                  <div key={i} style={{ display: 'flex', gap: 8, fontSize: 11.5, padding: '5px 0', borderBottom: i < 2 ? `1px solid rgba(99,102,241,0.1)` : 'none' }}>
                     <span style={{ color: th.accent, flexShrink: 0 }}>•</span>
                     <span style={{ color: th.text, lineHeight: 1.5 }}>{step}</span>
                   </div>
@@ -976,14 +955,14 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
               </div>
 
               {[
-                copy('১. Instagram link হলে এখন token নিন — Graph API Explorer-এ যান: developers.facebook.com/tools/explorer', '1. Once Instagram is linked, get the token — go to Graph API Explorer: developers.facebook.com/tools/explorer'),
-                copy('২. Instagram Business Account ID পেতে: Meta Developer Console → developers.facebook.com → আপনার App → Instagram → "Instagram Business Account" section থেকে ID copy করুন', '2. To get Instagram Business Account ID: Meta Developer Console → developers.facebook.com → your App → Instagram → copy ID from "Instagram Business Account" section'),
-                copy('৩. অথবা Graph API Explorer-এই Account ID বের করুন: আপনার App ও Page select → query field-এ লিখুন: /me?fields=instagram_business_account → Submit → "id" value টি copy করুন', '3. Or find Account ID in Graph API Explorer: select your App & Page → type in query field: /me?fields=instagram_business_account → Submit → copy the "id" value'),
-                copy('৪. "Meta App" dropdown থেকে আপনার App select করুন', '4. Select your App from the "Meta App" dropdown'),
-                copy('৫. "User or Page" থেকে আপনার Instagram-linked Facebook Page select করুন', '5. From "User or Page", select your Instagram-linked Facebook Page'),
-                copy('৬. নিচের permissions যোগ করুন: instagram_basic, instagram_manage_messages, instagram_manage_comments, pages_show_list', '6. Add these permissions: instagram_basic, instagram_manage_messages, instagram_manage_comments, pages_show_list'),
-                copy('৭. "Generate Access Token" click করুন → Facebook login করুন → সব permission Allow করুন → Token copy করুন (EAAxxxxx...)', '7. Click "Generate Access Token" → log in to Facebook → Allow all permissions → copy the token (EAAxxxxx...)'),
-                copy('৮. Webhook-এর জন্য: Meta App → Instagram → Webhooks → নিচের Webhook URL দিন, Verify Token দিন → "messages" ও "comments" subscribe করুন', '8. For Webhook: Meta App → Instagram → Webhooks → enter the Webhook URL below, enter Verify Token → subscribe to "messages" and "comments"'),
+                copy('১. developers.facebook.com → আপনার App → বাম sidebar: "Add Product" → "Instagram" → "Set Up" click করুন ("Instagram Basic Display" নয়, "Instagram" Graph API বেছে নিন)', '1. developers.facebook.com → your App → left sidebar: "Add Product" → "Instagram" → click "Set Up" (choose "Instagram" Graph API, NOT "Instagram Basic Display")'),
+                copy('২. Instagram Business Account ID পেতে: developers.facebook.com/tools/explorer → আপনার App ও IG-linked Page select → query field-এ লিখুন: /me?fields=instagram_business_account → Submit করুন → result-এ "id" value copy করুন → নিচের "Business Account ID" field-এ paste করুন', '2. To get Instagram Business Account ID: developers.facebook.com/tools/explorer → select your App & IG-linked Page → type: /me?fields=instagram_business_account → Submit → copy the "id" from the result → paste in the "Business Account ID" field below'),
+                copy('৩. Access Token-এর জন্য: business.facebook.com → Settings → Users → System Users → WhatsApp-এ তৈরি একই System User-এ click করুন (বা নতুন তৈরি করুন)', '3. For Access Token: business.facebook.com → Settings → Users → System Users → click the same System User you created for WhatsApp (or create a new one)'),
+                copy('৪. System User → "Add Assets" → Pages → customer-এর Page select → "Manage Page" ON → Save করুন', '4. System User → "Add Assets" → Pages → select customer\'s Page → turn ON "Manage Page" → Save'),
+                copy('৫. "Generate New Token" → আপনার App select → নিচের permissions যোগ করুন: instagram_basic, instagram_manage_messages, instagram_manage_comments, pages_messaging, pages_read_engagement → "Generate Token"', '5. "Generate New Token" → select your App → add permissions: instagram_basic, instagram_manage_messages, instagram_manage_comments, pages_messaging, pages_read_engagement → "Generate Token"'),
+                copy('৬. Token copy করুন (EAAxxxxx...) → নিচের "Access Token" field-এ paste করুন', '6. Copy the token (EAAxxxxx...) → paste in the "Access Token" field below'),
+                copy('৭. নিচে "Generate" click করে Webhook Verify Token তৈরি করুন', '7. Click "Generate" below to create a Webhook Verify Token'),
+                copy('৮. developers.facebook.com → App → Webhooks → Product: "Instagram" select → "Edit" → Callback URL দিন + Verify Token দিন → "Verify and Save" → Fields-এ "messages" ও "comments" Subscribe করুন', '8. developers.facebook.com → App → Webhooks → select Product: "Instagram" → "Edit" → enter Callback URL + Verify Token → "Verify and Save" → Subscribe to "messages" and "comments" in Fields'),
               ].map((step, i) => (
                 <div key={i} style={{ display: 'flex', gap: 8, fontSize: 12, padding: '7px 10px', borderRadius: 8, background: th.surface, border: `1px solid ${th.border}` }}>
                   <span style={{ color: th.accent, flexShrink: 0 }}>→</span>
@@ -1005,7 +984,7 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
                 placeholder="e.g. 17841400455057828"
               />
               <div style={{ fontSize: 11, color: th.muted, marginTop: 4 }}>
-                Meta Developer Console → Instagram → Instagram Business Account ID
+                Graph API Explorer → /me?fields=instagram_business_account → result-এ "id" value
               </div>
             </div>
             <div>
@@ -1016,12 +995,12 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
                 style={th.input}
                 type="password"
                 autoComplete="new-password"
-                placeholder={s.igTokenSet ? '••••••• (পরিবর্তন করতে নতুন token দিন)' : 'EAAxxxxxx... (Graph API Explorer থেকে)'}
+                placeholder={s.igTokenSet ? '••••••• (পরিবর্তন করতে নতুন token দিন)' : 'EAAxxxxxx... (System User Token)'}
                 value={igToken}
                 onChange={e => setIgToken(e.target.value)}
               />
               <div style={{ fontSize: 11, color: th.muted, marginTop: 4 }}>
-                Graph API Explorer → আপনার IG-linked Page select → instagram_basic + instagram_manage_messages + instagram_manage_comments → Token generate করুন
+                business.facebook.com → System Users → Generate Token → instagram_basic + instagram_manage_messages + instagram_manage_comments
               </div>
             </div>
             <div>

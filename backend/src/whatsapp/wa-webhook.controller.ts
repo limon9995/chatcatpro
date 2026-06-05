@@ -15,6 +15,7 @@ import * as crypto from 'crypto';
 import type { Request } from 'express';
 import { WaWebhookService } from './wa-webhook.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { EncryptionService } from '../common/encryption.service';
 
 @SkipThrottle()
 @Controller('wa-webhook')
@@ -25,6 +26,7 @@ export class WaWebhookController {
   constructor(
     private readonly waWebhookService: WaWebhookService,
     private readonly prisma: PrismaService,
+    private readonly encryption: EncryptionService,
   ) {}
 
   // ── GET: WhatsApp webhook verification ────────────────────────────────────
@@ -58,8 +60,34 @@ export class WaWebhookController {
     @Body() body: any,
     @Headers('x-hub-signature-256') sig: string,
   ) {
-    // HMAC signature verification (same FB App Secret as Facebook webhook)
-    const secret = process.env.FB_WEBHOOK_SECRET?.trim();
+    // Parse body first so we can do per-page HMAC lookup
+    let parsedBody = body;
+    if (Buffer.isBuffer(body)) {
+      try {
+        parsedBody = JSON.parse(body.toString('utf8'));
+      } catch {
+        this.logger.error('[WA Webhook] Failed to parse body');
+        return 'EVENT_RECEIVED';
+      }
+    }
+
+    // Resolve HMAC secret: prefer per-page fbAppSecret, fall back to global
+    const phoneNumberId: string | undefined =
+      parsedBody?.entry?.[0]?.changes?.[0]?.value?.metadata?.phone_number_id;
+    let secret = process.env.FB_WEBHOOK_SECRET?.trim();
+    if (phoneNumberId) {
+      const page = await this.prisma.page.findFirst({
+        where: { waPhoneNumberId: phoneNumberId },
+        select: { fbAppSecret: true },
+      });
+      if (page?.fbAppSecret) {
+        try {
+          secret = this.encryption.decrypt(page.fbAppSecret);
+        } catch {
+          // keep global secret if decrypt fails
+        }
+      }
+    }
 
     if (secret) {
       const rawBody = (req as any).rawBody ?? req.body;
@@ -89,17 +117,6 @@ export class WaWebhookController {
       this.logger.warn(
         '[WA Webhook] FB_WEBHOOK_SECRET not set — HMAC verification SKIPPED',
       );
-    }
-
-    // Parse raw body if needed
-    let parsedBody = body;
-    if (Buffer.isBuffer(body)) {
-      try {
-        parsedBody = JSON.parse(body.toString('utf8'));
-      } catch {
-        this.logger.error('[WA Webhook] Failed to parse body');
-        return 'EVENT_RECEIVED';
-      }
     }
 
     this.logger.debug(
