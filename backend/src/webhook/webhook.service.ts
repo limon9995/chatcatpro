@@ -207,9 +207,13 @@ export class WebhookService implements OnModuleDestroy {
         const postId: string = val.post_id ?? '';
         const commentText: string = String(val.message ?? '').trim();
         const commenterName: string = String(val.from?.name ?? '').trim();
+        const commenterId: string = String(val.from?.id ?? '').trim();
         if (!commentId || !commentText) continue;
 
-        this.handleCommentReply(resolvedPage, commentId, postId, commentText, commenterName)
+        // Like the comment immediately so commenter gets notified
+        this.messenger.likeComment(resolvedPage.pageToken, commentId).catch(() => {});
+
+        this.handleCommentReply(resolvedPage, commentId, postId, commentText, commenterName, commenterId)
           .catch(err => this.logger.error(`[Webhook] Comment reply error: ${err}`));
       }
     }
@@ -223,6 +227,7 @@ export class WebhookService implements OnModuleDestroy {
     postId: string,
     commentText: string,
     commenterName: string = '',
+    commenterId: string = '',
   ): Promise<void> {
     if (!page.commentReplyOn || !page.automationOn) return;
     // M-4: skip if page has no token
@@ -251,7 +256,7 @@ export class WebhookService implements OnModuleDestroy {
     if (!classification?.shouldReply) return;
 
     const { productCodes, intent } = classification;
-    const mention = commenterName ? `${commenterName} ` : '';
+    const mention = commenterId ? `@[${commenterId}] ` : (commenterName ? `${commenterName} ` : '');
     const inboxCta = `\n\n📩 Order বা আরও তথ্যের জন্য আমাদের Inbox-এ message করুন।`;
 
     // M-8: deduct wallet before send so cost is always recorded even if send fails

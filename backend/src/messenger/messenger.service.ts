@@ -122,6 +122,21 @@ export class MessengerService {
     }
   }
 
+  async likeComment(pageToken: string, commentId: string): Promise<void> {
+    if (!pageToken || !commentId) return;
+    const rawToken = this.encryption.decrypt(pageToken);
+    const url = `https://graph.facebook.com/v20.0/${encodeURIComponent(commentId)}/reactions?type=LOVE&access_token=${encodeURIComponent(rawToken)}`;
+    try {
+      const res = await fetch(url, { method: 'POST' });
+      if (!res.ok) {
+        const err = await res.text().catch(() => '');
+        this.logger.warn(`[Messenger] Comment like failed status=${res.status} body=${err.slice(0, 100)}`);
+      }
+    } catch (err) {
+      this.logger.warn(`[Messenger] Comment like network error: ${err}`);
+    }
+  }
+
   async sendSubscribeButton(encryptedToken: string, psid: string): Promise<void> {
     if (!encryptedToken || !psid) return;
     const rawToken = this.encryption.decrypt(encryptedToken);
