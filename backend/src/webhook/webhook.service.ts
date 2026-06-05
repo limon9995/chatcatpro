@@ -97,6 +97,7 @@ export class WebhookService implements OnModuleDestroy {
     if (!body || body.object !== 'page') return;
 
     for (const entry of body.entry ?? []) {
+      this.logger.log(`[Webhook] DEBUG entry.id=${entry.id} messaging=${entry.messaging?.length ?? 0} changes=${JSON.stringify((entry.changes ?? []).map((c: any) => ({ field: c.field, item: c.value?.item, verb: c.value?.verb, sender: c.value?.sender_id })))}`);
       const rows = await this.prisma.$queryRaw<any[]>`
         SELECT p.* FROM "Page" p
         LEFT JOIN "User" u ON u.id = p."ownerId"
@@ -3186,13 +3187,12 @@ ${businessInfo}
   }
 
   private async isAiAllowedForPage(ownerId: string | null): Promise<boolean> {
-    if (!ownerId) return true; // no owner = allow (shouldn't happen in prod)
+    if (!ownerId) return true;
     try {
       const sub = await this.billing.getOrCreateSubscription(ownerId);
-      const planName = (sub as any).plan?.name ?? 'starter';
-      return planName !== 'basic';
+      return this.billing.canTakeOrders(sub);
     } catch {
-      return true; // fail-open: if billing check fails, don't break the bot
+      return true;
     }
   }
 }
