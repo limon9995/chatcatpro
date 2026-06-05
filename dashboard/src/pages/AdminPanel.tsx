@@ -19,6 +19,13 @@ interface BillingSupportConfig {
   messengerUrl?: string;
   email?: string;
   note?: string;
+  bkash?: string;
+  nagad?: string;
+  rocket?: string;
+  bankAccount?: string;
+  bankName?: string;
+  bankBranch?: string;
+  bankHolder?: string;
 }
 
 const BILLING_FEATURES = [
@@ -435,10 +442,10 @@ export function AdminPanel({ th, onToast, onLogout }: {
     finally { setPricingSaving(false); }
   };
 
-  const confirmPayment = async (paymentId: string, planName?: string) => {
+  const confirmPayment = async (paymentId: string) => {
     try {
       const r = await request<any>(`${API_BASE}/billing/admin/payments/${paymentId}/confirm`, {
-        method: 'POST', body: JSON.stringify({ planName: planName || '' }),
+        method: 'POST', body: JSON.stringify({}),
       });
       onToast(r.message || '✅ Payment confirmed'); loadBilling();
     } catch (e: any) { onToast(e.message, 'error'); }
@@ -2044,6 +2051,10 @@ export function AdminPanel({ th, onToast, onLogout }: {
                     { key: 'ollamaChatModel', label: 'Ollama Chat Model', placeholder: 'qwen2.5:0.5b' },
                     { key: 'ollamaVisionModel', label: 'Ollama Vision Model', placeholder: 'llava:7b' },
                   ]},
+                  { group: '📱 Telegram Notifications', fields: [
+                    { key: 'telegramBotToken', label: 'Telegram Bot Token', secret: true, placeholder: '1234567890:AAG...' },
+                    { key: 'telegramChatId', label: 'Admin Chat ID', placeholder: '8183240678' },
+                  ]},
                   { group: '📧 Gmail (OTP/Email)', fields: [
                     { key: 'gmailUser', label: 'Gmail Address' },
                     { key: 'gmailAppPassword', label: 'Gmail App Password', secret: true },
@@ -2674,22 +2685,20 @@ function BillingTab({ th, data, supportConfig, loading, subFilter, setSubFilter,
   subFilter: string;
   setSubFilter: (v: string) => void;
   onRefresh: () => void;
-  onConfirmPayment: (id: string, plan?: string) => void;
+  onConfirmPayment: (id: string) => void;
   onSetSubscription: (userId: string, payload: any) => void;
   onSaveSupport: (payload: BillingSupportConfig) => void;
 }) {
   const [setSubModal, setSetSubModal] = useState<any>(null);
   const [setSubForm, setSetSubFormState] = useState<any>({
-    planName: 'starter',
     status: 'active',
     days: 30,
-    ordersLimit: 400,
+    ordersLimit: -1,
     note: '',
     featureAccess: { ...DEFAULT_FEATURE_ACCESS },
   });
   const [supportForm, setSupportForm] = useState<BillingSupportConfig>(supportConfig || {});
 
-  const PLANS = ['basic', 'starter', 'pro', 'business'];
   const STATUSES = ['trial', 'active', 'grace', 'expired', 'cancelled'];
 
   useEffect(() => {
@@ -2743,6 +2752,44 @@ function BillingTab({ th, data, supportConfig, loading, subFilter, setSubFilter,
             placeholder="Client-কে কীভাবে যোগাযোগ করতে হবে সেটা লিখুন"
           />
         </div>
+        <div style={{ borderTop: `1px solid ${th.border}`, paddingTop: 16, marginTop: 4 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: th.muted, marginBottom: 12, textTransform: 'uppercase' }}>Payment Numbers</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div>
+              <div style={{ fontSize: 11, color: th.muted, marginBottom: 4 }}>bKash Number</div>
+              <input style={th.input} value={supportForm.bkash || ''} onChange={e => setSupportForm(f => ({ ...f, bkash: e.target.value }))} placeholder="01XXXXXXXXX" />
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: th.muted, marginBottom: 4 }}>Nagad Number</div>
+              <input style={th.input} value={supportForm.nagad || ''} onChange={e => setSupportForm(f => ({ ...f, nagad: e.target.value }))} placeholder="01XXXXXXXXX" />
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: th.muted, marginBottom: 4 }}>Rocket Number</div>
+              <input style={th.input} value={supportForm.rocket || ''} onChange={e => setSupportForm(f => ({ ...f, rocket: e.target.value }))} placeholder="01XXXXXXXXX" />
+            </div>
+          </div>
+        </div>
+        <div style={{ borderTop: `1px solid ${th.border}`, paddingTop: 16, marginTop: 4 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: th.muted, marginBottom: 12, textTransform: 'uppercase' }}>Bank Account</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div>
+              <div style={{ fontSize: 11, color: th.muted, marginBottom: 4 }}>Account Number</div>
+              <input style={th.input} value={supportForm.bankAccount || ''} onChange={e => setSupportForm(f => ({ ...f, bankAccount: e.target.value }))} placeholder="Account number" />
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: th.muted, marginBottom: 4 }}>Account Holder</div>
+              <input style={th.input} value={supportForm.bankHolder || ''} onChange={e => setSupportForm(f => ({ ...f, bankHolder: e.target.value }))} placeholder="Holder name" />
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: th.muted, marginBottom: 4 }}>Bank Name</div>
+              <input style={th.input} value={supportForm.bankName || ''} onChange={e => setSupportForm(f => ({ ...f, bankName: e.target.value }))} placeholder="Dutch-Bangla Bank" />
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: th.muted, marginBottom: 4 }}>Branch</div>
+              <input style={th.input} value={supportForm.bankBranch || ''} onChange={e => setSupportForm(f => ({ ...f, bankBranch: e.target.value }))} placeholder="Branch name" />
+            </div>
+          </div>
+        </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button style={th.btnPrimary} onClick={() => onSaveSupport(supportForm)}>💾 Save Contact Info</button>
         </div>
@@ -2769,12 +2816,9 @@ function BillingTab({ th, data, supportConfig, loading, subFilter, setSubFilter,
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 6 }}>
-                  {PLANS.map(plan => (
-                    <button key={plan} style={{ ...th.btnSmAccent, background: plan === 'pro' ? th.accent : undefined }}
-                      onClick={() => onConfirmPayment(p.id, plan)}>
-                      ✅ {plan}
-                    </button>
-                  ))}
+                  <button style={th.btnSmAccent} onClick={() => onConfirmPayment(p.id)}>
+                    ✅ Confirm
+                  </button>
                 </div>
               </div>
             ))}
@@ -2817,9 +2861,6 @@ function BillingTab({ th, data, supportConfig, loading, subFilter, setSubFilter,
                         border: `1px solid ${STATUS_COLOR[sub.status] || '#9ca3af'}44`,
                         fontSize: 10,
                       }}>{sub.status.toUpperCase()}</span>
-                      <span style={{ ...th.pill, background: th.accentSoft, color: th.accent, fontSize: 10 }}>
-                        {sub.plan?.displayName || sub.plan?.name || 'starter'}
-                      </span>
                     </div>
                     <div style={{ fontSize: 12, color: th.muted }}>
                       Orders: {sub.ordersUsed}/{sub.ordersLimit === -1 ? '∞' : sub.ordersLimit} ·
@@ -2836,7 +2877,6 @@ function BillingTab({ th, data, supportConfig, loading, subFilter, setSubFilter,
                       }
                       setSetSubModal(sub);
                       setSetSubFormState({
-                        planName: sub.plan?.name || 'starter',
                         status: sub.status,
                         days: 30,
                         ordersLimit: sub.ordersLimit === -1 ? -1 : Number(sub.ordersLimit || 0),
@@ -2861,13 +2901,6 @@ function BillingTab({ th, data, supportConfig, loading, subFilter, setSubFilter,
             action={<button style={th.btnGhost} onClick={() => setSetSubModal(null)}>✕</button>}
           />
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 16 }}>
-            <div>
-              <div style={{ fontSize: 11, fontWeight: 700, color: th.muted, marginBottom: 6, textTransform: 'uppercase' }}>Plan</div>
-              <select style={th.input} value={setSubForm.planName}
-                onChange={e => setSetSubFormState((f: any) => ({ ...f, planName: e.target.value }))}>
-                {PLANS.map(p => <option key={p} value={p}>{p}</option>)}
-              </select>
-            </div>
             <div>
               <div style={{ fontSize: 11, fontWeight: 700, color: th.muted, marginBottom: 6, textTransform: 'uppercase' }}>Status</div>
               <select style={th.input} value={setSubForm.status}
@@ -2919,7 +2952,6 @@ function BillingTab({ th, data, supportConfig, loading, subFilter, setSubFilter,
             <button style={th.btnPrimary}
               onClick={() => {
                 onSetSubscription(setSubModal.user?.id, {
-                  planName: setSubForm.planName,
                   status: setSubForm.status,
                   periodDays: setSubForm.days,
                   ordersLimit: setSubForm.ordersLimit,

@@ -21,6 +21,7 @@ import { WalletService } from '../wallet/wallet.service';
 import { CourierService } from '../courier/courier.service';
 import { CourierAccountingService } from '../courier/courier-accounting.service';
 import { OrderNotificationService } from '../orders/order-notification.service';
+import { TelegramService } from '../common/telegram.service';
 
 @Injectable()
 export class ClientDashboardService {
@@ -53,6 +54,7 @@ export class ClientDashboardService {
     private readonly courierService: CourierService,
     private readonly courierAccounting: CourierAccountingService,
     private readonly orderNotification: OrderNotificationService,
+    private readonly telegram: TelegramService,
   ) {}
 
   // ── Summary ────────────────────────────────────────────────────────────────
@@ -1799,6 +1801,17 @@ Return ONLY valid JSON (no markdown):
         note: note?.trim() || null,
       },
     });
+
+    const page = await this.prisma.page.findUnique({ where: { id: pageId }, select: { pageName: true } });
+    void this.telegram.sendMessage(
+      `💰 <b>নতুন Wallet Recharge Request!</b>\n` +
+      `🏪 Page: ${page?.pageName || pageId}\n` +
+      `💵 Amount: ${amountBdt} BDT\n` +
+      `📱 Method: ${method}\n` +
+      `🔖 TxID: ${transactionId.trim()}\n` +
+      (note ? `📝 Note: ${note}\n` : '') +
+      `🕐 সময়: ${new Date().toLocaleString('bn-BD', { timeZone: 'Asia/Dhaka' })}`,
+    );
 
     return { success: true, requestId: req.id };
   }

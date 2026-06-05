@@ -48,6 +48,9 @@ export interface ApiKeysConfig {
   bdCallingApiKey?: string;
   bdCallingApiUrl?: string;
   bdCallingCallerId?: string;
+  // Telegram
+  telegramBotToken?: string;
+  telegramChatId?: string;
   // Misc
   landingPageUrl?: string;
   catalogBaseUrl?: string;
@@ -95,6 +98,8 @@ const ENV_MAP: Record<keyof ApiKeysConfig, string> = {
   bdCallingApiKey: 'BDCALLING_API_KEY',
   bdCallingApiUrl: 'BDCALLING_API_URL',
   bdCallingCallerId: 'BDCALLING_CALLER_ID',
+  telegramBotToken: 'TELEGRAM_BOT_TOKEN',
+  telegramChatId: 'TELEGRAM_CHAT_ID',
   landingPageUrl: 'LANDING_PAGE_URL',
   catalogBaseUrl: 'CATALOG_BASE_URL',
   storagePublicUrl: 'STORAGE_PUBLIC_URL',
@@ -116,6 +121,7 @@ export const SECRET_FIELDS = new Set<keyof ApiKeysConfig>([
   'twilioAuthToken',
   'sslWirelessApiKey',
   'bdCallingApiKey',
+  'telegramBotToken',
 ]);
 
 @Injectable()

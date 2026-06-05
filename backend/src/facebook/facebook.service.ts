@@ -9,6 +9,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuthService } from '../auth/auth.service';
 import { EncryptionService } from '../common/encryption.service';
 import { BillingService } from '../billing/billing.service';
+import { TelegramService } from '../common/telegram.service';
 
 type PendingOAuthResult = {
   userId: string;
@@ -32,6 +33,7 @@ export class FacebookService {
     private readonly authService: AuthService,
     private readonly encryption: EncryptionService,
     private readonly billing: BillingService,
+    private readonly telegram: TelegramService,
   ) {}
 
   getOAuthUrl(userId: string): string {
@@ -598,6 +600,17 @@ export class FacebookService {
       data: { userId, pageUrl: url, fbProfile: profile, note: note?.trim() || null },
     });
     this.logger.log(`[PageRequest] New request #${req.id} from user ${userId}: ${url}`);
+
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { name: true, email: true } });
+    void this.telegram.sendMessage(
+      `📄 <b>নতুন Page Request!</b>\n` +
+      `👤 User: ${user?.name || userId} (${user?.email || ''})\n` +
+      `🔗 Page URL: ${url}\n` +
+      `👤 FB Profile: ${profile}\n` +
+      (note ? `📝 Note: ${note}\n` : '') +
+      `🕐 সময়: ${new Date().toLocaleString('bn-BD', { timeZone: 'Asia/Dhaka' })}`,
+    );
+
     return { success: true, request: req };
   }
 

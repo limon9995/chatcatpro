@@ -8,6 +8,7 @@ import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import { PrismaService } from '../prisma/prisma.service';
+import { TelegramService } from '../common/telegram.service';
 
 const TRIAL_DAYS = 7;
 const PAGE_FEATURE_FIELDS = [
@@ -31,69 +32,33 @@ export class BillingService {
     'global-config.json',
   );
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly telegram: TelegramService,
+  ) {}
 
-  // ── Startup: seed / sync plans ───────────────────────────────────────────
+  // ── Startup: ensure single default plan exists (required for DB FK) ────────
   async onModuleInit() {
-    const plans = [
-      {
-        id: 'plan_basic',
-        name: 'basic',
-        displayName: 'Basic',
-        priceMonthly: 999,
-        ordersLimit: 200,
-        pagesLimit: 1,
-        agentsLimit: 1,
+    await this.prisma.plan.upsert({
+      where: { name: 'custom' },
+      update: { displayName: 'Custom', isActive: true },
+      create: {
+        id: 'plan_custom',
+        name: 'custom',
+        displayName: 'Custom',
+        priceMonthly: 0,
+        ordersLimit: -1,
+        pagesLimit: -1,
+        agentsLimit: -1,
+        isActive: true,
       },
-      {
-        id: 'plan_starter',
-        name: 'starter',
-        displayName: 'Starter',
-        priceMonthly: 1699,
-        ordersLimit: 400,
-        pagesLimit: 1,
-        agentsLimit: 1,
-      },
-      {
-        id: 'plan_pro',
-        name: 'pro',
-        displayName: 'Pro',
-        priceMonthly: 3499,
-        ordersLimit: 800,
-        pagesLimit: 3,
-        agentsLimit: 3,
-      },
-      {
-        id: 'plan_business',
-        name: 'business',
-        displayName: 'Business',
-        priceMonthly: 7999,
-        ordersLimit: 2000,
-        pagesLimit: 10,
-        agentsLimit: 10,
-      },
-    ];
-
-    for (const plan of plans) {
-      await this.prisma.plan.upsert({
-        where: { name: plan.name },
-        update: {
-          displayName: plan.displayName,
-          priceMonthly: plan.priceMonthly,
-          ordersLimit: plan.ordersLimit,
-          pagesLimit: plan.pagesLimit,
-          agentsLimit: plan.agentsLimit,
-          isActive: true,
-        },
-        create: { ...plan, isActive: true },
-      });
-    }
-    // Deactivate old plans no longer in use (enterprise)
+    });
+    // Deactivate old named plans
     await this.prisma.plan.updateMany({
-      where: { name: { in: ['enterprise'] } },
+      where: { name: { in: ['basic', 'starter', 'pro', 'business', 'enterprise'] } },
       data: { isActive: false },
     });
-    this.logger.log('[Billing] Plans synced (basic/starter/pro/business)');
+    this.logger.log('[Billing] Plan seeded');
   }
 
   // ── Get or create subscription for user ──────────────────────────────────
@@ -106,7 +71,7 @@ export class BillingService {
 
     if (!sub) {
       const plan = await this.prisma.plan.findFirst({
-        where: { name: 'starter' },
+        where: { name: 'custom' },
       });
       const now = new Date();
       const trialEnd = new Date(now.getTime() + TRIAL_DAYS * 86_400_000);
@@ -187,9 +152,6 @@ export class BillingService {
     return {
       subscriptionId: sub.id,
       status: sub.status, // trial | active | expired | grace | cancelled
-      planName: (sub as any).plan?.name || 'starter',
-      planDisplay: (sub as any).plan?.displayName || 'Starter',
-      priceMonthly: (sub as any).plan?.priceMonthly || 999,
       daysLeft,
       periodEnd: sub.periodEnd.toISOString(),
       trialEndsAt: sub.trialEndsAt?.toISOString() ?? null,
@@ -255,6 +217,18 @@ export class BillingService {
     this.logger.log(
       `[Billing] Payment submitted userId=${userId} txn=${body.transactionId} amount=${body.amount}`,
     );
+
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { name: true, email: true } });
+    void this.telegram.sendMessage(
+      `💳 <b>নতুন Payment Request!</b>\n` +
+      `👤 User: ${user?.name || userId} (${user?.email || ''})\n` +
+      `💰 Amount: ${body.amount} BDT\n` +
+      `📱 Method: ${body.method || 'bkash'}\n` +
+      `🔖 TxID: ${body.transactionId}\n` +
+      (body.note ? `📝 Note: ${body.note}\n` : '') +
+      `🕐 সময়: ${new Date().toLocaleString('bn-BD', { timeZone: 'Asia/Dhaka' })}`,
+    );
+
     return {
       paymentId: payment.id,
       status: 'pending',
@@ -289,29 +263,20 @@ export class BillingService {
   async adminConfirmPayment(
     paymentId: string,
     adminUserId: string,
-    planName?: string,
   ) {
     const payment = await this.prisma.payment.findUnique({
       where: { id: paymentId },
-      include: { subscription: { include: { plan: true } } },
+      include: { subscription: true },
     });
     if (!payment) throw new NotFoundException('Payment not found');
     if (payment.status === 'confirmed')
       throw new BadRequestException('Already confirmed');
 
-    // Confirm payment
     const now = new Date();
     await this.prisma.payment.update({
       where: { id: paymentId },
       data: { status: 'confirmed', confirmedAt: now, confirmedBy: adminUserId },
     });
-
-    // Activate / extend subscription
-    const plan = planName
-      ? await this.prisma.plan.findFirst({ where: { name: planName } })
-      : payment.subscription.plan;
-
-    if (!plan) throw new NotFoundException('Plan not found');
 
     const periodStart = now;
     const periodEnd = new Date(now.getTime() + 30 * 86_400_000);
@@ -320,23 +285,19 @@ export class BillingService {
       where: { id: payment.subscriptionId },
       data: {
         status: 'active',
-        planId: plan.id,
-        ordersLimit: plan.ordersLimit,
         periodStart,
         periodEnd,
-        ordersUsed: 0, // reset usage on new payment
+        ordersUsed: 0,
         lastPaymentAt: now,
         nextPaymentDue: periodEnd,
         updatedAt: now,
       },
     });
 
-    this.logger.log(
-      `[Billing] Payment confirmed ${paymentId} → subscription activated plan=${plan.name}`,
-    );
+    this.logger.log(`[Billing] Payment confirmed ${paymentId} → subscription activated`);
     return {
       success: true,
-      message: `Subscription activated — ${plan.displayName} until ${periodEnd.toLocaleDateString()}`,
+      message: `Subscription activated until ${periodEnd.toLocaleDateString()}`,
     };
   }
 
@@ -398,7 +359,6 @@ export class BillingService {
   async adminSetSubscription(
     userId: string,
     body: {
-      planName: string;
       status: string;
       periodDays?: number;
       ordersLimit?: number;
@@ -408,10 +368,8 @@ export class BillingService {
       >;
     },
   ) {
-    const plan = await this.prisma.plan.findFirst({
-      where: { name: body.planName },
-    });
-    if (!plan) throw new NotFoundException('Plan not found');
+    const plan = await this.prisma.plan.findFirst({ where: { name: 'custom' } });
+    if (!plan) throw new NotFoundException('Default plan not found');
 
     const existing = await this.prisma.subscription.findFirst({
       where: { userId },
@@ -422,14 +380,13 @@ export class BillingService {
     const nextOrdersLimit =
       typeof body.ordersLimit === 'number' && Number.isFinite(body.ordersLimit)
         ? body.ordersLimit
-        : plan.ordersLimit;
+        : -1;
     const pagePatch = this.buildPageFeaturePatch(body.featureAccess);
 
     if (existing) {
       await this.prisma.subscription.update({
         where: { id: existing.id },
         data: {
-          planId: plan.id,
           status: body.status,
           ordersLimit: nextOrdersLimit,
           ordersUsed: 0,
@@ -461,9 +418,7 @@ export class BillingService {
         data: pagePatch,
       });
     }
-    this.logger.log(
-      `[Billing] Admin set subscription for ${userId} → ${body.planName} / ${body.status}`,
-    );
+    this.logger.log(`[Billing] Admin set subscription for ${userId} → ${body.status}`);
     return { success: true };
   }
 
