@@ -69,6 +69,7 @@ export class WebhookController {
     @Body() body: any,
     @Headers('x-hub-signature-256') sig: string,
   ) {
+    this.logger.log(`[Webhook] POST received sig=${sig ? 'yes' : 'no'} bodyType=${typeof body} isBuffer=${Buffer.isBuffer(body)}`);
     // ── Resolve HMAC secret: per-page custom app OR global platform fallback ──
     const rawBody = (req as any).rawBody ?? req.body;
     const payload = Buffer.isBuffer(rawBody)
