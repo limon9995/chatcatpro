@@ -97,7 +97,6 @@ export class WebhookService implements OnModuleDestroy {
     if (!body || body.object !== 'page') return;
 
     for (const entry of body.entry ?? []) {
-      this.logger.log(`[Webhook] DEBUG entry.id=${entry.id} messaging=${entry.messaging?.length ?? 0} changes=${JSON.stringify((entry.changes ?? []).map((c: any) => ({ field: c.field, item: c.value?.item, verb: c.value?.verb, sender: c.value?.sender_id })))}`);
       const rows = await this.prisma.$queryRaw<any[]>`
         SELECT p.* FROM "Page" p
         LEFT JOIN "User" u ON u.id = p."ownerId"
@@ -200,13 +199,13 @@ export class WebhookService implements OnModuleDestroy {
         if (change.field !== 'feed') continue;
         const val = change.value ?? {};
         if (val.item !== 'comment' || val.verb !== 'add') continue;
-        this.logger.log(`[Webhook] DEBUG feed val=${JSON.stringify(val)}`);
-        if (String(val.sender_id) === String(resolvedPage.pageId)) continue;
+        // Facebook sends sender as val.from.id (not val.sender_id)
+        const senderId: string = String(val.sender_id ?? val.from?.id ?? '');
+        if (senderId && senderId === String(resolvedPage.pageId)) continue;
 
         const commentId: string = val.comment_id ?? '';
         const postId: string = val.post_id ?? '';
         const commentText: string = String(val.message ?? '').trim();
-        this.logger.log(`[Webhook] DEBUG commentId=${commentId} commentText=${commentText}`);
         if (!commentId || !commentText) continue;
 
         this.handleCommentReply(resolvedPage, commentId, postId, commentText)
