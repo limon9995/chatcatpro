@@ -264,6 +264,15 @@ export class WebhookService implements OnModuleDestroy {
       return;
     }
 
+    // Emoji or praise comment → warm appreciation reply
+    if (intent === 'emoji_praise') {
+      const reply = `ধন্যবাদ! ❤️ আপনার ভালোবাসাই আমাদের অনুপ্রেরণা! 😊 কোনো product সম্পর্কে জানতে চাইলে Inbox-এ message করুন। 📩`;
+      await deduct();
+      await this.messenger.sendCommentReply(page.pageToken, commentId, reply);
+      this.logger.log(`[Webhook] Emoji/praise comment reply page=${page.pageId} commentId=${commentId}`);
+      return;
+    }
+
     // No specific product or general question → generic inbox CTA
     if (productCodes.length === 0 || intent === 'other') {
       await deduct();
@@ -358,18 +367,18 @@ Given a customer comment and a numbered product list, decide:
 
 Return ONLY valid JSON:
 {
-  "shouldReply": true|false,
+  "shouldReply": true,
   "productCodes": [],
-  "intent": "price"|"stock"|"delivery"|"description"|"all_prices"|"other"
+  "intent": "price"|"stock"|"delivery"|"description"|"all_prices"|"emoji_praise"|"other"
 }
 
 Rules:
-- shouldReply=false: pure emojis (❤️🔥😍), single praise words (nice, wow, সুন্দর), no question implied
-- shouldReply=true: any question, price/stock inquiry, interest expressed in words
-- productCodes=[]: general question not about a specific product, OR intent is "all_prices"
+- shouldReply=true: ALWAYS — reply to every single comment, no exceptions
+- productCodes=[]: general question, emoji/praise, or intent is "all_prices"
 - productCodes=["X"]: one specific product (identified by name, color, number reference like "৩ নম্বর", or code)
 - productCodes=["X","Y"]: customer asks about multiple specific products
-- intent="all_prices": user wants prices of ALL products ("সবগুলোর দাম কত?" "price list দাও" "কতগুলো কত কত?")
+- intent="all_prices": user wants prices of ALL products ("সবগুলোর দাম কত?" "price list দাও")
+- intent="emoji_praise": pure emojis (❤️🔥😍) or simple praise (nice, wow, সুন্দর, ভালো, great) with no product question
 - intent="other": general question not about a specific product info → inbox CTA`;
 
     try {
