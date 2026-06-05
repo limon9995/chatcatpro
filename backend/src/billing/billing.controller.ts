@@ -62,10 +62,9 @@ export class BillingController {
   @Roles('admin')
   confirmPayment(
     @Param('id') id: string,
-    @Body('planName') planName: string,
     @Req() req: any,
   ) {
-    return this.billing.adminConfirmPayment(id, req.authUser.id, planName);
+    return this.billing.adminConfirmPayment(id, req.authUser.id);
   }
 
   @Patch('admin/users/:userId/subscription')

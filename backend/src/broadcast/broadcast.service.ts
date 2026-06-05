@@ -73,11 +73,8 @@ export class BroadcastService {
     });
     if (page?.ownerId) {
       const sub = await this.billing.getOrCreateSubscription(page.ownerId);
-      const planName = (sub as any).plan?.name ?? 'starter';
-      if (planName === 'basic') {
-        throw new ForbiddenException(
-          'Broadcast feature আপনার Basic plan-এ নেই। Starter বা উপরের plan-এ upgrade করুন।',
-        );
+      if (!this.billing.canTakeOrders(sub)) {
+        throw new ForbiddenException('Subscription expired। Admin-এর সাথে যোগাযোগ করুন।');
       }
     }
 
