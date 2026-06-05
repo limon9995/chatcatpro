@@ -200,11 +200,13 @@ export class WebhookService implements OnModuleDestroy {
         if (change.field !== 'feed') continue;
         const val = change.value ?? {};
         if (val.item !== 'comment' || val.verb !== 'add') continue;
+        this.logger.log(`[Webhook] DEBUG feed val=${JSON.stringify(val)}`);
         if (String(val.sender_id) === String(resolvedPage.pageId)) continue;
 
         const commentId: string = val.comment_id ?? '';
         const postId: string = val.post_id ?? '';
         const commentText: string = String(val.message ?? '').trim();
+        this.logger.log(`[Webhook] DEBUG commentId=${commentId} commentText=${commentText}`);
         if (!commentId || !commentText) continue;
 
         this.handleCommentReply(resolvedPage, commentId, postId, commentText)
