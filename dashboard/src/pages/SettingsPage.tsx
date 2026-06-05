@@ -893,7 +893,7 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
             <div style={{ padding: '10px 12px', borderRadius: 10, background: th.surface, border: `1px solid ${th.border}` }}>
               <div style={{ fontSize: 11.5, fontWeight: 700, marginBottom: 4 }}>📋 Webhook URL (Meta Console-এ দিন)</div>
               <div style={{ fontSize: 12, fontFamily: 'monospace', color: th.accent, wordBreak: 'break-all' }}>
-                {`${(typeof window !== 'undefined' ? window.location.origin.replace(/:\d+$/, ':3000') : 'https://api.chatcat.pro')}/wa-webhook`}
+                {`${(typeof window !== 'undefined' ? window.location.origin.replace(/:\d+$/, ':3000').replace('app.chatcat.pro', 'api.chatcat.pro') : 'https://api.chatcat.pro')}/wa-webhook`}
               </div>
               <div style={{ fontSize: 11, color: th.muted, marginTop: 4 }}>
                 Meta App → Webhook → Edit → এই URL দিন, Verify Token-ও দিন
@@ -1038,7 +1038,7 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
             <div style={{ padding: '10px 12px', borderRadius: 10, background: th.surface, border: `1px solid ${th.border}` }}>
               <div style={{ fontSize: 11.5, fontWeight: 700, marginBottom: 4 }}>📋 Webhook URL (Meta Console-এ দিন)</div>
               <div style={{ fontSize: 12, fontFamily: 'monospace', color: th.accent, wordBreak: 'break-all' }}>
-                {`${(typeof window !== 'undefined' ? window.location.origin.replace(/:\d+$/, ':3000') : 'https://api.chatcat.pro')}/ig-webhook`}
+                {`${(typeof window !== 'undefined' ? window.location.origin.replace(/:\d+$/, ':3000').replace('app.chatcat.pro', 'api.chatcat.pro') : 'https://api.chatcat.pro')}/ig-webhook`}
               </div>
               <div style={{ fontSize: 11, color: th.muted, marginTop: 4 }}>
                 Meta App → Instagram → Webhooks → এই URL দিন। Subscribe করুন: messages, comments
