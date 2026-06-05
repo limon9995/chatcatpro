@@ -210,8 +210,6 @@ export class WebhookService implements OnModuleDestroy {
         const commenterId: string = String(val.from?.id ?? '').trim();
         if (!commentId || !commentText) continue;
 
-        // Like the comment immediately so commenter gets notified
-        this.messenger.likeComment(resolvedPage.pageToken, commentId).catch(() => {});
 
         this.handleCommentReply(resolvedPage, commentId, postId, commentText, commenterName, commenterId)
           .catch(err => this.logger.error(`[Webhook] Comment reply error: ${err}`));
