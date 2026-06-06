@@ -1393,8 +1393,8 @@ async function woSubmit(){
       if(d.advanceRocket){document.getElementById('woSmsRocketNum').textContent=d.advanceRocket;document.getElementById('woSmsRocketLine').style.display='block';}
       woShowStep('1s'); document.getElementById('woTitle').textContent='💸 Payment করুন';
     } else {
-      var nums=(WO_BKASH?'📱 বিকাশ: '+WO_BKASH+'\n':'')+(WO_NAGAD?'📱 নগদ: '+WO_NAGAD+'\n':'')+(WO_ROCKET?'🚀 রকেট: '+WO_ROCKET+'\n':'');
-      var msg=WO_ADV_MSG||('Advance '+WO_CURRENCY+(WO_ADV_AMT||'')+' পাঠান:\n'+nums.trimEnd());
+      var nums=(WO_BKASH?'📱 বিকাশ: '+WO_BKASH+'\\n':'')+(WO_NAGAD?'📱 নগদ: '+WO_NAGAD+'\\n':'')+(WO_ROCKET?'🚀 রকেট: '+WO_ROCKET+'\\n':'');
+      var msg=WO_ADV_MSG||('Advance '+WO_CURRENCY+(WO_ADV_AMT||'')+' পাঠান:\\n'+nums.replace(/\\n$/,''));
       document.getElementById('woManualMsg').innerHTML='<strong style="font-size:13px;font-weight:700">💸 Advance পাঠান</strong><br><div style="margin-top:6px;font-size:13.5px;white-space:pre-line">'+msg+'</div>';
       document.getElementById('woManualTxIdRow').style.display='block';
       document.getElementById('woManualTxId').value='';
@@ -1422,8 +1422,8 @@ async function woVerify(){
     } else {
       // fallback to screenshot — pre-fill TxID from step 1b and hide the TxID input (already entered)
       var enteredTxId=document.getElementById('woTxId').value.trim();
-      var nums=(WO_BKASH?'📱 বিকাশ: '+WO_BKASH+'\n':'')+(WO_NAGAD?'📱 নগদ: '+WO_NAGAD+'\n':'')+(WO_ROCKET?'🚀 রকেট: '+WO_ROCKET+'\n':'');
-      var msg=WO_ADV_MSG||('Advance '+WO_CURRENCY+(WO_ADV_AMT||'')+' পাঠান:\n'+nums.trimEnd());
+      var nums=(WO_BKASH?'📱 বিকাশ: '+WO_BKASH+'\\n':'')+(WO_NAGAD?'📱 নগদ: '+WO_NAGAD+'\\n':'')+(WO_ROCKET?'🚀 রকেট: '+WO_ROCKET+'\\n':'');
+      var msg=WO_ADV_MSG||('Advance '+WO_CURRENCY+(WO_ADV_AMT||'')+' পাঠান:\\n'+nums.replace(/\\n$/,''));
       document.getElementById('woManualMsg').innerHTML='<strong style="font-size:13px;font-weight:700">💸 Advance পাঠান</strong><br><div style="margin-top:6px;font-size:13.5px;white-space:pre-line">'+msg+'</div>';
       if(enteredTxId){
         document.getElementById('woManualTxId').value=enteredTxId;
