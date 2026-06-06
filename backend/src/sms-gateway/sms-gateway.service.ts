@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
 import { PrismaService } from '../prisma/prisma.service';
+import { WalletService } from '../wallet/wallet.service';
 import { parseSms } from './sms-parser';
 import { randomUUID } from 'crypto';
 
@@ -19,7 +20,10 @@ export interface SmsMatchResult {
 export class SmsGatewayService {
   private readonly logger = new Logger(SmsGatewayService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly wallet: WalletService,
+  ) {}
 
   async handleIncoming(
     pageId: number,
@@ -72,7 +76,7 @@ export class SmsGatewayService {
         where: { ...baseWhere, txId: { equals: txId.toUpperCase(), mode: 'insensitive' } },
       });
       if (sms && sms.amount !== null && sms.amount >= expectedAmount - 1) {
-        return this.markMatched(sms);
+        return this.markMatched(sms, pageId);
       }
     }
 
@@ -85,7 +89,7 @@ export class SmsGatewayService {
         take: 20,
       });
       const partial = recent.find(s => s.txId?.toUpperCase().endsWith(suffix));
-      if (partial) return this.markMatched(partial);
+      if (partial) return this.markMatched(partial, pageId);
     }
 
     // 3. Fallback: sender phone + amount match
@@ -99,7 +103,7 @@ export class SmsGatewayService {
         },
         orderBy: { receivedAt: 'desc' },
       });
-      if (sms) return this.markMatched(sms);
+      if (sms) return this.markMatched(sms, pageId);
     }
 
     // 4. Amount-only match (last resort — risky, only if single SMS in window)
@@ -108,13 +112,23 @@ export class SmsGatewayService {
       orderBy: { receivedAt: 'desc' },
       take: 2,
     });
-    if (amountOnly.length === 1) return this.markMatched(amountOnly[0]);
+    if (amountOnly.length === 1) return this.markMatched(amountOnly[0], pageId);
 
     return { matched: false };
   }
 
-  private async markMatched(sms: any): Promise<SmsMatchResult> {
+  private async markMatched(sms: any, pageId?: number): Promise<SmsMatchResult> {
     await this.prisma.receivedSms.update({ where: { id: sms.id }, data: { matched: true } });
+    // Deduct 1% SMS verification fee from wallet
+    if (pageId && sms.amount && sms.amount > 0) {
+      const fee = Math.round(sms.amount * 0.01 * 100) / 100;
+      await this.wallet.deductFixed(
+        pageId,
+        fee,
+        `SMS Payment Verify fee 1% of ৳${sms.amount} (${(sms.method ?? '').toUpperCase()})`,
+        'DEDUCT_SMS_VERIFY',
+      );
+    }
     return { matched: true, method: sms.method, amount: sms.amount ?? undefined, senderPhone: sms.senderPhone ?? undefined };
   }
 

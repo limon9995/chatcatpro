@@ -167,6 +167,38 @@ export class WalletService {
   }
 
   /**
+   * Deducts a fixed BDT amount (e.g. SMS verify 1% fee) and logs it.
+   */
+  async deductFixed(
+    pageId: number,
+    amountBdt: number,
+    description: string,
+    type: string = 'DEDUCT_FIXED',
+  ): Promise<boolean> {
+    if (amountBdt <= 0) return true;
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        const current = await tx.page.findUnique({
+          where: { id: pageId },
+          select: { walletBalanceBdt: true },
+        });
+        if (!current || current.walletBalanceBdt <= 0) return;
+        await tx.page.update({
+          where: { id: pageId },
+          data: { walletBalanceBdt: { decrement: amountBdt } },
+        });
+        await tx.walletTransaction.create({
+          data: { pageId, type, amountBdt: -amountBdt, description },
+        });
+      });
+      return true;
+    } catch (error) {
+      this.logger.error(`Failed to deduct fixed fee for page ${pageId}: ${error}`);
+      return false;
+    }
+  }
+
+  /**
    * Deducts the monthly 699 BDT base platform fee.
    * Suspends the page if balance drops to 0 or below after deduction.
    */
