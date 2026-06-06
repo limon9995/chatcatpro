@@ -13,7 +13,8 @@ interface Settings {
   currencySymbol: string; codLabel: string; productCodePrefix: string;
   deliveryFeeInsideDhaka: number; deliveryFeeOutsideDhaka: number;
   deliveryTimeText: string;
-  paymentMode: string; advanceAmount: number; advanceBkash: string; advanceNagad: string; advancePaymentMessage: string; webOrderEnabled: boolean;
+  paymentMode: string; advanceAmount: number; advanceBkash: string; advanceNagad: string; advanceRocket: string; advancePaymentMessage: string; webOrderEnabled: boolean;
+  smsGatewayEnabled: boolean;
   automationOn: boolean; ocrOn: boolean;
   waEnabled: boolean; waPhoneNumberId: string; waVerifyToken: string; waTokenSet: boolean; waFallbackTemplateName: string;
   igEnabled: boolean; igBusinessAccountId: string; igVerifyToken: string; igTokenSet: boolean; igCommentToDmEnabled: boolean;
@@ -55,7 +56,7 @@ const S0: Settings = {
   catalogSlug: '',
   currencySymbol: '৳', codLabel: 'COD', productCodePrefix: 'DF',
   deliveryFeeInsideDhaka: 80, deliveryFeeOutsideDhaka: 120, deliveryTimeText: '',
-  paymentMode: 'cod', advanceAmount: 0, advanceBkash: '', advanceNagad: '', advancePaymentMessage: '', webOrderEnabled: false,
+  paymentMode: 'cod', advanceAmount: 0, advanceBkash: '', advanceNagad: '', advanceRocket: '', advancePaymentMessage: '', webOrderEnabled: false, smsGatewayEnabled: false,
   knowledgeText: '',
   automationOn: false, ocrOn: false,
   waEnabled: false, waPhoneNumberId: '', waVerifyToken: '', waTokenSet: false, waFallbackTemplateName: '',
@@ -234,6 +235,10 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
   const [payTesting, setPayTesting] = useState(false);
   const [payTestResult, setPayTestResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [payDeleting, setPayDeleting] = useState<string | null>(null);
+  // SMS Gateway state
+  const [smsToken, setSmsToken] = useState<string | null>(null);
+  const [smsCopied, setSmsCopied] = useState(false);
+  const [smsToggling, setSmsToggling] = useState(false);
   // WhatsApp settings state
   const [waToken, setWaToken] = useState('');
   const [waSaving, setWaSaving] = useState(false);
@@ -257,12 +262,13 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [biz, modes, tut, linked, payCr] = await Promise.all([
+      const [biz, modes, tut, linked, payCr, smsTok] = await Promise.all([
         request<any>(`${BASE}/settings`),
         request<any>(`${BASE}/modes`),
         request<any>(`${BASE}/tutorials`).catch(() => null),
         request<any>(`${API_BASE}/page/${pageId}/linked-pages`).catch(() => []),
         request<any>(`${API_BASE}/pages/${pageId}/payment-credentials`).catch(() => []),
+        request<any>(`${API_BASE}/sms-gateway/token?pageId=${pageId}`).catch(() => null),
       ]);
       setS(prev => ({
         ...prev, ...biz, ...modes,
@@ -273,6 +279,7 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
       if (tut?.facebookAccessToken) setFbTutorialUrl(tut.facebookAccessToken);
       setLinkedPages(Array.isArray(linked) ? linked : []);
       setPayCreds(Array.isArray(payCr) ? payCr : []);
+      if (smsTok?.token) setSmsToken(smsTok.token);
     } catch (e: any) { onToast(e.message, 'error'); }
     finally { setLoading(false); }
   }, [pageId]);
@@ -1181,6 +1188,11 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
                 <input style={inp} value={s.advanceNagad} placeholder="01XXXXXXXXX"
                   onChange={e => setS(p => ({ ...p, advanceNagad: e.target.value }))} />
               </div>
+              <div>
+                <Label text="Rocket Number" hint={copy('Customer কে দেখানো হবে', 'Shown to customers')}/>
+                <input style={inp} value={s.advanceRocket ?? ''} placeholder="01XXXXXXXXX"
+                  onChange={e => setS(p => ({ ...p, advanceRocket: e.target.value }))} />
+              </div>
             </div>
           )}
           {s.paymentMode !== 'cod' && (
@@ -1227,6 +1239,14 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
                 fields: [
                   { key: 'merchant_id', label: 'Merchant ID', ph: 'Nagad Merchant ID' },
                   { key: 'api_key', label: 'API Key', ph: 'Nagad API Key', secret: true },
+                ],
+              },
+              {
+                key: 'rocket', icon: '🚀', title: 'Rocket (SMS Gateway)', badge: copy('SMS VERIFY', 'SMS VERIFY'), badgeColor: '#8b5cf6',
+                desc: copy('SMS Gateway চালু থাকলে customer TxID দিলে bot আপনার ফোনের SMS-এর সাথে match করে auto-verify করবে।', 'When SMS Gateway is active, bot matches customer TxID against SMS received on your phone.'),
+                flow: copy('Customer TxID দেয় → Bot আপনার phone-এর SMS-এ match করে → Order auto-confirm ✅', 'Customer gives TxID → Bot matches against your phone SMS → Order auto-confirm ✅'),
+                fields: [
+                  { key: 'account_number', label: 'Rocket Account Number', ph: '01XXXXXXXXX' },
                 ],
               },
               {
@@ -1414,12 +1434,197 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
           </div>
         </Section>
 
+        {/* SMS Gateway Setup */}
+        <Section
+          title={copy('📲 SMS Gateway — Phone দিয়ে Payment Verify', '📲 SMS Gateway — Verify Payments via Phone')}
+          desc={copy(
+            'আপনার ফোনে bKash/Nagad/Rocket-এ টাকা আসলে সেই SMS bot স্বয়ংক্রিয়ভাবে পড়বে এবং customer-এর দেওয়া তথ্যের সাথে মিলিয়ে payment verify করবে। কোনো merchant API লাগবে না।',
+            'When your phone receives a bKash/Nagad/Rocket payment SMS, the bot reads it automatically and matches it with the customer\'s info to verify payment — no merchant API needed.',
+          )}
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+            {/* How it works banner */}
+            <div style={{ background: 'linear-gradient(135deg,#ede9fe,#dbeafe)', borderRadius: 12, padding: '14px 16px', border: '1px solid #c4b5fd' }}>
+              <div style={{ fontWeight: 800, fontSize: 13, color: '#4c1d95', marginBottom: 10 }}>⚡ কীভাবে কাজ করে?</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                {[
+                  { icon: '1️⃣', text: copy('Customer আপনার bKash/Nagad/Rocket নম্বরে টাকা পাঠায়', 'Customer sends money to your bKash/Nagad/Rocket number') },
+                  { icon: '2️⃣', text: copy('আপনার ফোনে payment received SMS আসে', 'Your phone receives a payment received SMS') },
+                  { icon: '3️⃣', text: copy('SMS Forwarder app সেই SMS টা chatcat-এ পাঠায়', 'SMS Forwarder app sends that SMS to chatcat') },
+                  { icon: '4️⃣', text: copy('Customer Messenger-এ TxID বা phone number দেয়', 'Customer gives TxID or phone number in Messenger') },
+                  { icon: '5️⃣', text: copy('Bot SMS-এর সাথে match করে → ✅ Auto confirm!', 'Bot matches with SMS → ✅ Auto confirm!') },
+                ].map(({ icon, text }) => (
+                  <div key={icon} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                    <span style={{ fontSize: 15, lineHeight: 1.4 }}>{icon}</span>
+                    <span style={{ fontSize: 12.5, color: '#3730a3', lineHeight: 1.5 }}>{text}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Enable toggle */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderRadius: 10, background: th.surface, border: `1px solid ${th.border}` }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 13, color: th.text }}>{copy('SMS Gateway চালু করুন', 'Enable SMS Gateway')}</div>
+                <div style={{ fontSize: 12, color: th.muted, marginTop: 2 }}>{copy('চালু থাকলে phone SMS-এ match করে payment verify হবে।', 'When enabled, payment is verified by matching with phone SMS.')}</div>
+              </div>
+              <button onClick={async () => {
+                setSmsToggling(true);
+                try {
+                  await request(`${API_BASE}/sms-gateway/enabled`, { method: 'PATCH', body: JSON.stringify({ pageId, enabled: !s.smsGatewayEnabled }) });
+                  setS(p => ({ ...p, smsGatewayEnabled: !p.smsGatewayEnabled }));
+                  onToast(copy('সেভ হয়েছে', 'Saved'));
+                } catch (e: any) { onToast(e.message, 'error'); }
+                finally { setSmsToggling(false); }
+              }} disabled={smsToggling} style={{
+                border: 'none', borderRadius: 20, padding: '7px 20px', cursor: 'pointer',
+                fontWeight: 800, fontSize: 13, fontFamily: 'inherit', flexShrink: 0,
+                background: s.smsGatewayEnabled ? '#059669' : th.border,
+                color: s.smsGatewayEnabled ? '#fff' : th.muted,
+                transition: 'all .15s',
+              }}>
+                {s.smsGatewayEnabled ? '✅ চালু' : '⏸ বন্ধ'}
+              </button>
+            </div>
+
+            {/* Step by step setup guide */}
+            {smsToken && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+
+                {/* Step 1 — Download app */}
+                <div style={{ borderRadius: 12, padding: '14px 16px', background: th.surface, border: `1px solid ${th.border}` }}>
+                  <div style={{ fontWeight: 800, fontSize: 13, color: th.text, marginBottom: 10 }}>
+                    📱 {copy('ধাপ ১ — App ডাউনলোড করুন', 'Step 1 — Download the App')}
+                  </div>
+                  <div style={{ fontSize: 12.5, color: th.muted, marginBottom: 12, lineHeight: 1.6 }}>
+                    {copy(
+                      'নিচের যেকোনো একটি app আপনার Android ফোনে install করুন। যে ফোনে bKash/Nagad/Rocket-এর payment SMS আসে সেই ফোনে দিতে হবে।',
+                      'Install any one of the apps below on the Android phone that receives your bKash/Nagad/Rocket payment SMSes.',
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {[
+                      {
+                        name: 'SMS Gateway — Android SMS API',
+                        badge: copy('সবচেয়ে ভালো', 'Best'),
+                        badgeColor: '#10b981',
+                        desc: copy('Free, open source। সহজে webhook URL দেওয়া যায়।', 'Free, open source. Easy webhook URL setup.'),
+                        url: 'https://play.google.com/store/apps/details?id=eu.apksoft.android.smsgateway',
+                      },
+                      {
+                        name: 'SMS Forwarder — Auto Forward',
+                        badge: copy('জনপ্রিয়', 'Popular'),
+                        badgeColor: '#3b82f6',
+                        desc: copy('Filter করে শুধু bKash/Nagad SMS forward করা যায়।', 'Can filter to forward only bKash/Nagad SMS.'),
+                        url: 'https://play.google.com/store/apps/details?id=com.smsforwarder.android',
+                      },
+                    ].map(app => (
+                      <div key={app.name} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 9, background: th.bg, border: `1px solid ${th.border}` }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 3 }}>
+                            <span style={{ fontWeight: 700, fontSize: 12.5, color: th.text }}>{app.name}</span>
+                            <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 20, background: app.badgeColor + '20', color: app.badgeColor }}>{app.badge}</span>
+                          </div>
+                          <div style={{ fontSize: 11.5, color: th.muted }}>{app.desc}</div>
+                        </div>
+                        <a href={app.url} target="_blank" rel="noreferrer" style={{
+                          flexShrink: 0, padding: '7px 14px', borderRadius: 8, background: '#1d4ed8', color: '#fff',
+                          fontWeight: 700, fontSize: 12, textDecoration: 'none', whiteSpace: 'nowrap',
+                        }}>
+                          ▶ {copy('Install', 'Install')}
+                        </a>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Step 2 — Copy webhook URL */}
+                <div style={{ borderRadius: 12, padding: '14px 16px', background: th.surface, border: `1px solid ${th.border}` }}>
+                  <div style={{ fontWeight: 800, fontSize: 13, color: th.text, marginBottom: 10 }}>
+                    🔗 {copy('ধাপ ২ — Webhook URL copy করুন', 'Step 2 — Copy Webhook URL')}
+                  </div>
+                  <div style={{ fontSize: 12.5, color: th.muted, marginBottom: 10, lineHeight: 1.5 }}>
+                    {copy('নিচের URL টা copy করে app-এ paste করুন।', 'Copy the URL below and paste it into the app.')}
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <input
+                      readOnly
+                      value={`${API_BASE}/sms-gateway/incoming?pageToken=${smsToken}`}
+                      style={{ ...inp, flex: 1, fontSize: 11, color: th.muted, userSelect: 'all', fontFamily: 'monospace' }}
+                      onFocus={e => e.target.select()}
+                    />
+                    <button onClick={() => {
+                      navigator.clipboard.writeText(`${API_BASE}/sms-gateway/incoming?pageToken=${smsToken}`);
+                      setSmsCopied(true); setTimeout(() => setSmsCopied(false), 2500);
+                    }} style={{
+                      padding: '9px 16px', borderRadius: 8, border: 'none',
+                      background: smsCopied ? '#10b981' : th.accent, color: '#fff',
+                      fontWeight: 700, cursor: 'pointer', fontSize: 12, whiteSpace: 'nowrap', flexShrink: 0,
+                    }}>
+                      {smsCopied ? '✅ Copied!' : '📋 Copy'}
+                    </button>
+                  </div>
+                  <button onClick={async () => {
+                    const res = await request<any>(`${API_BASE}/sms-gateway/token?pageId=${pageId}`, { method: 'DELETE' });
+                    if (res?.token) { setSmsToken(res.token); onToast(copy('নতুন token তৈরি হয়েছে', 'New token generated')); }
+                  }} style={{ marginTop: 10, background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: 11.5, padding: 0, fontWeight: 700 }}>
+                    🔄 {copy('নতুন token তৈরি করুন', 'Regenerate token')} <span style={{ fontWeight: 400, color: th.muted }}>{copy('(পুরানোটা কাজ করবে না)', '(old one will stop working)')}</span>
+                  </button>
+                </div>
+
+                {/* Step 3 — App setup instructions */}
+                <div style={{ borderRadius: 12, padding: '14px 16px', background: th.surface, border: `1px solid ${th.border}` }}>
+                  <div style={{ fontWeight: 800, fontSize: 13, color: th.text, marginBottom: 10 }}>
+                    ⚙️ {copy('ধাপ ৩ — App-এ Settings করুন', 'Step 3 — Configure the App')}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {[
+                      copy('App খুলুন → "Webhooks" বা "HTTP Forwarder" সেকশনে যান', 'Open app → go to "Webhooks" or "HTTP Forwarder" section'),
+                      copy('Method: POST সেট করুন', 'Set Method: POST'),
+                      copy('URL: উপরের webhook URL paste করুন', 'URL: Paste the webhook URL from above'),
+                      copy('(Optional) Filter: শুধু bKash/Nagad/Rocket নম্বর থেকে SMS forward করতে sender filter যোগ করুন', '(Optional) Filter: Add sender filter to forward only bKash/Nagad/Rocket SMSes'),
+                      copy('SMS Forwarding চালু করুন ✅', 'Enable SMS Forwarding ✅'),
+                      copy('Phone সবসময় internet-এ connected রাখুন', 'Keep the phone always connected to internet'),
+                    ].map((step, i) => (
+                      <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                        <span style={{ flexShrink: 0, width: 20, height: 20, borderRadius: '50%', background: th.accent + '20', color: th.accent, fontWeight: 800, fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{i + 1}</span>
+                        <span style={{ fontSize: 12.5, color: th.muted, lineHeight: 1.5 }}>{step}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* bKash/Nagad sender numbers info */}
+                <div style={{ borderRadius: 10, padding: '12px 14px', background: '#fefce8', border: '1px solid #fde68a' }}>
+                  <div style={{ fontWeight: 700, fontSize: 12.5, color: '#92400e', marginBottom: 7 }}>
+                    💡 {copy('bKash/Nagad/Rocket-এর Sender Number (Filter-এ দিন)', 'bKash/Nagad/Rocket Sender Numbers (use in filter)')}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                    {[
+                      { label: 'bKash', numbers: '01678-016786, 16247' },
+                      { label: 'Nagad', numbers: '16167' },
+                      { label: 'Rocket', numbers: '16216' },
+                    ].map(r => (
+                      <div key={r.label} style={{ display: 'flex', gap: 8, fontSize: 12, color: '#78350f' }}>
+                        <span style={{ fontWeight: 700, minWidth: 50 }}>{r.label}:</span>
+                        <span style={{ fontFamily: 'monospace' }}>{r.numbers}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+              </div>
+            )}
+          </div>
+        </Section>
+
         <SaveRow onClick={() => save({
           deliveryFeeInsideDhaka: s.deliveryFeeInsideDhaka,
           deliveryFeeOutsideDhaka: s.deliveryFeeOutsideDhaka,
           deliveryTimeText: s.deliveryTimeText,
           paymentMode: s.paymentMode, advanceAmount: s.advanceAmount,
-          advanceBkash: s.advanceBkash, advanceNagad: s.advanceNagad,
+          advanceBkash: s.advanceBkash, advanceNagad: s.advanceNagad, advanceRocket: s.advanceRocket,
           advancePaymentMessage: s.advancePaymentMessage,
           webOrderEnabled: s.webOrderEnabled,
         })} saving={saving}/>

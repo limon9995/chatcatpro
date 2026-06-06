@@ -1,7 +1,7 @@
 import { IsBoolean, IsIn, IsObject, IsOptional, IsString } from 'class-validator';
 
 export class SaveCredentialsDto {
-  @IsIn(['bkash', 'nagad', 'sslcommerz', 'shurjopay', 'zinipay'])
+  @IsIn(['bkash', 'nagad', 'rocket', 'sslcommerz', 'shurjopay', 'zinipay'])
   method: string;
 
   @IsObject()

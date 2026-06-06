@@ -322,13 +322,19 @@ export function DashboardLayout({
     if (!paymentForm.amount || Number(paymentForm.amount) <= 0) { showToast('Amount দিন', 'error'); return; }
     setPaymentSubmitting(true);
     try {
-      await request(`${API_BASE}/billing/payments/submit`, {
+      const res = await request<any>(`${API_BASE}/billing/payments/submit`, {
         method: 'POST',
         body: JSON.stringify({ method: paymentForm.method, amount: Number(paymentForm.amount), transactionId: paymentForm.transactionId.trim(), note: paymentForm.note }),
       });
       setPaymentSuccess(true);
       setPaymentForm({ method: 'bkash', amount: '', transactionId: '', note: '' });
-      showToast('Payment submitted! Admin confirm করলে plan activate হবে।', 'success');
+      if (res?.autoConfirmed) {
+        showToast(res.message || '✅ Payment verify হয়েছে! Subscription activate হয়েছে।', 'success');
+        // Reload billing info to reflect new subscription status
+        await loadBillingModalData();
+      } else {
+        showToast('Payment submitted! Admin confirm করলে plan activate হবে।', 'success');
+      }
     } catch (e: any) {
       showToast(e.message || 'Payment submit failed', 'error');
     } finally {
@@ -981,10 +987,10 @@ export function DashboardLayout({
                         ) : (
                           <>
                             <div style={{ display: 'flex', gap: 8 }}>
-                              {(['bkash', 'nagad'] as const).map(m => (
+                              {(['bkash', 'nagad', 'rocket'] as const).map(m => (
                                 <button key={m} onClick={() => setPaymentForm(f => ({ ...f, method: m }))}
                                   style={{ ...paymentForm.method === m ? th.btn : th.btnGhost, padding: '7px 18px', fontSize: 13, fontWeight: 700 }}>
-                                  {m === 'bkash' ? '🔴 bKash' : '🟠 Nagad'}
+                                  {m === 'bkash' ? '🔴 bKash' : m === 'nagad' ? '🟠 Nagad' : '🚀 Rocket'}
                                 </button>
                               ))}
                             </div>

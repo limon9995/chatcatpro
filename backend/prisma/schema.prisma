@@ -128,6 +128,7 @@ model Page {
   advanceAmount         Float   @default(0) // 0 = delivery fee only, >0 = custom fixed amount
   advanceBkash          String? // Bkash number shown to customer
   advanceNagad          String? // Nagad number shown to customer
+  advanceRocket         String? // Rocket number shown to customer
   advancePaymentMessage String? // Custom advance payment message template (supports {{amount}}, {{bkash}}, {{nagad}}, {{currency}})
 
   // V23: Web ordering
@@ -252,6 +253,11 @@ model Page {
 
   // Payment credentials for auto-verification
   paymentCredentials PaymentCredential[]
+
+  // SMS Gateway for payment verification
+  smsGatewayToken    String?  // unique secret token for Android SMS forwarder webhook
+  smsGatewayEnabled  Boolean  @default(false)
+  receivedSms        ReceivedSms[]
 
   costPerMemoPrintBdt  Float @default(0.10)
 
@@ -905,6 +911,28 @@ model RecurringSubscriber {
   @@unique([pageId, psid])
   @@index([pageId])
   @@index([pageId, declined])
+}
+
+// SMS received on merchant's phone via Android SMS forwarder app — used for payment verification
+// SMS received on merchant's phone via Android SMS forwarder app — used for payment verification
+// pageId=null means it's from the chatcat admin's own phone (for billing subscription payments)
+model ReceivedSms {
+  id          String   @id @default(cuid())
+  pageId      Int?
+  page        Page?    @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  isAdminSms  Boolean  @default(false) // true = chatcat admin billing SMS
+  rawText     String
+  method      String   // "bkash" | "nagad" | "rocket"
+  txId        String?
+  amount      Float?
+  senderPhone String?
+  receivedAt  DateTime @default(now())
+  matched     Boolean  @default(false)
+
+  @@index([pageId, txId])
+  @@index([pageId, senderPhone])
+  @@index([isAdminSms, txId])
+  @@index([isAdminSms, matched, receivedAt])
 }
 
 model LiveSession {

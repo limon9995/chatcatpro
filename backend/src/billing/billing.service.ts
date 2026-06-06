@@ -9,6 +9,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { PrismaService } from '../prisma/prisma.service';
 import { TelegramService } from '../common/telegram.service';
+import { SmsGatewayService } from '../sms-gateway/sms-gateway.service';
 
 const TRIAL_DAYS = 7;
 const PAGE_FEATURE_FIELDS = [
@@ -35,6 +36,7 @@ export class BillingService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly telegram: TelegramService,
+    private readonly smsGateway: SmsGatewayService,
   ) {}
 
   // ── Startup: ensure single default plan exists (required for DB FK) ────────
@@ -217,6 +219,40 @@ export class BillingService {
     this.logger.log(
       `[Billing] Payment submitted userId=${userId} txn=${body.transactionId} amount=${body.amount}`,
     );
+
+    // ── SMS auto-confirm: check if admin's phone received matching SMS ────────
+    const smsMatch = await this.smsGateway.matchAdminPayment(
+      body.transactionId.trim(),
+      body.amount,
+    );
+    if (smsMatch.matched) {
+      const now = new Date();
+      const periodEnd = new Date(now.getTime() + 30 * 86_400_000);
+      await this.prisma.payment.update({
+        where: { id: payment.id },
+        data: { status: 'confirmed', confirmedAt: now, confirmedBy: 'sms-auto' },
+      });
+      await this.prisma.subscription.update({
+        where: { id: sub.id },
+        data: {
+          status: 'active',
+          periodStart: now,
+          periodEnd,
+          ordersUsed: 0,
+          lastPaymentAt: now,
+          nextPaymentDue: periodEnd,
+          updatedAt: now,
+        },
+      });
+      this.logger.log(`[Billing] Payment auto-confirmed via SMS txn=${body.transactionId}`);
+      return {
+        paymentId: payment.id,
+        status: 'confirmed',
+        autoConfirmed: true,
+        message: `✅ Payment verify হয়েছে! Subscription ${periodEnd.toLocaleDateString('bn-BD')} পর্যন্ত active।`,
+      };
+    }
+    // ── End SMS auto-confirm ──────────────────────────────────────────────────
 
     const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { name: true, email: true } });
     void this.telegram.sendMessage(

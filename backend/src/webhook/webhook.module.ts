@@ -20,6 +20,7 @@ import { EmbeddingModule } from '../embedding/embedding.module';
 import { MessageQueueModule } from '../message-queue/message-queue.module';
 import { ProductNameMatchModule } from '../product-name-match/product-name-match.module';
 import { PaymentVerifyModule } from '../payment-verify/payment-verify.module';
+import { SmsGatewayModule } from '../sms-gateway/sms-gateway.module';
 import { WebhookController } from './webhook.controller';
 import { WebhookService } from './webhook.service';
 import { SmartBotService } from '../bot/smart-bot.service';
@@ -54,6 +55,7 @@ import {
     EmbeddingModule,
     ProductNameMatchModule,
     forwardRef(() => PaymentVerifyModule),
+    SmsGatewayModule,
   ],
   controllers: [WebhookController],
   providers: [

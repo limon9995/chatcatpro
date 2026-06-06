@@ -15,6 +15,7 @@ import { FollowUpService } from '../../followup/followup.service';
 import { BillingService } from '../../billing/billing.service';
 import { SpamCheckerService } from '../../spam-checker/spam-checker.service';
 import { PaymentVerifyService } from '../../payment-verify/payment-verify.service';
+import { SmsGatewayService } from '../../sms-gateway/sms-gateway.service';
 
 @Injectable()
 export class DraftOrderHandler {
@@ -33,6 +34,7 @@ export class DraftOrderHandler {
     private readonly billing: BillingService,
     private readonly spamChecker: SpamCheckerService,
     @Optional() private readonly paymentVerify?: PaymentVerifyService,
+    @Optional() private readonly smsGateway?: SmsGatewayService,
   ) {}
 
   normalizeVariantOptions(raw: any): CustomFieldDef[] {
@@ -299,6 +301,28 @@ export class DraftOrderHandler {
         }
       }
       // ── End auto-verify ─────────────────────────────────────────────────────
+
+      // ── SMS Gateway match — check merchant's phone received SMS ─────────────
+      if (this.smsGateway && !screenshotAlreadySent) {
+        const page2 = page as any;
+        if (page2.smsGatewayEnabled) {
+          const expectedAmount = this.calcAdvanceAmount(draft, page);
+          const smsMatch = await this.smsGateway.matchPayment(
+            pageId,
+            proofText,
+            draft.phone ?? null,
+            expectedAmount,
+          );
+          if (smsMatch.matched) {
+            draft.paymentProof = proofText.slice(0, 200);
+            draft.paymentVerified = true;
+            draft.currentStep = 'confirm';
+            await this.ctx.saveDraft(pageId, psid, draft);
+            return `✅ Payment verify হয়েছে! (${(smsMatch.method ?? 'SMS').toUpperCase()})\n\n` + this.buildSummary(draft, page);
+          }
+        }
+      }
+      // ── End SMS gateway match ───────────────────────────────────────────────
 
       draft.paymentProof = proofText.slice(0, 200);
       draft.currentStep = 'confirm';
