@@ -244,6 +244,7 @@ export class AdminService {
       'advanceAmount',
       'advanceBkash',
       'advanceNagad',
+      'advanceRocket',
       'advancePaymentMessage',
       'catalogMessengerUrl',
       'catalogSlug',
