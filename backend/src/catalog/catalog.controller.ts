@@ -206,6 +206,7 @@ export class CatalogController {
         advanceAmount: true,
         advanceBkash: true,
         advanceNagad: true,
+        advanceRocket: true,
         advancePaymentMessage: true,
         webOrderEnabled: true,
       },
@@ -262,6 +263,7 @@ export class CatalogController {
       advanceAmount: (page as any).advanceAmount ?? 0,
       advanceBkash: (page as any).advanceBkash ?? '',
       advanceNagad: (page as any).advanceNagad ?? '',
+      advanceRocket: (page as any).advanceRocket ?? '',
       advancePaymentMessage: (page as any).advancePaymentMessage ?? '',
     };
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
@@ -320,6 +322,7 @@ export class CatalogController {
         advanceAmount: true,
         advanceBkash: true,
         advanceNagad: true,
+        advanceRocket: true,
         advancePaymentMessage: true,
         webOrderEnabled: true,
       },
@@ -390,6 +393,7 @@ export class CatalogController {
         advanceAmount: page.advanceAmount,
         advanceBkash: page.advanceBkash,
         advanceNagad: page.advanceNagad,
+        advanceRocket: (page as any).advanceRocket,
       };
     }
 
@@ -400,6 +404,7 @@ export class CatalogController {
       advanceAmount: page.advanceAmount,
       advanceBkash: page.advanceBkash,
       advanceNagad: page.advanceNagad,
+      advanceRocket: (page as any).advanceRocket,
       advancePaymentMessage: page.advancePaymentMessage,
     };
   }
@@ -1219,6 +1224,7 @@ ${page.webOrderEnabled ? `
           <div style="font-size:13px;font-weight:700;margin-bottom:8px">💸 Advance পাঠান</div>
           <div id="woBkashLine" style="display:none">📱 বিকাশ: <span class="wo-num" id="woBkashNum"></span></div>
           <div id="woNagadLine" style="display:none">📱 নগদ: <span class="wo-num" id="woNagadNum"></span></div>
+          <div id="woRocketLine" style="display:none">🚀 রকেট: <span class="wo-num" id="woRocketNum"></span></div>
           <div style="font-size:13px;margin-top:6px">পরিমাণ: <strong id="woDirectAmt"></strong></div>
         </div>
         <div><div class="wo-lbl">Transaction ID *</div><input class="wo-inp" id="woTxId" type="text" placeholder="যেমন: 8N7XXXXXX"></div>
@@ -1269,6 +1275,7 @@ var WO_PAY_MODE = ${JSON.stringify(String(page.paymentMode || 'cod'))};
 var WO_ADV_AMT = ${Number(page.advanceAmount || 0)};
 var WO_BKASH = ${JSON.stringify(String(page.advanceBkash || ''))};
 var WO_NAGAD = ${JSON.stringify(String(page.advanceNagad || ''))};
+var WO_ROCKET = ${JSON.stringify(String((page as any).advanceRocket || ''))};
 var WO_ADV_MSG = ${JSON.stringify(String(page.advancePaymentMessage || ''))};
 var woOrderIdVal = null;
 var woPaymentUrl = null;
@@ -1315,9 +1322,10 @@ async function woSubmit(){
       document.getElementById('woDirectAmt').textContent=WO_CURRENCY+(d.advanceAmount||WO_ADV_AMT);
       if(d.advanceBkash){document.getElementById('woBkashNum').textContent=d.advanceBkash;document.getElementById('woBkashLine').style.display='block';}
       if(d.advanceNagad){document.getElementById('woNagadNum').textContent=d.advanceNagad;document.getElementById('woNagadLine').style.display='block';}
+      if(d.advanceRocket){document.getElementById('woRocketNum').textContent=d.advanceRocket;document.getElementById('woRocketLine').style.display='block';}
       woShowStep('1b'); document.getElementById('woTitle').textContent='💸 Payment করুন';
     } else {
-      var msg=WO_ADV_MSG||('Advance '+(WO_ADV_AMT||'')+' পাঠান:\\nবিকাশ: '+WO_BKASH+'\\nনগদ: '+WO_NAGAD);
+      var msg=WO_ADV_MSG||('Advance '+(WO_ADV_AMT||'')+' পাঠান:'+(WO_BKASH?'\\nবিকাশ: '+WO_BKASH:'')+(WO_NAGAD?'\\nনগদ: '+WO_NAGAD:'')+(WO_ROCKET?'\\nরকেট: '+WO_ROCKET:''));
       document.getElementById('woManualMsg').innerHTML='<strong style="font-size:13px;font-weight:700">💸 Advance পাঠান</strong><br><div style="margin-top:6px;font-size:13.5px;white-space:pre-line">'+msg+'</div>';
       woShowStep('1c'); document.getElementById('woTitle').textContent='📸 Payment Proof';
     }
