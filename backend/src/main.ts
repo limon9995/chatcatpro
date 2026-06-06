@@ -32,8 +32,8 @@ async function bootstrap() {
           defaultSrc: ["'self'"],
           // Catalog pages use inline onclick= handlers — must allow unsafe-inline
           scriptSrc: ["'self'", "'unsafe-inline'"],
-          // Disable Helmet's default script-src-attr 'none' so inline event handlers work
-          scriptSrcAttr: false,
+          // Allow inline event handlers (onclick=) in catalog pages
+          scriptSrcAttr: ["'unsafe-inline'"],
           styleSrc: [
             "'self'",
             "'unsafe-inline'",
