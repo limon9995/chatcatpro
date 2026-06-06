@@ -19,6 +19,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ProductsService } from '../products/products.service';
 import { OrdersService } from '../orders/orders.service';
 import { PaymentVerifyService } from '../payment-verify/payment-verify.service';
+import { SmsGatewayService } from '../sms-gateway/sms-gateway.service';
 
 // ── Video URL helpers ─────────────────────────────────────────────────────────
 
@@ -136,6 +137,7 @@ export class CatalogController {
     private readonly productsService: ProductsService,
     private readonly ordersService: OrdersService,
     private readonly paymentVerify: PaymentVerifyService,
+    private readonly smsGatewayService: SmsGatewayService,
   ) {}
 
   private normalizeCodeList(raw?: string): string[] {
@@ -325,6 +327,7 @@ export class CatalogController {
         advanceRocket: true,
         advancePaymentMessage: true,
         webOrderEnabled: true,
+        smsGatewayEnabled: true,
       },
     });
     if (!page) throw new NotFoundException('Page not found');
@@ -397,6 +400,18 @@ export class CatalogController {
       };
     }
 
+    if ((page as any).smsGatewayEnabled) {
+      return {
+        orderId: order.id,
+        paymentRequired: true,
+        method: 'sms',
+        advanceAmount: page.advanceAmount,
+        advanceBkash: page.advanceBkash,
+        advanceNagad: page.advanceNagad,
+        advanceRocket: (page as any).advanceRocket,
+      };
+    }
+
     return {
       orderId: order.id,
       paymentRequired: true,
@@ -407,6 +422,37 @@ export class CatalogController {
       advanceRocket: (page as any).advanceRocket,
       advancePaymentMessage: page.advancePaymentMessage,
     };
+  }
+
+  @Post(':pageId/web-order/:orderId/sms-txid')
+  async submitSmsTxId(
+    @Param('pageId') pid: string,
+    @Param('orderId', ParseIntPipe) orderId: number,
+    @Body('transactionId') transactionId: string,
+  ) {
+    const page = await this.prisma.page.findFirst({
+      where: pageWhere(pid),
+      select: { id: true, advanceAmount: true },
+    });
+    if (!page) throw new NotFoundException('Page not found');
+    if (!transactionId?.trim()) throw new BadRequestException('Transaction ID required');
+    const order = await this.prisma.order.findFirst({
+      where: { id: orderId, pageIdRef: page.id },
+      select: { id: true, paymentStatus: true },
+    });
+    if (!order) throw new NotFoundException('Order not found');
+    if (order.paymentStatus !== 'pending_proof') throw new BadRequestException('Payment not expected');
+
+    const smsMatch = await this.smsGatewayService.matchPayment(page.id, transactionId.trim(), null, page.advanceAmount ?? 0);
+    await this.prisma.order.update({
+      where: { id: orderId },
+      data: {
+        paymentStatus: 'advance_paid',
+        transactionId: transactionId.trim(),
+        paymentVerifyStatus: smsMatch.matched ? 'verified' : 'pending_review',
+      },
+    });
+    return { success: true, autoVerified: smsMatch.matched };
   }
 
   @Post(':pageId/web-order/:orderId/verify-direct')
@@ -1232,10 +1278,25 @@ ${page.webOrderEnabled ? `
         <button class="wo-btn" id="woBtnVerify" onclick="woVerify()">Verify করুন →</button>
       </div>
 
+      <!-- Step 1s: SMS Gateway TxID -->
+      <div class="wo-step" id="woStep1s">
+        <div class="wo-payment-box">
+          <div style="font-size:13px;font-weight:700;margin-bottom:8px">💸 Advance পাঠান</div>
+          <div id="woSmsBkashLine" style="display:none">📱 বিকাশ: <span class="wo-num" id="woSmsBkashNum"></span></div>
+          <div id="woSmsNagadLine" style="display:none">📱 নগদ: <span class="wo-num" id="woSmsNagadNum"></span></div>
+          <div id="woSmsRocketLine" style="display:none">🚀 রকেট: <span class="wo-num" id="woSmsRocketNum"></span></div>
+          <div style="font-size:13px;margin-top:6px">পরিমাণ: <strong id="woSmsAmt"></strong></div>
+        </div>
+        <div style="font-size:12px;color:var(--muted,#64748b);background:var(--surface-2,#f8fafc);padding:8px 10px;border-radius:6px;margin-bottom:12px;line-height:1.5">✅ Payment পাঠানোর পর TxID দিন — bot SMS থেকে auto-verify করবে। Screenshot লাগবে না।</div>
+        <div><div class="wo-lbl">Transaction ID *</div><input class="wo-inp" id="woSmsTxId" type="text" placeholder="যেমন: 8N7XXXXXX"></div>
+        <div class="wo-err" id="woErrSms"></div>
+        <button class="wo-btn" id="woBtnSms" onclick="woSmsSubmit()">Confirm করুন →</button>
+      </div>
+
       <!-- Step 1c: Manual Screenshot -->
       <div class="wo-step" id="woStep1c">
         <div class="wo-payment-box" id="woManualMsg"></div>
-        <div><div class="wo-lbl">Transaction ID (ঐচ্ছিক)</div><input class="wo-inp" id="woManualTxId" type="text" placeholder="যেমন: 8N7XXXXXX"></div>
+        <div id="woManualTxIdRow"><div class="wo-lbl">Transaction ID (ঐচ্ছিক)</div><input class="wo-inp" id="woManualTxId" type="text" placeholder="যেমন: 8N7XXXXXX"></div>
         <div>
           <div class="wo-lbl">Payment Screenshot *</div>
           <label class="wo-file-area" for="woScreenshot">
@@ -1282,7 +1343,7 @@ var woPaymentUrl = null;
 
 function woOpen(){ document.getElementById('woModal').classList.add('open'); document.body.style.overflow='hidden'; }
 function woClose(){ document.getElementById('woModal').classList.remove('open'); document.body.style.overflow=''; }
-function woShowStep(n){ ['woStep0','woStep1a','woStep1b','woStep1c','woStep2'].forEach(function(id){ document.getElementById(id).classList.remove('active'); }); document.getElementById('woStep'+n).classList.add('active'); }
+function woShowStep(n){ ['woStep0','woStep1a','woStep1b','woStep1c','woStep1s','woStep2'].forEach(function(id){ document.getElementById(id).classList.remove('active'); }); document.getElementById('woStep'+n).classList.add('active'); }
 function woSetErr(id,msg){ var el=document.getElementById(id); el.textContent=msg; el.style.display=msg?'block':'none'; }
 function woSetLoading(btnId,v){ var b=document.getElementById(btnId); if(b){ b.disabled=v; if(!v) b.textContent=b.dataset.orig||b.textContent; } }
 
@@ -1324,9 +1385,19 @@ async function woSubmit(){
       if(d.advanceNagad){document.getElementById('woNagadNum').textContent=d.advanceNagad;document.getElementById('woNagadLine').style.display='block';}
       if(d.advanceRocket){document.getElementById('woRocketNum').textContent=d.advanceRocket;document.getElementById('woRocketLine').style.display='block';}
       woShowStep('1b'); document.getElementById('woTitle').textContent='💸 Payment করুন';
+    } else if(d.method==='sms'){
+      var smsAmt=WO_CURRENCY+(d.advanceAmount||WO_ADV_AMT);
+      document.getElementById('woSmsAmt').textContent=smsAmt;
+      if(d.advanceBkash){document.getElementById('woSmsBkashNum').textContent=d.advanceBkash;document.getElementById('woSmsBkashLine').style.display='block';}
+      if(d.advanceNagad){document.getElementById('woSmsNagadNum').textContent=d.advanceNagad;document.getElementById('woSmsNagadLine').style.display='block';}
+      if(d.advanceRocket){document.getElementById('woSmsRocketNum').textContent=d.advanceRocket;document.getElementById('woSmsRocketLine').style.display='block';}
+      woShowStep('1s'); document.getElementById('woTitle').textContent='💸 Payment করুন';
     } else {
-      var msg=WO_ADV_MSG||('Advance '+(WO_ADV_AMT||'')+' পাঠান:'+(WO_BKASH?'\\nবিকাশ: '+WO_BKASH:'')+(WO_NAGAD?'\\nনগদ: '+WO_NAGAD:'')+(WO_ROCKET?'\\nরকেট: '+WO_ROCKET:''));
+      var nums=(WO_BKASH?'📱 বিকাশ: '+WO_BKASH+'\n':'')+(WO_NAGAD?'📱 নগদ: '+WO_NAGAD+'\n':'')+(WO_ROCKET?'🚀 রকেট: '+WO_ROCKET+'\n':'');
+      var msg=WO_ADV_MSG||('Advance '+WO_CURRENCY+(WO_ADV_AMT||'')+' পাঠান:\n'+nums.trimEnd());
       document.getElementById('woManualMsg').innerHTML='<strong style="font-size:13px;font-weight:700">💸 Advance পাঠান</strong><br><div style="margin-top:6px;font-size:13.5px;white-space:pre-line">'+msg+'</div>';
+      document.getElementById('woManualTxIdRow').style.display='block';
+      document.getElementById('woManualTxId').value='';
       woShowStep('1c'); document.getElementById('woTitle').textContent='📸 Payment Proof';
     }
   } catch(e){ woSetErr('woErr0',e.message||'কিছু একটা সমস্যা হয়েছে'); }
@@ -1349,13 +1420,38 @@ async function woVerify(){
       document.getElementById('woMsgId').textContent='#'+woOrderIdVal;
       woShowStep(2);
     } else {
-      // fallback to screenshot
-      var msg=WO_ADV_MSG||('Advance পাঠান:\\nবিকাশ: '+WO_BKASH+'\\nনগদ: '+WO_NAGAD);
+      // fallback to screenshot — pre-fill TxID from step 1b and hide the TxID input (already entered)
+      var enteredTxId=document.getElementById('woTxId').value.trim();
+      var nums=(WO_BKASH?'📱 বিকাশ: '+WO_BKASH+'\n':'')+(WO_NAGAD?'📱 নগদ: '+WO_NAGAD+'\n':'')+(WO_ROCKET?'🚀 রকেট: '+WO_ROCKET+'\n':'');
+      var msg=WO_ADV_MSG||('Advance '+WO_CURRENCY+(WO_ADV_AMT||'')+' পাঠান:\n'+nums.trimEnd());
       document.getElementById('woManualMsg').innerHTML='<strong style="font-size:13px;font-weight:700">💸 Advance পাঠান</strong><br><div style="margin-top:6px;font-size:13.5px;white-space:pre-line">'+msg+'</div>';
+      if(enteredTxId){
+        document.getElementById('woManualTxId').value=enteredTxId;
+        document.getElementById('woManualTxIdRow').style.display='none';
+      } else {
+        document.getElementById('woManualTxIdRow').style.display='block';
+      }
       woShowStep('1c'); document.getElementById('woTitle').textContent='📸 Payment Proof';
     }
   } catch(e){ woSetErr('woErr1b',e.message||'Verify করা যায়নি'); }
   btn.disabled=false; btn.textContent='Verify করুন →';
+}
+
+async function woSmsSubmit(){
+  var txId=document.getElementById('woSmsTxId').value.trim();
+  if(!txId){woSetErr('woErrSms','Transaction ID দিন');return;}
+  woSetErr('woErrSms','');
+  var btn=document.getElementById('woBtnSms');
+  btn.disabled=true; btn.textContent='Confirm হচ্ছে...';
+  try {
+    var r=await fetch('/catalog/'+WO_PAGE_ID+'/web-order/'+woOrderIdVal+'/sms-txid',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({transactionId:txId})});
+    var d=await r.json();
+    if(!r.ok) throw new Error(d.message||'Error');
+    document.getElementById('woOrderId').textContent='#'+woOrderIdVal;
+    document.getElementById('woMsgId').textContent='#'+woOrderIdVal;
+    woShowStep(2);
+  } catch(e){ woSetErr('woErrSms',e.message||'কিছু একটা সমস্যা হয়েছে'); }
+  btn.disabled=false; btn.textContent='Confirm করুন →';
 }
 
 async function woUpload(){
