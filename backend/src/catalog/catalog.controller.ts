@@ -1260,16 +1260,16 @@ ${page.webOrderEnabled ? `
 </div>
 
 <script>
-var WO_PAGE_ID = '${esc(String(page.id))}';
-var WO_CODE = '${esc(p.code)}';
+var WO_PAGE_ID = ${JSON.stringify(String(page.id))};
+var WO_CODE = ${JSON.stringify(String(p.code))};
 var WO_PRICE = ${Number(p.price)};
-var WO_NAME = '${esc(String(p.name || p.code))}';
-var WO_CURRENCY = '${esc(page.currency)}';
-var WO_PAY_MODE = '${esc(String(page.paymentMode || 'cod'))}';
+var WO_NAME = ${JSON.stringify(String(p.name || p.code))};
+var WO_CURRENCY = ${JSON.stringify(String(page.currency || '৳'))};
+var WO_PAY_MODE = ${JSON.stringify(String(page.paymentMode || 'cod'))};
 var WO_ADV_AMT = ${Number(page.advanceAmount || 0)};
-var WO_BKASH = '${esc(String(page.advanceBkash || ''))}';
-var WO_NAGAD = '${esc(String(page.advanceNagad || ''))}';
-var WO_ADV_MSG = '${esc(String(page.advancePaymentMessage || '')).replace(/'/g, "\\'")}';
+var WO_BKASH = ${JSON.stringify(String(page.advanceBkash || ''))};
+var WO_NAGAD = ${JSON.stringify(String(page.advanceNagad || ''))};
+var WO_ADV_MSG = ${JSON.stringify(String(page.advancePaymentMessage || ''))};
 var woOrderIdVal = null;
 var woPaymentUrl = null;
 

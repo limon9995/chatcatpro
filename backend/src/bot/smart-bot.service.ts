@@ -7,6 +7,7 @@ import { BotContextService, BusinessContext } from './bot-context.service';
 import { BotKnowledgeService } from '../bot-knowledge/bot-knowledge.service';
 import { WalletService } from '../wallet/wallet.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { GeminiKeyRotatorService } from '../common/gemini-key-rotator.service';
 
 export interface IDraftOrderHandler {
   finalizeDraftOrder(
@@ -45,9 +46,7 @@ const VALID_ACTIONS = new Set([
 @Injectable()
 export class SmartBotService {
   private readonly logger = new Logger(SmartBotService.name);
-  private readonly geminiKey: string;
   private readonly openAiKey: string;
-  private readonly apiKey: string;
   private readonly model: string;
 
   private failCount = 0;
@@ -60,15 +59,14 @@ export class SmartBotService {
     private readonly botKnowledge: BotKnowledgeService,
     private readonly walletService: WalletService,
     private readonly prisma: PrismaService,
+    private readonly geminiRotator: GeminiKeyRotatorService,
   ) {
-    this.geminiKey = process.env.GEMINI_API_KEY ?? '';
     this.openAiKey = process.env.OPENAI_API_KEY ?? '';
-    this.apiKey = this.geminiKey || this.openAiKey;
     this.model = process.env.AI_INTENT_MODEL ?? 'gemini-2.0-flash';
   }
 
   isAvailable(): boolean {
-    return !!(this.geminiKey || this.openAiKey) && Date.now() > this.cooldownUntil;
+    return (this.geminiRotator.isAvailable() || !!this.openAiKey) && Date.now() > this.cooldownUntil;
   }
 
   /**
@@ -459,20 +457,28 @@ Customer-এর message দেখে **strictly valid JSON** return করো:
   private async callOpenAI(
     messages: { role: string; content: string }[],
   ): Promise<string | null> {
-    if (this.geminiKey) {
-      const result = await this.callGemini(messages);
-      if (result !== 'QUOTA_EXCEEDED') return result;
-      // Gemini quota hit — fall through to OpenAI
-      this.logger.warn('[SmartBot] Gemini quota exceeded — falling back to OpenAI');
+    // Try Gemini keys in rotation until one works or all exhausted
+    while (this.geminiRotator.isAvailable()) {
+      const key = this.geminiRotator.getKey();
+      if (!key) break;
+      const result = await this.callGeminiWithKey(key, messages);
+      if (result === 'QUOTA_EXCEEDED') {
+        this.geminiRotator.markExhausted(key);
+        continue; // try next key
+      }
+      return result;
     }
+    // All Gemini keys exhausted — fall back to OpenAI
     if (this.openAiKey) {
+      this.logger.warn('[SmartBot] All Gemini keys exhausted — falling back to OpenAI');
       return this.callOpenAIApi(messages);
     }
     this.enterCooldown();
     return null;
   }
 
-  private async callGemini(
+  private async callGeminiWithKey(
+    geminiKey: string,
     messages: { role: string; content: string }[],
   ): Promise<string | null | 'QUOTA_EXCEEDED'> {
     try {
@@ -496,7 +502,7 @@ Customer-এর message দেখে **strictly valid JSON** return করো:
         body.systemInstruction = { parts: [{ text: systemMsg.content }] };
       }
 
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent?key=${this.geminiKey}`;
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent?key=${geminiKey}`;
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -505,7 +511,7 @@ Customer-এর message দেখে **strictly valid JSON** return করো:
       });
 
       if (res.status === 429 || res.status === 402) {
-        this.logger.warn(`[SmartBot] Gemini quota/limit (${res.status})`);
+        this.logger.warn(`[SmartBot] Gemini key ...${geminiKey.slice(-6)} quota/limit (${res.status})`);
         return 'QUOTA_EXCEEDED';
       }
       if (!res.ok) {

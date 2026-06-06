@@ -111,6 +111,16 @@ export class AccountingController {
     return this.svc.addReturn(this.pid(r, p), b);
   }
 
+  @Post(':pageId/accounting/returns/:id/refund')
+  initiateRefund(
+    @Param('pageId') p: string,
+    @Param('id') id: string,
+    @Body() b: any,
+    @Req() r: any,
+  ) {
+    return this.svc.initiateRefund(this.pid(r, p), Number(id), b);
+  }
+
   // ── Exchanges ─────────────────────────────────────────────────────────────
   @Get(':pageId/accounting/exchanges')
   listExch(@Param('pageId') p: string, @Req() r: any) {

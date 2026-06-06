@@ -167,6 +167,7 @@ export function ProductsPage({ th, pageId, onToast }: {
   const { request } = useApi();
   const [products, setProducts]   = useState<Product[]>([]);
   const [loading, setLoading]     = useState(false);
+  const [codePrefix, setCodePrefix] = useState('DF');
   const [view, setView]           = useState<'grid' | 'list'>('grid');
   const [search, setSearch]       = useState('');
   const [editId, setEditId]       = useState<number | null>(null);
@@ -227,8 +228,12 @@ export function ProductsPage({ th, pageId, onToast }: {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const prods = await request<Product[]>(`${BASE}/products`);
+      const [prods, settings] = await Promise.all([
+        request<Product[]>(`${BASE}/products`),
+        request<any>(`${BASE}/settings`).catch(() => null),
+      ]);
       setProducts(prods);
+      if (settings?.productCodePrefix) setCodePrefix(settings.productCodePrefix);
     }
     catch (e: any) { onToast(e.message, 'error'); }
     finally { setLoading(false); }
@@ -520,7 +525,7 @@ export function ProductsPage({ th, pageId, onToast }: {
           </p>
         </div>
         {productTab === 'single' && (
-          <button style={th.btnPrimary} onClick={() => setShowNew(v => !v)}>
+          <button style={th.btnPrimary} onClick={() => { if (!showNew) setNewP(p => ({ ...p, code: p.code || codePrefix + '-' })); setShowNew(v => !v); }}>
             {showNew ? copy('✕ Cancel', '✕ Cancel') : copy('+ Add Product', '+ Add Product')}
           </button>
         )}
@@ -588,7 +593,7 @@ export function ProductsPage({ th, pageId, onToast }: {
               <>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(160px,1fr))', gap: 12 }}>
             <FieldWithInfo th={th} label="Code *" helpText={copy('Unique product code। যেমন: DF-0001, SK-0042', 'Unique product code, for example: DF-0001, SK-0042')}>
-              <input style={th.input} placeholder="DF-0001" value={newP.code}
+              <input style={th.input} placeholder={`${codePrefix}-0001`} value={newP.code}
                 onChange={e => setNewP(p => ({ ...p, code: e.target.value.toUpperCase() }))} />
             </FieldWithInfo>
             <FieldWithInfo th={th} label="Name" helpText={copy('Product এর নাম', 'Product name')}>

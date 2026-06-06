@@ -201,6 +201,8 @@ export function AdminPanel({ th, onToast, onLogout }: {
   const [apiKeysDraft, setApiKeysDraft] = useState<Record<string, string>>({});
   const [apiKeysSaving, setApiKeysSaving] = useState(false);
   const [apiKeysLoaded, setApiKeysLoaded] = useState(false);
+  const [geminiKeys, setGeminiKeys] = useState<string[]>(['']);
+  const [geminiStatus, setGeminiStatus] = useState<{ total: number; available: number; keys: { masked: string; available: boolean; exhaustedUntil: number | null }[] } | null>(null);
 
   // Domain Setup tab state
   const [domainPages, setDomainPages]         = useState<any[]>([]);
@@ -537,13 +539,27 @@ export function AdminPanel({ th, onToast, onLogout }: {
       setApiKeys(data || {});
       setApiKeysDraft(data || {});
       setApiKeysLoaded(true);
+      // Load multi-key list
+      try {
+        const raw = (data as any)?.geminiApiKeys;
+        const parsed: string[] = raw && raw !== '***SAVED***' ? JSON.parse(raw) : [];
+        setGeminiKeys(parsed.length > 0 ? parsed : ['']);
+      } catch { setGeminiKeys(['']); }
+      // Load rotator status
+      try {
+        const status = await request<any>(`${BASE}/gemini-key-status`);
+        setGeminiStatus(status);
+      } catch {}
     } catch (e: any) { onToast(e.message, 'error'); }
   };
 
   const saveApiKeys = async () => {
     setApiKeysSaving(true);
     try {
-      await request(`${BASE}/api-keys`, { method: 'PATCH', body: JSON.stringify(apiKeysDraft) });
+      // Save geminiApiKeys array (filter empty)
+      const keys = geminiKeys.filter(k => k.trim());
+      const patch = { ...apiKeysDraft, geminiApiKeys: keys.length > 0 ? JSON.stringify(keys) : '' };
+      await request(`${BASE}/api-keys`, { method: 'PATCH', body: JSON.stringify(patch) });
       onToast('✅ API Keys সংরক্ষিত হয়েছে', 'success');
       setApiKeysLoaded(false);
       loadApiKeys();
@@ -2023,6 +2039,57 @@ export function AdminPanel({ th, onToast, onLogout }: {
         )}
         {tab === 'api-keys' && (
           <div style={{ maxWidth: 800, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 24 }}>
+            {/* ── Gemini Multi-Key Manager ── */}
+            <div style={{ ...th.card, borderRadius: 14, padding: 20 }}>
+              <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>✨ Gemini API Keys (Rotation Pool)</div>
+              <div style={{ fontSize: 12, color: th.muted, marginBottom: 16 }}>
+                একাধিক free Gemini API key add করুন। একটা quota শেষ হলে automatically পরেরটায় চলে যাবে। Quota reset হলে (1 ঘণ্টা পর) আবার ব্যবহার হবে।
+              </div>
+
+              {/* Status bar */}
+              {geminiStatus && (
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+                  {geminiStatus.keys.map((k, i) => (
+                    <div key={i} style={{ fontSize: 11, padding: '4px 10px', borderRadius: 20, fontWeight: 700,
+                      background: k.available ? 'rgba(52,211,153,.15)' : 'rgba(239,68,68,.12)',
+                      color: k.available ? '#34d399' : '#f87171',
+                      border: `1px solid ${k.available ? 'rgba(52,211,153,.3)' : 'rgba(239,68,68,.25)'}` }}>
+                      {k.available ? '✅' : '⏳'} {k.masked}
+                      {!k.available && k.exhaustedUntil && ` (${Math.ceil((k.exhaustedUntil - Date.now()) / 60000)}m)`}
+                    </div>
+                  ))}
+                  <div style={{ fontSize: 11, padding: '4px 10px', borderRadius: 20, background: 'rgba(255,255,255,.06)', color: th.muted }}>
+                    {geminiStatus.available}/{geminiStatus.total} available
+                  </div>
+                </div>
+              )}
+
+              {/* Key list */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+                {geminiKeys.map((k, i) => (
+                  <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <div style={{ fontSize: 12, color: th.muted, width: 24, textAlign: 'right', flexShrink: 0 }}>#{i + 1}</div>
+                    <input
+                      type="password"
+                      value={k}
+                      onChange={e => { const arr = [...geminiKeys]; arr[i] = e.target.value; setGeminiKeys(arr); }}
+                      placeholder="AIza..."
+                      style={{ flex: 1, padding: '8px 12px', borderRadius: 8, border: `1px solid ${th.border}`, backgroundColor: 'rgba(255,255,255,.05)', color: th.text, fontSize: 13, fontFamily: 'monospace' }}
+                    />
+                    <button
+                      onClick={() => setGeminiKeys(geminiKeys.filter((_, j) => j !== i))}
+                      disabled={geminiKeys.length === 1}
+                      style={{ padding: '6px 10px', borderRadius: 8, border: 'none', background: 'rgba(239,68,68,.15)', color: '#f87171', cursor: 'pointer', fontSize: 14, fontWeight: 700 }}
+                    >✕</button>
+                  </div>
+                ))}
+              </div>
+              <button
+                onClick={() => setGeminiKeys([...geminiKeys, ''])}
+                style={{ fontSize: 12, padding: '7px 16px', borderRadius: 8, border: `1px dashed ${th.border}`, background: 'transparent', color: th.muted, cursor: 'pointer', width: '100%' }}
+              >+ আরেকটি Key যোগ করুন</button>
+            </div>
+
             <div style={{ ...th.card, borderRadius: 14, padding: 20 }}>
               <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>🔑 API Keys Manager</div>
               <div style={{ fontSize: 13, color: th.muted, marginBottom: 20 }}>এখানে সংরক্ষিত values .env ফাইলের চেয়ে priority পাবে। কোনো field খালি রাখলে .env এর value ব্যবহার হবে।</div>
@@ -2030,7 +2097,6 @@ export function AdminPanel({ th, onToast, onLogout }: {
               {(
                 [
                   { group: '🤖 AI / Gemini', fields: [
-                    { key: 'geminiApiKey', label: 'Gemini API Key', secret: true },
                     { key: 'aiIntentProvider', label: 'AI Intent Provider', placeholder: 'gemini / openai' },
                     { key: 'aiIntentModel', label: 'AI Intent Model', placeholder: 'gemini-2.0-flash' },
                   ]},

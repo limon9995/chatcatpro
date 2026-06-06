@@ -144,6 +144,8 @@ export function AccountingPage({ th, pageId, onToast, preset }: {
   const [exchanges, setExchanges] = useState<ExchangeE[]>([]);
   const [refundQueue, setRefundQueue]   = useState<any[]>([]);
   const [refundAmounts, setRefundAmounts] = useState<Record<number, string>>({});
+  const [refundMethods, setRefundMethods] = useState<Record<number, string>>({});
+  const [refundPhones, setRefundPhones] = useState<Record<number, string>>({});
   const [confirmingId, setConfirmingId] = useState<number | null>(null);
   const [partialEntry, setPartialEntry] = useState<ReturnE | null>(null);
   const [partialItems, setPartialItems] = useState<{ id: number; selected: boolean; restock: boolean }[]>([]);
@@ -215,16 +217,28 @@ export function AccountingPage({ th, pageId, onToast, preset }: {
   const fmtPlain = (n: number) => Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 0 });
 
   // ── Refund queue actions ───────────────────────────────────────────────────
-  const handleConfirmRefund = async (returnId: number) => {
+  const handleConfirmRefund = async (returnId: number, entryPhone?: string) => {
     const amt = Number(refundAmounts[returnId] || 0);
     if (amt < 0) return onToast('Amount must be 0 or more', 'error');
+    const method = refundMethods[returnId] || 'bkash_manual';
+    const phone = refundPhones[returnId] || entryPhone || '';
+    const isAuto = method === 'bkash_auto' || method === 'nagad_auto';
+    if (isAuto && !phone) return onToast(copy('Auto refund এর জন্য phone number দিন', 'Phone number required for auto refund'), 'error');
     setConfirmingId(returnId);
     try {
-      await request(`${BASE}/refund-queue/${returnId}/confirm`, {
-        method: 'PATCH', body: JSON.stringify({ givenAmount: amt }),
+      const res: any = await request(`${BASE}/returns/${returnId}/refund`, {
+        method: 'POST',
+        body: JSON.stringify({ method, givenAmount: amt, phoneNumber: phone || undefined }),
       });
-      onToast(copy('✅ Refund confirmed', '✅ Refund confirmed'));
-      setRefundQueue(q => q.map(r => r.id === returnId ? { ...r, refundStatus: 'given', refundGivenAmount: amt, refundGivenAt: new Date().toISOString() } : r));
+      if (res.success === false) {
+        onToast(`❌ Auto refund failed: ${res.errorMessage} — manually send করুন`, 'error');
+      } else {
+        const txMsg = res.gatewayTxId ? ` — TxID: ${res.gatewayTxId}` : '';
+        onToast(copy(`✅ Refund confirmed${txMsg}`, `✅ Refund confirmed${txMsg}`));
+        setRefundQueue(q => q.map(r => r.id === returnId
+          ? { ...r, refundStatus: 'given', refundGivenAmount: amt, refundGivenAt: new Date().toISOString(), refundMethod: method, refundGatewayTxId: res.gatewayTxId }
+          : r));
+      }
     } catch (e: any) { onToast(e.message, 'error'); }
     finally { setConfirmingId(null); }
   };
@@ -1069,15 +1083,34 @@ export function AccountingPage({ th, pageId, onToast, preset }: {
 
                   {/* Action row */}
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                    <div style={{ fontSize: 12, color: th.muted }}>{copy('Refund দিন:', 'Refund amount:')}</div>
+                    <div style={{ fontSize: 12, color: th.muted }}>{copy('Method:', 'Method:')}</div>
+                    <select
+                      value={refundMethods[entry.id] || 'bkash_manual'}
+                      onChange={e => setRefundMethods(m => ({ ...m, [entry.id]: e.target.value }))}
+                      style={{ ...th.input, padding: '5px 8px', fontSize: 12, minWidth: 140 }}>
+                      <option value="bkash_manual">bKash (Manual)</option>
+                      <option value="nagad_manual">Nagad (Manual)</option>
+                      <option value="bkash_auto">bKash Auto (API)</option>
+                      <option value="nagad_auto">Nagad Auto (API)</option>
+                      <option value="cash">Cash</option>
+                      <option value="bank">Bank Transfer</option>
+                    </select>
+                    {(refundMethods[entry.id] === 'bkash_auto' || refundMethods[entry.id] === 'nagad_auto') && (
+                      <input type="tel"
+                        value={refundPhones[entry.id] ?? (entry.order?.phone || '')}
+                        onChange={e => setRefundPhones(p => ({ ...p, [entry.id]: e.target.value }))}
+                        style={{ ...th.input, width: 140, padding: '5px 10px', fontSize: 12 }}
+                        placeholder="01XXXXXXXXX" />
+                    )}
+                    <div style={{ fontSize: 12, color: th.muted }}>{copy('Amount:', 'Amount:')}</div>
                     <input type="number" min={0}
                       value={refundAmounts[entry.id] ?? String(defaultAmt)}
                       onChange={e => setRefundAmounts(a => ({ ...a, [entry.id]: e.target.value }))}
-                      style={{ ...th.input, width: 110, padding: '5px 10px', fontSize: 13 }}
+                      style={{ ...th.input, width: 100, padding: '5px 10px', fontSize: 13 }}
                       placeholder={String(defaultAmt)} />
                     <span style={{ fontSize: 12, color: th.muted }}>{cur}</span>
                     <button
-                      onClick={() => handleConfirmRefund(entry.id)}
+                      onClick={() => handleConfirmRefund(entry.id, entry.order?.phone)}
                       disabled={confirmingId === entry.id}
                       style={{ ...th.btnPrimary, fontSize: 12, padding: '6px 16px', background: '#10b981' }}>
                       {confirmingId === entry.id ? <Spinner size={12} color="#fff"/> : copy('✅ Confirm Refund', 'Confirm Refund')}
@@ -1105,6 +1138,14 @@ export function AccountingPage({ th, pageId, onToast, preset }: {
                 <span style={{ fontWeight: 700 }}>#{entry.orderId}</span>
                 <span style={{ color: th.text }}>{entry.order?.customerName || '—'}</span>
                 {entry.order?.phone && <span style={{ fontSize: 12, color: th.muted }}>📞 {entry.order.phone}</span>}
+                {entry.refundMethod && (
+                  <span style={{ fontSize: 11, background: th.accentSoft, color: th.accentText, borderRadius: 4, padding: '1px 7px', fontWeight: 600 }}>
+                    {entry.refundMethod.replace('_', ' ')}
+                  </span>
+                )}
+                {entry.refundGatewayTxId && (
+                  <span style={{ fontSize: 11, color: th.muted }}>🔖 {entry.refundGatewayTxId}</span>
+                )}
                 <span style={{ marginLeft: 'auto', background: '#d1fae5', color: '#065f46', borderRadius: 5, padding: '2px 10px', fontWeight: 700, fontSize: 12 }}>
                   {copy(`✅ ${fmt(entry.refundGivenAmount || 0)} দেওয়া হয়েছে`, `✅ ${fmt(entry.refundGivenAmount || 0)} paid`)}
                 </span>

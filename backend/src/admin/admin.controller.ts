@@ -20,6 +20,7 @@ import { RolesGuard } from '../auth/roles.guard';
 import { AdminService } from './admin.service';
 import { GlobalSettingsService } from '../common/global-settings.service';
 import { ApiKeysService } from '../common/api-keys.service';
+import { GeminiKeyRotatorService } from '../common/gemini-key-rotator.service';
 
 @SkipThrottle({ global: true, auth: true })
 @Controller('admin')
@@ -30,6 +31,7 @@ export class AdminController {
     private readonly svc: AdminService,
     private readonly globalSettings: GlobalSettingsService,
     private readonly apiKeys: ApiKeysService,
+    private readonly geminiRotator: GeminiKeyRotatorService,
   ) {}
 
   @Get('api-keys')
@@ -40,6 +42,11 @@ export class AdminController {
   @Patch('api-keys')
   setApiKeys(@Body() b: any) {
     return this.apiKeys.set(b || {});
+  }
+
+  @Get('gemini-key-status')
+  getGeminiKeyStatus() {
+    return this.geminiRotator.getStatus();
   }
 
   @Get('laptop-ai')

@@ -6,6 +6,7 @@ export interface ApiKeysConfig {
   // AI
   openaiApiKey?: string;
   geminiApiKey?: string;
+  geminiApiKeys?: string; // JSON array of multiple Gemini keys for rotation
   ollamaBaseUrl?: string;
   ollamaChatModel?: string;
   ollamaVisionModel?: string;
@@ -64,6 +65,7 @@ const FILE = join(process.cwd(), 'storage', 'settings', 'api-keys.json');
 const ENV_MAP: Record<keyof ApiKeysConfig, string> = {
   openaiApiKey: 'OPENAI_API_KEY',
   geminiApiKey: 'GEMINI_API_KEY',
+  geminiApiKeys: 'GEMINI_API_KEYS',
   ollamaBaseUrl: 'OLLAMA_BASE_URL',
   ollamaChatModel: 'OLLAMA_CHAT_MODEL',
   ollamaVisionModel: 'OLLAMA_VISION_MODEL',
@@ -110,6 +112,7 @@ const ENV_MAP: Record<keyof ApiKeysConfig, string> = {
 export const SECRET_FIELDS = new Set<keyof ApiKeysConfig>([
   'openaiApiKey',
   'geminiApiKey',
+  'geminiApiKeys',
   'gmailAppPassword',
   'fbAppSecret',
   'fbOauthStateSecret',

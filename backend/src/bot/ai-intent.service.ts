@@ -3,6 +3,7 @@ import { GlobalSettingsService } from '../common/global-settings.service';
 import { ApiKeysService } from '../common/api-keys.service';
 import { WalletService } from '../wallet/wallet.service';
 import { BusinessContext } from './bot-context.service';
+import { GeminiKeyRotatorService } from '../common/gemini-key-rotator.service';
 
 export interface AiIntentResult {
   intent: string | null; // null = use keyword fallback
@@ -80,6 +81,7 @@ export class AiIntentService {
     private readonly walletService: WalletService,
     private readonly globalSettings: GlobalSettingsService,
     private readonly apiKeysService: ApiKeysService,
+    private readonly geminiRotator: GeminiKeyRotatorService,
   ) {
     this.apiKey = apiKeysService.getSync('openaiApiKey');
     this.geminiApiKey = apiKeysService.getSync('geminiApiKey');
@@ -111,9 +113,11 @@ export class AiIntentService {
   }
 
   isAvailable(): boolean {
-    const activeKey =
-      this.provider === 'gemini' ? this.geminiApiKey : this.apiKey;
-    return !!activeKey && Date.now() > this.cooldownUntil;
+    const hasKey =
+      this.provider === 'gemini'
+        ? this.geminiRotator.isAvailable()
+        : !!this.apiKey;
+    return hasKey && Date.now() > this.cooldownUntil;
   }
 
   private async attemptOllama(
@@ -219,58 +223,51 @@ export class AiIntentService {
     maxTokens: number,
     temperature: number,
   ): Promise<string | null> {
-    if (!this.geminiApiKey) return null;
-    try {
-      const systemMsg = messages.find((m) => m.role === 'system');
-      const rest = messages.filter((m) => m.role !== 'system');
-      const contents = rest.map((m) => ({
-        role: m.role === 'assistant' ? 'model' : 'user',
-        parts: [{ text: m.content }],
-      }));
-      const body: any = {
-        contents,
-        generationConfig: {
-          temperature,
-          maxOutputTokens: maxTokens,
-          responseMimeType: 'application/json',
-        },
-      };
-      if (systemMsg)
-        body.systemInstruction = { parts: [{ text: systemMsg.content }] };
+    // Try all available Gemini keys in rotation
+    while (this.geminiRotator.isAvailable()) {
+      const key = this.geminiRotator.getKey();
+      if (!key) break;
+      try {
+        const systemMsg = messages.find((m) => m.role === 'system');
+        const rest = messages.filter((m) => m.role !== 'system');
+        const contents = rest.map((m) => ({
+          role: m.role === 'assistant' ? 'model' : 'user',
+          parts: [{ text: m.content }],
+        }));
+        const body: any = {
+          contents,
+          generationConfig: { temperature, maxOutputTokens: maxTokens, responseMimeType: 'application/json' },
+        };
+        if (systemMsg) body.systemInstruction = { parts: [{ text: systemMsg.content }] };
 
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent?key=${this.geminiApiKey}`;
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-        signal: AbortSignal.timeout(8_000),
-      });
-      if (res.status === 429 || res.status === 402) {
-        this.logger.warn(
-          `[AiIntent] Gemini quota/limit (${res.status}) — keyword fallback`,
-        );
-        this.enterCooldown();
-        return null;
-      }
-      if (!res.ok) {
-        const errText = await res.text();
-        this.logger.error(
-          `[AiIntent] Gemini error ${res.status}: ${errText.slice(0, 100)}`,
-        );
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent?key=${key}`;
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+          signal: AbortSignal.timeout(8_000),
+        });
+        if (res.status === 429 || res.status === 402) {
+          this.logger.warn(`[AiIntent] Gemini key ...${key.slice(-6)} quota (${res.status}) — trying next`);
+          this.geminiRotator.markExhausted(key);
+          continue;
+        }
+        if (!res.ok) {
+          const errText = await res.text();
+          this.logger.error(`[AiIntent] Gemini error ${res.status}: ${errText.slice(0, 100)}`);
+          this.recordFailure();
+          return null;
+        }
+        const data = await res.json();
+        return (data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '').trim() || null;
+      } catch (err: any) {
+        this.logger.warn(`[AiIntent] Gemini network error: ${err?.message ?? err}`);
         this.recordFailure();
         return null;
       }
-      const data = await res.json();
-      return (
-        (data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '').trim() || null
-      );
-    } catch (err: any) {
-      this.logger.warn(
-        `[AiIntent] Gemini network error: ${err?.message ?? err}`,
-      );
-      this.recordFailure();
-      return null;
     }
+    this.logger.warn('[AiIntent] All Gemini keys exhausted — keyword fallback');
+    return null;
   }
 
   private async resolveProvider(
@@ -302,8 +299,8 @@ export class AiIntentService {
     }
 
     if (this.provider === 'gemini') {
-      if (!this.geminiApiKey) {
-        this.logger.warn(`[AiIntent] No Gemini key — keyword fallback`);
+      if (!this.geminiRotator.isAvailable()) {
+        this.logger.warn(`[AiIntent] No Gemini key available — keyword fallback`);
         return null;
       }
       this.logger.log(`[AiIntent] ${label} — Gemini (${this.model})`);

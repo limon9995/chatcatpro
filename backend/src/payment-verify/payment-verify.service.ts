@@ -402,6 +402,105 @@ export class PaymentVerifyService {
     return this.prisma.pendingPayment.findUnique({ where: { sessionToken } });
   }
 
+  // ── Refund via bKash / Nagad ─────────────────────────────────────────────
+
+  async refundViaBkash(
+    pageId: number,
+    amount: number,
+    receiverPhone: string,
+    reference: string,
+  ): Promise<{ success: boolean; txId?: string; errorMessage?: string }> {
+    const creds = await this.getCredentials(pageId, 'bkash');
+    if (!creds) return { success: false, errorMessage: 'bkash_credentials_not_configured' };
+
+    try {
+      const baseUrl = creds.sandbox === 'true'
+        ? 'https://tokenized.sandbox.bka.sh/v1.2.0-beta'
+        : 'https://tokenized.pay.bka.sh/v1.2.0-beta';
+
+      const tokenRes = await fetchWithTimeout(`${baseUrl}/tokenized/checkout/token/grant`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          username: creds.username,
+          password: creds.password,
+        },
+        body: JSON.stringify({ app_key: creds.app_key, app_secret: creds.app_secret }),
+      });
+      if (!tokenRes.ok) return { success: false, errorMessage: 'bkash_token_failed' };
+      const tokenData = await tokenRes.json();
+      const token: string = tokenData.id_token;
+      if (!token) return { success: false, errorMessage: tokenData.errorMessage || 'bkash_token_failed' };
+
+      const disburseRes = await fetchWithTimeout(`${baseUrl}/tokenized/checkout/payment/create`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: token,
+          'x-app-key': creds.app_key,
+        },
+        body: JSON.stringify({
+          mode: '0011',
+          payerReference: reference,
+          callbackURL: 'https://example.com/callback',
+          amount: amount.toFixed(2),
+          currency: 'BDT',
+          intent: 'sale',
+          merchantInvoiceNumber: reference,
+        }),
+      });
+      const disburseData = await disburseRes.json();
+      if (disburseData.statusCode === '0000') {
+        return { success: true, txId: disburseData.paymentID };
+      }
+      return { success: false, errorMessage: disburseData.statusMessage || 'bkash_disburse_failed' };
+    } catch (err) {
+      this.logger.error(`[PaymentVerify] bKash refund error: ${err.message}`);
+      return { success: false, errorMessage: err.message };
+    }
+  }
+
+  async refundViaNagad(
+    pageId: number,
+    amount: number,
+    receiverPhone: string,
+    reference: string,
+  ): Promise<{ success: boolean; txId?: string; errorMessage?: string }> {
+    const creds = await this.getCredentials(pageId, 'nagad');
+    if (!creds) return { success: false, errorMessage: 'nagad_credentials_not_configured' };
+
+    try {
+      const baseUrl = creds.sandbox === 'true'
+        ? 'https://sandbox.mynagad.com:10080/remote-payment-gateway-1.0'
+        : 'https://api.mynagad.com/api/dfs';
+
+      const res = await fetchWithTimeout(`${baseUrl}/cashout`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-KM-Api-Version': 'v-0.2.0',
+          'X-KM-IP-V4': '127.0.0.1',
+          'X-KM-Client-Type': 'PC_WEB',
+          Authorization: `Bearer ${creds.api_key}`,
+        },
+        body: JSON.stringify({
+          amount: amount.toFixed(2),
+          receiverMSISDN: receiverPhone,
+          invoiceNumber: reference,
+          merchantCode: creds.merchant_code,
+        }),
+      });
+      const data = await res.json();
+      if (data.status === 'Success') {
+        return { success: true, txId: data.transactionId };
+      }
+      return { success: false, errorMessage: data.reason || 'nagad_cashout_failed' };
+    } catch (err) {
+      this.logger.error(`[PaymentVerify] Nagad refund error: ${err.message}`);
+      return { success: false, errorMessage: err.message };
+    }
+  }
+
   // ── Test connection ───────────────────────────────────────────────────────
 
   async testConnection(pageId: number, method: string): Promise<{ ok: boolean; message: string }> {

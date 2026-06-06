@@ -529,6 +529,13 @@ model ReturnEntry {
   refundGivenAt     DateTime?
   refundGivenAmount Float?
 
+  // Refund method & auto-send tracking
+  refundMethod       String?   // bkash_manual | nagad_manual | bkash_auto | nagad_auto | cash | bank
+  refundPhoneNumber  String?   // customer phone for bKash/Nagad send
+  refundGatewayTxId  String?   // txn ID from bKash/Nagad after auto-refund
+  refundInitiatedAt  DateTime? // when auto-refund was triggered
+  refundFailReason   String?   // error message if auto-refund failed
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

@@ -225,6 +225,15 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
   const [scrapePreview, setScrapePreview] = useState<string | null>(null);
   const [knowledgeSaving, setKnowledgeSaving] = useState(false);
   const [unlinkingId, setUnlinkingId] = useState<number | null>(null);
+  // Payment credentials state
+  const [payCreds, setPayCreds] = useState<{ method: string; type: string; isActive: boolean }[]>([]);
+  const [paySelected, setPaySelected] = useState<string | null>(null);
+  const [payFields, setPayFields] = useState<Record<string, string>>({});
+  const [paySandbox, setPaySandbox] = useState(true);
+  const [paySaving, setPaySaving] = useState(false);
+  const [payTesting, setPayTesting] = useState(false);
+  const [payTestResult, setPayTestResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [payDeleting, setPayDeleting] = useState<string | null>(null);
   // WhatsApp settings state
   const [waToken, setWaToken] = useState('');
   const [waSaving, setWaSaving] = useState(false);
@@ -248,11 +257,12 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [biz, modes, tut, linked] = await Promise.all([
+      const [biz, modes, tut, linked, payCr] = await Promise.all([
         request<any>(`${BASE}/settings`),
         request<any>(`${BASE}/modes`),
         request<any>(`${BASE}/tutorials`).catch(() => null),
         request<any>(`${API_BASE}/page/${pageId}/linked-pages`).catch(() => []),
+        request<any>(`${API_BASE}/pages/${pageId}/payment-credentials`).catch(() => []),
       ]);
       setS(prev => ({
         ...prev, ...biz, ...modes,
@@ -262,6 +272,7 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
       }));
       if (tut?.facebookAccessToken) setFbTutorialUrl(tut.facebookAccessToken);
       setLinkedPages(Array.isArray(linked) ? linked : []);
+      setPayCreds(Array.isArray(payCr) ? payCr : []);
     } catch (e: any) { onToast(e.message, 'error'); }
     finally { setLoading(false); }
   }, [pageId]);
@@ -1192,6 +1203,193 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
               </div>
             </div>
           )}
+        </Section>
+
+        {/* Payment Auto-Verification */}
+        <Section title={copy('💳 Payment Auto-Verification', '💳 Payment Auto-Verification')} desc={copy('Bot customer-এর payment auto-verify করবে। না থাকলে customer screenshot/TxID দিলে manually review করতে হবে।', 'Bot will auto-verify customer payments. Without this, screenshot/TxID review is manual.')}>
+          {(() => {
+            const PAY_OPTS = [
+              {
+                key: 'bkash', icon: '📱', title: 'bKash Merchant (Direct)', badge: copy('RECOMMENDED', 'RECOMMENDED'), badgeColor: '#22c55e',
+                desc: copy('Customer TxID দিলে bot bKash API-তে auto verify করবে।', 'Bot auto-verifies customer TxID via bKash API.'),
+                flow: copy('Customer TxID দেয় → Bot verify করে → Order auto-confirm ✅', 'Customer gives TxID → Bot verifies → Order auto-confirm ✅'),
+                fields: [
+                  { key: 'app_key', label: 'App Key', ph: 'bKash App Key' },
+                  { key: 'app_secret', label: 'App Secret', ph: 'bKash App Secret' },
+                  { key: 'username', label: 'Username', ph: 'Merchant Portal Username' },
+                  { key: 'password', label: 'Password', ph: 'Merchant Portal Password', secret: true },
+                ],
+              },
+              {
+                key: 'nagad', icon: '💰', title: 'Nagad Merchant (Direct)', badge: null, badgeColor: '',
+                desc: copy('Customer TxID দিলে bot Nagad API-তে auto verify করবে।', 'Bot auto-verifies customer TxID via Nagad API.'),
+                flow: copy('Customer TxID দেয় → Bot verify করে → Order auto-confirm ✅', 'Customer gives TxID → Bot verifies → Order auto-confirm ✅'),
+                fields: [
+                  { key: 'merchant_id', label: 'Merchant ID', ph: 'Nagad Merchant ID' },
+                  { key: 'api_key', label: 'API Key', ph: 'Nagad API Key', secret: true },
+                ],
+              },
+              {
+                key: 'sslcommerz', icon: '🌐', title: 'SSLCommerz Gateway', badge: 'POPULAR', badgeColor: '#3b82f6',
+                desc: copy('Bot customer কে payment link পাঠাবে। bKash/Nagad/Card সব accept করে।', 'Bot sends a payment link. Accepts bKash, Nagad, and cards.'),
+                flow: copy('Bot link পাঠায় → Customer pay করে → Order auto-confirm ✅', 'Bot sends link → Customer pays → Order auto-confirm ✅'),
+                fields: [
+                  { key: 'store_id', label: 'Store ID', ph: 'SSLCommerz Store ID' },
+                  { key: 'store_passwd', label: 'Store Password', ph: 'SSLCommerz Store Password', secret: true },
+                ],
+              },
+            ];
+
+            const activeCred = payCreds.find(c => c.isActive);
+            const opt = PAY_OPTS.find(o => o.key === paySelected);
+
+            const handlePaySave = async () => {
+              if (!opt) return;
+              setPaySaving(true); setPayTestResult(null);
+              try {
+                await request(`${API_BASE}/pages/${pageId}/payment-credentials`, {
+                  method: 'POST',
+                  body: JSON.stringify({ method: opt.key, credentials: { ...payFields, sandbox: paySandbox ? 'true' : 'false' }, isActive: true }),
+                });
+                setPayCreds(prev => {
+                  const filtered = prev.filter(c => c.method !== opt.key);
+                  return [...filtered, { method: opt.key, type: ['bkash','nagad'].includes(opt.key) ? 'direct' : 'gateway', isActive: true }];
+                });
+                onToast(copy('✅ Payment credentials সেভ হয়েছে', '✅ Payment credentials saved'));
+                setPaySelected(null); setPayFields({});
+              } catch (e: any) { onToast(e.message, 'error'); }
+              finally { setPaySaving(false); }
+            };
+
+            const handlePayTest = async () => {
+              if (!opt) return;
+              setPayTesting(true); setPayTestResult(null);
+              try {
+                await request(`${API_BASE}/pages/${pageId}/payment-credentials`, {
+                  method: 'POST',
+                  body: JSON.stringify({ method: opt.key, credentials: { ...payFields, sandbox: paySandbox ? 'true' : 'false' }, isActive: true }),
+                });
+                const r = await request<any>(`${API_BASE}/pages/${pageId}/payment-credentials/${opt.key}/test`, { method: 'POST' });
+                setPayTestResult({ ok: r.ok, message: r.message });
+              } catch (e: any) { setPayTestResult({ ok: false, message: e.message }); }
+              finally { setPayTesting(false); }
+            };
+
+            const handlePayDelete = async (method: string) => {
+              setPayDeleting(method);
+              try {
+                await request(`${API_BASE}/pages/${pageId}/payment-credentials/${method}`, { method: 'DELETE' });
+                setPayCreds(prev => prev.filter(c => c.method !== method));
+                onToast(copy('Credentials মুছে ফেলা হয়েছে', 'Credentials removed'));
+                if (paySelected === method) { setPaySelected(null); setPayFields({}); }
+              } catch (e: any) { onToast(e.message, 'error'); }
+              finally { setPayDeleting(null); }
+            };
+
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {/* Active badge */}
+                {activeCred && !paySelected && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderRadius: 10, background: '#d1fae5', border: '1.5px solid #10b981' }}>
+                    <span style={{ fontSize: 18 }}>{PAY_OPTS.find(o => o.key === activeCred.method)?.icon || '💳'}</span>
+                    <span style={{ fontWeight: 700, fontSize: 13, color: '#065f46' }}>
+                      {copy('সক্রিয়:', 'Active:')} {PAY_OPTS.find(o => o.key === activeCred.method)?.title || activeCred.method}
+                    </span>
+                    <button onClick={() => handlePayDelete(activeCred.method)} disabled={payDeleting === activeCred.method}
+                      style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: 12, fontWeight: 700, padding: '4px 10px' }}>
+                      {payDeleting === activeCred.method ? '...' : copy('🗑 সরান', '🗑 Remove')}
+                    </button>
+                  </div>
+                )}
+
+                {/* Fallback note */}
+                {!activeCred && !paySelected && (
+                  <div style={{ fontSize: 12.5, color: th.muted, padding: '10px 14px', borderRadius: 8, background: th.surface, border: `1px dashed ${th.border}` }}>
+                    ⚠️ {copy('কোনো payment method configure করা নেই। Customer TxID/screenshot দিলে manually review করতে হবে।', 'No payment method configured. Customer TxID/screenshot will require manual review.')}
+                  </div>
+                )}
+
+                {/* Option cards (only when nothing selected) */}
+                {!paySelected && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {PAY_OPTS.map(o => {
+                      const existing = payCreds.find(c => c.method === o.key);
+                      return (
+                        <div key={o.key} onClick={() => { setPaySelected(o.key); setPayFields({}); setPayTestResult(null); setPaySandbox(true); }}
+                          style={{ borderRadius: 12, padding: '13px 16px', cursor: 'pointer', border: `1.5px solid ${existing?.isActive ? '#10b981' : th.border}`, background: existing?.isActive ? '#f0fdf4' : th.surface, transition: 'all 150ms' }}
+                          onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.borderColor = th.accent; (e.currentTarget as HTMLDivElement).style.transform = 'translateX(3px)'; }}
+                          onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = existing?.isActive ? '#10b981' : th.border; (e.currentTarget as HTMLDivElement).style.transform = 'translateX(0)'; }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                            <span style={{ fontSize: 22 }}>{o.icon}</span>
+                            <span style={{ fontWeight: 800, fontSize: 14, color: th.text }}>{o.title}</span>
+                            {o.badge && <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 20, background: o.badgeColor + '20', color: o.badgeColor }}>{o.badge}</span>}
+                            {existing?.isActive && <span style={{ marginLeft: 'auto', fontSize: 11, background: '#d1fae5', color: '#065f46', borderRadius: 4, padding: '1px 8px', fontWeight: 700 }}>✅ Active</span>}
+                          </div>
+                          <div style={{ fontSize: 12.5, color: th.muted, lineHeight: 1.5, marginBottom: 4 }}>{o.desc}</div>
+                          <div style={{ fontSize: 12, color: th.accent, fontWeight: 600 }}>→ {o.flow}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Credential form */}
+                {paySelected && opt && (
+                  <div style={{ borderRadius: 12, border: `2px solid ${th.accent}`, padding: '16px 18px', background: th.surface }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                      <span style={{ fontSize: 22 }}>{opt.icon}</span>
+                      <span style={{ fontWeight: 800, fontSize: 15, color: th.text }}>{opt.title}</span>
+                      <button onClick={() => { setPaySelected(null); setPayFields({}); setPayTestResult(null); }}
+                        style={{ marginLeft: 'auto', background: 'none', border: 'none', color: th.muted, cursor: 'pointer', fontSize: 18 }}>✕</button>
+                    </div>
+
+                    {/* Sandbox toggle */}
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, cursor: 'pointer', fontSize: 13 }}>
+                      <input type="checkbox" checked={paySandbox} onChange={e => setPaySandbox(e.target.checked)} style={{ accentColor: th.accent }} />
+                      <span style={{ color: th.muted }}>{copy('Sandbox/Test mode (live তে দিতে uncheck করুন)', 'Sandbox/Test mode (uncheck for live)')}</span>
+                    </label>
+
+                    {/* Fields */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(200px,1fr))', gap: 10, marginBottom: 14 }}>
+                      {opt.fields.map((f: any) => (
+                        <div key={f.key}>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: th.muted, marginBottom: 4 }}>{f.label}</div>
+                          <input
+                            type={f.secret ? 'password' : 'text'}
+                            placeholder={f.ph}
+                            value={payFields[f.key] || ''}
+                            onChange={e => setPayFields(prev => ({ ...prev, [f.key]: e.target.value }))}
+                            style={{ ...inp, width: '100%', boxSizing: 'border-box' }}
+                          />
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Test result */}
+                    {payTestResult && (
+                      <div style={{ marginBottom: 12, padding: '8px 12px', borderRadius: 8, fontSize: 13, fontWeight: 600,
+                        background: payTestResult.ok ? '#d1fae5' : '#fee2e2', color: payTestResult.ok ? '#065f46' : '#991b1b' }}>
+                        {payTestResult.ok ? '✅' : '❌'} {payTestResult.message}
+                      </div>
+                    )}
+
+                    {/* Action buttons */}
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      <button onClick={handlePayTest} disabled={payTesting || paySaving}
+                        style={{ ...th.btnGhost, fontSize: 13, padding: '7px 16px' }}>
+                        {payTesting ? <Spinner size={13} color={th.accent} /> : copy('🔍 Test Connection', 'Test Connection')}
+                      </button>
+                      <button onClick={handlePaySave} disabled={paySaving || payTesting}
+                        style={{ ...th.btnPrimary, fontSize: 13, padding: '7px 18px' }}>
+                        {paySaving ? <Spinner size={13} color="#fff" /> : copy('💾 Save', 'Save')}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </Section>
 
         {/* Web Order Toggle */}

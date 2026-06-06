@@ -5,6 +5,8 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { PaymentVerifyService } from '../payment-verify/payment-verify.service';
+import { MessengerService } from '../messenger/messenger.service';
 import {
   aggregateMetrics,
   computeProfits,
@@ -39,7 +41,11 @@ export interface OrderStatusDist {
 export class AccountingService {
   private readonly logger = new Logger(AccountingService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly paymentVerify: PaymentVerifyService,
+    private readonly messenger: MessengerService,
+  ) {}
 
   // ── Overview ──────────────────────────────────────────────────────────────
 
@@ -480,21 +486,129 @@ export class AccountingService {
   }
 
   async confirmRefund(pageId: number, returnId: number, givenAmount: number) {
+    return this.initiateRefund(pageId, returnId, {
+      method: 'bkash_manual',
+      givenAmount,
+    });
+  }
+
+  async initiateRefund(
+    pageId: number,
+    returnId: number,
+    dto: {
+      method: string;
+      givenAmount: number;
+      phoneNumber?: string;
+    },
+  ) {
     const entry = await this.prisma.returnEntry.findUnique({
       where: { id: returnId },
-      include: { order: { select: { pageIdRef: true } } },
+      include: {
+        order: {
+          select: {
+            pageIdRef: true,
+            id: true,
+            customerName: true,
+            customerPsid: true,
+            phone: true,
+          },
+        },
+      },
     });
     if (!entry || entry.order.pageIdRef !== pageId)
       throw new NotFoundException('Return entry not found');
-    this.validateNonNegative(givenAmount, 'givenAmount');
-    return this.prisma.returnEntry.update({
+    this.validateNonNegative(dto.givenAmount, 'givenAmount');
+
+    const isAuto = dto.method === 'bkash_auto' || dto.method === 'nagad_auto';
+    const phone = dto.phoneNumber || entry.order.phone || '';
+    const reference = `refund-order-${entry.order.id}`;
+
+    let gatewayTxId: string | undefined;
+    let failReason: string | undefined;
+
+    if (isAuto) {
+      const result = dto.method === 'bkash_auto'
+        ? await this.paymentVerify.refundViaBkash(pageId, dto.givenAmount, phone, reference)
+        : await this.paymentVerify.refundViaNagad(pageId, dto.givenAmount, phone, reference);
+
+      if (result.success) {
+        gatewayTxId = result.txId;
+      } else {
+        failReason = result.errorMessage;
+        // auto failed — save the failure, keep status pending so merchant can retry manually
+        await this.prisma.returnEntry.update({
+          where: { id: returnId },
+          data: {
+            refundMethod: dto.method,
+            refundPhoneNumber: phone || null,
+            refundInitiatedAt: new Date(),
+            refundFailReason: failReason,
+          },
+        });
+        return {
+          success: false,
+          errorMessage: failReason,
+          entry: await this.prisma.returnEntry.findUnique({ where: { id: returnId } }),
+        };
+      }
+    }
+
+    const updated = await this.prisma.returnEntry.update({
       where: { id: returnId },
       data: {
         refundStatus: 'given',
         refundGivenAt: new Date(),
-        refundGivenAmount: givenAmount,
+        refundGivenAmount: dto.givenAmount,
+        refundMethod: dto.method,
+        refundPhoneNumber: phone || null,
+        refundGatewayTxId: gatewayTxId ?? null,
+        refundInitiatedAt: new Date(),
+        refundFailReason: null,
       },
     });
+
+    // Notify customer via Messenger (fire-and-forget)
+    void this.sendRefundNotification(entry.order, dto.givenAmount, dto.method, gatewayTxId);
+
+    return { success: true, gatewayTxId, entry: updated };
+  }
+
+  private async sendRefundNotification(
+    order: { customerPsid: string; id: number; customerName?: string | null; pageIdRef: number },
+    amount: number,
+    method: string,
+    gatewayTxId?: string,
+  ) {
+    if (!order.customerPsid || order.customerPsid === 'WEB') return;
+
+    const page = await this.prisma.page.findUnique({
+      where: { id: order.pageIdRef },
+      select: { pageId: true, currencySymbol: true },
+    });
+    if (!page) return;
+
+    const cur = page.currencySymbol || '৳';
+    const methodLabel: Record<string, string> = {
+      bkash_auto: 'bKash (Auto)',
+      nagad_auto: 'Nagad (Auto)',
+      bkash_manual: 'bKash',
+      nagad_manual: 'Nagad',
+      cash: 'নগদ (Cash)',
+      bank: 'Bank Transfer',
+    };
+    const label = methodLabel[method] || method;
+
+    let msg = `✅ আপনার রিফান্ড সম্পন্ন হয়েছে!\n`;
+    msg += `💰 পরিমাণ: ${cur}${amount}\n`;
+    msg += `📱 মাধ্যম: ${label}\n`;
+    if (gatewayTxId) msg += `🔖 TxID: ${gatewayTxId}\n`;
+    msg += `📦 অর্ডার #${order.id}`;
+
+    try {
+      await this.messenger.sendText(page.pageId, order.customerPsid, msg);
+    } catch (err) {
+      this.logger.warn(`[Accounting] Refund notification failed for order ${order.id}: ${err.message}`);
+    }
   }
 
   async markRefundNotApplicable(pageId: number, returnId: number) {
