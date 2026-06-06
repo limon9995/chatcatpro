@@ -239,6 +239,7 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
   const [smsToken, setSmsToken] = useState<string | null>(null);
   const [smsCopied, setSmsCopied] = useState(false);
   const [smsToggling, setSmsToggling] = useState(false);
+  const [selectedPayModeKey, setSelectedPayModeKey] = useState<string>('sms');
   // WhatsApp settings state
   const [waToken, setWaToken] = useState('');
   const [waSaving, setWaSaving] = useState(false);
@@ -1332,8 +1333,9 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
             const activeGatewayKey = activeCred && ['sslcommerz','shurjopay','zinipay'].includes(activeCred.method) ? activeCred.method : null;
             const smsActive = s.smsGatewayEnabled;
             const activeModeNum = smsActive ? 1 : activeDirectKey ? 2 : activeGatewayKey ? 3 : 4;
-            const [selectedModeKey, setSelectedModeKey] = useState<string>(MODES.find(m => m.num === activeModeNum)?.key ?? 'sms');
-            const selectedMode = MODES.find(m => m.key === selectedModeKey)!;
+            const selectedModeKey = selectedPayModeKey;
+            const setSelectedModeKey = setSelectedPayModeKey;
+            const selectedMode = MODES.find(m => m.key === selectedModeKey) ?? MODES[0];
             const col = MC[selectedMode.mck];
 
             const opt = (selectedMode.subModes ?? []).find((sub: any) => sub.key === paySelected) as any;
