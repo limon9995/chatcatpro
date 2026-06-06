@@ -116,11 +116,9 @@ export function CatalogPage({ th, pageId, onToast }: {
   };
 
   const saveOwnUrl = async () => {
-    const url = ownUrlInput.trim();
-    if (url && !/^https?:\/\/.+/.test(url)) {
-      onToast(copy('সঠিক URL দিন (https:// দিয়ে শুরু)', 'Enter a valid URL starting with https://'), 'error');
-      return;
-    }
+    let url = ownUrlInput.trim();
+    if (url && !/^https?:\/\/.+/.test(url)) url = 'https://' + url;
+    if (url) setOwnUrlInput(url);
     setSavingOwnUrl(true);
     try {
       await patchSettings({ websiteUrl: url || null });
@@ -235,7 +233,15 @@ export function CatalogPage({ th, pageId, onToast }: {
                       color: th.text, fontSize: 13, fontFamily: 'monospace', outline: 'none',
                     }}
                     value={ownUrlInput}
-                    onChange={e => setOwnUrlInput(e.target.value)}
+                    onChange={e => {
+                      let v = e.target.value;
+                      if (v && !v.startsWith('http') && !v.startsWith('/')) v = 'https://' + v;
+                      setOwnUrlInput(v);
+                    }}
+                    onBlur={e => {
+                      let v = e.target.value.trim();
+                      if (v && !/^https?:\/\//.test(v)) setOwnUrlInput('https://' + v);
+                    }}
                     placeholder="https://yourshop.com"
                     onKeyDown={e => { if (e.key === 'Enter') saveOwnUrl(); if (e.key === 'Escape') setEditingOwnUrl(false); }}
                   />

@@ -30,7 +30,10 @@ async function bootstrap() {
       contentSecurityPolicy: {
         directives: {
           defaultSrc: ["'self'"],
-          scriptSrc: ["'self'"],
+          // Catalog pages use inline onclick= handlers — must allow unsafe-inline
+          scriptSrc: ["'self'", "'unsafe-inline'"],
+          // Disable Helmet's default script-src-attr 'none' so inline event handlers work
+          scriptSrcAttr: false,
           styleSrc: [
             "'self'",
             "'unsafe-inline'",
@@ -38,6 +41,8 @@ async function bootstrap() {
           ],
           fontSrc: ["'self'", 'https://fonts.gstatic.com'],
           imgSrc: ["'self'", 'data:', 'https:'],
+          // Allow API calls to qrserver for QR code images
+          connectSrc: ["'self'", 'https://api.qrserver.com'],
         },
       },
     }),
