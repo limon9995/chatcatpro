@@ -1289,6 +1289,10 @@ async function woSubmit(){
   var note=document.getElementById('woNote').value.trim();
   if(!name){woSetErr('woErr0','নাম দিন');return;}
   if(!phone){woSetErr('woErr0','ফোন নম্বর দিন');return;}
+  var phoneDigits=phone.replace(/\D/g,'');
+  if(phoneDigits.length<10||phoneDigits.length>12){woSetErr('woErr0','সঠিক ফোন নম্বর দিন (যেমন: 01XXXXXXXXX)');return;}
+  var normPhone=phoneDigits.length===12&&phoneDigits.startsWith('88')?phoneDigits.slice(2):phoneDigits;
+  if(normPhone.length!==11||!normPhone.startsWith('0')){woSetErr('woErr0','সঠিক বাংলাদেশি ফোন নম্বর দিন (01XXXXXXXXX)');return;}
   if(!addr){woSetErr('woErr0','ঠিকানা দিন');return;}
   woSetErr('woErr0','');
   var btn=document.getElementById('woBtnSubmit');
