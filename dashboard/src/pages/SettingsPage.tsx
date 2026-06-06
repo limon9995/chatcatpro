@@ -1172,12 +1172,26 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
 
           {/* Extra config for advance modes */}
           {s.paymentMode !== 'cod' && (
-            <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(170px,1fr))', gap: 12 }}>
-              <div>
-                <Label text="Advance Amount (৳)" hint={copy('0 দিলে শুধু delivery fee নেবে, >0 দিলে ওই পরিমাণ', 'Use 0 to collect only the delivery fee; use a higher amount to collect that value')}/>
-                <input style={inp} type="number" min={0} value={s.advanceAmount || ''}
-                  onChange={e => setS(p => ({ ...p, advanceAmount: Number(e.target.value) }))} placeholder="0"/>
-              </div>
+            <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
+
+              {/* Full Advance info note — no fixed amount needed */}
+              {s.paymentMode === 'full_advance' ? (
+                <div style={{ padding: '10px 14px', borderRadius: 9, background: '#f0fdf4', border: '1px solid #86efac' }}>
+                  <span style={{ fontSize: 12.5, color: '#166534', fontWeight: 600 }}>
+                    ✅ {copy('Full Advance mode-এ bot প্রতিটা order-এর মোট দাম (product + delivery fee) automatically নেবে। আলাদা করে amount দেওয়ার দরকার নেই।', 'In Full Advance mode, the bot automatically collects the full order total (product price + delivery fee). No fixed amount needed.')}
+                  </span>
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(170px,1fr))', gap: 12 }}>
+                  <div>
+                    <Label text="Advance Amount (৳)" hint={copy('0 দিলে শুধু delivery fee নেবে, >0 দিলে ওই fixed পরিমাণ সব order-এ নেবে', 'Use 0 to collect only the delivery fee; enter an amount to collect that fixed value for every order')}/>
+                    <input style={inp} type="number" min={0} value={s.advanceAmount || ''}
+                      onChange={e => setS(p => ({ ...p, advanceAmount: Number(e.target.value) }))} placeholder="0"/>
+                  </div>
+                </div>
+              )}
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(170px,1fr))', gap: 12 }}>
               <div>
                 <Label text="Bkash Number" hint={copy('Customer কে দেখানো হবে', 'Shown to customers')}/>
                 <input style={inp} value={s.advanceBkash} placeholder="01XXXXXXXXX"
@@ -1193,6 +1207,7 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
                 <input style={inp} value={s.advanceRocket ?? ''} placeholder="01XXXXXXXXX"
                   onChange={e => setS(p => ({ ...p, advanceRocket: e.target.value }))} />
               </div>
+            </div>
             </div>
           )}
           {s.paymentMode !== 'cod' && (
