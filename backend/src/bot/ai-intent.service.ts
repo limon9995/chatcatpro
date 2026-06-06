@@ -113,10 +113,7 @@ export class AiIntentService {
   }
 
   isAvailable(): boolean {
-    const hasKey =
-      this.provider === 'gemini'
-        ? this.geminiRotator.isAvailable()
-        : !!this.apiKey;
+    const hasKey = this.geminiRotator.isAvailable() || !!this.apiKey;
     return hasKey && Date.now() > this.cooldownUntil;
   }
 
@@ -303,10 +300,11 @@ export class AiIntentService {
         this.logger.warn(`[AiIntent] No Gemini key available — keyword fallback`);
         return null;
       }
-      this.logger.log(`[AiIntent] ${label} — Gemini (${this.model})`);
-      const raw = await this.attemptGemini(messages, maxTokens, temperature);
-      if (!raw) return null;
-      return { raw };
+      this.logger.log(`[AiIntent] ${label} — Gemini rotation (${this.model})`);
+      const geminiRaw = await this.attemptGemini(messages, maxTokens, temperature);
+      if (geminiRaw) return { raw: geminiRaw };
+      // All Gemini keys exhausted — fall through to OpenAI
+      this.logger.warn(`[AiIntent] All Gemini keys exhausted — trying OpenAI fallback`);
     }
 
     if (!this.apiKey) {
