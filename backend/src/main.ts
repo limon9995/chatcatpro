@@ -100,12 +100,21 @@ async function bootstrap() {
       // Allow requests with no Origin header (server-to-server, curl, etc.)
       // but never allow the literal string "null" (sandboxed iframe / file://)
       if (!origin) return cb(null, true);
+      // Always allow same-host requests (catalog pages fetch back to the API server)
+      const serverHost = process.env.API_BASE_URL || '';
+      if (serverHost && origin === serverHost) return cb(null, true);
       if (!allowedOrigins) {
         if (isProduction)
           return cb(new Error(`CORS blocked: ${origin} — set CORS_ORIGINS`));
         return cb(null, true);
       }
       if (allowedOrigins.includes(origin)) return cb(null, true);
+      // Allow any subdomain of allowed origins (e.g. api.chatcat.pro when app.chatcat.pro is allowed)
+      const originHost = new URL(origin).hostname;
+      const allowed = allowedOrigins.some(o => {
+        try { return new URL(o).hostname.split('.').slice(-2).join('.') === originHost.split('.').slice(-2).join('.'); } catch { return false; }
+      });
+      if (allowed) return cb(null, true);
       cb(new Error(`CORS blocked: ${origin}`));
     },
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
