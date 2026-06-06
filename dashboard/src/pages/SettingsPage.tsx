@@ -1234,21 +1234,30 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
 
         {/* Payment Verification — 4 numbered modes */}
         <Section
-          title={copy('💳 Payment Verification Mode', '💳 Payment Verification Mode')}
-          desc={copy('কোন পদ্ধতিতে customer-এর payment verify হবে তা বেছে নিন। Mode 4 সবসময় fallback হিসেবে কাজ করে।', 'Choose how customer payments are verified. Mode 4 always works as a fallback.')}
+          title={copy('💳 Payment Verification', '💳 Payment Verification')}
+          desc={copy('কোন পদ্ধতিতে customer-এর payment verify হবে তা বেছে নিন। একটাই active থাকবে — বাকিগুলো fallback।', 'Choose how customer payments are verified. Only one is active at a time.')}
         >
           {(() => {
+            // ── Color palette per mode ───────────────────────────────────────
+            const MC = {
+              sms:     { c: '#8b5cf6', bg: 'rgba(139,92,246,0.12)', border: 'rgba(139,92,246,0.35)', light: 'rgba(139,92,246,0.06)' },
+              direct:  { c: '#10b981', bg: 'rgba(16,185,129,0.12)', border: 'rgba(16,185,129,0.35)', light: 'rgba(16,185,129,0.06)' },
+              gateway: { c: '#3b82f6', bg: 'rgba(59,130,246,0.12)', border: 'rgba(59,130,246,0.35)', light: 'rgba(59,130,246,0.06)' },
+              manual:  { c: '#f59e0b', bg: 'rgba(245,158,11,0.12)',  border: 'rgba(245,158,11,0.35)',  light: 'rgba(245,158,11,0.06)'  },
+            } as Record<string, { c: string; bg: string; border: string; light: string }>;
+
             // ── Mode definitions ────────────────────────────────────────────
             const MODES = [
               {
-                num: 1, key: 'sms', icon: '📲',
-                title: copy('SMS Gateway (Phone Verify)', 'SMS Gateway (Phone Verify)'),
-                badge: copy('সবচেয়ে সহজ', 'Easiest'), badgeColor: '#8b5cf6',
-                fee: copy('১% fee — wallet থেকে কাটবে প্রতি verify-এ', '1% fee per verify — deducted from wallet'),
-                feeColor: '#7c3aed',
-                works: copy('Personal + Merchant সব account — bKash / Nagad / Rocket', 'Personal + Merchant — bKash / Nagad / Rocket'),
-                flow: copy('Customer TxID/phone দেয় → Bot আপনার phone SMS-এ match করে → Auto confirm ✅', 'Customer gives TxID/phone → Bot matches your phone SMS → Auto confirm ✅'),
-                note: copy('কোনো merchant API লাগবে না। Android phone-এ SMS Forwarder app লাগাতে হবে। নিচে SMS Gateway section দেখুন।', 'No merchant API needed. Requires SMS Forwarder app on Android phone. See SMS Gateway section below.'),
+                num: 1, key: 'sms', mck: 'sms', icon: '📲',
+                title: copy('SMS Gateway', 'SMS Gateway'),
+                subtitle: copy('Phone Verify', 'Phone Verify'),
+                badge: copy('সবচেয়ে সহজ', 'Easiest'),
+                feeLabel: '১%', feeDesc: copy('wallet থেকে প্রতি verify-এ', 'per verify from wallet'),
+                works: copy('Personal + Merchant — bKash / Nagad / Rocket', 'Personal + Merchant — bKash / Nagad / Rocket'),
+                flow: copy('Customer TxID দেয় → Bot আপনার phone SMS-এ match করে → Auto confirm ✅', 'Customer gives TxID → Bot matches phone SMS → Auto confirm ✅'),
+                note: copy('কোনো merchant API লাগবে না। Android-এ SMS Forwarder app ইন্সটল করুন।', 'No merchant API needed. Install SMS Forwarder app on Android.'),
+                accountingNote: copy('প্রতি verify-এ ১% fee wallet থেকে কাটবে → Accounting-এ "SMS Verify Fee" হিসেবে দেখাবে।', '1% fee per verify deducted from wallet → appears in Accounting as "SMS Verify Fee".'),
                 fields: [],
               },
               {
@@ -1256,93 +1265,78 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
                 title: copy('Direct API (bKash/Nagad Merchant)', 'Direct API (bKash/Nagad Merchant)'),
                 badge: copy('Merchant Account লাগবে', 'Requires Merchant Account'), badgeColor: '#059669',
                 fee: copy('bKash: ~1.5% | Nagad: ~1.5% (gateway নিজে কাটে)', 'bKash: ~1.5% | Nagad: ~1.5% (charged by gateway)'),
-                feeColor: '#065f46',
+                mck: 'direct',
                 works: copy('শুধু bKash/Nagad Merchant Account', 'bKash/Nagad Merchant Account only'),
                 flow: copy('Customer TxID দেয় → Bot API-তে verify করে → Auto confirm ✅', 'Customer gives TxID → Bot verifies via API → Auto confirm ✅'),
-                note: copy('bKash বা Nagad-এর merchant portal থেকে API credentials নিতে হবে।', 'Get API credentials from bKash or Nagad merchant portal.'),
+                note: copy('bKash বা Nagad merchant portal থেকে API credentials নিতে হবে।', 'Get API credentials from bKash or Nagad merchant portal.'),
+                feeLabel: '~১.৫%', feeDesc: copy('gateway নিজে কাটে', 'charged by gateway'),
+                accountingNote: copy('Payment fee bKash/Nagad নিজেই কাটে — আপনার wallet থেকে কিছু কাটে না।', 'Gateway fee is deducted by bKash/Nagad — nothing from your wallet.'),
                 subModes: [
-                  {
-                    key: 'bkash', icon: '📱', title: 'bKash Merchant (Direct)',
-                    fee: '~1.5%',
-                    fields: [
-                      { key: 'app_key', label: 'App Key', ph: 'bKash App Key' },
-                      { key: 'app_secret', label: 'App Secret', ph: 'bKash App Secret' },
-                      { key: 'username', label: 'Username', ph: 'Merchant Portal Username' },
-                      { key: 'password', label: 'Password', ph: 'Merchant Portal Password', secret: true },
-                    ],
-                  },
-                  {
-                    key: 'nagad', icon: '💰', title: 'Nagad Merchant (Direct)',
-                    fee: '~1.5%',
-                    fields: [
-                      { key: 'merchant_id', label: 'Merchant ID', ph: 'Nagad Merchant ID' },
-                      { key: 'api_key', label: 'API Key', ph: 'Nagad API Key', secret: true },
-                    ],
-                  },
+                  { key: 'bkash', icon: '📱', title: 'bKash Merchant', fee: '~১.৫%', fields: [
+                    { key: 'app_key', label: 'App Key', ph: 'bKash App Key' },
+                    { key: 'app_secret', label: 'App Secret', ph: 'bKash App Secret' },
+                    { key: 'username', label: 'Username', ph: 'Merchant Portal Username' },
+                    { key: 'password', label: 'Password', ph: 'Merchant Portal Password', secret: true },
+                  ]},
+                  { key: 'nagad', icon: '💰', title: 'Nagad Merchant', fee: '~১.৫%', fields: [
+                    { key: 'merchant_id', label: 'Merchant ID', ph: 'Nagad Merchant ID' },
+                    { key: 'api_key', label: 'API Key', ph: 'Nagad API Key', secret: true },
+                  ]},
                 ],
                 fields: [],
               },
               {
-                num: 3, key: 'gateway', icon: '🌐',
-                title: copy('Payment Gateway (Link পাঠায়)', 'Payment Gateway (Sends Payment Link)'),
-                badge: copy('সব method accept করে', 'Accepts all methods'), badgeColor: '#3b82f6',
-                fee: copy('SSLCommerz: ~2.5% | ShurjoPay: ~2% | ZiniPay: ~2%', 'SSLCommerz: ~2.5% | ShurjoPay: ~2% | ZiniPay: ~2%'),
-                feeColor: '#1d4ed8',
-                works: copy('bKash / Nagad / Rocket / Card / Bank — সব একসাথে', 'bKash / Nagad / Rocket / Card / Bank — all in one'),
-                flow: copy('Bot payment link পাঠায় → Customer pay করে → Auto confirm ✅', 'Bot sends payment link → Customer pays → Auto confirm ✅'),
-                note: copy('Gateway-এর নিজস্ব checkout page-এ নিয়ে যাবে। customer কে TxID দিতে হবে না।', 'Takes customer to gateway checkout page. Customer doesn\'t need to share TxID.'),
+                num: 3, key: 'gateway', mck: 'gateway', icon: '🌐',
+                title: copy('Payment Gateway', 'Payment Gateway'),
+                subtitle: copy('Link পাঠায়', 'Sends Payment Link'),
+                badge: copy('সব method', 'All Methods'),
+                feeLabel: '~২-২.৫%', feeDesc: copy('gateway নিজে কাটে', 'charged by gateway'),
+                works: copy('bKash / Nagad / Rocket / Card / Bank', 'bKash / Nagad / Rocket / Card / Bank'),
+                flow: copy('Bot link পাঠায় → Customer pay করে → Auto confirm ✅', 'Bot sends link → Customer pays → Auto confirm ✅'),
+                note: copy('Gateway checkout page-এ নেয়। Customer TxID দিতে হয় না।', 'Goes to gateway checkout. Customer doesn\'t need to share TxID.'),
+                accountingNote: copy('Payment fee gateway নিজে কাটে — আপনার wallet থেকে কিছু কাটে না।', 'Gateway fee is deducted by the gateway — nothing from your wallet.'),
                 subModes: [
-                  {
-                    key: 'sslcommerz', icon: '🌐', title: 'SSLCommerz',
-                    fee: '~2.5%',
-                    fields: [
-                      { key: 'store_id', label: 'Store ID', ph: 'SSLCommerz Store ID' },
-                      { key: 'store_passwd', label: 'Store Password', ph: 'SSLCommerz Store Password', secret: true },
-                    ],
-                  },
-                  {
-                    key: 'shurjopay', icon: '💳', title: 'ShurjoPay',
-                    fee: '~2%',
-                    fields: [
-                      { key: 'username', label: 'Username', ph: 'ShurjoPay Username' },
-                      { key: 'password', label: 'Password', ph: 'ShurjoPay Password', secret: true },
-                      { key: 'prefix', label: 'Prefix', ph: 'e.g. SP' },
-                    ],
-                  },
-                  {
-                    key: 'zinipay', icon: '⚡', title: 'ZiniPay',
-                    fee: '~2%',
-                    fields: [
-                      { key: 'store_id', label: 'Store ID', ph: 'ZiniPay Store ID' },
-                      { key: 'api_key', label: 'API Key', ph: 'ZiniPay API Key', secret: true },
-                    ],
-                  },
+                  { key: 'sslcommerz', icon: '🔵', title: 'SSLCommerz', fee: '~২.৫%', fields: [
+                    { key: 'store_id', label: 'Store ID', ph: 'SSLCommerz Store ID' },
+                    { key: 'store_passwd', label: 'Store Password', ph: 'SSLCommerz Store Password', secret: true },
+                  ]},
+                  { key: 'shurjopay', icon: '🟠', title: 'ShurjoPay', fee: '~২%', fields: [
+                    { key: 'username', label: 'Username', ph: 'ShurjoPay Username' },
+                    { key: 'password', label: 'Password', ph: 'ShurjoPay Password', secret: true },
+                    { key: 'prefix', label: 'Prefix', ph: 'e.g. SP' },
+                  ]},
+                  { key: 'zinipay', icon: '⚡', title: 'ZiniPay', fee: '~২%', fields: [
+                    { key: 'store_id', label: 'Store ID', ph: 'ZiniPay Store ID' },
+                    { key: 'api_key', label: 'API Key', ph: 'ZiniPay API Key', secret: true },
+                  ]},
                 ],
                 fields: [],
               },
               {
-                num: 4, key: 'manual', icon: '📋',
-                title: copy('Manual TxID Review (সবসময় Fallback)', 'Manual TxID Review (Always Fallback)'),
-                badge: copy('সবসময় চালু', 'Always On'), badgeColor: '#64748b',
-                fee: copy('কোনো fee নেই', 'No fee'),
-                feeColor: '#16a34a',
-                works: copy('সব payment method — bKash / Nagad / Rocket / যেকোনো', 'All methods — bKash / Nagad / Rocket / anything'),
-                flow: copy('Customer TxID দেয় → Dashboard-এ জমা হয় → আপনি amount মিলিয়ে confirm করেন', 'Customer gives TxID → Stored in dashboard → You verify amount manually'),
-                note: copy('Mode 1/2/3 fail করলে বা configure না থাকলে এই mode কাজ করে। Orders → Payment Proof-এ দেখা যাবে।', 'Works when Mode 1/2/3 fails or not configured. View in Orders → Payment Proof.'),
+                num: 4, key: 'manual', mck: 'manual', icon: '📋',
+                title: copy('Manual TxID', 'Manual TxID'),
+                subtitle: copy('সবসময় Fallback', 'Always Fallback'),
+                badge: copy('সবসময় চালু', 'Always On'),
+                feeLabel: '০%', feeDesc: copy('কোনো fee নেই', 'No fee'),
+                works: copy('সব method — bKash / Nagad / Rocket / যেকোনো', 'All — bKash / Nagad / Rocket / anything'),
+                flow: copy('Customer TxID দেয় → Dashboard-এ জমা → আপনি amount মিলিয়ে confirm করেন', 'Customer gives TxID → Stored in dashboard → You manually verify'),
+                note: copy('Mode 1/2/3 fail বা configure না থাকলে এই mode চলে।', 'Runs when Mode 1/2/3 fails or is not configured.'),
+                accountingNote: copy('Manual verify → Orders-এ "Payment Proof" tab-এ দেখুন। Accounting-এ manual confirm করা orders দেখা যাবে।', 'Manual verify → check Orders "Payment Proof" tab. Confirmed orders appear in Accounting.'),
                 fields: [],
               },
             ];
 
-            // Active credential info
+            // ── Derived state ────────────────────────────────────────────────
             const activeCred = payCreds.find(c => c.isActive);
             const activeDirectKey = activeCred && ['bkash','nagad'].includes(activeCred.method) ? activeCred.method : null;
             const activeGatewayKey = activeCred && ['sslcommerz','shurjopay','zinipay'].includes(activeCred.method) ? activeCred.method : null;
             const smsActive = s.smsGatewayEnabled;
-
-            // Which mode number is currently configured
             const activeModeNum = smsActive ? 1 : activeDirectKey ? 2 : activeGatewayKey ? 3 : 4;
+            const [selectedModeKey, setSelectedModeKey] = useState<string>(MODES.find(m => m.num === activeModeNum)?.key ?? 'sms');
+            const selectedMode = MODES.find(m => m.key === selectedModeKey)!;
+            const col = MC[selectedMode.mck];
 
-            const opt = MODES.flatMap(m => m.subModes ?? []).find(s => s.key === paySelected) as any;
+            const opt = (selectedMode.subModes ?? []).find((sub: any) => sub.key === paySelected) as any;
 
             const handlePaySave = async () => {
               if (!opt) return;
@@ -1398,152 +1392,184 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
             };
 
             return (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 0, borderRadius: 14, overflow: 'hidden', border: `2px solid ${col.border}`, background: th.panel }}>
 
-                {/* Currently active mode banner */}
-                <div style={{ padding: '10px 14px', borderRadius: 10, background: '#f0fdf4', border: '1.5px solid #10b981', display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 16 }}>{MODES.find(m => m.num === activeModeNum)?.icon}</span>
-                  <span style={{ fontWeight: 700, fontSize: 13, color: '#065f46' }}>
-                    {copy('সক্রিয় Mode:', 'Active Mode:')} {activeModeNum} — {MODES.find(m => m.num === activeModeNum)?.title}
-                    {activeModeNum === 4 && <span style={{ fontWeight: 400, color: '#059669', marginLeft: 6 }}>{copy('(কোনো mode configure করা নেই, fallback চলছে)', '(no mode configured, running fallback)')}</span>}
-                  </span>
+                {/* ── Tab strip ──────────────────────────────────────────── */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', borderBottom: `2px solid ${col.border}` }}>
+                  {MODES.map(mode => {
+                    const mc = MC[mode.mck];
+                    const isSel = mode.key === selectedModeKey;
+                    const modeHasActive = mode.num === activeModeNum;
+                    return (
+                      <button key={mode.key}
+                        onClick={() => { setSelectedModeKey(mode.key); setPaySelected(null); setPayFields({}); setPayTestResult(null); }}
+                        style={{
+                          padding: '12px 6px 10px', border: 'none', cursor: 'pointer',
+                          borderRight: mode.num < 4 ? `1px solid ${isSel ? mc.border : 'rgba(148,163,184,0.12)'}` : 'none',
+                          background: isSel ? mc.bg : 'transparent',
+                          transition: 'background 150ms',
+                          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                          borderBottom: isSel ? `3px solid ${mc.c}` : '3px solid transparent',
+                          position: 'relative',
+                        }}
+                      >
+                        {modeHasActive && (
+                          <div style={{ position: 'absolute', top: 6, right: 8, width: 7, height: 7, borderRadius: '50%', background: mc.c, boxShadow: `0 0 6px ${mc.c}` }} />
+                        )}
+                        <span style={{ fontSize: 20 }}>{mode.icon}</span>
+                        <span style={{ fontSize: 11, fontWeight: 800, color: isSel ? mc.c : th.muted, lineHeight: 1.2, textAlign: 'center' }}>
+                          {mode.num}. {mode.title}
+                        </span>
+                        {mode.subtitle && <span style={{ fontSize: 10, color: isSel ? mc.c : th.muted, opacity: 0.8 }}>{mode.subtitle}</span>}
+                        <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 20,
+                          background: isSel ? mc.c + '25' : 'rgba(148,163,184,0.08)',
+                          color: isSel ? mc.c : th.muted }}>
+                          fee {mode.feeLabel}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
 
-                {/* 4 Mode tabs */}
-                {MODES.map(mode => {
-                  const isActive = mode.num === activeModeNum;
-                  const isManual = mode.key === 'manual';
-                  return (
-                    <div key={mode.key} style={{
-                      borderRadius: 12, border: `2px solid ${isActive ? '#10b981' : th.border}`,
-                      background: isActive ? (th.bg === '#0f172a' ? '#0d2b1a' : '#f0fdf4') : th.surface,
-                      overflow: 'hidden',
-                    }}>
-                      {/* Mode header */}
-                      <div style={{ padding: '14px 16px', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-                        {/* Number badge */}
-                        <div style={{
-                          flexShrink: 0, width: 30, height: 30, borderRadius: '50%',
-                          background: isActive ? '#10b981' : th.border,
-                          color: isActive ? '#fff' : th.muted,
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          fontWeight: 900, fontSize: 14,
-                        }}>{mode.num}</div>
-
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 5 }}>
-                            <span style={{ fontSize: 18 }}>{mode.icon}</span>
-                            <span style={{ fontWeight: 800, fontSize: 14, color: th.text }}>{mode.title}</span>
-                            <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: mode.badgeColor + '20', color: mode.badgeColor }}>{mode.badge}</span>
-                            {isActive && !isManual && <span style={{ fontSize: 11, background: '#d1fae5', color: '#065f46', borderRadius: 4, padding: '2px 8px', fontWeight: 700 }}>✅ চালু</span>}
-                            {isManual && <span style={{ fontSize: 11, background: '#f1f5f9', color: '#475569', borderRadius: 4, padding: '2px 8px', fontWeight: 700 }}>🔄 Fallback</span>}
-                          </div>
-
-                          {/* Fee info */}
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5 }}>
-                            <span style={{ fontSize: 11, fontWeight: 700, color: mode.feeColor, background: mode.feeColor + '15', padding: '2px 8px', borderRadius: 6 }}>
-                              💰 {mode.fee}
-                            </span>
-                          </div>
-
-                          <div style={{ fontSize: 12, color: th.muted, marginBottom: 3 }}>
-                            <span style={{ fontWeight: 600 }}>{copy('কাজ করে:', 'Works with:')} </span>{mode.works}
-                          </div>
-                          <div style={{ fontSize: 12, color: th.accent }}>→ {mode.flow}</div>
-                          <div style={{ fontSize: 11.5, color: th.muted, marginTop: 4, fontStyle: 'italic' }}>{mode.note}</div>
-                        </div>
+                {/* ── Detail panel ───────────────────────────────────────── */}
+                <div style={{ padding: '18px 20px', background: col.light }}>
+                  {/* Header row */}
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 14 }}>
+                    <div style={{ width: 42, height: 42, borderRadius: 12, background: col.bg, border: `2px solid ${col.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>
+                      {selectedMode.icon}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <span style={{ fontWeight: 900, fontSize: 16, color: col.c }}>{selectedMode.title}</span>
+                        {selectedMode.subtitle && <span style={{ fontSize: 13, color: th.textSub, fontWeight: 500 }}>— {selectedMode.subtitle}</span>}
+                        <span style={{ fontSize: 10.5, fontWeight: 800, padding: '3px 10px', borderRadius: 20, background: col.bg, color: col.c, border: `1px solid ${col.border}` }}>{selectedMode.badge}</span>
+                        {selectedMode.num === activeModeNum && (
+                          <span style={{ fontSize: 10.5, fontWeight: 800, padding: '3px 10px', borderRadius: 20, background: '#16a34a22', color: '#16a34a', border: '1px solid #16a34a44' }}>✅ {copy('এখন চালু', 'Active Now')}</span>
+                        )}
                       </div>
+                      <div style={{ marginTop: 6, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                        {/* Fee badge */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 8, background: col.bg, border: `1px solid ${col.border}` }}>
+                          <span style={{ fontSize: 13 }}>💰</span>
+                          <span style={{ fontSize: 12.5, fontWeight: 800, color: col.c }}>{selectedMode.feeLabel}</span>
+                          <span style={{ fontSize: 11.5, color: th.muted }}>{selectedMode.feeDesc}</span>
+                        </div>
+                        {/* Works with */}
+                        <div style={{ fontSize: 12, color: th.textSub }}><strong style={{ color: th.text }}>Works:</strong> {selectedMode.works}</div>
+                      </div>
+                    </div>
+                  </div>
 
-                      {/* Sub-modes (Direct API and Gateway) */}
-                      {mode.subModes && (
-                        <div style={{ borderTop: `1px solid ${th.border}`, padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                          <div style={{ fontSize: 12, fontWeight: 700, color: th.muted, marginBottom: 4 }}>
-                            {copy('Provider বেছে নিন:', 'Select Provider:')}
-                          </div>
-                          {mode.subModes.map(sub => {
-                            const existingCred = payCreds.find(c => c.method === sub.key);
-                            const isSubSelected = paySelected === sub.key;
-                            return (
-                              <div key={sub.key}>
-                                <div
-                                  onClick={() => { setPaySelected(isSubSelected ? null : sub.key); setPayFields({}); setPayTestResult(null); setPaySandbox(true); }}
-                                  style={{
-                                    display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
-                                    borderRadius: 9, cursor: 'pointer',
-                                    border: `1.5px solid ${isSubSelected ? th.accent : existingCred?.isActive ? '#10b981' : th.border}`,
-                                    background: isSubSelected ? th.accentSoft : existingCred?.isActive ? (th.bg === '#0f172a' ? '#0d2b1a' : '#f0fdf4') : th.bg,
-                                    transition: 'all 120ms',
-                                  }}
-                                >
-                                  <span style={{ fontSize: 18 }}>{sub.icon}</span>
-                                  <span style={{ fontWeight: 700, fontSize: 13, color: th.text }}>{sub.title}</span>
-                                  <span style={{ fontSize: 11, color: '#64748b', background: '#f1f5f9', padding: '1px 7px', borderRadius: 4 }}>fee: {sub.fee}</span>
-                                  {existingCred?.isActive && <span style={{ marginLeft: 'auto', fontSize: 11, background: '#d1fae5', color: '#065f46', borderRadius: 4, padding: '1px 8px', fontWeight: 700 }}>✅ Active</span>}
-                                  {existingCred?.isActive && (
-                                    <button onClick={e => { e.stopPropagation(); handlePayDelete(sub.key); }} disabled={payDeleting === sub.key}
-                                      style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: 12, fontWeight: 700, padding: '2px 8px' }}>
-                                      {payDeleting === sub.key ? '...' : '🗑'}
-                                    </button>
-                                  )}
-                                  <span style={{ marginLeft: existingCred?.isActive ? 0 : 'auto', fontSize: 13, color: th.muted }}>{isSubSelected ? '▲' : '▼'}</span>
+                  {/* Flow diagram */}
+                  <div style={{ padding: '10px 14px', borderRadius: 10, background: col.bg, border: `1px solid ${col.border}`, marginBottom: 12, fontSize: 12.5, color: col.c, fontWeight: 600 }}>
+                    🔄 {selectedMode.flow}
+                  </div>
+
+                  {/* Note */}
+                  <div style={{ fontSize: 12, color: th.muted, marginBottom: 14, fontStyle: 'italic' }}>
+                    ℹ️ {selectedMode.note}
+                  </div>
+
+                  {/* Accounting integration note */}
+                  <div style={{ padding: '8px 12px', borderRadius: 8, background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)', fontSize: 12, color: '#92400e', marginBottom: 16, display: 'flex', gap: 8 }}>
+                    <span>📊</span>
+                    <span><strong>{copy('Accounting:', 'Accounting:')}</strong> {selectedMode.accountingNote}</span>
+                  </div>
+
+                  {/* SMS mode — pointer */}
+                  {selectedMode.key === 'sms' && (
+                    <div style={{ padding: '12px 16px', borderRadius: 10, background: col.bg, border: `1.5px solid ${col.border}`, fontSize: 13, color: col.c, fontWeight: 600 }}>
+                      👇 {copy('নিচে "SMS Gateway" section-এ আপনার phone setup করুন এবং চালু করুন।', 'Set up your phone in the "SMS Gateway" section below and enable it.')}
+                    </div>
+                  )}
+
+                  {/* Manual mode — pointer */}
+                  {selectedMode.key === 'manual' && (
+                    <div style={{ padding: '12px 16px', borderRadius: 10, background: col.bg, border: `1.5px solid ${col.border}`, fontSize: 13, color: col.c, fontWeight: 600 }}>
+                      👉 {copy('Orders → "Payment Proof" tab-এ pending TxID গুলো দেখুন ও verify করুন।', 'Go to Orders → "Payment Proof" tab to review and verify pending TxIDs.')}
+                    </div>
+                  )}
+
+                  {/* Sub-modes for Direct API and Gateway */}
+                  {selectedMode.subModes && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <div style={{ fontSize: 12, fontWeight: 800, color: th.textSub, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>
+                        {copy('Provider বেছে নিন:', 'Select Provider:')}
+                      </div>
+                      {selectedMode.subModes.map((sub: any) => {
+                        const existingCred = payCreds.find(c => c.method === sub.key);
+                        const isSubSelected = paySelected === sub.key;
+                        return (
+                          <div key={sub.key}>
+                            <div
+                              onClick={() => { setPaySelected(isSubSelected ? null : sub.key); setPayFields({}); setPayTestResult(null); setPaySandbox(true); }}
+                              style={{
+                                display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px',
+                                borderRadius: 10, cursor: 'pointer',
+                                border: `2px solid ${isSubSelected ? col.c : existingCred?.isActive ? '#16a34a' : col.border}`,
+                                background: isSubSelected ? col.bg : existingCred?.isActive ? 'rgba(22,163,74,0.08)' : th.panel,
+                                transition: 'all 130ms',
+                              }}
+                            >
+                              <span style={{ fontSize: 20 }}>{sub.icon}</span>
+                              <div style={{ flex: 1 }}>
+                                <div style={{ fontWeight: 700, fontSize: 13, color: th.text }}>{sub.title}</div>
+                                <div style={{ fontSize: 11, color: th.muted }}>Gateway fee: <strong style={{ color: col.c }}>{sub.fee}</strong></div>
+                              </div>
+                              {existingCred?.isActive && (
+                                <>
+                                  <span style={{ fontSize: 11, background: '#d1fae5', color: '#065f46', borderRadius: 6, padding: '3px 10px', fontWeight: 800 }}>✅ Active</span>
+                                  <button onClick={e => { e.stopPropagation(); handlePayDelete(sub.key); }} disabled={payDeleting === sub.key}
+                                    style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 6, color: '#dc2626', cursor: 'pointer', fontSize: 12, fontWeight: 700, padding: '3px 9px' }}>
+                                    {payDeleting === sub.key ? '…' : '🗑'}
+                                  </button>
+                                </>
+                              )}
+                              <span style={{ fontSize: 14, color: isSubSelected ? col.c : th.muted, fontWeight: 700 }}>{isSubSelected ? '▲' : '▼'}</span>
+                            </div>
+
+                            {/* Credential form */}
+                            {isSubSelected && (
+                              <div style={{ marginTop: 6, padding: '16px 18px', borderRadius: 10, background: th.surface, border: `2px solid ${col.border}` }}>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, cursor: 'pointer', fontSize: 13 }}>
+                                  <input type="checkbox" checked={paySandbox} onChange={e => setPaySandbox(e.target.checked)} style={{ accentColor: col.c }} />
+                                  <span style={{ color: th.muted }}>{copy('Sandbox/Test mode (live করতে uncheck করুন)', 'Sandbox/Test mode (uncheck for live)')}</span>
+                                </label>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(175px,1fr))', gap: 10, marginBottom: 12 }}>
+                                  {sub.fields.map((f: any) => (
+                                    <div key={f.key}>
+                                      <div style={{ fontSize: 11.5, fontWeight: 700, color: th.muted, marginBottom: 4 }}>{f.label}</div>
+                                      <input type={f.secret ? 'password' : 'text'} placeholder={f.ph}
+                                        value={payFields[f.key] || ''}
+                                        onChange={e => setPayFields(prev => ({ ...prev, [f.key]: e.target.value }))}
+                                        style={{ ...inp, width: '100%', boxSizing: 'border-box' }} />
+                                    </div>
+                                  ))}
                                 </div>
-
-                                {/* Credential form */}
-                                {isSubSelected && (
-                                  <div style={{ marginTop: 8, padding: '14px 16px', borderRadius: 9, background: th.surface, border: `1px solid ${th.accent}` }}>
-                                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, cursor: 'pointer', fontSize: 13 }}>
-                                      <input type="checkbox" checked={paySandbox} onChange={e => setPaySandbox(e.target.checked)} style={{ accentColor: th.accent }} />
-                                      <span style={{ color: th.muted }}>{copy('Sandbox/Test mode (live-এ দিতে uncheck করুন)', 'Sandbox/Test mode (uncheck for live)')}</span>
-                                    </label>
-                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(180px,1fr))', gap: 10, marginBottom: 12 }}>
-                                      {sub.fields.map((f: any) => (
-                                        <div key={f.key}>
-                                          <div style={{ fontSize: 12, fontWeight: 600, color: th.muted, marginBottom: 4 }}>{f.label}</div>
-                                          <input type={f.secret ? 'password' : 'text'} placeholder={f.ph}
-                                            value={payFields[f.key] || ''}
-                                            onChange={e => setPayFields(prev => ({ ...prev, [f.key]: e.target.value }))}
-                                            style={{ ...inp, width: '100%', boxSizing: 'border-box' }} />
-                                        </div>
-                                      ))}
-                                    </div>
-                                    {payTestResult && (
-                                      <div style={{ marginBottom: 10, padding: '8px 12px', borderRadius: 8, fontSize: 13, fontWeight: 600,
-                                        background: payTestResult.ok ? '#d1fae5' : '#fee2e2', color: payTestResult.ok ? '#065f46' : '#991b1b' }}>
-                                        {payTestResult.ok ? '✅' : '❌'} {payTestResult.message}
-                                      </div>
-                                    )}
-                                    <div style={{ display: 'flex', gap: 8 }}>
-                                      <button onClick={handlePayTest} disabled={payTesting || paySaving} style={{ ...th.btnGhost, fontSize: 13, padding: '7px 14px' }}>
-                                        {payTesting ? <Spinner size={13} color={th.accent} /> : copy('🔍 Test', 'Test')}
-                                      </button>
-                                      <button onClick={handlePaySave} disabled={paySaving || payTesting} style={{ ...th.btnPrimary, fontSize: 13, padding: '7px 18px' }}>
-                                        {paySaving ? <Spinner size={13} color="#fff" /> : copy('💾 Save', 'Save')}
-                                      </button>
-                                    </div>
+                                {payTestResult && (
+                                  <div style={{ marginBottom: 10, padding: '9px 14px', borderRadius: 9, fontSize: 13, fontWeight: 700,
+                                    background: payTestResult.ok ? '#d1fae5' : '#fee2e2', color: payTestResult.ok ? '#065f46' : '#991b1b' }}>
+                                    {payTestResult.ok ? '✅' : '❌'} {payTestResult.message}
                                   </div>
                                 )}
+                                <div style={{ display: 'flex', gap: 8 }}>
+                                  <button onClick={handlePayTest} disabled={payTesting || paySaving}
+                                    style={{ ...th.btnGhost, fontSize: 13, padding: '8px 16px' }}>
+                                    {payTesting ? <Spinner size={13} color={th.accent} /> : copy('🔍 Test Connection', 'Test Connection')}
+                                  </button>
+                                  <button onClick={handlePaySave} disabled={paySaving || payTesting}
+                                    style={{ ...th.btnPrimary, fontSize: 13, padding: '8px 20px', background: col.c, borderColor: col.c }}>
+                                    {paySaving ? <Spinner size={13} color="#fff" /> : copy('💾 Save & Activate', 'Save & Activate')}
+                                  </button>
+                                </div>
                               </div>
-                            );
-                          })}
-                        </div>
-                      )}
-
-                      {/* Mode 1 (SMS) — points to SMS Gateway section */}
-                      {mode.key === 'sms' && (
-                        <div style={{ borderTop: `1px solid ${th.border}`, padding: '10px 16px', fontSize: 12, color: th.muted }}>
-                          👇 {copy('নিচে "SMS Gateway" section-এ phone setup করুন এবং "চালু" করুন।', 'Set up your phone in the "SMS Gateway" section below and enable it.')}
-                        </div>
-                      )}
-
-                      {/* Mode 4 — link to orders */}
-                      {mode.key === 'manual' && (
-                        <div style={{ borderTop: `1px solid ${th.border}`, padding: '10px 16px', fontSize: 12, color: th.muted }}>
-                          👉 {copy('Orders → "Payment Proof" tab-এ pending TxID গুলো দেখতে পাবেন এবং verify করতে পারবেন।', 'View and verify pending TxIDs in Orders → "Payment Proof" tab.')}
-                        </div>
-                      )}
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
-                  );
-                })}
+                  )}
+                </div>
               </div>
             );
           })()}
