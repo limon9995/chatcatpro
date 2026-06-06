@@ -1280,6 +1280,12 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
 
             const handlePaySave = async () => {
               if (!opt) return;
+              // Validate all required fields are filled
+              const emptyFields = opt.fields.filter(f => !payFields[f.key]?.trim());
+              if (emptyFields.length > 0) {
+                onToast(copy(`❌ ${emptyFields.map(f => f.label).join(', ')} দিন`, `❌ Please fill: ${emptyFields.map(f => f.label).join(', ')}`), 'error');
+                return;
+              }
               setPaySaving(true); setPayTestResult(null);
               try {
                 await request(`${API_BASE}/pages/${pageId}/payment-credentials`, {
@@ -1298,6 +1304,11 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
 
             const handlePayTest = async () => {
               if (!opt) return;
+              const emptyFields = opt.fields.filter(f => !payFields[f.key]?.trim());
+              if (emptyFields.length > 0) {
+                onToast(copy(`❌ ${emptyFields.map(f => f.label).join(', ')} দিন`, `❌ Please fill: ${emptyFields.map(f => f.label).join(', ')}`), 'error');
+                return;
+              }
               setPayTesting(true); setPayTestResult(null);
               try {
                 await request(`${API_BASE}/pages/${pageId}/payment-credentials`, {
