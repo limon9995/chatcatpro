@@ -20,6 +20,11 @@ export class WalletService {
 
       if (!page) return false;
       if (page.subscriptionStatus !== 'ACTIVE') return false;
+
+      // Grace period: allow AI even with zero/negative balance (debt tracked, repaid on recharge)
+      const isGrace = await this.isGracePeriod(pageId);
+      if (isGrace) return true;
+
       if (page.walletBalanceBdt <= 0) return false;
 
       return true;
@@ -130,21 +135,25 @@ export class WalletService {
 
       if (amountToDeduct <= 0) return true; // Free setup or overridden to 0
 
-      // Transactionally deduct and log; skip if balance is already 0 or below
+      // Transactionally deduct and log.
+      // In grace mode: always deduct (balance may go negative — debt is repaid on next recharge).
+      // Otherwise: skip if balance is already 0 or below (non-grace pages stop at zero).
       await this.prisma.$transaction(async (tx) => {
         const current = await tx.page.findUnique({
           where: { id: pageId },
-          select: { walletBalanceBdt: true },
+          select: { walletBalanceBdt: true, subscriptionStatus: true },
         });
-        if (!current || current.walletBalanceBdt <= 0) return;
+        if (!current) return;
+
+        // Check if subscription is currently in grace period
+        const isGrace = await this.isGracePeriod(pageId, tx as any);
+
+        // Non-grace pages: stop deducting once balance hits zero
+        if (!isGrace && current.walletBalanceBdt <= 0) return;
 
         await tx.page.update({
           where: { id: pageId },
-          data: {
-            walletBalanceBdt: {
-              decrement: amountToDeduct,
-            },
-          },
+          data: { walletBalanceBdt: { decrement: amountToDeduct } },
         });
 
         await tx.walletTransaction.create({
@@ -152,7 +161,7 @@ export class WalletService {
             pageId,
             type: `DEDUCT_${type}`,
             amountBdt: -amountToDeduct,
-            description,
+            description: isGrace ? `[Grace] ${description}` : description,
           },
         });
       });
@@ -242,6 +251,20 @@ export class WalletService {
       );
       return { suspended: false };
     }
+  }
+
+  private async isGracePeriod(pageId: number, tx?: any): Promise<boolean> {
+    const db = tx ?? this.prisma;
+    const page = await db.page.findUnique({
+      where: { id: pageId },
+      select: { ownerId: true },
+    });
+    if (!page?.ownerId) return false;
+    const sub = await db.subscription.findFirst({
+      where: { userId: page.ownerId, status: 'grace' },
+      select: { id: true },
+    });
+    return !!sub;
   }
 
   /**
