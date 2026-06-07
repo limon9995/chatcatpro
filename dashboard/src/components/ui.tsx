@@ -46,12 +46,13 @@ export function getTheme(dark: boolean) {
     fontFamily: 'inherit',
     border: `1px solid ${borderMd}`,
     outline: 'none',
-    background: dark ? 'rgba(255,255,255,0.04)' : panel,
+    background: dark ? '#1e2535' : panel,
     color: text,
     width: '100%',
     boxSizing: 'border-box',
     fontSize: 13.5,
     transition: 'border-color .15s, box-shadow .15s',
+    colorScheme: dark ? 'dark' : 'light',
   };
 
   // Base button style
