@@ -26,7 +26,7 @@ npx prisma db push --accept-data-loss
 
 # 4. Build the NestJS app
 echo "[4/6] Building application..."
-node ./node_modules/@nestjs/cli/bin/nest.js build
+node --max-old-space-size=450 ./node_modules/@nestjs/cli/bin/nest.js build
 
 # 5. Remove devDependencies after build to save memory
 echo "[5/6] Pruning dev dependencies..."
