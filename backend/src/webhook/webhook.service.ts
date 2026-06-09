@@ -33,6 +33,13 @@ import { WhisperService } from '../whisper/whisper.service';
 import { SmartBotService } from '../bot/smart-bot.service';
 import { ProductNameMatchService } from '../product-name-match/product-name-match.service';
 
+function getFullImageUrl(url?: string | null): string | undefined {
+  if (!url) return undefined;
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  const base = process.env.API_BASE_URL || 'https://api.chatcat.pro';
+  return `${base.replace(/\/$/, '')}${url.startsWith('/') ? '' : '/'}${url}`;
+}
+
 @Injectable()
 export class WebhookService implements OnModuleDestroy {
   private readonly logger = new Logger(WebhookService.name);
@@ -1493,6 +1500,31 @@ export class WebhookService implements OnModuleDestroy {
   ): Promise<void> {
     const catalogUrl = this.buildCatalogUrl(page);
     const businessName = page.businessName || page.pageName || 'আমাদের';
+
+    let logoUrl = getFullImageUrl(page.logoUrl);
+    if (!logoUrl) {
+      logoUrl = 'https://images.unsplash.com/photo-1557821552-17105176677c?q=80&w=1000&auto=format&fit=crop';
+    }
+
+    try {
+      await this.messenger.sendGenericTemplate(token, psid, [
+        {
+          title: `${businessName}-এর Online Catalog`,
+          image_url: logoUrl,
+          subtitle: `আমাদের সব product দেখুন এবং সহজেই order করুন 💖`,
+          buttons: [
+            {
+              type: 'web_url' as const,
+              url: catalogUrl,
+              title: 'সব Product দেখুন',
+            },
+          ],
+        },
+      ]);
+    } catch (err) {
+      this.logger.error(`[Webhook] sendCatalogFallback card failed: ${err}`);
+    }
+
     await this.safeSend(
       token,
       psid,
