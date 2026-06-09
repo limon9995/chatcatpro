@@ -8,7 +8,6 @@ import { SignupPageComponent } from './pages/SignupPage';
 import { ChangePasswordPage } from './pages/ChangePasswordPage';
 import { ConnectPageScreen } from './pages/ConnectPageScreen';
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
-import { LandingPage } from './pages/LandingPage';
 import { OnboardingFlow } from './pages/OnboardingFlow';
 const DashboardLayout = safeLazy(async () => {
   const mod = await import('./pages/DashboardLayout');
@@ -148,6 +147,7 @@ export function AppContent() {
       return;
     }
     if (screen === 'landing') {
+      void loadMyPages();
       return;
     }
     if (user.forcePasswordChange) {
@@ -244,35 +244,17 @@ export function AppContent() {
     setScreen('landing');
   };
 
-  const handleLandingLogin = async () => {
-    if (!user) {
-      setScreen('login');
-      return;
-    }
-    if (user.forcePasswordChange) {
-      setScreen('change-password');
-      return;
-    }
-    if (user.role === 'admin') {
-      setScreen('admin');
-      return;
-    }
-    await loadMyPages();
-  };
+
 
   if (!ready) {
     return <ScreenFallback dark={dark} />;
   }
 
   if (screen === 'landing') {
-    return (
-      <LandingPage
-        dark={dark}
-        setDark={setDark}
-        onLogin={handleLandingLogin}
-        onSignup={() => setScreen('signup')}
-      />
-    );
+    if (ready && !user) {
+      window.location.href = 'https://chatcat.pro';
+    }
+    return <ScreenFallback dark={dark} />;
   }
 
   if (screen === 'login') {
