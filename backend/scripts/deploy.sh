@@ -12,23 +12,27 @@ echo "========================================"
 echo "  Chatcat Pro — Deploy $(date '+%Y-%m-%d %H:%M:%S')"
 echo "========================================"
 
-# 1. Install ALL dependencies (including devDeps needed for build)
+# 1. Stop PM2 process to free up memory
+echo "Stopping PM2 chatcatpro process to free up memory..."
+pm2 stop chatcatpro || true
+
+# 2. Install ALL dependencies (including devDeps needed for build)
 echo "[1/6] Installing all dependencies..."
 npm install
 
-# 2. Generate Prisma client
+# 3. Generate Prisma client
 echo "[2/6] Generating Prisma client..."
 npx prisma generate
 
-# 3. Sync schema to database (db push — safe for PostgreSQL with no migration history)
+# 4. Sync schema to database (db push — safe for PostgreSQL with no migration history)
 echo "[3/6] Syncing database schema..."
 npx prisma db push --accept-data-loss
 
-# 4. Build the NestJS app
+# 5. Build the NestJS app
 echo "[4/6] Building application..."
-node --max-old-space-size=450 ./node_modules/@nestjs/cli/bin/nest.js build
+node --max-old-space-size=800 ./node_modules/@nestjs/cli/bin/nest.js build
 
-# 5. Remove devDependencies after build to save memory
+# 6. Remove devDependencies after build to save memory
 echo "[5/6] Pruning dev dependencies..."
 npm prune --omit=dev
 
