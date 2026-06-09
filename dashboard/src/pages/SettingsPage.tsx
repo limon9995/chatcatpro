@@ -1668,36 +1668,55 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
                       'Install any one of the apps below on the Android phone that receives your bKash/Nagad/Rocket payment SMSes.',
                     )}
                   </div>
+                  <div style={{ padding: '8px 12px', borderRadius: 8, background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)', fontSize: 11.5, color: '#92400e', marginBottom: 12, lineHeight: 1.6 }}>
+                    ⚠️ {copy(
+                      'বেশিরভাগ SMS forwarder app Google Play Store-এ নেই (Google-এর SMS permission নীতির কারণে)। নিচের app গুলো GitHub থেকে সরাসরি APK download করে install করতে হবে। Install-এর সময় "Unknown Sources" allow করুন।',
+                      'Most SMS forwarder apps are not on the Play Store (due to Google\'s SMS permission policy). Download the APK directly from GitHub. Allow "Unknown Sources" during install.',
+                    )}
+                  </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {[
                       {
-                        name: 'SMS Gateway — Android SMS API',
-                        badge: copy('সবচেয়ে ভালো', 'Best'),
+                        name: 'SMS Gateway for Android',
+                        badge: copy('✅ টেস্ট করা', '✅ Tested'),
                         badgeColor: '#10b981',
-                        desc: copy('Free, open source। সহজে webhook URL দেওয়া যায়।', 'Free, open source. Easy webhook URL setup.'),
-                        url: 'https://play.google.com/store/apps/details?id=eu.apksoft.android.smsgateway',
+                        desc: copy('Open source (capcom6)। Webhook support আছে, incoming SMS JSON-এ পাঠায়। ChatCat-এর সাথে tested।', 'Open source (capcom6). Has webhook support, sends incoming SMS as JSON. Tested with ChatCat.'),
+                        url: 'https://github.com/capcom6/android-sms-gateway/releases',
+                        btnText: copy('⬇ APK Download', '⬇ APK Download'),
+                        btnColor: '#059669',
                       },
                       {
-                        name: 'SMS Forwarder — Auto Forward',
-                        badge: copy('জনপ্রিয়', 'Popular'),
+                        name: 'SMS to URL Forwarder',
+                        badge: copy('সহজ', 'Simple'),
                         badgeColor: '#3b82f6',
-                        desc: copy('Filter করে শুধু bKash/Nagad SMS forward করা যায়।', 'Can filter to forward only bKash/Nagad SMS.'),
-                        url: 'https://play.google.com/store/apps/details?id=com.smsforwarder.android',
+                        desc: copy('Lightweight, open source। শুধু incoming SMS কে URL-এ POST করে।', 'Lightweight, open source. Simply POSTs incoming SMS to a URL.'),
+                        url: 'https://github.com/bogkonstantin/android_income_sms_gateway_webhook/releases',
+                        btnText: copy('⬇ APK Download', '⬇ APK Download'),
+                        btnColor: '#2563eb',
+                      },
+                      {
+                        name: 'httpSMS',
+                        badge: copy('ওয়েব UI আছে', 'Has Web UI'),
+                        badgeColor: '#8b5cf6',
+                        desc: copy('Web dashboard + Android app। SMS পাঠানো ও পাওয়া দুটোই করা যায়। httpsms.com এ সাইন আপ করুন।', 'Web dashboard + Android app. Send and receive SMS. Sign up at httpsms.com.'),
+                        url: 'https://httpsms.com',
+                        btnText: copy('🌐 Website', '🌐 Website'),
+                        btnColor: '#7c3aed',
                       },
                     ].map(app => (
                       <div key={app.name} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 9, background: th.bg, border: `1px solid ${th.border}` }}>
                         <div style={{ flex: 1 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 3 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 3, flexWrap: 'wrap' }}>
                             <span style={{ fontWeight: 700, fontSize: 12.5, color: th.text }}>{app.name}</span>
                             <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 20, background: app.badgeColor + '20', color: app.badgeColor }}>{app.badge}</span>
                           </div>
-                          <div style={{ fontSize: 11.5, color: th.muted }}>{app.desc}</div>
+                          <div style={{ fontSize: 11.5, color: th.muted, lineHeight: 1.5 }}>{app.desc}</div>
                         </div>
                         <a href={app.url} target="_blank" rel="noreferrer" style={{
-                          flexShrink: 0, padding: '7px 14px', borderRadius: 8, background: '#1d4ed8', color: '#fff',
+                          flexShrink: 0, padding: '7px 14px', borderRadius: 8, background: app.btnColor, color: '#fff',
                           fontWeight: 700, fontSize: 12, textDecoration: 'none', whiteSpace: 'nowrap',
                         }}>
-                          ▶ {copy('Install', 'Install')}
+                          {app.btnText}
                         </a>
                       </div>
                     ))}
@@ -1743,14 +1762,24 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
                   <div style={{ fontWeight: 800, fontSize: 13, color: th.text, marginBottom: 10 }}>
                     ⚙️ {copy('ধাপ ৩ — App-এ Settings করুন', 'Step 3 — Configure the App')}
                   </div>
+                  <div style={{ fontSize: 12, color: th.muted, marginBottom: 10, lineHeight: 1.6 }}>
+                    {copy(
+                      '⚡ "SMS Gateway for Android" (capcom6) app ব্যবহার করলে নিচের steps follow করুন। অন্য app-এও একই ধরনের settings থাকবে।',
+                      '⚡ Follow these steps if using "SMS Gateway for Android" (capcom6). Other apps have similar settings.',
+                    )}
+                  </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {[
-                      copy('App খুলুন → "Webhooks" বা "HTTP Forwarder" সেকশনে যান', 'Open app → go to "Webhooks" or "HTTP Forwarder" section'),
+                      copy('App install করে open করুন → সব SMS permission allow করুন', 'Install and open the app → Allow all SMS permissions'),
+                      copy('"Webhooks" বা "Settings" সেকশনে যান', 'Go to "Webhooks" or "Settings" section'),
                       copy('Method: POST সেট করুন', 'Set Method: POST'),
-                      copy('URL: উপরের webhook URL paste করুন', 'URL: Paste the webhook URL from above'),
-                      copy('(Optional) Filter: শুধু bKash/Nagad/Rocket নম্বর থেকে SMS forward করতে sender filter যোগ করুন', '(Optional) Filter: Add sender filter to forward only bKash/Nagad/Rocket SMSes'),
-                      copy('SMS Forwarding চালু করুন ✅', 'Enable SMS Forwarding ✅'),
-                      copy('Phone সবসময় internet-এ connected রাখুন', 'Keep the phone always connected to internet'),
+                      copy('URL: উপরের webhook URL paste করুন (ধাপ ২ এর URL)', 'URL: Paste the webhook URL from above (Step 2 URL)'),
+                      copy('Content-Type: application/json সিলেক্ট করুন', 'Select Content-Type: application/json'),
+                      copy('Body/Payload template-এ রাখুন: {"message": "{{message}}", "from": "{{from}}"}', 'Set Body/Payload template to: {"message": "{{message}}", "from": "{{from}}"}'),
+                      copy('(Optional) Filter: sender-এ "bKash" বা "16247" বা "Nagad" বা "16167" দিন — শুধু payment SMS forward হবে', '(Optional) Filter: set sender to "bKash" or "16247" or "Nagad" or "16167" — only payment SMS will forward'),
+                      copy('SMS Forwarding / Webhook চালু করুন ✅', 'Enable SMS Forwarding / Webhook ✅'),
+                      copy('⚠️ Battery Optimization OFF করুন (Settings → Battery → এই app → Unrestricted)', '⚠️ Disable Battery Optimization (Settings → Battery → This app → Unrestricted)'),
+                      copy('Phone সবসময় internet-এ connected ও চার্জে রাখুন', 'Keep the phone always connected to internet and plugged in'),
                     ].map((step, i) => (
                       <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
                         <span style={{ flexShrink: 0, width: 20, height: 20, borderRadius: '50%', background: th.accent + '20', color: th.accent, fontWeight: 800, fontSize: 11, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{i + 1}</span>
@@ -1760,22 +1789,67 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
                   </div>
                 </div>
 
+                {/* Step 4 — Test webhook */}
+                <div style={{ borderRadius: 12, padding: '14px 16px', background: th.surface, border: `1px solid ${th.border}` }}>
+                  <div style={{ fontWeight: 800, fontSize: 13, color: th.text, marginBottom: 10 }}>
+                    🧪 {copy('ধাপ ৪ — টেস্ট করুন', 'Step 4 — Test It')}
+                  </div>
+                  <div style={{ fontSize: 12.5, color: th.muted, marginBottom: 12, lineHeight: 1.6 }}>
+                    {copy(
+                      'সব setup হয়ে গেলে নিচের "Test" button-এ click করুন, অথবা নিজের bKash/Nagad থেকে ৳10 send করুন। নিচে "Last SMS" দেখালে setup সঠিক আছে।',
+                      'After setup, click "Test" below, or send ৳10 from your own bKash/Nagad. If "Last SMS" appears below, setup is correct.',
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <button
+                      onClick={async () => {
+                        try {
+                          const res = await request<any>(`${API_BASE}/sms-gateway/status?pageId=${pageId}`);
+                          if (res.lastReceived) {
+                            onToast(copy(
+                              `✅ SMS আসছে! শেষ SMS: ${res.lastReceived.method?.toUpperCase()} ৳${res.lastReceived.amount ?? '?'} — ${new Date(res.lastReceived.receivedAt).toLocaleString('bn-BD')}`,
+                              `✅ SMS working! Last: ${res.lastReceived.method?.toUpperCase()} ৳${res.lastReceived.amount ?? '?'} — ${new Date(res.lastReceived.receivedAt).toLocaleString()}`
+                            ));
+                          } else {
+                            onToast(copy(
+                              '⚠️ এখনো কোনো SMS আসেনি। App setup ঠিক আছে কিনা চেক করুন, তারপর নিজে ৳10 send করে test করুন।',
+                              '⚠️ No SMS received yet. Verify app setup, then test by sending ৳10 to yourself.'
+                            ), 'error');
+                          }
+                        } catch (e: any) { onToast(e.message, 'error'); }
+                      }}
+                      style={{ ...th.btnPrimary, fontSize: 12.5, padding: '8px 18px', background: '#059669', borderColor: '#059669' }}
+                    >
+                      🧪 {copy('Connection Test করুন', 'Test Connection')}
+                    </button>
+                    <span style={{ fontSize: 11.5, color: th.muted }}>
+                      {copy('(নিজের নম্বরে ৳10 send করে test করুন)', '(Send ৳10 to yourself to test)')}
+                    </span>
+                  </div>
+                </div>
+
                 {/* bKash/Nagad sender numbers info */}
                 <div style={{ borderRadius: 10, padding: '12px 14px', background: '#fefce8', border: '1px solid #fde68a' }}>
                   <div style={{ fontWeight: 700, fontSize: 12.5, color: '#92400e', marginBottom: 7 }}>
-                    💡 {copy('bKash/Nagad/Rocket-এর Sender Number (Filter-এ দিন)', 'bKash/Nagad/Rocket Sender Numbers (use in filter)')}
+                    💡 {copy('bKash/Nagad/Rocket-এর SMS Sender ID (Filter-এ দিন)', 'bKash/Nagad/Rocket SMS Sender IDs (use in filter)')}
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                     {[
-                      { label: 'bKash', numbers: '01678-016786, 16247' },
-                      { label: 'Nagad', numbers: '16167' },
-                      { label: 'Rocket', numbers: '16216' },
+                      { label: 'bKash', numbers: copy('16247 (শর্টকোড) অথবা sender name: "bKash"', '16247 (shortcode) or sender name: "bKash"') },
+                      { label: 'Nagad', numbers: copy('16167 (শর্টকোড) অথবা sender name: "NAGAD"', '16167 (shortcode) or sender name: "NAGAD"') },
+                      { label: 'Rocket', numbers: copy('16216 (শর্টকোড) অথবা sender name: "DBBL"', '16216 (shortcode) or sender name: "DBBL"') },
                     ].map(r => (
                       <div key={r.label} style={{ display: 'flex', gap: 8, fontSize: 12, color: '#78350f' }}>
                         <span style={{ fontWeight: 700, minWidth: 50 }}>{r.label}:</span>
                         <span style={{ fontFamily: 'monospace' }}>{r.numbers}</span>
                       </div>
                     ))}
+                  </div>
+                  <div style={{ fontSize: 11, color: '#92400e', marginTop: 8, fontStyle: 'italic', lineHeight: 1.5 }}>
+                    {copy(
+                      '💡 ChatCat SMS content দিয়ে match করে (bKash/Nagad/Rocket keyword + TxID + Amount)। তাই filter না দিলেও কাজ করবে, তবে filter দিলে unnecessary SMS forwarding হবে না।',
+                      '💡 ChatCat matches by SMS content (bKash/Nagad/Rocket keyword + TxID + Amount). It works without filters too, but filters prevent unnecessary SMS forwarding.',
+                    )}
                   </div>
                 </div>
 
