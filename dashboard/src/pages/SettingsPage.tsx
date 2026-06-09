@@ -1764,8 +1764,8 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
                   </div>
                   <div style={{ fontSize: 12, color: th.muted, marginBottom: 10, lineHeight: 1.6 }}>
                     {copy(
-                      '⚡ "SMS Gateway for Android" (capcom6) app ব্যবহার করলে নিচের steps follow করুন। অন্য app-এও একই ধরনের settings থাকবে।',
-                      '⚡ Follow these steps if using "SMS Gateway for Android" (capcom6). Other apps have similar settings.',
+                      '⚡ "SMS to URL Forwarder" (bogkonstantin) app ব্যবহার করলে নিচের steps follow করুন। অন্য app-এও একই ধরনের settings থাকবে।',
+                      '⚡ Follow these steps if using "SMS to URL Forwarder" (bogkonstantin). Other apps have similar settings.',
                     )}
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
