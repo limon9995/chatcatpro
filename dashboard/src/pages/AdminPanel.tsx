@@ -1835,6 +1835,16 @@ export function AdminPanel({ th, onToast, onLogout }: {
         )}
         {tab === 'billing' && (
           <>
+            <AdminPaymentSetup
+              th={th}
+              cfg={adminPayCfg}
+              setCfg={setAdminPayCfg}
+              activeTab={adminPayTab}
+              setActiveTab={setAdminPayTab}
+              smsLog={adminSmsLog}
+              saving={adminPaySaving}
+              onSave={saveAdminPayConfig}
+            />
             <BillingTab
               th={th}
               data={billingData}
@@ -1846,16 +1856,6 @@ export function AdminPanel({ th, onToast, onLogout }: {
               onConfirmPayment={confirmPayment}
               onSetSubscription={setSubscription}
               onSaveSupport={saveBillingSupport}
-            />
-            <AdminPaymentSetup
-              th={th}
-              cfg={adminPayCfg}
-              setCfg={setAdminPayCfg}
-              activeTab={adminPayTab}
-              setActiveTab={setAdminPayTab}
-              smsLog={adminSmsLog}
-              saving={adminPaySaving}
-              onSave={saveAdminPayConfig}
             />
           </>
         )}
