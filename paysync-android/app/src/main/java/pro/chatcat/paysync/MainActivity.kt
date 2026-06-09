@@ -1,191 +1,179 @@
 package pro.chatcat.paysync
 
-import android.Manifest
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
+import android.provider.Settings
 import android.view.View
 import android.widget.Button
-import android.widget.EditText
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import com.google.android.material.textfield.TextInputEditText
 
 class MainActivity : AppCompatActivity() {
 
-    private val PERMISSION_REQUEST_CODE = 200
+    private val DEFAULT_WEBHOOK = "https://api.chatcat.pro/admin/sms-incoming"
 
-    private lateinit var statusDot: View
-    private lateinit var statusText: TextView
-    private lateinit var tokenInput: EditText
-    private lateinit var saveButton: Button
+    private lateinit var statusDot:        View
+    private lateinit var statusText:       TextView
+    private lateinit var tokenInput:       TextInputEditText
+    private lateinit var saveButton:       Button
     private lateinit var permSmsIndicator: View
     private lateinit var permNotifIndicator: View
     private lateinit var grantPermissionBtn: Button
-    private lateinit var logsTextView: TextView
+    private lateinit var logsTextView:     TextView
+    private lateinit var clearLogsBtn:     Button
+    private lateinit var statSyncCount:    TextView
+    private lateinit var statFailCount:    TextView
+    private lateinit var statLastSync:     TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_NO)
+        androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(
+            androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_NO
+        )
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        // Initialize UI Elements
-        statusDot = findViewById(R.id.statusDot)
-        statusText = findViewById(R.id.statusText)
-        tokenInput = findViewById(R.id.tokenInput)
-        saveButton = findViewById(R.id.saveButton)
-        permSmsIndicator = findViewById(R.id.permSmsIndicator)
-        permNotifIndicator = findViewById(R.id.permNotifIndicator)
-        grantPermissionBtn = findViewById(R.id.grantPermissionBtn)
-        logsTextView = findViewById(R.id.logsText)
+        statusDot           = findViewById(R.id.statusDot)
+        statusText          = findViewById(R.id.statusText)
+        tokenInput          = findViewById(R.id.tokenInput)
+        saveButton          = findViewById(R.id.saveButton)
+        permSmsIndicator    = findViewById(R.id.permSmsIndicator)
+        permNotifIndicator  = findViewById(R.id.permNotifIndicator)
+        grantPermissionBtn  = findViewById(R.id.grantPermissionBtn)
+        logsTextView        = findViewById(R.id.logsText)
+        clearLogsBtn        = findViewById(R.id.clearLogsBtn)
+        statSyncCount       = findViewById(R.id.statSyncCount)
+        statFailCount       = findViewById(R.id.statFailCount)
+        statLastSync        = findViewById(R.id.statLastSync)
 
-        // Load Saved Token
-        val sharedPref = getSharedPreferences("ChatCatPrefs", Context.MODE_PRIVATE)
-        val savedToken = sharedPref.getString("pageToken", "")
-        tokenInput.setText(savedToken)
+        val prefs = getSharedPreferences("ChatCatPrefs", Context.MODE_PRIVATE)
+        tokenInput.setText(prefs.getString("pageToken", ""))
 
-        // Update UI Statuses
-        updateUIStatus(savedToken)
+        updateUIStatus()
         updatePermissionIndicators()
         loadLogs()
+        updateStats()
 
-        // Save Button Handler
         saveButton.setOnClickListener {
             val token = tokenInput.text.toString().trim()
-            if (token.isNotEmpty()) {
-                sharedPref.edit().putString("pageToken", token).apply()
-                Toast.makeText(this, "কনফিগারেশন সেভ হয়েছে! ✅", Toast.LENGTH_SHORT).show()
-                updateUIStatus(token)
-                startPaySyncService()
-                addLog("সিস্টেম অ্যাক্টিভেট করা হয়েছে।")
-                loadLogs()
-            } else {
-                Toast.makeText(this, "দয়া করে পেজ টোকেন দিন", Toast.LENGTH_SHORT).show()
+
+            if (token.isEmpty()) {
+                Toast.makeText(this, "দয়া করে Secret Token দিন", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
             }
-        }
-
-        // Grant Permissions Button Handler
-        grantPermissionBtn.setOnClickListener {
-            requestPermissions()
-        }
-
-        // Auto request permissions if not granted
-        if (!hasSmsPermissions() || !hasNotificationPermissions()) {
-            requestPermissions()
-        } else {
+            prefs.edit().putString("pageToken", token).putString("webhookUrl", DEFAULT_WEBHOOK).apply()
+            Toast.makeText(this, "কনফিগারেশন সেভ হয়েছে! ✅", Toast.LENGTH_SHORT).show()
+            updateUIStatus()
             startPaySyncService()
+            addLog("সিস্টেম অ্যাক্টিভেট করা হয়েছে।")
+            loadLogs()
         }
+
+        // "পারমিশন দিন" — goes to SetupActivity wizard
+        grantPermissionBtn.setOnClickListener {
+            startActivity(Intent(this, SetupActivity::class.java))
+        }
+
+        clearLogsBtn.setOnClickListener {
+            prefs.edit()
+                .putString("sync_logs", "")
+                .putInt("sync_count", 0)
+                .putInt("fail_count", 0)
+                .putString("last_sync", "")
+                .apply()
+            loadLogs()
+            updateStats()
+            Toast.makeText(this, "লগ মুছে ফেলা হয়েছে।", Toast.LENGTH_SHORT).show()
+        }
+
+        if (isSetupComplete()) startPaySyncService()
     }
 
     override fun onResume() {
         super.onResume()
+        updateUIStatus()
         updatePermissionIndicators()
         loadLogs()
+        updateStats()
     }
 
-    private fun updateUIStatus(token: String?) {
-        if (!token.isNullOrEmpty() && hasSmsPermissions()) {
-            statusDot.setBackgroundResource(R.drawable.circle_green)
-            statusText.text = "সিঙ্ক একটিভ আছে"
-            statusText.setTextColor(ContextCompat.getColor(this, R.color.success))
-        } else {
-            statusDot.setBackgroundResource(R.drawable.circle_red)
-            statusText.text = "সেটআপ বা অনুমতি প্রয়োজন"
-            statusText.setTextColor(ContextCompat.getColor(this, R.color.error))
-        }
+    private fun updateUIStatus() {
+        val token = getSharedPreferences("ChatCatPrefs", Context.MODE_PRIVATE)
+            .getString("pageToken", "")
+        val active = !token.isNullOrEmpty() && isNotificationListenerEnabled()
+        statusDot.setBackgroundResource(
+            if (active) R.drawable.circle_green else R.drawable.circle_red
+        )
+        statusText.text = if (active) "অনলাইন" else "অফলাইন"
     }
 
     private fun updatePermissionIndicators() {
-        if (hasSmsPermissions()) {
-            permSmsIndicator.setBackgroundResource(R.drawable.circle_green)
-        } else {
-            permSmsIndicator.setBackgroundResource(R.drawable.circle_red)
-        }
-
-        if (hasNotificationPermissions()) {
-            permNotifIndicator.setBackgroundResource(R.drawable.circle_green)
-        } else {
-            permNotifIndicator.setBackgroundResource(R.drawable.circle_red)
-        }
-
-        if (hasSmsPermissions() && hasNotificationPermissions()) {
-            grantPermissionBtn.visibility = View.GONE
-        } else {
-            grantPermissionBtn.visibility = View.VISIBLE
-        }
-    }
-
-    private fun hasSmsPermissions(): Boolean {
-        val receiveSms = ContextCompat.checkSelfPermission(this, Manifest.permission.RECEIVE_SMS)
-        val readSms = ContextCompat.checkSelfPermission(this, Manifest.permission.READ_SMS)
-        return receiveSms == PackageManager.PERMISSION_GRANTED && readSms == PackageManager.PERMISSION_GRANTED
-    }
-
-    private fun hasNotificationPermissions(): Boolean {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
-        } else {
-            true
-        }
-    }
-
-    private fun requestPermissions() {
-        val permissions = mutableListOf(
-            Manifest.permission.RECEIVE_SMS,
-            Manifest.permission.READ_SMS
+        // Indicator 1: Notification Listener
+        permSmsIndicator.setBackgroundResource(
+            if (isNotificationListenerEnabled()) R.drawable.circle_green else R.drawable.circle_red
         )
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            permissions.add(Manifest.permission.POST_NOTIFICATIONS)
-        }
-        ActivityCompat.requestPermissions(this, permissions.toTypedArray(), PERMISSION_REQUEST_CODE)
+        // Indicator 2: Battery optimization
+        permNotifIndicator.setBackgroundResource(
+            if (isBatteryOptimizationIgnored()) R.drawable.circle_green else R.drawable.circle_red
+        )
+        grantPermissionBtn.visibility =
+            if (isSetupComplete()) View.GONE else View.VISIBLE
     }
 
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == PERMISSION_REQUEST_CODE) {
-            updatePermissionIndicators()
-            val sharedPref = getSharedPreferences("ChatCatPrefs", Context.MODE_PRIVATE)
-            val token = sharedPref.getString("pageToken", "")
-            updateUIStatus(token)
-            if (hasSmsPermissions() && !token.isNullOrEmpty()) {
-                startPaySyncService()
-            }
-        }
+    private fun updateStats() {
+        val prefs = getSharedPreferences("ChatCatPrefs", Context.MODE_PRIVATE)
+        statSyncCount.text = prefs.getInt("sync_count", 0).toString()
+        statFailCount.text = prefs.getInt("fail_count", 0).toString()
+        val last = prefs.getString("last_sync", "—")
+        statLastSync.text  = if (last.isNullOrEmpty()) "—" else last
     }
+
+    private fun isNotificationListenerEnabled(): Boolean {
+        val cn   = ComponentName(this, SmsNotificationListener::class.java)
+        val flat = Settings.Secure.getString(contentResolver, "enabled_notification_listeners")
+            ?: return false
+        return flat.contains(cn.flattenToString())
+    }
+
+    private fun isBatteryOptimizationIgnored(): Boolean {
+        val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+        // Also accept manual confirmation from setup wizard (some devices don't report correctly)
+        val manuallyConfirmed = getSharedPreferences("setup_prefs", Context.MODE_PRIVATE)
+            .getBoolean("battery_done", false)
+        return pm.isIgnoringBatteryOptimizations(packageName) || manuallyConfirmed
+    }
+
+    private fun isSetupComplete() = isNotificationListenerEnabled() && isBatteryOptimizationIgnored()
 
     private fun startPaySyncService() {
-        val sharedPref = getSharedPreferences("ChatCatPrefs", Context.MODE_PRIVATE)
-        val token = sharedPref.getString("pageToken", "")
-        if (!token.isNullOrEmpty() && hasSmsPermissions()) {
-            val serviceIntent = Intent(this, PaySyncService::class.java)
+        val token = getSharedPreferences("ChatCatPrefs", Context.MODE_PRIVATE)
+            .getString("pageToken", "")
+        if (!token.isNullOrEmpty() && isNotificationListenerEnabled()) {
+            val intent = Intent(this, PaySyncService::class.java)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                ContextCompat.startForegroundService(this, serviceIntent)
+                ContextCompat.startForegroundService(this, intent)
             } else {
-                startService(serviceIntent)
+                startService(intent)
             }
         }
     }
 
     private fun loadLogs() {
-        val sharedPref = getSharedPreferences("ChatCatPrefs", Context.MODE_PRIVATE)
-        val logs = sharedPref.getString("sync_logs", "কোনো লগ পাওয়া যায়নি।")
-        logsTextView.text = logs
+        val logs = getSharedPreferences("ChatCatPrefs", Context.MODE_PRIVATE)
+            .getString("sync_logs", "")
+        logsTextView.text = if (logs.isNullOrEmpty()) "কোনো লগ পাওয়া যায়নি।" else logs
     }
 
     private fun addLog(message: String) {
-        val sharedPref = getSharedPreferences("ChatCatPrefs", Context.MODE_PRIVATE)
-        val currentLogs = sharedPref.getString("sync_logs", "") ?: ""
-        val timestamp = java.text.SimpleDateFormat("hh:mm a", java.util.Locale.getDefault()).format(java.util.Date())
-        val newLogs = "[$timestamp] $message\n$currentLogs"
-        
-        // Keep logs short (last 10 lines)
-        val lines = newLogs.split("\n")
-        val truncated = lines.take(10).joinToString("\n")
-        
-        sharedPref.edit().putString("sync_logs", truncated).apply()
+        val prefs   = getSharedPreferences("ChatCatPrefs", Context.MODE_PRIVATE)
+        val time    = java.text.SimpleDateFormat("hh:mm a", java.util.Locale.getDefault()).format(java.util.Date())
+        val updated = "[$time] $message\n${prefs.getString("sync_logs", "") ?: ""}"
+        prefs.edit().putString("sync_logs", updated.split("\n").take(20).joinToString("\n")).apply()
     }
 }
