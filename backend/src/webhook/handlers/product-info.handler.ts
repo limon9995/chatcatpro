@@ -5,6 +5,13 @@ import { BotKnowledgeService } from '../../bot-knowledge/bot-knowledge.service';
 import { BotIntentService } from '../../bot/bot-intent.service';
 import { ConversationContextService } from '../../conversation-context/conversation-context.service';
 
+function getFullImageUrl(url?: string | null): string | undefined {
+  if (!url) return undefined;
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  const base = process.env.API_BASE_URL || 'https://api.chatcat.pro';
+  return `${base.replace(/\/$/, '')}${url.startsWith('/') ? '' : '/'}${url}`;
+}
+
 @Injectable()
 export class ProductInfoHandler {
   constructor(
@@ -40,6 +47,26 @@ export class ProductInfoHandler {
       return;
     }
 
+    // Send generic template card
+    const imageUrl = getFullImageUrl(product.imageUrl);
+    const productUrl = `https://api.chatcat.pro/catalog/${page.id}/product/${product.code}`;
+    const sym = page.currencySymbol || '৳';
+
+    await this.messenger.sendGenericTemplate(page.pageToken, psid, [
+      {
+        title: product.name || product.code,
+        image_url: imageUrl,
+        subtitle: `${sym}${Number(product.price).toLocaleString()} · Code: ${product.code}`,
+        buttons: [
+          {
+            type: 'web_url' as const,
+            url: productUrl,
+            title: 'View product',
+          },
+        ],
+      },
+    ]);
+
     let msg = await this.botKnowledge.resolveSystemReply(
       page.id,
       'product_info',
@@ -73,19 +100,30 @@ export class ProductInfoHandler {
     const sym = page.currencySymbol || '৳';
     await this.ctx.setLastPresentedProducts(page.id, psid, products);
 
-    const lines = codes
-      .map((c) => products.find((p) => p.code === c))
-      .filter(Boolean)
-      .map(
-        (p: any) =>
-          `${p.code} — ${p.price}${sym}${p.stockQty <= 0 ? ' ❌ Stock Out' : ''}`,
-      );
+    // Send generic template carousel
+    const elements = products.map((p: any) => {
+      const imageUrl = getFullImageUrl(p.imageUrl);
+      const productUrl = `https://api.chatcat.pro/catalog/${page.id}/product/${p.code}`;
+      return {
+        title: p.name || p.code,
+        image_url: imageUrl,
+        subtitle: `${sym}${Number(p.price).toLocaleString()} · Code: ${p.code}${p.stockQty <= 0 ? ' (Stock Out)' : ''}`,
+        buttons: [
+          {
+            type: 'web_url' as const,
+            url: productUrl,
+            title: 'View product',
+          },
+        ],
+      };
+    });
+
+    await this.messenger.sendGenericTemplate(page.pageToken, psid, elements);
 
     await this.messenger.sendText(
       page.pageToken,
       psid,
-      lines.join('\n') +
-        '\n\nসবগুলো order করতে চান? **confirm** / **cancel** লিখুন 💖',
+      'সবগুলো order করতে চান? **confirm** / **cancel** লিখুন 💖',
     );
   }
 

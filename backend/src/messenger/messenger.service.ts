@@ -168,4 +168,90 @@ export class MessengerService {
       this.logger.error(`[Messenger] Subscribe button network error: ${err}`);
     }
   }
+
+  async sendGenericTemplate(
+    encryptedToken: string,
+    psid: string,
+    elements: Array<{
+      title: string;
+      image_url?: string;
+      subtitle?: string;
+      buttons?: Array<{
+        type: 'web_url' | 'postback';
+        url?: string;
+        title: string;
+        payload?: string;
+      }>;
+    }>,
+  ): Promise<void> {
+    if (!encryptedToken || !psid || !elements || elements.length === 0) return;
+    const rawToken = this.encryption.decrypt(encryptedToken);
+    const url = `https://graph.facebook.com/v20.0/me/messages?access_token=${encodeURIComponent(rawToken)}`;
+    
+    const payload = {
+      recipient: { id: psid },
+      message: {
+        attachment: {
+          type: 'template',
+          payload: {
+            template_type: 'generic',
+            elements: elements.slice(0, 10).map((el) => ({
+              title: el.title.slice(0, 80),
+              image_url: el.image_url || undefined,
+              subtitle: el.subtitle ? el.subtitle.slice(0, 80) : undefined,
+              buttons: el.buttons && el.buttons.length > 0 ? el.buttons.slice(0, 3).map((btn) => {
+                if (btn.type === 'web_url') {
+                  return {
+                    type: 'web_url',
+                    url: btn.url,
+                    title: btn.title.slice(0, 20),
+                    webview_height_ratio: 'full',
+                  };
+                } else {
+                  return {
+                    type: 'postback',
+                    title: btn.title.slice(0, 20),
+                    payload: btn.payload,
+                  };
+                }
+              }) : undefined,
+            })),
+          },
+        },
+      },
+    };
+
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        if (res.ok) {
+          this.logger.debug(`[Messenger] Sent generic template psid=${psid} count=${elements.length}`);
+          return;
+        }
+
+        const errText = await res.text().catch(() => '');
+        if ((res.status === 429 || res.status >= 500) && attempt < MAX_RETRIES) {
+          const delay = RETRY_DELAY_MS[attempt];
+          this.logger.warn(`[Messenger] Generic template status=${res.status} psid=${psid} — retry ${attempt + 1}/${MAX_RETRIES} in ${delay}ms`);
+          await new Promise((r) => setTimeout(r, delay));
+          continue;
+        }
+        this.logger.error(`[Messenger] Generic template failed status=${res.status} psid=${psid} body=${errText.slice(0, 200)}`);
+        return;
+      } catch (err) {
+        if (attempt < MAX_RETRIES) {
+          const delay = RETRY_DELAY_MS[attempt];
+          this.logger.warn(`[Messenger] Generic template network error psid=${psid} — retry ${attempt + 1}/${MAX_RETRIES} in ${delay}ms`);
+          await new Promise((r) => setTimeout(r, delay));
+        } else {
+          this.logger.error(`[Messenger] Generic template network error psid=${psid} (exhausted retries): ${err}`);
+        }
+      }
+    }
+  }
 }
