@@ -19,6 +19,22 @@ export interface CallServerConfig {
   enabled: boolean;
 }
 
+export interface AdminPaymentConfig {
+  smsGatewayEnabled?: boolean;
+  smsGatewayToken?: string;        // secret token for Android SMS forwarder app
+  bkashEnabled?: boolean;
+  bkashAppKey?: string;
+  bkashAppSecret?: string;
+  bkashUsername?: string;
+  bkashPassword?: string;
+  bkashSandbox?: boolean;
+  nagadEnabled?: boolean;
+  nagadMerchantId?: string;
+  nagadMerchantPrivateKey?: string;
+  nagadApiBaseUrl?: string;
+  manualEnabled?: boolean;         // always true by default
+}
+
 export interface GlobalConfig {
   callFeatureEnabled: boolean;
   callServers: CallServerConfig[];
@@ -30,6 +46,7 @@ export interface GlobalConfig {
     email?: string;
     note?: string;
   };
+  adminPayment?: AdminPaymentConfig;
 }
 
 const DEFAULT_CALL_SERVERS: CallServerConfig[] = [
@@ -477,8 +494,68 @@ export class AdminService {
           input.billingSupport?.note ?? existing.billingSupport?.note ?? '',
         ).trim(),
       },
+      adminPayment: input.adminPayment !== undefined
+        ? { ...existing.adminPayment, ...input.adminPayment }
+        : existing.adminPayment,
     };
     return this._writeGlobalConfig(merged);
+  }
+
+  // ── Admin SMS Gateway (file-based, no DB migration needed) ───────────────
+  private readonly adminSmsFile = path.join(process.cwd(), 'storage', 'admin-sms.json');
+
+  private _readAdminSms(): any[] {
+    try {
+      if (fs.existsSync(this.adminSmsFile)) return JSON.parse(fs.readFileSync(this.adminSmsFile, 'utf8'));
+    } catch {}
+    return [];
+  }
+
+  saveAdminSms(sms: { method: string; txId?: string; amount?: number; senderPhone?: string; rawText: string; receivedAt: string }): void {
+    const list = this._readAdminSms();
+    list.unshift({ ...sms, matched: false, id: Date.now() });
+    // Keep last 500 SMSes
+    fs.mkdirSync(path.dirname(this.adminSmsFile), { recursive: true });
+    fs.writeFileSync(this.adminSmsFile, JSON.stringify(list.slice(0, 500), null, 2));
+  }
+
+  matchAdminSms(txId: string | null, amount: number): { matched: boolean; sms?: any } {
+    const cutoff = Date.now() - 60 * 60 * 1000; // 1 hour window for admin
+    const list = this._readAdminSms();
+    const idx = list.findIndex(s => {
+      if (s.matched) return false;
+      if (new Date(s.receivedAt).getTime() < cutoff) return false;
+      if (txId && s.txId && s.txId.toUpperCase().includes(txId.toUpperCase())) {
+        return !amount || s.amount >= amount - 1;
+      }
+      return false;
+    });
+    if (idx === -1) return { matched: false };
+    list[idx].matched = true;
+    fs.writeFileSync(this.adminSmsFile, JSON.stringify(list, null, 2));
+    return { matched: true, sms: list[idx] };
+  }
+
+  getRecentAdminSms(): any[] {
+    return this._readAdminSms().slice(0, 20);
+  }
+
+  parseAdminSms(text: string): { method: string; txId?: string; amount?: number; senderPhone?: string } {
+    const bkash = text.match(/You have received Tk\s*([\d,]+\.?\d*)/i);
+    const nagad = text.match(/[\d,]+\.?\d*\s*Tk received/i);
+    const rocket = text.match(/received BDT\s*([\d,]+\.?\d*)/i);
+    const txBkash = text.match(/TrxID\s*([A-Z0-9]+)/i);
+    const txNagad = text.match(/Reference[:\s]+([A-Z0-9]+)/i);
+    const txRocket = text.match(/Ref[:\s]+([A-Z0-9]+)/i);
+    const phone = text.match(/\b(01[3-9]\d{8})\b/);
+    const amtStr = (bkash?.[1] || nagad?.[0]?.match(/[\d,]+\.?\d*/)?.[0] || rocket?.[1] || '').replace(/,/g, '');
+    const method = bkash ? 'bkash' : nagad ? 'nagad' : rocket ? 'rocket' : 'unknown';
+    return {
+      method,
+      txId: (txBkash?.[1] || txNagad?.[1] || txRocket?.[1])?.toUpperCase(),
+      amount: amtStr ? parseFloat(amtStr) : undefined,
+      senderPhone: phone?.[1],
+    };
   }
 
   // ── V10: Courier tutorial videos (backward-compat) ────────────────────────

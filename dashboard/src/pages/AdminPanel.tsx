@@ -131,6 +131,12 @@ export function AdminPanel({ th, onToast, onLogout }: {
   const [billingSubFilter, setBillingSubFilter] = useState('');
   const [billingSupport, setBillingSupport] = useState<BillingSupportConfig>({});
 
+  // Admin payment config state
+  const [adminPayCfg, setAdminPayCfg] = useState<any>({});
+  const [adminPaySaving, setAdminPaySaving] = useState(false);
+  const [adminPayTab, setAdminPayTab] = useState<'sms' | 'bkash' | 'nagad' | 'manual'>('sms');
+  const [adminSmsLog, setAdminSmsLog] = useState<any[]>([]);
+
   // Wallet admin state
   const [walletPages, setWalletPages]       = useState<any[]>([]);
   const [walletRequests, setWalletRequests] = useState<any[]>([]);
@@ -326,13 +332,16 @@ export function AdminPanel({ th, onToast, onLogout }: {
   const loadBilling = useCallback(async () => {
     setBillingLoading(true);
     try {
-      const [subs, pending, globalCfg] = await Promise.all([
+      const [subs, pending, globalCfg, payCfg] = await Promise.all([
         request<any[]>(`${API_BASE}/billing/admin/subscriptions${billingSubFilter ? `?status=${billingSubFilter}` : ''}`),
         request<any[]>(`${API_BASE}/billing/admin/pending-payments`),
         request<any>(`${BASE}/global-config`),
+        request<any>(`${BASE}/payment-config`).catch(() => ({})),
       ]);
       setBillingData({ subscriptions: subs || [], pending: pending || [] });
       setBillingSupport(globalCfg?.billingSupport || {});
+      setAdminPayCfg(payCfg || {});
+      setAdminSmsLog(payCfg?.recentSms || []);
     } catch (e: any) { onToast(e.message, 'error'); }
     finally { setBillingLoading(false); }
   }, [BASE, billingSubFilter]);
@@ -473,6 +482,16 @@ export function AdminPanel({ th, onToast, onLogout }: {
     } catch (e: any) {
       onToast(e.message, 'error');
     }
+  };
+
+  const saveAdminPayConfig = async () => {
+    setAdminPaySaving(true);
+    try {
+      await request(`${BASE}/payment-config`, { method: 'POST', body: JSON.stringify(adminPayCfg) });
+      onToast('✅ Payment config saved');
+      loadBilling();
+    } catch (e: any) { onToast(e.message, 'error'); }
+    finally { setAdminPaySaving(false); }
   };
 
   const saveTutorials = async () => {
@@ -1803,18 +1822,30 @@ export function AdminPanel({ th, onToast, onLogout }: {
             : <div style={{ textAlign: 'center', padding: 40 }}><Spinner size={22}/></div>
         )}
         {tab === 'billing' && (
-          <BillingTab
-            th={th}
-            data={billingData}
-            supportConfig={billingSupport}
-            loading={billingLoading}
-            subFilter={billingSubFilter}
-            setSubFilter={setBillingSubFilter}
-            onRefresh={loadBilling}
-            onConfirmPayment={confirmPayment}
-            onSetSubscription={setSubscription}
-            onSaveSupport={saveBillingSupport}
-          />
+          <>
+            <BillingTab
+              th={th}
+              data={billingData}
+              supportConfig={billingSupport}
+              loading={billingLoading}
+              subFilter={billingSubFilter}
+              setSubFilter={setBillingSubFilter}
+              onRefresh={loadBilling}
+              onConfirmPayment={confirmPayment}
+              onSetSubscription={setSubscription}
+              onSaveSupport={saveBillingSupport}
+            />
+            <AdminPaymentSetup
+              th={th}
+              cfg={adminPayCfg}
+              setCfg={setAdminPayCfg}
+              activeTab={adminPayTab}
+              setActiveTab={setAdminPayTab}
+              smsLog={adminSmsLog}
+              saving={adminPaySaving}
+              onSave={saveAdminPayConfig}
+            />
+          </>
         )}
 
         {tab === 'wallet' && (
@@ -3854,6 +3885,150 @@ function PaymentGatewaySection({ th, pageId, request }: { th: any; pageId: numbe
       <div style={{ fontSize: 12, color: th.muted, marginTop: 8 }}>
         <strong>Direct API</strong> (bKash/Nagad): Customer transaction ID automatically verify হবে।{' '}
         <strong>Gateway</strong> (SSLCommerz/ShurjoPay/ZiniPay): Bot payment link পাঠাবে।
+      </div>
+    </div>
+  );
+}
+
+// ── Admin Payment Setup Component ─────────────────────────────────────────
+function AdminPaymentSetup({ th, cfg, setCfg, activeTab, setActiveTab, smsLog, saving, onSave }: {
+  th: Theme; cfg: any; setCfg: (v: any) => void;
+  activeTab: string; setActiveTab: (t: any) => void;
+  smsLog: any[]; saving: boolean; onSave: () => void;
+}) {
+  const inp = { ...th.input, marginTop: 4 };
+  const TABS = [
+    { key: 'sms',    icon: '📲', label: 'SMS Gateway',  color: '#8b5cf6' },
+    { key: 'bkash',  icon: '💜', label: 'bKash API',    color: '#e11d9b' },
+    { key: 'nagad',  icon: '🟠', label: 'Nagad API',    color: '#f97316' },
+    { key: 'manual', icon: '✍️', label: 'Manual Only',  color: '#6b7280' },
+  ];
+  const API_BASE = (window as any).API_BASE || (import.meta as any)?.env?.VITE_API_BASE || 'http://localhost:3000';
+  const smsWebhookUrl = cfg.smsGatewayToken
+    ? `${API_BASE}/admin/sms-incoming?token=${cfg.smsGatewayToken}`
+    : '— Token সেট করুন —';
+
+  return (
+    <div style={{ ...th.card, marginTop: 16 }}>
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ fontWeight: 800, fontSize: 16, color: th.text }}>💳 আমার Payment System</div>
+        <div style={{ fontSize: 12.5, color: th.muted, marginTop: 3 }}>
+          Users কীভাবে আপনাকে payment করে wallet recharge করবে তা setup করুন।
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
+        {TABS.map(t => (
+          <button key={t.key} onClick={() => setActiveTab(t.key)}
+            style={{ padding: '7px 14px', borderRadius: 20, border: `1.5px solid ${activeTab === t.key ? t.color : th.border}`,
+              background: activeTab === t.key ? t.color + '18' : 'transparent',
+              color: activeTab === t.key ? t.color : th.muted, fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+            {t.icon} {t.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === 'sms' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ background: '#8b5cf618', border: '1px solid #8b5cf640', borderRadius: 10, padding: 12, fontSize: 13, color: th.text }}>
+            📲 আপনার ফোনে SMS Gateway app ইন্সটল করুন → নিচের Webhook URL দিন → আপনার bKash/Nagad/Rocket-এ payment এলে bot auto-verify করবে।
+          </div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+            <input type="checkbox" checked={!!cfg.smsGatewayEnabled} onChange={e => setCfg({ ...cfg, smsGatewayEnabled: e.target.checked })} />
+            <span style={{ fontWeight: 700, color: th.text }}>SMS Gateway চালু করুন</span>
+          </label>
+          <div>
+            <div style={{ fontSize: 11, color: th.muted, fontWeight: 600 }}>Secret Token</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input style={{ ...inp, flex: 1 }} value={cfg.smsGatewayToken || ''} placeholder="Random secret string"
+                onChange={e => setCfg({ ...cfg, smsGatewayToken: e.target.value })} />
+              <button style={{ ...th.btnGhost, whiteSpace: 'nowrap', fontSize: 12 }}
+                onClick={() => setCfg({ ...cfg, smsGatewayToken: Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2) })}>
+                🔄 Generate
+              </button>
+            </div>
+          </div>
+          {cfg.smsGatewayToken && (
+            <div>
+              <div style={{ fontSize: 11, color: th.muted, fontWeight: 600, marginBottom: 4 }}>Webhook URL (SMS Gateway app-এ দিন)</div>
+              <div style={{ background: th.surface, borderRadius: 8, padding: '9px 12px', fontSize: 12, wordBreak: 'break-all', color: '#8b5cf6', fontFamily: 'monospace', border: `1px solid ${th.border}` }}>
+                {smsWebhookUrl}
+              </div>
+            </div>
+          )}
+          {smsLog.length > 0 && (
+            <div>
+              <div style={{ fontSize: 11, color: th.muted, fontWeight: 600, marginBottom: 6 }}>সাম্প্রতিক Received SMS</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 180, overflowY: 'auto' }}>
+                {smsLog.map((s: any, i: number) => (
+                  <div key={i} style={{ ...th.card2, fontSize: 12, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <span style={{ background: s.matched ? '#22c55e22' : '#f59e0b22', color: s.matched ? '#16a34a' : '#d97706', borderRadius: 6, padding: '2px 7px', fontWeight: 700, fontSize: 11 }}>
+                      {s.matched ? '✓ Used' : '⏳ New'}
+                    </span>
+                    <span style={{ color: th.text, fontWeight: 600 }}>{String(s.method || '').toUpperCase()}</span>
+                    <span style={{ color: th.muted }}>৳{s.amount}</span>
+                    <span style={{ color: '#8b5cf6', fontFamily: 'monospace' }}>{s.txId || '—'}</span>
+                    <span style={{ color: th.muted, marginLeft: 'auto', fontSize: 11 }}>{new Date(s.receivedAt).toLocaleTimeString('bn-BD')}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'bkash' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ background: '#e11d9b18', border: '1px solid #e11d9b40', borderRadius: 10, padding: 12, fontSize: 13, color: th.text }}>
+            💜 bKash Merchant API credentials দিন — user TxID submit করলে auto-verify হবে।
+          </div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+            <input type="checkbox" checked={!!cfg.bkashEnabled} onChange={e => setCfg({ ...cfg, bkashEnabled: e.target.checked })} />
+            <span style={{ fontWeight: 700, color: th.text }}>bKash Direct API চালু করুন</span>
+          </label>
+          {(['bkashUsername', 'bkashAppKey', 'bkashAppSecret', 'bkashPassword'] as const).map(k => (
+            <div key={k}>
+              <div style={{ fontSize: 11, color: th.muted, fontWeight: 600 }}>{k.replace('bkash', '').replace(/([A-Z])/g, ' $1').trim()}</div>
+              <input style={inp} type={k.includes('Secret') || k.includes('Password') ? 'password' : 'text'}
+                value={cfg[k] || ''} onChange={e => setCfg({ ...cfg, [k]: e.target.value })} />
+            </div>
+          ))}
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13 }}>
+            <input type="checkbox" checked={!!cfg.bkashSandbox} onChange={e => setCfg({ ...cfg, bkashSandbox: e.target.checked })} />
+            <span style={{ color: th.muted }}>Sandbox mode (testing)</span>
+          </label>
+        </div>
+      )}
+
+      {activeTab === 'nagad' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ background: '#f9730018', border: '1px solid #f9730040', borderRadius: 10, padding: 12, fontSize: 13, color: th.text }}>
+            🟠 Nagad Merchant API credentials দিন — user TxID submit করলে auto-verify হবে।
+          </div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+            <input type="checkbox" checked={!!cfg.nagadEnabled} onChange={e => setCfg({ ...cfg, nagadEnabled: e.target.checked })} />
+            <span style={{ fontWeight: 700, color: th.text }}>Nagad Direct API চালু করুন</span>
+          </label>
+          {(['nagadMerchantId', 'nagadMerchantPrivateKey', 'nagadApiBaseUrl'] as const).map(k => (
+            <div key={k}>
+              <div style={{ fontSize: 11, color: th.muted, fontWeight: 600 }}>{k.replace('nagad', '').replace(/([A-Z])/g, ' $1').trim()}</div>
+              <input style={inp} type={k.includes('Key') ? 'password' : 'text'}
+                value={cfg[k] || ''} placeholder={k === 'nagadApiBaseUrl' ? 'https://api.mynagad.com' : ''}
+                onChange={e => setCfg({ ...cfg, [k]: e.target.value })} />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {activeTab === 'manual' && (
+        <div style={{ background: th.surface, borderRadius: 10, padding: 14, fontSize: 13.5, color: th.muted, lineHeight: 1.7, border: `1px solid ${th.border}` }}>
+          ✍️ <strong style={{ color: th.text }}>Manual mode</strong> — user TxID submit করবে, আপনি Wallet tab থেকে manually approve করবেন। এটা সবসময় available।
+        </div>
+      )}
+
+      <div style={{ marginTop: 16 }}>
+        <button style={{ ...th.btnPrimary, opacity: saving ? 0.7 : 1 }} onClick={onSave} disabled={saving}>
+          {saving ? '⏳ Saving…' : '💾 Save Payment Config'}
+        </button>
       </div>
     </div>
   );

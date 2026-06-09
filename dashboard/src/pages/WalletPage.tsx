@@ -99,7 +99,7 @@ export default function WalletPage({
     }
     setSubmitting(true);
     try {
-      await request(`${API_BASE}/client-dashboard/${pageId}/wallet/recharge-request`, {
+      const res = await request<any>(`${API_BASE}/client-dashboard/${pageId}/wallet/recharge-request`, {
         method: 'POST',
         body: JSON.stringify({
           amountBdt: Number(form.amountBdt),
@@ -108,7 +108,11 @@ export default function WalletPage({
           note: form.note.trim() || undefined,
         }),
       });
-      onToast('✅ Recharge request জমা হয়েছে! Admin approve করলে balance যোগ হবে।', 'success');
+      if (res?.autoVerified) {
+        onToast('✅ Payment auto-verified! Balance এখনই যোগ হয়েছে।', 'success');
+      } else {
+        onToast('✅ Recharge request জমা হয়েছে! Admin approve করলে balance যোগ হবে।', 'success');
+      }
       setForm({ amountBdt: '', method: 'bkash', transactionId: '', note: '' });
       setActiveTab('requests');
       load();

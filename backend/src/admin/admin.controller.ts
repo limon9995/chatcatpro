@@ -215,6 +215,52 @@ export class AdminController {
     return this.svc.saveGlobalConfig(b || {});
   }
 
+  // ── Admin Payment Config ──────────────────────────────────────────────────
+  @Get('payment-config')
+  getAdminPaymentConfig() {
+    const cfg = this.svc.getGlobalConfig();
+    const p = cfg.adminPayment || {};
+    // Mask secrets before returning
+    return {
+      smsGatewayEnabled: p.smsGatewayEnabled ?? false,
+      smsGatewayToken: p.smsGatewayToken ?? '',
+      bkashEnabled: p.bkashEnabled ?? false,
+      bkashAppKey: p.bkashAppKey ? '***' + p.bkashAppKey.slice(-4) : '',
+      bkashAppSecret: p.bkashAppSecret ? '••••••••' : '',
+      bkashUsername: p.bkashUsername ?? '',
+      bkashSandbox: p.bkashSandbox ?? false,
+      nagadEnabled: p.nagadEnabled ?? false,
+      nagadMerchantId: p.nagadMerchantId ?? '',
+      nagadMerchantPrivateKey: p.nagadMerchantPrivateKey ? '••••••••' : '',
+      recentSms: this.svc.getRecentAdminSms(),
+    };
+  }
+
+  @Post('payment-config')
+  saveAdminPaymentConfig(@Body() b: any) {
+    const current = this.svc.getGlobalConfig().adminPayment || {};
+    // Don't overwrite secrets if placeholder sent
+    const patch: any = { ...b };
+    if (patch.bkashAppSecret === '••••••••') delete patch.bkashAppSecret;
+    if (patch.nagadMerchantPrivateKey === '••••••••') delete patch.nagadMerchantPrivateKey;
+    this.svc.saveGlobalConfig({ adminPayment: { ...current, ...patch } });
+    return { success: true };
+  }
+
+  @Post('sms-incoming')
+  receiveAdminSms(@Query('token') token: string, @Body() b: any) {
+    const cfg = this.svc.getGlobalConfig().adminPayment || {};
+    if (!cfg.smsGatewayEnabled || !cfg.smsGatewayToken || token !== cfg.smsGatewayToken) {
+      return { success: false, message: 'Invalid token' };
+    }
+    const raw = String(b?.message || b?.text || '');
+    if (!raw) return { success: false };
+    // Reuse the SmsParser from sms-gateway module
+    const parsed = this.svc.parseAdminSms(raw);
+    this.svc.saveAdminSms({ ...parsed, rawText: raw, receivedAt: new Date().toISOString() });
+    return { success: true };
+  }
+
   // ── Manual Call Queue ─────────────────────────────────────────────────────
   @Get('call-queue')
   getCallQueue(@Query('pageId') pageId?: string) {

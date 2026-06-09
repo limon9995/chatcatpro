@@ -22,6 +22,7 @@ import { CourierService } from '../courier/courier.service';
 import { CourierAccountingService } from '../courier/courier-accounting.service';
 import { OrderNotificationService } from '../orders/order-notification.service';
 import { TelegramService } from '../common/telegram.service';
+import { AdminService } from '../admin/admin.service';
 
 @Injectable()
 export class ClientDashboardService {
@@ -55,6 +56,7 @@ export class ClientDashboardService {
     private readonly courierAccounting: CourierAccountingService,
     private readonly orderNotification: OrderNotificationService,
     private readonly telegram: TelegramService,
+    private readonly adminService: AdminService,
   ) {}
 
   // ── Summary ────────────────────────────────────────────────────────────────
@@ -1804,7 +1806,34 @@ Return ONLY valid JSON (no markdown):
       },
     });
 
+    // ── Auto-verify via admin payment config ────────────────────────────────
+    const adminPay = this.adminService.getGlobalConfig().adminPayment || {};
+    let autoVerified = false;
+
+    if (adminPay.smsGatewayEnabled) {
+      const match = this.adminService.matchAdminSms(transactionId.trim(), amountBdt);
+      if (match.matched) {
+        await this.prisma.walletRechargeRequest.update({
+          where: { id: req.id },
+          data: { status: 'approved', approvedAt: new Date(), approvedBy: 'auto-sms' },
+        });
+        await this.walletService.rechargeWallet(pageId, amountBdt, `${method}:${transactionId.trim()}`);
+        autoVerified = true;
+      }
+    }
+
     const page = await this.prisma.page.findUnique({ where: { id: pageId }, select: { pageName: true } });
+
+    if (autoVerified) {
+      void this.telegram.sendMessage(
+        `✅ <b>Wallet Auto-Verified!</b>\n` +
+        `🏪 Page: ${page?.pageName || pageId}\n` +
+        `💵 Amount: ৳${amountBdt}\n` +
+        `📱 Method: ${method} | TxID: ${transactionId.trim()}`,
+      );
+      return { success: true, requestId: req.id, autoVerified: true, message: 'Payment auto-verified! Balance যোগ হয়েছে।' };
+    }
+
     void this.telegram.sendMessage(
       `💰 <b>নতুন Wallet Recharge Request!</b>\n` +
       `🏪 Page: ${page?.pageName || pageId}\n` +
@@ -1815,7 +1844,7 @@ Return ONLY valid JSON (no markdown):
       `🕐 সময়: ${new Date().toLocaleString('bn-BD', { timeZone: 'Asia/Dhaka' })}`,
     );
 
-    return { success: true, requestId: req.id };
+    return { success: true, requestId: req.id, autoVerified: false };
   }
 
   async getRechargeRequests(pageId: number) {
