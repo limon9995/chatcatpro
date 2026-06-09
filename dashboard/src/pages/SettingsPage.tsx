@@ -1677,17 +1677,17 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {[
                       {
-                        name: 'SMS Gateway for Android',
-                        badge: copy('✅ টেস্ট করা', '✅ Tested'),
+                        name: 'ChatCat PaySync',
+                        badge: copy('⭐ অফিসিয়াল (প্রস্তাবিত)', '⭐ Official (Recommended)'),
                         badgeColor: '#10b981',
-                        desc: copy('Open source (capcom6)। Webhook support আছে, incoming SMS JSON-এ পাঠায়। ChatCat-এর সাথে tested।', 'Open source (capcom6). Has webhook support, sends incoming SMS as JSON. Tested with ChatCat.'),
-                        url: 'https://github.com/capcom6/android-sms-gateway/releases',
+                        desc: copy('চ্যাটক্যাট-এর নিজস্ব পেমেন্ট সিঙ্ক অ্যাপ। সবচেয়ে সহজ ও সবচেয়ে বিশ্বস্ত।', 'ChatCat\'s own payment sync app. Simplest and most reliable.'),
+                        url: '/downloads/chatcat-paysync.apk',
                         btnText: copy('⬇ APK Download', '⬇ APK Download'),
-                        btnColor: '#059669',
+                        btnColor: '#10b981',
                       },
                       {
                         name: 'SMS to URL Forwarder',
-                        badge: copy('সহজ', 'Simple'),
+                        badge: copy('সহজ (বিকল্প)', 'Simple (Alternative)'),
                         badgeColor: '#3b82f6',
                         desc: copy('Lightweight, open source। শুধু incoming SMS কে URL-এ POST করে।', 'Lightweight, open source. Simply POSTs incoming SMS to a URL.'),
                         url: 'https://github.com/bogkonstantin/android_income_sms_gateway_webhook/releases',
@@ -1786,6 +1786,25 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
                         <span style={{ fontSize: 12.5, color: th.muted, lineHeight: 1.5 }}>{step}</span>
                       </div>
                     ))}
+                  </div>
+
+                  {/* Android 13+ / MIUI Restricted settings warning */}
+                  <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px dashed ${th.border}`, fontSize: 12, color: th.muted, lineHeight: 1.6 }}>
+                    <div style={{ fontWeight: 800, color: '#eab308', marginBottom: 6 }}>
+                      ⚠️ {copy('Android 13+ / Xiaomi / MIUI / HyperOS ব্যবহারকারীদের জন্য:', 'For Android 13+ / Xiaomi / MIUI / HyperOS Users:')}
+                    </div>
+                    <div>
+                      {copy(
+                        'অ্যাপটি প্লে স্টোরের বাইরে থেকে ইনস্টল করায় অ্যান্ড্রয়েড ওএস পারমিশন ব্লক করে দিতে পারে (Restricted Setting)। পারমিশন দিতে নিচের ধাপগুলো অনুসরণ করুন:',
+                        'Android OS may block SMS permissions for sideloaded apps (Restricted Setting). Follow these steps to unlock:'
+                      )}
+                    </div>
+                    <div style={{ paddingLeft: 12, marginTop: 4, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <div>• {copy('ফোনের Settings ➔ Apps ➔ Manage Apps ➔ ChatCat PaySync (বা আপনার ইনস্টল করা অ্যাপটি) সিলেক্ট করুন।', 'Go to Phone Settings ➔ Apps ➔ Manage Apps ➔ Select ChatCat PaySync (or your installed app).')}</div>
+                      <div>• {copy('পেজের একদম ওপরে ডান কোণায় থাকা ৩টি ডট (⋮) এ ক্লিক করুন (অথবা পেজের নিচের দিকে স্ক্রল করুন)।', 'Click the three dots (⋮) at the top-right corner (or scroll to the bottom).')}</div>
+                      <div>• {copy('"Allow restricted settings" (সীমাবদ্ধ সেটিংস অনুমোদন করুন) এ ক্লিক করে ফিঙ্গারপ্রিন্ট/পিন দিয়ে অ্যাক্টিভেট করুন।', 'Click "Allow restricted settings" and unlock with fingerprint/pin.')}</div>
+                      <div>• {copy('এবার অ্যাপটি আবার ওপেন করে পেমেন্ট SMS রিড করার অনুমতি (Allow SMS Permission) দিন।', 'Reopen the app and grant the SMS permission successfully.')}</div>
+                    </div>
                   </div>
                 </div>
 
