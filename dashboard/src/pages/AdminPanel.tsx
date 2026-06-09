@@ -441,6 +441,18 @@ export function AdminPanel({ th, onToast, onLogout }: {
     } catch { /* silent — fallback to defaults */ }
   }, [BASE]);
 
+  const saveDefaultPricing = async () => {
+    setPricingSaving(true);
+    try {
+      await request<any>(`${BASE}/wallet/pricing/save-default`, {
+        method: 'POST',
+        body: JSON.stringify(pricingForm),
+      });
+      onToast('✅ Default pricing saved — নতুন client রা এই rate পাবে', 'success');
+    } catch (e: any) { onToast(e.message, 'error'); }
+    finally { setPricingSaving(false); }
+  };
+
   const applyPricingToAll = async () => {
     setPricingSaving(true);
     try {
@@ -1871,6 +1883,7 @@ export function AdminPanel({ th, onToast, onLogout }: {
             form={pricingForm}
             setForm={setPricingForm}
             saving={pricingSaving}
+            onSaveDefault={saveDefaultPricing}
             onApplyAll={applyPricingToAll}
           />
         )}
@@ -3322,11 +3335,12 @@ const PRICING_FIELDS: { key: keyof PricingForm; label: string; help: string }[] 
   { key: 'costPerMemoPrintBdt',      label: 'Memo Print (৳)',                help: 'প্রতিটি invoice/memo print এর charge' },
 ];
 
-function AdminPricingTab({ th, form, setForm, saving, onApplyAll }: {
+function AdminPricingTab({ th, form, setForm, saving, onSaveDefault, onApplyAll }: {
   th: Theme;
   form: PricingForm;
   setForm: (v: PricingForm | ((p: PricingForm) => PricingForm)) => void;
   saving: boolean;
+  onSaveDefault: () => void;
   onApplyAll: () => void;
 }) {
   return (
@@ -3354,37 +3368,49 @@ function AdminPricingTab({ th, form, setForm, saving, onApplyAll }: {
 
         <div style={{ marginTop: 20, padding: '12px 14px', background: th.accentSoft, borderRadius: 8, fontSize: 12.5, color: th.muted, lineHeight: 1.6 }}>
           <strong style={{ color: th.accent }}>কীভাবে কাজ করে:</strong><br />
-          এই form এ price দিয়ে "সবার জন্য Apply করুন" চাপলে সব active client এর pricing একসাথে update হবে।
-          Individual client এর জন্য Wallet tab থেকে আলাদাভাবে set করা যাবে।
+          <strong>Default Save:</strong> শুধু default pricing update হবে — নতুন client রা এই price পাবে।<br />
+          <strong>সবার জন্য Apply:</strong> Default save + সব existing client এর pricing এখনই update হবে।
         </div>
 
-        <button
-          style={{
-            ...th.btnPrimary,
-            width: '100%',
-            marginTop: 18,
-            padding: '13px 0',
-            fontSize: 15,
-            fontWeight: 800,
-            background: saving ? th.muted : 'linear-gradient(135deg, #4f46e5, #8b5cf6)',
-            boxShadow: saving ? 'none' : '0 6px 20px rgba(79, 70, 229, 0.35)',
-            border: 'none',
-            borderRadius: 12,
-            transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
-            cursor: saving ? 'not-allowed' : 'pointer',
-            letterSpacing: '-0.01em',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 8
-          }}
-          disabled={saving}
-          onClick={onApplyAll}
-          onMouseOver={e => !saving && (e.currentTarget.style.transform = 'translateY(-2px)')}
-          onMouseOut={e => !saving && (e.currentTarget.style.transform = 'translateY(0)')}
-        >
-          {saving ? <Spinner size={16} color="#fff" /> : <span>✨ সবার জন্য Apply করুন</span>}
-        </button>
+        <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
+          <button
+            style={{
+              ...th.btnPrimary,
+              flex: 1,
+              padding: '12px 0',
+              fontSize: 14,
+              fontWeight: 700,
+              background: saving ? th.muted : th.accent,
+              border: 'none',
+              borderRadius: 10,
+              cursor: saving ? 'not-allowed' : 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+            }}
+            disabled={saving}
+            onClick={onSaveDefault}
+          >
+            {saving ? <Spinner size={14} color="#fff" /> : <span>💾 Default Save</span>}
+          </button>
+          <button
+            style={{
+              ...th.btnPrimary,
+              flex: 1,
+              padding: '12px 0',
+              fontSize: 14,
+              fontWeight: 800,
+              background: saving ? th.muted : 'linear-gradient(135deg, #4f46e5, #8b5cf6)',
+              boxShadow: saving ? 'none' : '0 4px 16px rgba(79, 70, 229, 0.35)',
+              border: 'none',
+              borderRadius: 10,
+              cursor: saving ? 'not-allowed' : 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+            }}
+            disabled={saving}
+            onClick={onApplyAll}
+          >
+            {saving ? <Spinner size={14} color="#fff" /> : <span>✨ সবার জন্য Apply</span>}
+          </button>
+        </div>
       </div>
 
       <div style={{ ...th.card }}>

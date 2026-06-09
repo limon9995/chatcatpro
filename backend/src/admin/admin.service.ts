@@ -863,40 +863,57 @@ export class AdminService {
     return { success: true };
   }
 
+  private readonly globalPricingFile = path.join(
+    process.cwd(),
+    'storage',
+    'global-pricing.json',
+  );
+
+  private readonly DEFAULT_GLOBAL_PRICING = {
+    costPerKeywordReplyBdt: 0.02,
+    costPerTextMsgBdt: 0.05,
+    costPerImageBdt: 0.20,
+    costPerImageLocalBdt: 0.10,
+    costPerOcrLocalBdt: 0.02,
+    costPerOcrAiBdt: 0.05,
+    costPerVoiceMsgBdt: 1.00,
+    costPerAnalyzeBdt: 0.20,
+    costPerAiGenerateBdt: 0.10,
+    costPerBroadcastMsgBdt: 0.05,
+    costPerRecurringNotifBdt: 0.10,
+    costPerCommentReplyBdt: 0.05,
+    costPerMemoPrintBdt: 0.10,
+  };
+
+  private _readGlobalPricing(): typeof this.DEFAULT_GLOBAL_PRICING {
+    try {
+      if (fs.existsSync(this.globalPricingFile)) {
+        const saved = JSON.parse(fs.readFileSync(this.globalPricingFile, 'utf8'));
+        return { ...this.DEFAULT_GLOBAL_PRICING, ...saved };
+      }
+    } catch {}
+    return { ...this.DEFAULT_GLOBAL_PRICING };
+  }
+
+  private _writeGlobalPricing(pricing: Partial<typeof this.DEFAULT_GLOBAL_PRICING>) {
+    fs.mkdirSync(path.dirname(this.globalPricingFile), { recursive: true });
+    const current = this._readGlobalPricing();
+    const updated = { ...current, ...pricing };
+    fs.writeFileSync(this.globalPricingFile, JSON.stringify(updated, null, 2), 'utf8');
+    return updated;
+  }
+
   async getGlobalPricing() {
-    const page = await this.prisma.page.findFirst({
-      select: {
-        costPerTextMsgBdt: true,
-        costPerVoiceMsgBdt: true,
-        costPerImageBdt: true,
-        costPerImageLocalBdt: true,
-        costPerAnalyzeBdt: true,
-        costPerOcrLocalBdt: true,
-        costPerOcrAiBdt: true,
-        costPerRecurringNotifBdt: true,
-        costPerBroadcastMsgBdt: true,
-        costPerKeywordReplyBdt: true,
-        costPerAiGenerateBdt: true,
-        costPerMemoPrintBdt: true,
-        costPerCommentReplyBdt: true,
-      },
-      orderBy: { id: 'asc' },
-    });
-    return {
-      costPerTextMsgBdt: page?.costPerTextMsgBdt ?? 0.05,
-      costPerVoiceMsgBdt: page?.costPerVoiceMsgBdt ?? 1.00,
-      costPerImageBdt: page?.costPerImageBdt ?? 0.20,
-      costPerImageLocalBdt: page?.costPerImageLocalBdt ?? 0.10,
-      costPerAnalyzeBdt: page?.costPerAnalyzeBdt ?? 0.20,
-      costPerOcrLocalBdt: page?.costPerOcrLocalBdt ?? 0.02,
-      costPerOcrAiBdt: page?.costPerOcrAiBdt ?? 0.05,
-      costPerRecurringNotifBdt: page?.costPerRecurringNotifBdt ?? 0.10,
-      costPerBroadcastMsgBdt: page?.costPerBroadcastMsgBdt ?? 0.05,
-      costPerKeywordReplyBdt: page?.costPerKeywordReplyBdt ?? 0.02,
-      costPerAiGenerateBdt: page?.costPerAiGenerateBdt ?? 0.10,
-      costPerMemoPrintBdt: page?.costPerMemoPrintBdt ?? 0.10,
-      costPerCommentReplyBdt: page?.costPerCommentReplyBdt ?? 0.05,
-    };
+    return this._readGlobalPricing();
+  }
+
+  getDefaultPricing() {
+    return { ...this.DEFAULT_GLOBAL_PRICING };
+  }
+
+  async saveDefaultPricing(pricing: Partial<typeof this.DEFAULT_GLOBAL_PRICING>) {
+    const updated = this._writeGlobalPricing(pricing);
+    return { success: true, pricing: updated };
   }
 
   async applyPricingToAll(pricing: {
@@ -929,6 +946,8 @@ export class AdminService {
     if (pricing.costPerMemoPrintBdt !== undefined) data.costPerMemoPrintBdt = pricing.costPerMemoPrintBdt;
     if (pricing.costPerCommentReplyBdt !== undefined) data.costPerCommentReplyBdt = pricing.costPerCommentReplyBdt;
     if (!Object.keys(data).length) return { success: false, updated: 0 };
+    // Save as new global defaults so future pages & UI always show correct values
+    this._writeGlobalPricing(pricing as any);
     const result = await this.prisma.page.updateMany({ data });
     return { success: true, updated: result.count };
   }

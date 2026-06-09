@@ -5,6 +5,8 @@ import {
   Logger,
 } from '@nestjs/common';
 import * as crypto from 'crypto';
+import * as fs from 'fs';
+import * as path from 'path';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthService } from '../auth/auth.service';
 import { EncryptionService } from '../common/encryption.service';
@@ -16,6 +18,32 @@ type PendingOAuthResult = {
   pages: FacebookPageInfo[];
   createdAt: number;
 };
+
+const DEFAULT_PRICING = {
+  costPerKeywordReplyBdt: 0.02,
+  costPerTextMsgBdt: 0.05,
+  costPerImageBdt: 0.20,
+  costPerImageLocalBdt: 0.10,
+  costPerOcrLocalBdt: 0.02,
+  costPerOcrAiBdt: 0.05,
+  costPerVoiceMsgBdt: 1.00,
+  costPerAnalyzeBdt: 0.20,
+  costPerAiGenerateBdt: 0.10,
+  costPerBroadcastMsgBdt: 0.05,
+  costPerRecurringNotifBdt: 0.10,
+  costPerCommentReplyBdt: 0.05,
+  costPerMemoPrintBdt: 0.10,
+};
+
+function readGlobalPricing(): typeof DEFAULT_PRICING {
+  try {
+    const file = path.join(process.cwd(), 'storage', 'global-pricing.json');
+    if (fs.existsSync(file)) {
+      return { ...DEFAULT_PRICING, ...JSON.parse(fs.readFileSync(file, 'utf8')) };
+    }
+  } catch {}
+  return { ...DEFAULT_PRICING };
+}
 
 @Injectable()
 export class FacebookService {
@@ -196,6 +224,7 @@ export class FacebookService {
             fbAppId: submittedFbAppId,
             fbAppSecret: encryptedFbAppSecret,
             ...(masterPageId !== undefined ? { masterPageId } : {}),
+            ...readGlobalPricing(),
           },
         });
 

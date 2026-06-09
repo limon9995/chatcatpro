@@ -292,6 +292,26 @@ export class AdminController {
     return this.svc.getGlobalPricing();
   }
 
+  @Post('wallet/pricing/save-default')
+  saveDefaultPricing(@Body() b: any) {
+    const n = (v: any) => (v !== undefined ? Number(v) : undefined);
+    return this.svc.saveDefaultPricing({
+      costPerTextMsgBdt: n(b?.costPerTextMsgBdt),
+      costPerVoiceMsgBdt: n(b?.costPerVoiceMsgBdt),
+      costPerImageBdt: n(b?.costPerImageBdt),
+      costPerImageLocalBdt: n(b?.costPerImageLocalBdt),
+      costPerAnalyzeBdt: n(b?.costPerAnalyzeBdt),
+      costPerOcrLocalBdt: n(b?.costPerOcrLocalBdt),
+      costPerOcrAiBdt: n(b?.costPerOcrAiBdt),
+      costPerRecurringNotifBdt: n(b?.costPerRecurringNotifBdt),
+      costPerBroadcastMsgBdt: n(b?.costPerBroadcastMsgBdt),
+      costPerKeywordReplyBdt: n(b?.costPerKeywordReplyBdt),
+      costPerAiGenerateBdt: n(b?.costPerAiGenerateBdt),
+      costPerMemoPrintBdt: n(b?.costPerMemoPrintBdt),
+      costPerCommentReplyBdt: n(b?.costPerCommentReplyBdt),
+    });
+  }
+
   @Post('wallet/pricing/apply-all')
   applyPricingToAll(@Body() b: any) {
     const n = (v: any) => (v !== undefined ? Number(v) : undefined);
