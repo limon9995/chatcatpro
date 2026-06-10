@@ -568,7 +568,7 @@ export class AuthService {
     email?: string;
   }) {
     const raw = body.username || body.identifier || body.email || '';
-    const n = String(raw).trim().toLowerCase();
+    const n = String(raw).trim().toLowerCase().replace(/\s+/g, '');
     if (!n) throw new UnauthorizedException('username is required');
     return n;
   }
