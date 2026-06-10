@@ -463,7 +463,7 @@ export function AdminPanel({ th, onToast, onLogout }: {
         method: 'POST',
         body: JSON.stringify(pricingForm),
       });
-      onToast('✅ Default pricing saved — নতুন client রা এই rate পাবে', 'success');
+      onToast('✅ Default pricing saved — নতুন client রা এই rate পাবে এবং landing page আপডেট হয়েছে', 'success');
     } catch (e: any) { onToast(e.message, 'error'); }
     finally { setPricingSaving(false); }
   };
@@ -475,7 +475,7 @@ export function AdminPanel({ th, onToast, onLogout }: {
         method: 'POST',
         body: JSON.stringify(pricingForm),
       });
-      onToast(`✅ ${r.updated} client এ pricing update হয়েছে`, 'success');
+      onToast(`✅ ${r.updated} client এ pricing update হয়েছে — landing page ও আপডেট হয়েছে`, 'success');
     } catch (e: any) { onToast(e.message, 'error'); }
     finally { setPricingSaving(false); }
   };
@@ -3482,7 +3482,7 @@ function AdminPricingTab({ th, form, setForm, saving, onSaveDefault, onApplyAll 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 520 }}>
       <div style={{ ...th.card }}>
-        <CardHeader th={th} title="Global Usage Pricing" sub="এই rates সব client এ একসাথে apply করা যাবে" />
+        <CardHeader th={th} title="Global Usage Pricing" sub="এই rates সব client এ একসাথে apply করা যাবে এবং Landing Page এ দেখাবে" />
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 16 }}>
           {PRICING_FIELDS.map(({ key, label, help }) => (
             <div key={key} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -3504,8 +3504,9 @@ function AdminPricingTab({ th, form, setForm, saving, onSaveDefault, onApplyAll 
 
         <div style={{ marginTop: 20, padding: '12px 14px', background: th.accentSoft, borderRadius: 8, fontSize: 12.5, color: th.muted, lineHeight: 1.6 }}>
           <strong style={{ color: th.accent }}>কীভাবে কাজ করে:</strong><br />
-          <strong>Default Save:</strong> শুধু default pricing update হবে — নতুন client রা এই price পাবে।<br />
-          <strong>সবার জন্য Apply:</strong> Default save + সব existing client এর pricing এখনই update হবে।
+          <strong>Default Save:</strong> Default pricing + <strong style={{ color: th.accent }}>Landing Page</strong> update হবে — নতুন client রা এই price পাবে।<br />
+          <strong>সবার জন্য Apply:</strong> Default save + সব existing client এর pricing + <strong style={{ color: th.accent }}>Landing Page</strong> এখনই update হবে।<br />
+          <strong>Messenger chatbot:</strong> প্রতিটি page এর নিজস্ব rate অনুযায়ী wallet থেকে কাটে।
         </div>
 
         <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>

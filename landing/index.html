@@ -2483,17 +2483,17 @@
               <div
                 style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-radius:10px;background:rgba(255,255,255,0.04);border:1px solid var(--border)">
                 <div style="font-size:13px;font-weight:600">💬 Text reply</div>
-                <div style="font-size:15px;font-weight:900;color:#10b981">৳০.০৫</div>
+                <div id="lp-price-text" style="font-size:15px;font-weight:900;color:#10b981">৳০.০৫</div>
               </div>
               <div
                 style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-radius:10px;background:rgba(255,255,255,0.04);border:1px solid var(--border)">
                 <div style="font-size:13px;font-weight:600">🎙️ Voice note (STT)</div>
-                <div style="font-size:15px;font-weight:900;color:#10b981">৳০.৫০</div>
+                <div id="lp-price-voice" style="font-size:15px;font-weight:900;color:#10b981">৳১.০০</div>
               </div>
               <div
                 style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-radius:10px;background:rgba(255,255,255,0.04);border:1px solid var(--border)">
                 <div style="font-size:13px;font-weight:600">🖼️ Customer image check</div>
-                <div style="font-size:15px;font-weight:900;color:#10b981">৳১.২০</div>
+                <div id="lp-price-image" style="font-size:15px;font-weight:900;color:#10b981">৳০.২০</div>
               </div>
             </div>
           </div>
@@ -4139,6 +4139,24 @@
           input.focus();
         }
       }
+    })();
+  </script>
+  <script>
+    (function () {
+      function fmt(v) {
+        return '৳' + Number(v).toLocaleString('bn-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      }
+      fetch('https://api.chatcat.pro/public/pricing')
+        .then(function (r) { return r.json(); })
+        .then(function (p) {
+          var t = document.getElementById('lp-price-text');
+          var v = document.getElementById('lp-price-voice');
+          var i = document.getElementById('lp-price-image');
+          if (t && p.costPerTextMsgBdt !== undefined) t.textContent = fmt(p.costPerTextMsgBdt);
+          if (v && p.costPerVoiceMsgBdt !== undefined) v.textContent = fmt(p.costPerVoiceMsgBdt);
+          if (i && p.costPerImageBdt !== undefined) i.textContent = fmt(p.costPerImageBdt);
+        })
+        .catch(function () { /* fallback: hardcoded defaults stay */ });
     })();
   </script>
 </body>

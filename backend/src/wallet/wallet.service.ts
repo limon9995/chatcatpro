@@ -107,7 +107,7 @@ export class WalletService {
         }
         case 'SMART_BOT':
           // SmartBot sends large context (history + catalog) — charge 2× TEXT rate
-          amountToDeduct = (page.costPerTextMsgBdt ?? 0.04) * 2;
+          amountToDeduct = (page.costPerTextMsgBdt ?? 0.05) * 2;
           description = 'SmartBot AI Response';
           break;
         case 'MEMO_PRINT': {
