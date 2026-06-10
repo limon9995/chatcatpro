@@ -462,8 +462,12 @@ Customer-এর message দেখে **strictly valid JSON** return করো:
       const key = this.geminiRotator.getKey();
       if (!key) break;
       const result = await this.callGeminiWithKey(key, messages);
-      if (result === 'QUOTA_EXCEEDED') {
-        this.geminiRotator.markExhausted(key);
+      if (
+        result === 'QUOTA_EXCEEDED' ||
+        result === 'SERVER_ERROR' ||
+        result === 'DISABLED' ||
+        result === null
+      ) {
         continue; // try next key
       }
       return result;
@@ -480,7 +484,8 @@ Customer-এর message দেখে **strictly valid JSON** return করো:
   private async callGeminiWithKey(
     geminiKey: string,
     messages: { role: string; content: string }[],
-  ): Promise<string | null | 'QUOTA_EXCEEDED'> {
+  ): Promise<string | null | 'QUOTA_EXCEEDED' | 'SERVER_ERROR' | 'DISABLED'> {
+    const start = Date.now();
     try {
       const systemMsg = messages.find((m) => m.role === 'system');
       const rest = messages.filter((m) => m.role !== 'system');
@@ -510,21 +515,38 @@ Customer-এর message দেখে **strictly valid JSON** return করো:
         signal: AbortSignal.timeout(15_000),
       });
 
+      const latency = Date.now() - start;
+
       if (res.status === 429 || res.status === 402) {
         this.logger.warn(`[SmartBot] Gemini key ...${geminiKey.slice(-6)} quota/limit (${res.status})`);
+        this.geminiRotator.markError(geminiKey, res.status);
         return 'QUOTA_EXCEEDED';
+      }
+      if (res.status === 500 || res.status === 503 || res.status === 504) {
+        this.logger.warn(`[SmartBot] Gemini key ...${geminiKey.slice(-6)} server error (${res.status})`);
+        this.geminiRotator.markError(geminiKey, res.status);
+        return 'SERVER_ERROR';
+      }
+      if (res.status === 400 || res.status === 401 || res.status === 403) {
+        const errText = await res.text();
+        this.logger.error(`[SmartBot] Gemini key ...${geminiKey.slice(-6)} invalid/permission error (${res.status}): ${errText}`);
+        this.geminiRotator.markError(geminiKey, res.status, errText);
+        return 'DISABLED';
       }
       if (!res.ok) {
         const errText = await res.text();
         this.logger.error(`[SmartBot] Gemini error ${res.status}: ${errText.slice(0, 200)}`);
+        this.geminiRotator.markError(geminiKey, res.status, errText);
         this.recordFailure();
         return null;
       }
 
       const data = await res.json();
+      this.geminiRotator.markSuccess(geminiKey, latency);
       return (data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '').trim() || null;
     } catch (err: any) {
       this.logger.warn(`[SmartBot] Gemini network error: ${err?.message ?? err}`);
+      this.geminiRotator.markError(geminiKey, 500, err?.message ?? String(err));
       this.recordFailure();
       return null;
     }

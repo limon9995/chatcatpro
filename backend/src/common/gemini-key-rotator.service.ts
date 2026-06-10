@@ -1,11 +1,17 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ApiKeysService } from './api-keys.service';
 
-const QUOTA_COOLDOWN_MS = 60 * 60 * 1000; // 1 hour per exhausted key
-
-interface KeyState {
+export interface KeyState {
   key: string;
-  exhaustedUntil: number; // epoch ms, 0 = available
+  status: 'active' | 'cooldown' | 'disabled';
+  cooldownUntil: number; // epoch ms, 0 = active
+  successCount: number;
+  failureCount: number;
+  healthScore: number; // calculated as successCount / (successCount + failureCount) * 100
+  latencies: number[]; // array of last response times in ms
+  lastLatencyMs: number | null;
+  avgLatencyMs: number | null;
+  errorMessage?: string;
 }
 
 @Injectable()
@@ -33,9 +39,23 @@ export class GeminiKeyRotatorService {
 
     const hash = keyList.join('|');
     if (hash !== this.lastLoadHash) {
-      // Preserve exhausted state for keys that already exist
+      // Preserve state for keys that already exist
       const oldMap = new Map(this.states.map((s) => [s.key, s]));
-      this.states = keyList.map((k) => oldMap.get(k) ?? { key: k, exhaustedUntil: 0 });
+      this.states = keyList.map((k) => {
+        const old = oldMap.get(k);
+        if (old) return old;
+        return {
+          key: k,
+          status: 'active',
+          cooldownUntil: 0,
+          successCount: 0,
+          failureCount: 0,
+          healthScore: 100,
+          latencies: [],
+          lastLatencyMs: null,
+          avgLatencyMs: null,
+        };
+      });
       this.lastLoadHash = hash;
       this.logger.log(`[GeminiRotator] Loaded ${keyList.length} key(s)`);
     }
@@ -47,8 +67,36 @@ export class GeminiKeyRotatorService {
   getKey(): string | null {
     const states = this.loadKeys();
     const now = Date.now();
-    const available = states.find((s) => s.exhaustedUntil <= now);
-    return available?.key ?? null;
+
+    // Auto-reactivate any cooldowns that have expired
+    for (const state of states) {
+      if (state.status === 'cooldown' && state.cooldownUntil <= now) {
+        state.status = 'active';
+        state.cooldownUntil = 0;
+        this.logger.log(`[GeminiRotator] Key ...${state.key.slice(-6)} cooldown expired — automatically reactivating.`);
+      }
+    }
+
+    // Filter to find active/available keys (ignore permanently disabled and keys still in cooldown)
+    const available = states.filter((s) => s.status === 'active');
+    if (available.length === 0) {
+      return null;
+    }
+
+    // Sort available keys by:
+    // 1. Health score (higher is better). If health is same,
+    // 2. Average latency (lower is better, keys with no recorded latency are treated as 0 ms to test them first)
+    // 3. Fallback to insertion order (since it's a stable sort)
+    available.sort((a, b) => {
+      if (b.healthScore !== a.healthScore) {
+        return b.healthScore - a.healthScore;
+      }
+      const avgA = a.avgLatencyMs ?? 0;
+      const avgB = b.avgLatencyMs ?? 0;
+      return avgA - avgB;
+    });
+
+    return available[0].key;
   }
 
   /** True if at least one key is available */
@@ -56,30 +104,117 @@ export class GeminiKeyRotatorService {
     return this.getKey() !== null;
   }
 
-  /** Mark a key as quota-exhausted — it won't be used for QUOTA_COOLDOWN_MS */
+  /** Legacy method to mark a key as quota-exhausted (mapped to 429 status code) */
   markExhausted(key: string): void {
+    this.markError(key, 429, 'Quota exhausted (via legacy markExhausted)');
+  }
+
+  /** Record a successful API call and update response latency */
+  markSuccess(key: string, latencyMs?: number): void {
     this.loadKeys();
     const state = this.states.find((s) => s.key === key);
     if (state) {
-      state.exhaustedUntil = Date.now() + QUOTA_COOLDOWN_MS;
-      this.logger.warn(
-        `[GeminiRotator] Key ...${key.slice(-6)} exhausted — cooldown 1h. Available keys: ${this.states.filter((s) => s.exhaustedUntil <= Date.now()).length}/${this.states.length}`,
+      state.status = 'active';
+      state.cooldownUntil = 0;
+      state.successCount++;
+      state.errorMessage = undefined;
+
+      if (latencyMs !== undefined && latencyMs !== null) {
+        state.lastLatencyMs = latencyMs;
+        state.latencies.push(latencyMs);
+        if (state.latencies.length > 10) {
+          state.latencies.shift(); // Keep last 10 latency measurements
+        }
+        const sum = state.latencies.reduce((sum, val) => sum + val, 0);
+        state.avgLatencyMs = Math.round(sum / state.latencies.length);
+      }
+
+      // Re-calculate health score: successes / total
+      const total = state.successCount + state.failureCount;
+      state.healthScore = total > 0 ? Math.round((state.successCount / total) * 100) : 100;
+
+      this.logger.log(
+        `[GeminiRotator] Key ...${key.slice(-6)} request succeeded (latency: ${latencyMs}ms, health: ${state.healthScore}%)`,
       );
     }
   }
 
+  /** Record a failed API call and assign cooldown/disable status based on code */
+  markError(key: string, statusCode: number, errorMessage?: string): void {
+    this.loadKeys();
+    const state = this.states.find((s) => s.key === key);
+    if (state) {
+      state.failureCount++;
+      state.errorMessage = errorMessage || `HTTP Error ${statusCode}`;
+
+      // Calculate health score: successes / total
+      const total = state.successCount + state.failureCount;
+      state.healthScore = total > 0 ? Math.round((state.successCount / total) * 100) : 100;
+
+      // Handle cooldown/disable logic based on status code
+      if (statusCode === 429 || statusCode === 402) {
+        // 429/402 (Quota Limit) -> 1 Hour Cooldown
+        state.status = 'cooldown';
+        state.cooldownUntil = Date.now() + 60 * 60 * 1000; // 1 hour
+        this.logger.warn(
+          `[GeminiRotator] Key ...${key.slice(-6)} hit quota limit (${statusCode}) — cooldown 1 hour. Available keys: ${
+            this.states.filter((s) => s.status === 'active').length
+          }/${this.states.length}`,
+        );
+      } else if (statusCode === 503 || statusCode === 504 || statusCode === 500) {
+        // 503 (Server Busy) / 500 (Internal Error) -> 5 Minutes Cooldown
+        state.status = 'cooldown';
+        state.cooldownUntil = Date.now() + 5 * 60 * 1000; // 5 minutes
+        this.logger.warn(
+          `[GeminiRotator] Key ...${key.slice(-6)} hit server error (${statusCode}) — cooldown 5 minutes. Available keys: ${
+            this.states.filter((s) => s.status === 'active').length
+          }/${this.states.length}`,
+        );
+      } else if (statusCode === 400 || statusCode === 401 || statusCode === 403) {
+        // Invalid API Key / Permission Denied -> Permanently Disable
+        state.status = 'disabled';
+        state.cooldownUntil = Infinity;
+        this.logger.error(
+          `[GeminiRotator] Key ...${key.slice(-6)} permanently disabled (status: ${statusCode}, msg: ${state.errorMessage}).`,
+        );
+      } else {
+        // Other errors -> 5 mins cooldown
+        state.status = 'cooldown';
+        state.cooldownUntil = Date.now() + 5 * 60 * 1000; // 5 minutes
+        this.logger.warn(
+          `[GeminiRotator] Key ...${key.slice(-6)} hit unexpected error (${statusCode}) — cooldown 5 minutes. Available keys: ${
+            this.states.filter((s) => s.status === 'active').length
+          }/${this.states.length}`,
+        );
+      }
+    }
+  }
+
   /** Returns status of all keys for admin display */
-  getStatus(): { total: number; available: number; keys: { masked: string; available: boolean; exhaustedUntil: number | null }[] } {
+  getStatus() {
     const states = this.loadKeys();
     const now = Date.now();
     return {
       total: states.length,
-      available: states.filter((s) => s.exhaustedUntil <= now).length,
-      keys: states.map((s) => ({
-        masked: `...${s.key.slice(-8)}`,
-        available: s.exhaustedUntil <= now,
-        exhaustedUntil: s.exhaustedUntil > now ? s.exhaustedUntil : null,
-      })),
+      available: states.filter((s) => s.status === 'active' || (s.status === 'cooldown' && s.cooldownUntil <= now)).length,
+      keys: states.map((s) => {
+        const isCooldownExpired = s.status === 'cooldown' && s.cooldownUntil <= now;
+        const currentStatus = isCooldownExpired ? 'active' : s.status;
+        const currentCooldownUntil = isCooldownExpired ? 0 : s.cooldownUntil;
+
+        return {
+          masked: s.key.startsWith('AIza') ? `...${s.key.slice(-8)}` : `...${s.key.slice(-6)}`,
+          available: currentStatus === 'active',
+          status: currentStatus,
+          exhaustedUntil: currentCooldownUntil > 0 && currentCooldownUntil !== Infinity ? currentCooldownUntil : null,
+          successCount: s.successCount,
+          failureCount: s.failureCount,
+          healthScore: s.healthScore,
+          lastLatencyMs: s.lastLatencyMs,
+          avgLatencyMs: s.avgLatencyMs,
+          errorMessage: s.errorMessage,
+        };
+      }),
     };
   }
 }

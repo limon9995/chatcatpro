@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ApiKeysService } from '../common/api-keys.service';
+import { GeminiKeyRotatorService } from '../common/gemini-key-rotator.service';
 import * as Tesseract from 'tesseract.js';
 import sharp from 'sharp';
 import axios from 'axios';
@@ -42,7 +43,10 @@ export class OcrService {
     rejectUnauthorized: false,
   });
 
-  constructor(private readonly apiKeysService: ApiKeysService) {}
+  constructor(
+    private readonly apiKeysService: ApiKeysService,
+    private readonly geminiRotator: GeminiKeyRotatorService,
+  ) {}
 
   // ── Public entry point ──────────────────────────────────────────────────────
   async extractTextFromImageUrl(imageUrl: string): Promise<string> {
@@ -982,11 +986,12 @@ export class OcrService {
    * Cost: ~$0.00005 per call (Gemini 2.0 Flash).
    */
   async extractTextViaGemini(imageUrl: string): Promise<string> {
-    const apiKey = this.apiKeysService.getSync('geminiApiKey');
-    if (!apiKey) {
-      this.logger.warn('[OCR/Gemini] GEMINI_API_KEY not set — skipping');
+    if (!this.geminiRotator.isAvailable()) {
+      this.logger.warn('[OCR/Gemini] No Gemini key available — skipping');
       return '';
     }
+    const apiKey = this.geminiRotator.getKey();
+    if (!apiKey) return '';
 
     let rawBuffer: Buffer;
     try {
@@ -998,6 +1003,7 @@ export class OcrService {
     const base64 = rawBuffer.toString('base64');
     const model = this.apiKeysService.getSync('visionModel') || 'gemini-2.0-flash';
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+    const start = Date.now();
 
     try {
       const res = await fetch(apiUrl, {
@@ -1015,16 +1021,22 @@ export class OcrService {
         }),
         signal: AbortSignal.timeout(15_000),
       });
+
+      const latency = Date.now() - start;
+
       if (!res.ok) {
         this.logger.warn(`[OCR/Gemini] API error ${res.status}`);
+        this.geminiRotator.markError(apiKey, res.status);
         return '';
       }
       const resp = await res.json();
       const text: string = resp?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
-      this.logger.log(`[OCR/Gemini] Extracted ${text.length} chars`);
+      this.geminiRotator.markSuccess(apiKey, latency);
+      this.logger.log(`[OCR/Gemini] Extracted ${text.length} chars (latency: ${latency}ms)`);
       return text;
     } catch (e: any) {
       this.logger.error(`[OCR/Gemini] Failed: ${e?.message}`);
+      this.geminiRotator.markError(apiKey, 500, e?.message ?? String(e));
       return '';
     }
   }

@@ -224,6 +224,7 @@ export class AiIntentService {
     while (this.geminiRotator.isAvailable()) {
       const key = this.geminiRotator.getKey();
       if (!key) break;
+      const start = Date.now();
       try {
         const systemMsg = messages.find((m) => m.role === 'system');
         const rest = messages.filter((m) => m.role !== 'system');
@@ -244,23 +245,40 @@ export class AiIntentService {
           body: JSON.stringify(body),
           signal: AbortSignal.timeout(8_000),
         });
+
+        const latency = Date.now() - start;
+
         if (res.status === 429 || res.status === 402) {
           this.logger.warn(`[AiIntent] Gemini key ...${key.slice(-6)} quota (${res.status}) — trying next`);
-          this.geminiRotator.markExhausted(key);
+          this.geminiRotator.markError(key, res.status);
+          continue;
+        }
+        if (res.status === 500 || res.status === 503 || res.status === 504) {
+          this.logger.warn(`[AiIntent] Gemini key ...${key.slice(-6)} server error (${res.status}) — trying next`);
+          this.geminiRotator.markError(key, res.status);
+          continue;
+        }
+        if (res.status === 400 || res.status === 401 || res.status === 403) {
+          const errText = await res.text();
+          this.logger.error(`[AiIntent] Gemini key ...${key.slice(-6)} invalid/permission error (${res.status}): ${errText}`);
+          this.geminiRotator.markError(key, res.status, errText);
           continue;
         }
         if (!res.ok) {
           const errText = await res.text();
           this.logger.error(`[AiIntent] Gemini error ${res.status}: ${errText.slice(0, 100)}`);
+          this.geminiRotator.markError(key, res.status, errText);
           this.recordFailure();
-          return null;
+          continue;
         }
         const data = await res.json();
+        this.geminiRotator.markSuccess(key, latency);
         return (data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '').trim() || null;
       } catch (err: any) {
         this.logger.warn(`[AiIntent] Gemini network error: ${err?.message ?? err}`);
+        this.geminiRotator.markError(key, 500, err?.message ?? String(err));
         this.recordFailure();
-        return null;
+        continue;
       }
     }
     this.logger.warn('[AiIntent] All Gemini keys exhausted — keyword fallback');
