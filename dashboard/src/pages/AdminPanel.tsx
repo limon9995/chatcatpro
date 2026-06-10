@@ -208,7 +208,22 @@ export function AdminPanel({ th, onToast, onLogout }: {
   const [apiKeysSaving, setApiKeysSaving] = useState(false);
   const [apiKeysLoaded, setApiKeysLoaded] = useState(false);
   const [geminiKeys, setGeminiKeys] = useState<string[]>(['']);
-  const [geminiStatus, setGeminiStatus] = useState<{ total: number; available: number; keys: { masked: string; available: boolean; exhaustedUntil: number | null }[] } | null>(null);
+  const [geminiStatus, setGeminiStatus] = useState<{
+    total: number;
+    available: number;
+    keys: {
+      masked: string;
+      available: boolean;
+      status: 'active' | 'cooldown' | 'disabled';
+      exhaustedUntil: number | null;
+      successCount: number;
+      failureCount: number;
+      healthScore: number;
+      lastLatencyMs: number | null;
+      avgLatencyMs: number | null;
+      errorMessage?: string;
+    }[];
+  } | null>(null);
 
   // Domain Setup tab state
   const [domainPages, setDomainPages]         = useState<any[]>([]);
@@ -2090,20 +2105,141 @@ export function AdminPanel({ th, onToast, onLogout }: {
                 একাধিক free Gemini API key add করুন। একটা quota শেষ হলে automatically পরেরটায় চলে যাবে। Quota reset হলে (1 ঘণ্টা পর) আবার ব্যবহার হবে।
               </div>
 
-              {/* Status bar */}
-              {geminiStatus && (
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
-                  {geminiStatus.keys.map((k, i) => (
-                    <div key={i} style={{ fontSize: 11, padding: '4px 10px', borderRadius: 20, fontWeight: 700,
-                      background: k.available ? 'rgba(52,211,153,.15)' : 'rgba(239,68,68,.12)',
-                      color: k.available ? '#34d399' : '#f87171',
-                      border: `1px solid ${k.available ? 'rgba(52,211,153,.3)' : 'rgba(239,68,68,.25)'}` }}>
-                      {k.available ? '✅' : '⏳'} {k.masked}
-                      {!k.available && k.exhaustedUntil && ` (${Math.ceil((k.exhaustedUntil - Date.now()) / 60000)}m)`}
+              {/* Premium Gemini Key Health Board */}
+              {geminiStatus && geminiStatus.keys && geminiStatus.keys.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 20 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${th.border}`, paddingBottom: 8 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: th.text }}>📡 Rotation Pool Health</div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: th.muted }}>
+                      <span style={{ color: geminiStatus.available > 0 ? '#34d399' : '#f87171', fontWeight: 800 }}>
+                        {geminiStatus.available}
+                      </span>
+                      /{geminiStatus.total} active keys
                     </div>
-                  ))}
-                  <div style={{ fontSize: 11, padding: '4px 10px', borderRadius: 20, background: 'rgba(255,255,255,.06)', color: th.muted }}>
-                    {geminiStatus.available}/{geminiStatus.total} available
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12 }}>
+                    {geminiStatus.keys.map((k, i) => {
+                      // Status styling
+                      let statusBg = 'rgba(255,255,255,0.04)';
+                      let statusBorder = 'rgba(255,255,255,0.08)';
+                      let statusColor = th.muted;
+                      let statusLabel = 'Unknown';
+                      let statusIcon = '⚪';
+
+                      if (k.status === 'active') {
+                        statusBg = 'rgba(16,185,129,0.08)';
+                        statusBorder = 'rgba(16,185,129,0.18)';
+                        statusColor = '#10b981';
+                        statusLabel = 'Active';
+                        statusIcon = '🟢';
+                      } else if (k.status === 'cooldown') {
+                        statusBg = 'rgba(245,158,11,0.08)';
+                        statusBorder = 'rgba(245,158,11,0.18)';
+                        statusColor = '#f59e0b';
+                        const minLeft = k.exhaustedUntil ? Math.ceil((k.exhaustedUntil - Date.now()) / 60000) : 0;
+                        statusLabel = minLeft > 0 ? `Cooldown (${minLeft}m)` : 'Cooldown';
+                        statusIcon = '⏳';
+                      } else if (k.status === 'disabled') {
+                        statusBg = 'rgba(239,68,68,0.08)';
+                        statusBorder = 'rgba(239,68,68,0.18)';
+                        statusColor = '#ef4444';
+                        statusLabel = 'Disabled';
+                        statusIcon = '❌';
+                      }
+
+                      // Health score coloring
+                      let healthColor = '#10b981';
+                      if (k.healthScore < 50) healthColor = '#ef4444';
+                      else if (k.healthScore < 80) healthColor = '#f59e0b';
+
+                      return (
+                        <div
+                          key={i}
+                          style={{
+                            background: th.elevated,
+                            border: `1px solid ${statusBorder}`,
+                            borderRadius: 12,
+                            padding: '14px 16px',
+                            boxShadow: th.shadow,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 10,
+                            position: 'relative',
+                            transition: 'all 0.2s ease-in-out',
+                            cursor: 'default',
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.transform = 'translateY(-2px)';
+                            e.currentTarget.style.boxShadow = th.shadowMd;
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.transform = 'translateY(0)';
+                            e.currentTarget.style.boxShadow = th.shadow;
+                          }}
+                        >
+                          {/* Top Row: Index, Masked Key & Badge */}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                              <span style={{ fontSize: 11, fontWeight: 700, color: th.muted }}>KEY #{i + 1}</span>
+                              <span style={{ fontSize: 12.5, fontWeight: 600, fontFamily: 'monospace', color: th.text }}>{k.masked}</span>
+                            </div>
+                            <span style={{
+                              fontSize: 10.5,
+                              fontWeight: 800,
+                              padding: '3px 8px',
+                              borderRadius: 20,
+                              background: statusBg,
+                              border: `1px solid ${statusBorder}`,
+                              color: statusColor,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 4
+                            }}>
+                              <span>{statusIcon}</span>
+                              <span>{statusLabel}</span>
+                            </span>
+                          </div>
+
+                          {/* Stats Grid */}
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, padding: '8px 0', borderTop: `1px dashed ${th.border}`, borderBottom: `1px dashed ${th.border}` }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                              <span style={{ fontSize: 9.5, fontWeight: 700, color: th.muted, textTransform: 'uppercase' }}>Reqs</span>
+                              <span style={{ fontSize: 12, fontWeight: 700, color: th.text }}>
+                                <span style={{ color: '#10b981' }}>{k.successCount}</span>
+                                <span style={{ color: th.muted, margin: '0 2px' }}>/</span>
+                                <span style={{ color: k.failureCount > 0 ? '#ef4444' : th.muted }}>{k.failureCount}</span>
+                              </span>
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                              <span style={{ fontSize: 9.5, fontWeight: 700, color: th.muted, textTransform: 'uppercase' }}>Health</span>
+                              <span style={{ fontSize: 12, fontWeight: 800, color: healthColor }}>{k.healthScore}%</span>
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                              <span style={{ fontSize: 9.5, fontWeight: 700, color: th.muted, textTransform: 'uppercase' }}>Latency</span>
+                              <span style={{ fontSize: 12, fontWeight: 700, color: th.text }}>{k.avgLatencyMs ? `${k.avgLatencyMs}ms` : '—'}</span>
+                            </div>
+                          </div>
+
+                          {/* Error message if present */}
+                          {k.errorMessage && (
+                            <div style={{
+                              fontSize: 10.5,
+                              color: '#ef4444',
+                              background: 'rgba(239,68,68,0.05)',
+                              border: '1px solid rgba(239,68,68,0.15)',
+                              padding: '6px 8px',
+                              borderRadius: 6,
+                              wordBreak: 'break-word',
+                              maxHeight: 48,
+                              overflowY: 'auto'
+                            }}>
+                              ⚠️ {k.errorMessage}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
