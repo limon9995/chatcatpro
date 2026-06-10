@@ -301,7 +301,7 @@
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
-                            android:text="সার্ভার কনফিগারেশন"
+                            android:text="Secret Token সমূহ"
                             android:textColor="@color/text_dark"
                             android:textSize="13sp"
                             android:textStyle="bold" />
@@ -323,41 +323,58 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="4dp"
-                        android:text="Admin Panel → Billing → আমার Payment System → Secret Token কপি করে নিচে দিন।"
+                        android:text="Admin Panel → Billing → আমার Payment System → Secret Token কপি করে Add করুন। একাধিক page থাকলে প্রতিটার token আলাদা করে Add করুন।"
                         android:textColor="@color/text_muted"
                         android:textSize="11sp"
                         android:lineSpacingMultiplier="1.3" />
 
-                    <!-- Token field -->
-                    <com.google.android.material.textfield.TextInputLayout
+                    <!-- Dynamic token list (populated by MainActivity) -->
+                    <LinearLayout
+                        android:id="@+id/tokenListContainer"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="14dp"
-                        android:hint="Secret Token *"
-                        app:boxStrokeColor="@color/brand_primary"
-                        app:hintTextColor="@color/brand_primary"
-                        app:endIconMode="password_toggle"
-                        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+                        android:orientation="vertical"
+                        android:layout_marginTop="12dp" />
 
-                        <com.google.android.material.textfield.TextInputEditText
-                            android:id="@+id/tokenInput"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:inputType="textPassword"
-                            android:singleLine="true"
-                            android:textSize="13sp" />
-                    </com.google.android.material.textfield.TextInputLayout>
-
-                    <Button
-                        android:id="@+id/saveButton"
+                    <!-- Add token row -->
+                    <LinearLayout
                         android:layout_width="match_parent"
-                        android:layout_height="48dp"
-                        android:layout_marginTop="14dp"
-                        android:backgroundTint="@color/brand_primary"
-                        android:text="সেভ করুন ও সিঙ্ক শুরু করুন"
-                        android:textStyle="bold"
-                        android:textColor="#FFFFFF"
-                        app:cornerRadius="8dp" />
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:layout_marginTop="10dp"
+                        android:gravity="center_vertical">
+
+                        <com.google.android.material.textfield.TextInputLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:hint="নতুন Secret Token"
+                            app:boxStrokeColor="@color/brand_primary"
+                            app:hintTextColor="@color/brand_primary"
+                            app:endIconMode="password_toggle"
+                            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+
+                            <com.google.android.material.textfield.TextInputEditText
+                                android:id="@+id/tokenInput"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:inputType="textPassword"
+                                android:singleLine="true"
+                                android:textSize="13sp" />
+                        </com.google.android.material.textfield.TextInputLayout>
+
+                        <Button
+                            android:id="@+id/saveButton"
+                            android:layout_width="wrap_content"
+                            android:layout_height="48dp"
+                            android:layout_marginStart="8dp"
+                            android:backgroundTint="@color/brand_primary"
+                            android:text="Add"
+                            android:textStyle="bold"
+                            android:textColor="#FFFFFF"
+                            app:cornerRadius="8dp" />
+                    </LinearLayout>
+
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 

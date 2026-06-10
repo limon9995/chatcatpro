@@ -7,121 +7,98 @@ import android.util.Log
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
 
 class SmsNotificationListener : NotificationListenerService() {
 
     private val client = OkHttpClient()
-    private val DEFAULT_WEBHOOK = "https://api.chatcat.pro/sms-gateway/incoming"
+    private val WEBHOOK_URL = "https://api.chatcat.pro/admin/sms-incoming"
 
-    // SMS app package names to listen to
     private val smsPackages = setOf(
-        "com.google.android.apps.messaging",   // Google Messages
-        "com.samsung.android.messaging",        // Samsung Messages
-        "com.android.mms",                      // Stock Android SMS
-        "com.android.messaging",                // AOSP Messaging
-        "com.bsb.hike",                         // Hike
-        "com.coloros.message",                  // OnePlus/ColorOS
-        "com.miui.sms",                         // MIUI Messages
-        "com.huawei.message",                   // Huawei Messages
-        "com.vivo.message",                     // Vivo Messages
+        "com.google.android.apps.messaging",
+        "com.samsung.android.messaging",
+        "com.android.mms",
+        "com.android.messaging",
+        "com.bsb.hike",
+        "com.coloros.message",
+        "com.miui.sms",
+        "com.huawei.message",
+        "com.vivo.message",
     )
 
-    // Payment keywords to identify payment SMS
     private val paymentKeywords = listOf(
-        "bkash", "বিকাশ",
-        "nagad", "নগদ",
-        "rocket", "রকেট",
-        "nexuspay",
-        "dbbl",
-        "taka", "টাকা",
-        "tk.", "tk ",
-        "received", "payment",
-        "transaction", "transfer",
-        "credited", "debited",
-        "cash in", "cash out",
+        "bkash", "বিকাশ", "nagad", "নগদ", "rocket", "রকেট", "nexuspay", "dbbl",
+        "taka", "টাকা", "tk.", "tk ", "received", "payment", "transaction",
+        "transfer", "credited", "debited", "cash in", "cash out",
         "send money", "mobile recharge"
     )
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         val pkg = sbn.packageName ?: return
-
-        // Only process SMS app notifications
         if (pkg !in smsPackages) return
 
-        val extras = sbn.notification?.extras ?: return
-
-        // Extract notification text
-        val title = extras.getCharSequence("android.title")?.toString() ?: ""
-        val text  = extras.getCharSequence("android.text")?.toString()  ?: ""
+        val extras  = sbn.notification?.extras ?: return
+        val title   = extras.getCharSequence("android.title")?.toString() ?: ""
+        val text    = extras.getCharSequence("android.text")?.toString()  ?: ""
         val bigText = extras.getCharSequence("android.bigText")?.toString() ?: ""
-
         val fullText = if (bigText.isNotEmpty()) bigText else text
-
         if (fullText.isEmpty()) return
 
-        // Check if it looks like a payment SMS
-        val lowerText = fullText.lowercase()
-        val isPayment = paymentKeywords.any { lowerText.contains(it) }
+        val lower = fullText.lowercase()
+        if (paymentKeywords.none { lower.contains(it) }) return
 
-        if (!isPayment) return
+        Log.d("PaySync", "Payment notification from $title: $fullText")
 
-        Log.d("PaySync", "Payment notification detected from $title: $fullText")
-
-        val prefs = applicationContext.getSharedPreferences("ChatCatPrefs", Context.MODE_PRIVATE)
-        val token = prefs.getString("pageToken", null)
-        val webhookUrl = prefs.getString("webhookUrl", DEFAULT_WEBHOOK)
-            ?.ifEmpty { DEFAULT_WEBHOOK } ?: DEFAULT_WEBHOOK
-
-        if (token.isNullOrEmpty()) {
-            Log.w("PaySync", "No pageToken configured")
+        val tokens = getTokens()
+        if (tokens.isEmpty()) {
+            Log.w("PaySync", "No tokens configured")
             return
         }
 
-        addLog(applicationContext, "$title থেকে পেমেন্ট নোটিফিকেশন পাওয়া গেছে...")
-        forwardPayment(applicationContext, token, webhookUrl, fullText, title)
+        addLog(applicationContext, "$title থেকে পেমেন্ট নোটিফিকেশন (${tokens.size}টি token এ পাঠানো হচ্ছে)...")
+        tokens.forEach { token -> forwardPayment(token, fullText, title) }
     }
 
-    private fun forwardPayment(
-        context: Context,
-        token: String,
-        webhookUrl: String,
-        message: String,
-        from: String
-    ) {
-        val url = "$webhookUrl?token=$token"
+    private fun getTokens(): List<String> {
+        val prefs = applicationContext.getSharedPreferences("ChatCatPrefs", Context.MODE_PRIVATE)
+        val raw = prefs.getString("pageTokens", null)
+        if (!raw.isNullOrEmpty()) {
+            return try {
+                val arr = JSONArray(raw)
+                (0 until arr.length()).map { arr.getString(it) }
+            } catch (e: Exception) { emptyList() }
+        }
+        val old = prefs.getString("pageToken", null)
+        return if (!old.isNullOrEmpty()) listOf(old) else emptyList()
+    }
 
+    private fun forwardPayment(token: String, message: String, from: String) {
         val json = JSONObject().apply {
-            put("message", message)
-            put("from", from)
+            put("message", message); put("from", from)
             put("timestamp", System.currentTimeMillis().toString())
             put("source", "notification_listener")
         }
-
-        val body = json.toString()
-            .toRequestBody("application/json; charset=utf-8".toMediaTypeOrNull())
-        val request = Request.Builder().url(url).post(body).build()
+        val body = json.toString().toRequestBody("application/json; charset=utf-8".toMediaTypeOrNull())
+        val request = Request.Builder().url("$WEBHOOK_URL?token=$token").post(body).build()
 
         client.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
-                incrementCounter(context, "fail_count")
-                addLog(context, "❌ $from — ব্যর্থ: ${e.message}")
+                incrementCounter(applicationContext, "fail_count")
+                addLog(applicationContext, "❌ $from — ব্যর্থ: ${e.message}")
             }
-
             override fun onResponse(call: Call, response: Response) {
-                val code = response.code
-                response.close()
+                val code = response.code; response.close()
                 if (code in 200..299) {
-                    incrementCounter(context, "sync_count")
-                    val time = java.text.SimpleDateFormat("hh:mm a", java.util.Locale.getDefault())
-                        .format(java.util.Date())
-                    context.getSharedPreferences("ChatCatPrefs", Context.MODE_PRIVATE)
+                    incrementCounter(applicationContext, "sync_count")
+                    val time = java.text.SimpleDateFormat("hh:mm a", java.util.Locale.getDefault()).format(java.util.Date())
+                    applicationContext.getSharedPreferences("ChatCatPrefs", Context.MODE_PRIVATE)
                         .edit().putString("last_sync", time).apply()
-                    addLog(context, "✅ $from — সিঙ্ক সফল")
+                    addLog(applicationContext, "✅ $from — সিঙ্ক সফল")
                 } else {
-                    incrementCounter(context, "fail_count")
-                    addLog(context, "⚠️ $from — সার্ভার প্রত্যাখ্যান ($code)")
+                    incrementCounter(applicationContext, "fail_count")
+                    addLog(applicationContext, "⚠️ $from — সার্ভার প্রত্যাখ্যান ($code)")
                 }
             }
         })
@@ -134,8 +111,7 @@ class SmsNotificationListener : NotificationListenerService() {
 
     private fun addLog(context: Context, message: String) {
         val prefs = context.getSharedPreferences("ChatCatPrefs", Context.MODE_PRIVATE)
-        val time = java.text.SimpleDateFormat("hh:mm a", java.util.Locale.getDefault())
-            .format(java.util.Date())
+        val time = java.text.SimpleDateFormat("hh:mm a", java.util.Locale.getDefault()).format(java.util.Date())
         val updated = "[$time] $message\n${prefs.getString("sync_logs", "") ?: ""}"
         prefs.edit().putString("sync_logs", updated.split("\n").take(20).joinToString("\n")).apply()
     }

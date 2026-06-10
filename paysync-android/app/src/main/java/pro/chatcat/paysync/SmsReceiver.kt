@@ -4,17 +4,17 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.provider.Telephony
-import android.util.Log
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
 
 class SmsReceiver : BroadcastReceiver() {
 
     private val client = OkHttpClient()
-    private val DEFAULT_WEBHOOK = "https://api.chatcat.pro/sms-gateway/incoming"
+    private val WEBHOOK_URL = "https://api.chatcat.pro/admin/sms-incoming"
 
     private val paymentSenders = setOf(
         "bkash", "16247", "nagad", "16167",
@@ -32,24 +32,36 @@ class SmsReceiver : BroadcastReceiver() {
             val body   = sms.displayMessageBody ?: ""
             if (paymentSenders.none { sender.lowercase().contains(it) }) continue
 
-            val prefs  = context.getSharedPreferences("ChatCatPrefs", Context.MODE_PRIVATE)
-            val token  = prefs.getString("pageToken", null) ?: continue
-            val url    = prefs.getString("webhookUrl", DEFAULT_WEBHOOK)
-                ?.ifEmpty { DEFAULT_WEBHOOK } ?: DEFAULT_WEBHOOK
+            val tokens = getTokens(context)
+            if (tokens.isEmpty()) continue
 
-            addLog(context, "$sender থেকে পেমেন্ট SMS পাওয়া গেছে...")
-            forward(context, token, url, body, sender)
+            addLog(context, "$sender থেকে পেমেন্ট SMS পাওয়া গেছে (${tokens.size}টি token এ পাঠানো হচ্ছে)...")
+            tokens.forEach { token -> forward(context, token, body, sender) }
         }
     }
 
-    private fun forward(context: Context, token: String, webhookUrl: String, message: String, from: String) {
+    private fun getTokens(context: Context): List<String> {
+        val prefs = context.getSharedPreferences("ChatCatPrefs", Context.MODE_PRIVATE)
+        val raw = prefs.getString("pageTokens", null)
+        if (!raw.isNullOrEmpty()) {
+            return try {
+                val arr = JSONArray(raw)
+                (0 until arr.length()).map { arr.getString(it) }
+            } catch (e: Exception) { emptyList() }
+        }
+        // legacy fallback
+        val old = prefs.getString("pageToken", null)
+        return if (!old.isNullOrEmpty()) listOf(old) else emptyList()
+    }
+
+    private fun forward(context: Context, token: String, message: String, from: String) {
         val json = JSONObject().apply {
             put("message", message); put("from", from)
             put("timestamp", System.currentTimeMillis().toString())
             put("source", "sms_direct")
         }
         val req = Request.Builder()
-            .url("$webhookUrl?token=$token")
+            .url("$WEBHOOK_URL?token=$token")
             .post(json.toString().toRequestBody("application/json".toMediaTypeOrNull()))
             .build()
 
