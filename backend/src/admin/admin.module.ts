@@ -5,9 +5,10 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { BotKnowledgeModule } from '../bot-knowledge/bot-knowledge.module';
 import { AuthModule } from '../auth/auth.module';
 import { CommonModule } from '../common/common.module';
+import { FacebookModule } from '../facebook/facebook.module';
 
 @Module({
-  imports: [PrismaModule, BotKnowledgeModule, AuthModule, CommonModule],
+  imports: [PrismaModule, BotKnowledgeModule, AuthModule, CommonModule, FacebookModule],
   controllers: [AdminController],
   providers: [AdminService],
   exports: [AdminService],

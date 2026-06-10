@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import * as fs from 'fs';
@@ -11,6 +12,7 @@ import { Workbook, type Worksheet } from 'exceljs';
 import { PrismaService } from '../prisma/prisma.service';
 import { BotKnowledgeService } from '../bot-knowledge/bot-knowledge.service';
 import { EncryptionService } from '../common/encryption.service';
+import { FacebookService } from '../facebook/facebook.service';
 
 export interface CallServerConfig {
   id: string;
@@ -75,10 +77,13 @@ export interface TutorialsConfig {
 
 @Injectable()
 export class AdminService {
+  private readonly logger = new Logger(AdminService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly botKnowledge: BotKnowledgeService,
     private readonly encryption: EncryptionService,
+    private readonly facebook: FacebookService,
   ) {}
 
   async overview() {
@@ -412,6 +417,19 @@ export class AdminService {
         : null;
     }
     await this.prisma.page.update({ where: { id: pageId }, data });
+
+    // Re-subscribe webhook under the new app so FB delivers messages to this platform
+    if (page.pageToken && page.pageId) {
+      const rawToken = this.encryption.decrypt(page.pageToken);
+      await this.facebook
+        .subscribePageToWebhook(page.pageId, rawToken)
+        .catch((err: any) =>
+          this.logger.warn(
+            `[Admin] Webhook re-subscribe failed for page ${page.pageId}: ${err?.message}`,
+          ),
+        );
+    }
+
     return { success: true, fbAppId: (data.fbAppId ?? page.fbAppId) || null };
   }
 
