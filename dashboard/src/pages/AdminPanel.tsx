@@ -3929,11 +3929,6 @@ function AdminPaymentSetup({ th, cfg, setCfg, activeTab, setActiveTab, smsLog, s
     { key: 'nagad',  icon: '🟠', label: 'Nagad API',    color: '#f97316' },
     { key: 'manual', icon: '✍️', label: 'Manual Only',  color: '#6b7280' },
   ];
-  const API_BASE = (window as any).API_BASE || (import.meta as any)?.env?.VITE_API_BASE || 'http://localhost:3000';
-  const smsWebhookUrl = cfg.smsGatewayToken
-    ? `${API_BASE}/admin/sms-incoming?token=${cfg.smsGatewayToken}`
-    : '— Token সেট করুন —';
-
   return (
     <div style={{ ...th.card, marginTop: 16 }}>
       <div style={{ marginBottom: 16 }}>
@@ -3968,19 +3963,15 @@ function AdminPaymentSetup({ th, cfg, setCfg, activeTab, setActiveTab, smsLog, s
               <input style={{ ...inp, flex: 1 }} value={cfg.smsGatewayToken || ''} placeholder="Random secret string"
                 onChange={e => setCfg({ ...cfg, smsGatewayToken: e.target.value })} />
               <button style={{ ...th.btnGhost, whiteSpace: 'nowrap', fontSize: 12 }}
+                onClick={() => cfg.smsGatewayToken && navigator.clipboard.writeText(cfg.smsGatewayToken)}>
+                📋 Copy
+              </button>
+              <button style={{ ...th.btnGhost, whiteSpace: 'nowrap', fontSize: 12 }}
                 onClick={() => setCfg({ ...cfg, smsGatewayToken: Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2) })}>
                 🔄 Generate
               </button>
             </div>
           </div>
-          {cfg.smsGatewayToken && (
-            <div>
-              <div style={{ fontSize: 11, color: th.muted, fontWeight: 600, marginBottom: 4 }}>Webhook URL (SMS Gateway app-এ দিন)</div>
-              <div style={{ background: th.surface, borderRadius: 8, padding: '9px 12px', fontSize: 12, wordBreak: 'break-all', color: '#8b5cf6', fontFamily: 'monospace', border: `1px solid ${th.border}` }}>
-                {smsWebhookUrl}
-              </div>
-            </div>
-          )}
           {smsLog.length > 0 && (
             <div>
               <div style={{ fontSize: 11, color: th.muted, fontWeight: 600, marginBottom: 6 }}>সাম্প্রতিক Received SMS</div>

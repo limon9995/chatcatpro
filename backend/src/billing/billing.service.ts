@@ -165,6 +165,7 @@ export class BillingService {
       canTakeOrders: this.canTakeOrders(sub),
       warnings: this.buildWarnings(sub, daysLeft, usagePct),
       adminContact: this.getBillingSupportContact(),
+      paymentConfig: this.getPaymentConfig(),
     };
   }
 
@@ -505,6 +506,22 @@ export class BillingService {
       }
     }
     return patch;
+  }
+
+  private getPaymentConfig() {
+    try {
+      if (fs.existsSync(this.globalConfigFile)) {
+        const cfg = JSON.parse(fs.readFileSync(this.globalConfigFile, 'utf8'));
+        const p = cfg?.adminPayment || {};
+        return {
+          smsGatewayEnabled: !!p.smsGatewayEnabled,
+          bkashEnabled:      !!p.bkashEnabled,
+          nagadEnabled:      !!p.nagadEnabled,
+          manualEnabled:     true,
+        };
+      }
+    } catch {}
+    return { smsGatewayEnabled: false, bkashEnabled: false, nagadEnabled: false, manualEnabled: true };
   }
 
   private getBillingSupportContact() {
