@@ -362,7 +362,7 @@ export class AiIntentService {
       ...historyMessages,
       {
         role: 'user',
-        content: this.buildUserMessage(text, awaitingConfirm, draftStep),
+        content: this.buildUserMessage(text, awaitingConfirm, draftStep, context),
       },
     ];
 
@@ -539,6 +539,9 @@ Intents: GREETING, ORDER_INTENT, CANCEL, CONFIRM, EDIT_ORDER, NEGOTIATION, SIZE_
 Rules:
 - "nibo na"/"lagbe na"/"cancel"/"bad den" → CANCEL
 - "lagbe"/"kinbo"/"order" (without "na") → ORDER_INTENT
+- "ok"/"haa"/"theek ache"/"send koren"/"pathaan"/"nibo"/"chai" after bot showed a product → ORDER_INTENT
+- "ok"/"haa"/"theek ache" inside a draft step → CONFIRM
+- "ok" as casual acknowledgment with no product context → UNKNOWN (reply warmly)
 - "ki ki ache"/"product list"/"catalog" → CATALOG_REQUEST
 - "valo asen"/"kemon achen"/"how are you"/"hi"/"hello"/"salam" → GREETING
 - Doubt → UNKNOWN
@@ -631,8 +634,10 @@ Customer-এর message দেখে JSON return করো:
 3. NEGOTIATION: শুধু তখন যখন customer explicitly দাম কমাতে চাইছে — "kom hobe?", "discount diben?", "last price?", "X taka te diben?" এই ধরনের। "ki ki ache?" কোনোভাবেই NEGOTIATION না।
 4. CATALOG_REQUEST: "ki ki ache/ki ache/product list/catalog/sob dekhao/konta ache" → সবসময় CATALOG_REQUEST, NEGOTIATION না।
 5. GREETING: "valo asen/kemon achen/hi/hello/salam" → GREETING। price বা product-এর কথা নেই।
-6. "Ok/Thik" একা + no draft → UNKNOWN।
-7. সন্দেহ হলে ORDER-এর চেয়ে CANCEL বেছে নাও।
+6. "Ok/Thik/send koren/pathao/nibo/chai" + [সর্বশেষ দেখানো product] context আছে → ORDER_INTENT।
+7. "Ok/Thik" একা + no product shown + no draft → UNKNOWN (warmly reply)।
+8. "Ok/haa/yes" + awaitingConfirm=true বা draft step=confirm → CONFIRM।
+9. সন্দেহ হলে ORDER-এর চেয়ে CANCEL বেছে নাও।
 
 ━━ REPLY RULES — কোন তথ্য কোথা থেকে নেবে ━━
 
@@ -671,11 +676,25 @@ UNKNOWN + no draft → তারা কী বলতে চাইছে acknowle
     text: string,
     awaitingConfirm: boolean,
     draftStep: string | null,
+    context?: BusinessContext,
   ): string {
     let ctx = '';
     if (draftStep) ctx += ` | draft_step="${draftStep}"`;
     if (awaitingConfirm) ctx += ' | awaiting_confirm=true';
-    return `Customer: "${text}"${ctx}`;
+
+    // Inject last bot reply and shown products so AI understands "ok"/soft replies
+    const extraLines: string[] = [];
+    if (context?.lastBotReply) {
+      extraLines.push(`[Bot এর আগের reply: "${context.lastBotReply.slice(0, 200)}"]`);
+    }
+    if (context?.lastPresentedProducts?.length) {
+      const shown = context.lastPresentedProducts
+        .map((p) => `${p.name ?? p.code} (${p.code})${p.price ? ` ৳${p.price}` : ''}`)
+        .join(', ');
+      extraLines.push(`[সর্বশেষ দেখানো product: ${shown}]`);
+    }
+    const prefix = extraLines.length ? extraLines.join('\n') + '\n' : '';
+    return `${prefix}Customer: "${text}"${ctx}`;
   }
 
   private buildDraftReviewPrompt(

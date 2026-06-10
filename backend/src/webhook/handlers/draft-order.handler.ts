@@ -445,7 +445,12 @@ export class DraftOrderHandler {
               draft.currentStep = 'awaiting_gateway_payment';
               draft.pendingPaymentId = pending.id;
               await this.ctx.saveDraft(pageId, psid, draft);
-              return `💳 এই লিংকে ক্লিক করে ${page.currencySymbol || '৳'}${amount} পেমেন্ট করুন:\n${paymentLink}\n\nপেমেন্ট হলে অর্ডার automatically confirm হবে ✅`;
+              const sym = page.currencySymbol || '৳';
+              const manualLines = this.buildManualAccountLines(page);
+              const manualSection = manualLines
+                ? `\n\n──────────────────\n*অথবা manually পাঠান:*\n${manualLines}\n\nManually পাঠালে Transaction ID বা screenshot পাঠান 💖`
+                : '';
+              return `💳 *Payment করুন* (${sym}${amount})\n\n🔗 এই লিংকে ক্লিক করে সহজে পেমেন্ট করুন:\n${paymentLink}\n(bKash / Nagad / Rocket সব option থাকবে)\n\nপেমেন্ট হলে অর্ডার automatically confirm হবে ✅${manualSection}`;
             }
           } catch (err) {
             this.logger.error(`[DraftOrder] gateway link error: ${err.message}`);
@@ -828,6 +833,7 @@ export class DraftOrderHandler {
         .replace(/\{\{amount\}\}/g, `${sym}${amount}`)
         .replace(/\{\{bkash\}\}/g, page.advanceBkash || '')
         .replace(/\{\{nagad\}\}/g, page.advanceNagad || '')
+        .replace(/\{\{rocket\}\}/g, page.advanceRocket || '')
         .replace(/\{\{currency\}\}/g, sym);
     }
 
@@ -837,11 +843,22 @@ export class DraftOrderHandler {
         ? `💳 *Full Advance Payment প্রয়োজন*`
         : `💳 *Advance Payment প্রয়োজন* (Outside Dhaka)`,
       `পরিমাণ: ${sym}${amount}`,
+      '',
     ];
-    if (page.advanceBkash) lines.push(`📱 Bkash: ${page.advanceBkash}`);
-    if (page.advanceNagad) lines.push(`📱 Nagad: ${page.advanceNagad}`);
+    if (page.advanceBkash) lines.push(`📱 Bkash (Send Money): ${page.advanceBkash}`);
+    if (page.advanceNagad) lines.push(`📱 Nagad (Send Money): ${page.advanceNagad}`);
+    if (page.advanceRocket) lines.push(`📱 Rocket (Send Money): ${page.advanceRocket}`);
     lines.push('');
     lines.push('Payment করার পর **Transaction ID** অথবা screenshot পাঠান 💖');
+    return lines.join('\n');
+  }
+
+  /** Returns manual account lines for appending to gateway payment messages */
+  buildManualAccountLines(page: any): string {
+    const lines: string[] = [];
+    if (page.advanceBkash) lines.push(`📱 Bkash: ${page.advanceBkash}`);
+    if (page.advanceNagad) lines.push(`📱 Nagad: ${page.advanceNagad}`);
+    if (page.advanceRocket) lines.push(`📱 Rocket: ${page.advanceRocket}`);
     return lines.join('\n');
   }
 

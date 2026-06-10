@@ -49,7 +49,9 @@ export class ProductInfoHandler {
 
     // Send generic template card
     const imageUrl = getFullImageUrl(product.imageUrl);
-    const productUrl = `https://api.chatcat.pro/catalog/${page.id}/product/${product.code}`;
+    const catalogBase = (page.catalogBaseUrl || '').replace(/\/$/, '') ||
+      `https://api.chatcat.pro/catalog/${page.id}`;
+    const productUrl = `${catalogBase}/product/${product.code}`;
     const sym = page.currencySymbol || '৳';
 
     await this.messenger.sendGenericTemplate(page.pageToken, psid, [
@@ -61,7 +63,7 @@ export class ProductInfoHandler {
           {
             type: 'web_url' as const,
             url: productUrl,
-            title: 'View product',
+            title: '🛍 Details দেখুন',
           },
         ],
       },
@@ -77,6 +79,8 @@ export class ProductInfoHandler {
         productInfoNote: product.description || '',
       },
     );
+    // Append catalog link as plain text (visible on Facebook Lite too)
+    msg += `\n\n🔗 ${productUrl}`;
     if (page.orderModeOn) {
       const prompt = await this.botKnowledge.resolveSystemReply(
         page.id,

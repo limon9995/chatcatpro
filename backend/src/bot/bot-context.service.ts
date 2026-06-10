@@ -31,6 +31,9 @@ export interface BusinessContext {
   dualPhotoMode: boolean;
   dualWearingProduct: DualProduct | null;
   dualHoldingProduct: DualProduct | null;
+  // Conversation state — injected by webhook before calling AI
+  lastBotReply?: string | null;
+  lastPresentedProducts?: { code: string; name?: string; price?: number }[];
 }
 
 @Injectable()

@@ -43,6 +43,9 @@ export interface DraftSession {
   paymentVerified?: boolean;
   // PendingPayment id — set when gateway payment link was sent to customer
   pendingPaymentId?: string;
+  // Dual photo clarification — image URL stored while waiting for customer to pick wearing/holding
+  pendingDualImageUrl?: string;
+  pendingDualAllImageUrls?: string[];
 }
 
 @Injectable()

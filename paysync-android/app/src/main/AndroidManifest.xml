@@ -2,13 +2,18 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="pro.chatcat.paysync">
 
+    <uses-feature android:name="android.hardware.telephony" android:required="false" />
+
     <uses-permission android:name="android.permission.RECEIVE_SMS" />
     <uses-permission android:name="android.permission.READ_SMS" />
+    <uses-permission android:name="android.permission.SEND_SMS" />
+    <uses-permission android:name="android.permission.RECEIVE_MMS" />
+    <uses-permission android:name="android.permission.RECEIVE_WAP_PUSH" />
+    <uses-permission android:name="android.permission.WRITE_SMS" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    
-    <!-- Android 14 Foreground Service Requirements -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
@@ -20,8 +25,9 @@
         android:theme="@style/Theme.PaySync"
         android:usesCleartextTraffic="true">
 
+        <!-- Setup wizard — launcher -->
         <activity
-            android:name=".MainActivity"
+            android:name=".SetupActivity"
             android:exported="true"
             android:screenOrientation="portrait">
             <intent-filter>
@@ -30,17 +36,77 @@
             </intent-filter>
         </activity>
 
-        <!-- SMS Receiver for incoming payment SMS -->
+        <!-- Main dashboard -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+
+        <!-- Required: SMS compose activity (mandatory for default SMS app role) -->
+        <activity
+            android:name=".SmsComposeActivity"
+            android:exported="true"
+            android:screenOrientation="portrait">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <action android:name="android.intent.action.SENDTO" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="sms" />
+                <data android:scheme="smsto" />
+                <data android:scheme="mms" />
+                <data android:scheme="mmsto" />
+            </intent-filter>
+        </activity>
+
+        <!-- Notification Listener — reads SMS notifications -->
+        <service
+            android:name=".SmsNotificationListener"
+            android:label="ChatCat PaySync"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
+        <!-- SMS Receiver — works when app is Default SMS App -->
         <receiver
             android:name=".SmsReceiver"
-            android:permission="android.permission.BROADCAST_SMS"
             android:exported="true">
+            <intent-filter android:priority="999">
+                <action android:name="android.provider.Telephony.SMS_DELIVER" />
+            </intent-filter>
             <intent-filter android:priority="999">
                 <action android:name="android.provider.Telephony.SMS_RECEIVED" />
             </intent-filter>
         </receiver>
 
-        <!-- Boot Receiver to auto-restart sync service on reboot -->
+        <!-- Required: WAP push receiver (mandatory for default SMS app role) -->
+        <receiver
+            android:name=".WapPushReceiver"
+            android:exported="true"
+            android:permission="android.permission.BROADCAST_WAP_PUSH">
+            <intent-filter>
+                <action android:name="android.provider.Telephony.WAP_PUSH_DELIVER" />
+                <data android:mimeType="application/vnd.wap.mms-message" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Required: HeadlessSmsSendService (mandatory for default SMS app role) -->
+        <service
+            android:name=".HeadlessSmsService"
+            android:exported="true"
+            android:permission="android.permission.SEND_RESPOND_VIA_MESSAGE">
+            <intent-filter>
+                <action android:name="android.intent.action.RESPOND_VIA_MESSAGE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="sms" />
+                <data android:scheme="smsto" />
+            </intent-filter>
+        </service>
+
+        <!-- Boot Receiver -->
         <receiver
             android:name=".BootReceiver"
             android:exported="true">
@@ -49,7 +115,7 @@
             </intent-filter>
         </receiver>
 
-        <!-- Foreground Service for background SMS forwarding -->
+        <!-- Background sync service -->
         <service
             android:name=".PaySyncService"
             android:foregroundServiceType="dataSync"

@@ -629,6 +629,12 @@ export class WebhookService implements OnModuleDestroy {
       const businessContext =
         await this.botContext.buildBusinessContext(pageId);
       if (businessContext) {
+        // Inject conversation state so AI understands "ok" / soft replies in context
+        businessContext.lastBotReply = this.inFlightReply.get(psid) ?? null;
+        businessContext.lastPresentedProducts = (
+          await this.ctx.getLastPresentedProducts(pageId, psid)
+        ).map((p) => ({ code: p.code, price: p.price, name: p.name ?? undefined }));
+
         // Pass conversation history only when the message is ambiguous (no keyword match)
         // or for intents that need contextual replies. Skipping history for clear keywords
         // saves ~800 tokens per call.
@@ -1045,6 +1051,15 @@ export class WebhookService implements OnModuleDestroy {
       await this.ctx.setLastPresentedProducts(pageId, psid, [
         { code: dualProduct.code, price: Number(dualProduct.price) },
       ]);
+      // Clear pending dual image (customer has now picked a product)
+      const dualDraft = await this.ctx.getActiveDraft(pageId, psid);
+      if (dualDraft?.pendingDualImageUrl) {
+        dualDraft.pendingDualImageUrl = undefined;
+        dualDraft.pendingDualAllImageUrls = undefined;
+        await this.ctx.saveDraft(pageId, psid, dualDraft);
+      }
+      // Send full product card
+      await this.productHandler.sendProductInfo(page, psid, dualProduct.code);
       return;
     }
 
@@ -2077,6 +2092,27 @@ export class WebhookService implements OnModuleDestroy {
       `[BatchImages] Processing ${imageUrls.length} images — page=${page.pageId} psid=${psid}`,
     );
 
+    // ── Simple Dual Photo Mode clarification (batch) ──────────────────────
+    if (
+      page.dualPhotoMode &&
+      page.dualWearingProductId &&
+      page.dualHoldingProductId
+    ) {
+      const activeDraft = await this.ctx.getActiveDraft(pageId, psid);
+      const updatedDraft = activeDraft ?? {
+        items: [], customerName: null, phone: null, address: null, currentStep: 'idle',
+      };
+      updatedDraft.pendingDualImageUrl = imageUrls[0];
+      updatedDraft.pendingDualAllImageUrls = imageUrls;
+      await this.ctx.saveDraft(pageId, psid, updatedDraft as any);
+      await this.safeSend(
+        token,
+        psid,
+        '📸 এই ছবিতে দুটো পোশাক আছে। আপনি কোনটার ব্যাপারে জানতে চান?\n\n👗 *গায়ে পরা* টার কথা জানতে লিখুন: "গায়েরটা"\n🤲 *হাতে ধরা* টার কথা জানতে লিখুন: "হাতেরটা"',
+      );
+      return;
+    }
+
     try {
       const pageProducts = await this.prisma.product.findMany({
         where: { pageId, isActive: true },
@@ -2193,6 +2229,29 @@ export class WebhookService implements OnModuleDestroy {
         token,
         psid,
         `👗 ${slotLabel}: *${liveMatch.product.name}*\n💰 দাম: ৳${Number(liveMatch.product.price).toLocaleString()}\n\nOrder করতে চাইলে বলুন 😊`,
+      );
+      return;
+    }
+
+    // ── Simple Dual Photo Mode clarification ──────────────────────────────
+    // If page has dualPhotoMode on with both products configured, ask customer
+    // which product they mean before running OCR/Vision
+    if (
+      page.dualPhotoMode &&
+      page.dualWearingProductId &&
+      page.dualHoldingProductId
+    ) {
+      const activeDraft = await this.ctx.getActiveDraft(pageId, psid);
+      // Store the image so we can process after customer picks
+      const updatedDraft = activeDraft ?? {
+        items: [], customerName: null, phone: null, address: null, currentStep: 'idle',
+      };
+      updatedDraft.pendingDualImageUrl = imageUrl;
+      await this.ctx.saveDraft(pageId, psid, updatedDraft as any);
+      await this.safeSend(
+        token,
+        psid,
+        '📸 এই ছবিতে দুটো পোশাক আছে। আপনি কোনটার ব্যাপারে জানতে চান?\n\n👗 *গায়ে পরা* টার কথা জানতে লিখুন: "গায়েরটা"\n🤲 *হাতে ধরা* টার কথা জানতে লিখুন: "হাতেরটা"',
       );
       return;
     }

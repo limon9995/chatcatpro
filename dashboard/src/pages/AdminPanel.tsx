@@ -2287,11 +2287,131 @@ export function AdminPanel({ th, onToast, onLogout }: {
                     { key: 'fallbackAiProvider', label: 'Fallback AI Provider', placeholder: 'openai / gemini' },
                     { key: 'fallbackAiModel', label: 'Fallback AI Model', placeholder: 'gpt-4o-mini' },
                   ]},
-                  { group: '👁 Vision', fields: [
-                    { key: 'visionProvider', label: 'Vision Provider', placeholder: 'gemini-with-fallback / openai / gemini' },
-                    { key: 'visionModel', label: 'Vision Model (Gemini)', placeholder: 'gemini-2.0-flash' },
-                    { key: 'visionConfidenceThreshold', label: 'Vision Confidence Threshold', placeholder: '0.15' },
-                  ]},
+                ] as { group: string; fields: { key: string; label: string; placeholder?: string; secret?: boolean }[] }[]
+              ).filter(g => g.group !== '👁 Vision').map(({ group, fields }) => (
+                <div key={group} style={{ marginBottom: 24 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: th.accent, marginBottom: 10, borderBottom: `1px solid ${th.border}`, paddingBottom: 6 }}>{group}</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 12 }}>
+                    {fields.map(({ key, label, placeholder, secret }) => (
+                      <div key={key}>
+                        <div style={{ fontSize: 12, color: th.muted, marginBottom: 4 }}>{label}</div>
+                        <input
+                          type={secret && apiKeysDraft[key] === '***SAVED***' ? 'password' : 'text'}
+                          value={apiKeysDraft[key] ?? ''}
+                          placeholder={placeholder || (secret ? '••••••• (সংরক্ষিত)' : '')}
+                          onChange={e => setApiKeysDraft(d => ({ ...d, [key]: e.target.value }))}
+                          onFocus={e => { if (secret && e.target.value === '***SAVED***') setApiKeysDraft(d => ({ ...d, [key]: '' })); }}
+                          style={{ ...th.input, width: '100%', fontSize: 13, fontFamily: 'monospace', boxSizing: 'border-box' }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+
+              {/* ── Vision Smart Config ── */}
+              {(() => {
+                const VISION_PROVIDERS = [
+                  { value: 'gemini', label: '✨ Gemini only', desc: 'শুধু Gemini ব্যবহার হবে' },
+                  { value: 'gemini-with-fallback', label: '✨ Gemini → 🧠 OpenAI fallback', desc: 'Gemini fail হলে OpenAI তে যাবে' },
+                  { value: 'openai', label: '🧠 OpenAI only', desc: 'শুধু OpenAI ব্যবহার হবে' },
+                  { value: 'mock', label: '🧪 Mock (Test)', desc: 'API call হবে না — testing এর জন্য' },
+                ];
+                const GEMINI_MODELS = [
+                  { value: 'gemini-2.5-flash', label: 'gemini-2.5-flash', desc: '⚡ Latest — Fast & Accurate (Recommended)' },
+                  { value: 'gemini-2.5-flash-lite', label: 'gemini-2.5-flash-lite', desc: '💸 Cheapest — Good for simple images' },
+                  { value: 'gemini-2.0-flash', label: 'gemini-2.0-flash', desc: '🔄 Previous default — Stable' },
+                  { value: 'gemini-1.5-flash', label: 'gemini-1.5-flash', desc: '📦 Older generation' },
+                  { value: 'gemini-1.5-pro', label: 'gemini-1.5-pro', desc: '🏆 Most accurate — Higher cost' },
+                ];
+                const OPENAI_MODELS = [
+                  { value: 'gpt-4o', label: 'gpt-4o', desc: '🏆 Best accuracy' },
+                  { value: 'gpt-4o-mini', label: 'gpt-4o-mini', desc: '💸 Cheaper option' },
+                ];
+
+                const currentProvider = apiKeysDraft['visionProvider'] || 'gemini';
+                const currentModel = apiKeysDraft['visionModel'] || '';
+                const isGemini = currentProvider === 'gemini' || currentProvider === 'gemini-with-fallback';
+                const models = isGemini ? GEMINI_MODELS : currentProvider === 'openai' ? OPENAI_MODELS : [];
+
+                const selectStyle: React.CSSProperties = {
+                  ...th.input as any,
+                  width: '100%',
+                  fontSize: 13,
+                  boxSizing: 'border-box' as const,
+                  cursor: 'pointer',
+                  appearance: 'auto' as any,
+                };
+
+                return (
+                  <div style={{ marginBottom: 24 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: th.accent, marginBottom: 10, borderBottom: `1px solid ${th.border}`, paddingBottom: 6 }}>👁 Vision (Image Analysis)</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 12 }}>
+
+                      {/* Provider Dropdown */}
+                      <div>
+                        <div style={{ fontSize: 12, color: th.muted, marginBottom: 4 }}>Vision Provider</div>
+                        <select
+                          value={currentProvider}
+                          onChange={e => {
+                            const p = e.target.value;
+                            setApiKeysDraft(d => ({
+                              ...d,
+                              visionProvider: p,
+                              visionModel: p === 'openai' ? 'gpt-4o' : p === 'mock' ? '' : 'gemini-2.5-flash',
+                            }));
+                          }}
+                          style={selectStyle}
+                        >
+                          {VISION_PROVIDERS.map(p => (
+                            <option key={p.value} value={p.value}>{p.label}</option>
+                          ))}
+                        </select>
+                        <div style={{ fontSize: 11, color: th.muted, marginTop: 4 }}>
+                          {VISION_PROVIDERS.find(p => p.value === currentProvider)?.desc}
+                        </div>
+                      </div>
+
+                      {/* Model Dropdown */}
+                      {models.length > 0 && (
+                        <div>
+                          <div style={{ fontSize: 12, color: th.muted, marginBottom: 4 }}>
+                            Vision Model {isGemini ? '(Gemini)' : '(OpenAI)'}
+                          </div>
+                          <select
+                            value={currentModel || models[0].value}
+                            onChange={e => setApiKeysDraft(d => ({ ...d, visionModel: e.target.value }))}
+                            style={selectStyle}
+                          >
+                            {models.map(m => (
+                              <option key={m.value} value={m.value}>{m.label} — {m.desc}</option>
+                            ))}
+                          </select>
+                          <div style={{ fontSize: 11, color: th.muted, marginTop: 4 }}>
+                            {models.find(m => m.value === (currentModel || models[0].value))?.desc}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Confidence Threshold */}
+                      <div>
+                        <div style={{ fontSize: 12, color: th.muted, marginBottom: 4 }}>Vision Confidence Threshold</div>
+                        <input
+                          type="number"
+                          min="0" max="1" step="0.05"
+                          value={apiKeysDraft['visionConfidenceThreshold'] ?? ''}
+                          placeholder="0.15"
+                          onChange={e => setApiKeysDraft(d => ({ ...d, visionConfidenceThreshold: e.target.value }))}
+                          style={{ ...th.input, width: '100%', fontSize: 13, boxSizing: 'border-box' }}
+                        />
+                        <div style={{ fontSize: 11, color: th.muted, marginTop: 4 }}>0.0 – 1.0 | কম হলে বেশি image accept হবে (default: 0.15)</div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {([
                   { group: '🦙 Ollama (Local)', fields: [
                     { key: 'ollamaBaseUrl', label: 'Ollama Base URL', placeholder: 'http://localhost:11434' },
                     { key: 'ollamaChatModel', label: 'Ollama Chat Model', placeholder: 'qwen2.5:0.5b' },

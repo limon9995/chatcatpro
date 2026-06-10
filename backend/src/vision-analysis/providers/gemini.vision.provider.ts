@@ -16,7 +16,7 @@ export class GeminiVisionProvider implements VisionAnalysisProvider {
 
   constructor(private readonly apiKeysService: ApiKeysService) {
     this.apiKey = apiKeysService.getSync('geminiApiKey');
-    this.model = apiKeysService.getSync('visionModel') || 'gemini-2.0-flash';
+    this.model = apiKeysService.getSync('visionModel') || 'gemini-2.5-flash';
   }
 
   private buildCodeExtractionPrompt(prefix: string): string {
