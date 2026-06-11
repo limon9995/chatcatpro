@@ -4210,12 +4210,39 @@ function AdminPaymentSetup({ th, cfg, setCfg, activeTab, setActiveTab, smsLog, s
           <div style={{ background: '#8b5cf618', border: '1px solid #8b5cf640', borderRadius: 10, padding: 12, fontSize: 13, color: th.text }}>
             📲 আপনার ফোনে SMS Gateway app ইন্সটল করুন → নিচের Webhook URL দিন → আপনার bKash/Nagad/Rocket-এ payment এলে bot auto-verify করবে।
           </div>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
-            <input type="checkbox" checked={!!cfg.smsGatewayEnabled} onChange={e => setCfg({ ...cfg, smsGatewayEnabled: e.target.checked })} />
-            <span style={{ fontWeight: 700, color: th.text }}>SMS Gateway চালু করুন</span>
-          </label>
-          <div>
-            <div style={{ fontSize: 11, color: th.muted, fontWeight: 600 }}>Secret Token</div>
+
+          {/* Step 1 — Download App */}
+          <div style={{ borderRadius: 10, padding: '12px 14px', background: '#8b5cf610', border: '1px solid #8b5cf630' }}>
+            <div style={{ fontWeight: 800, fontSize: 13, color: th.text, marginBottom: 8 }}>📱 ধাপ ১ — App ডাউনলোড করুন</div>
+            <div style={{ fontSize: 12, color: th.muted, marginBottom: 10, lineHeight: 1.6 }}>
+              যে ফোনে bKash/Nagad/Rocket-এর payment SMS আসে সেই Android ফোনে নিচের app install করুন।
+            </div>
+            <div style={{ padding: '7px 10px', borderRadius: 8, background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)', fontSize: 11.5, color: '#92400e', marginBottom: 10, lineHeight: 1.6 }}>
+              ⚠️ এই app গুলো Google Play Store-এ নেই। GitHub থেকে APK download করে install করুন। Install-এর সময় "Unknown Sources" allow করুন।
+            </div>
+            {[
+              { name: 'ChatCat PaySync', badge: '⭐ Official (Recommended)', badgeColor: '#10b981', desc: 'ChatCat-এর নিজস্ব app। সবচেয়ে সহজ।', url: `${API_BASE.replace('/api', '')}/downloads/chatcat-paysync.apk`, btn: '⬇ APK Download', btnColor: '#10b981' },
+              { name: 'SMS to URL Forwarder', badge: 'Alternative', badgeColor: '#3b82f6', desc: 'Open source, lightweight।', url: 'https://github.com/bogkonstantin/android_income_sms_gateway_webhook/releases', btn: '⬇ GitHub APK', btnColor: '#2563eb' },
+            ].map(app => (
+              <div key={app.name} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 10px', borderRadius: 8, background: th.surface, border: `1px solid ${th.border}`, marginBottom: 6 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 2, flexWrap: 'wrap' }}>
+                    <span style={{ fontWeight: 700, fontSize: 12.5, color: th.text }}>{app.name}</span>
+                    <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 20, background: app.badgeColor + '20', color: app.badgeColor }}>{app.badge}</span>
+                  </div>
+                  <div style={{ fontSize: 11.5, color: th.muted }}>{app.desc}</div>
+                </div>
+                <a href={app.url} target="_blank" rel="noreferrer" style={{ flexShrink: 0, padding: '6px 12px', borderRadius: 7, background: app.btnColor, color: '#fff', fontWeight: 700, fontSize: 12, textDecoration: 'none', whiteSpace: 'nowrap' }}>
+                  {app.btn}
+                </a>
+              </div>
+            ))}
+          </div>
+
+          {/* Step 2 — Token + Webhook URL */}
+          <div style={{ borderRadius: 10, padding: '12px 14px', background: '#8b5cf610', border: '1px solid #8b5cf630' }}>
+            <div style={{ fontWeight: 800, fontSize: 13, color: th.text, marginBottom: 8 }}>🔑 ধাপ ২ — Secret Token তৈরি করুন</div>
+            <div style={{ fontSize: 11, color: th.muted, fontWeight: 600, marginBottom: 4 }}>Secret Token</div>
             <div style={{ display: 'flex', gap: 8 }}>
               <input style={{ ...inp, flex: 1 }} value={cfg.smsGatewayToken || ''} placeholder="Random secret string"
                 onChange={e => setCfg({ ...cfg, smsGatewayToken: e.target.value })} />
@@ -4229,6 +4256,28 @@ function AdminPaymentSetup({ th, cfg, setCfg, activeTab, setActiveTab, smsLog, s
               </button>
             </div>
           </div>
+
+          {/* Step 3 — Webhook URL */}
+          {cfg.smsGatewayToken && (
+            <div style={{ borderRadius: 10, padding: '12px 14px', background: '#8b5cf610', border: '1px solid #8b5cf630' }}>
+              <div style={{ fontWeight: 800, fontSize: 13, color: th.text, marginBottom: 8 }}>🔗 ধাপ ৩ — Webhook URL app-এ দিন</div>
+              <div style={{ fontSize: 12, color: th.muted, marginBottom: 8 }}>নিচের URL টা copy করে app-এর Webhook URL field-এ paste করুন।</div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input readOnly value={`${API_BASE}/admin/sms-incoming?token=${cfg.smsGatewayToken}`}
+                  style={{ ...inp, flex: 1, fontSize: 11, fontFamily: 'monospace', userSelect: 'all' as any }}
+                  onFocus={(e: any) => e.target.select()} />
+                <button style={{ ...th.btnGhost, whiteSpace: 'nowrap', fontSize: 12 }}
+                  onClick={() => { navigator.clipboard.writeText(`${API_BASE}/admin/sms-incoming?token=${cfg.smsGatewayToken}`); }}>
+                  📋 Copy
+                </button>
+              </div>
+            </div>
+          )}
+
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+            <input type="checkbox" checked={!!cfg.smsGatewayEnabled} onChange={e => setCfg({ ...cfg, smsGatewayEnabled: e.target.checked })} />
+            <span style={{ fontWeight: 700, color: th.text }}>SMS Gateway চালু করুন</span>
+          </label>
           {smsLog.length > 0 && (
             <div>
               <div style={{ fontSize: 11, color: th.muted, fontWeight: 600, marginBottom: 6 }}>সাম্প্রতিক Received SMS</div>
