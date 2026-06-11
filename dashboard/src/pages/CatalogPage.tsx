@@ -176,7 +176,7 @@ export function CatalogPage({ th, pageId, onToast }: {
         {/* Toggle tabs */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderBottom: `1px solid ${th.border}` }}>
           {(['own', 'chatcat'] as const).map(m => {
-            const isActive = mode === m;
+            const isActive = mode === m || (m === 'own' && editingOwnUrl);
             return (
               <button
                 key={m}
