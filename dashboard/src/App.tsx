@@ -133,6 +133,10 @@ export function AppContent() {
     if (screen === 'dashboard') return;
     const params = new URLSearchParams();
     if (screen !== 'landing') params.set('mode', screen);
+    // preserve oauthResult so ConnectPageScreen can consume it
+    const existing = new URLSearchParams(window.location.search);
+    const oauthResult = existing.get('oauthResult');
+    if (oauthResult) params.set('oauthResult', oauthResult);
     replaceUrl(params);
   }, [screen]);
 
