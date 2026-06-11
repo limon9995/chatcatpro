@@ -577,6 +577,15 @@ export function AdminPanel({ th, onToast, onLogout }: {
     if (tab === 'billing') loadBilling();
   }, [tab, billingSubFilter]);
 
+  // Poll admin SMS devices every 30s when on billing tab
+  useEffect(() => {
+    if (tab !== 'billing') return;
+    const interval = setInterval(() => {
+      request<any[]>(`${API_BASE}/sms-gateway/devices`).then(d => { if (Array.isArray(d)) setAdminSmsDevices(d); }).catch(() => {});
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [tab]);
+
   useEffect(() => {
     if (tab === 'pricing') loadPricing();
   }, [tab]);
@@ -4211,7 +4220,7 @@ function AdminPaymentSetup({ th, cfg, setCfg, activeTab, setActiveTab, smsLog, a
       {activeTab === 'sms' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={{ background: '#8b5cf618', border: '1px solid #8b5cf640', borderRadius: 10, padding: 12, fontSize: 13, color: th.text }}>
-            📲 আপনার ফোনে SMS Gateway app ইন্সটল করুন → নিচের Webhook URL দিন → আপনার bKash/Nagad/Rocket-এ payment এলে bot auto-verify করবে।
+            📲 আপনার ফোনে ChatCat PaySync app install করুন → Secret Token দিয়ে connect করুন → আপনার bKash/Nagad/Rocket-এ payment এলে bot auto-verify করবে।
           </div>
 
           {/* Step 1 — Download App */}
@@ -4263,7 +4272,7 @@ function AdminPaymentSetup({ th, cfg, setCfg, activeTab, setActiveTab, smsLog, a
           <div style={{ borderRadius: 10, padding: '12px 14px', background: '#8b5cf610', border: '1px solid #8b5cf630' }}>
             <div style={{ fontWeight: 800, fontSize: 13, color: th.text, marginBottom: 8 }}>⚙️ ধাপ ৩ — App-এ connect করুন</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {['App install করে open করুন → সব SMS permission allow করুন', 'App-এ Secret Token paste করুন (উপরের ধাপ ২ এর token)', '"Connect" button চাপুন — connected হলে নিচে device দেখাবে', '⚠️ Battery Optimization OFF করুন'].map((step, i) => (
+              {['App install করে open করুন → সব permission allow করুন', 'App-এ উপরের Secret Token paste করে ADD চাপুন — connected হলে নিচে device দেখাবে', '⚠️ Battery Optimization OFF করুন — ফোন lock থাকলেও SMS আসবে'].map((step, i) => (
                 <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
                   <span style={{ flexShrink: 0, width: 18, height: 18, borderRadius: '50%', background: '#8b5cf620', color: '#8b5cf6', fontWeight: 800, fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{i + 1}</span>
                   <span style={{ fontSize: 12, color: th.muted }}>{step}</span>
@@ -4272,22 +4281,25 @@ function AdminPaymentSetup({ th, cfg, setCfg, activeTab, setActiveTab, smsLog, a
             </div>
           </div>
 
-          {/* Connected Devices */}
-          {adminSmsDevices.length > 0 && (
-            <div style={{ borderRadius: 10, padding: '12px 14px', background: '#8b5cf610', border: '1px solid #8b5cf630' }}>
-              <div style={{ fontWeight: 800, fontSize: 13, color: th.text, marginBottom: 8 }}>📱 Connected Devices</div>
-              {adminSmsDevices.map((d: any) => (
-                <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 8, background: th.surface, border: `1px solid ${d.isActive ? '#10b98133' : th.border}`, marginBottom: 6 }}>
-                  <span style={{ fontSize: 18 }}>📱</span>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 700, fontSize: 12.5, color: th.text }}>{d.deviceName}</div>
-                    {d.deviceModel && <div style={{ fontSize: 11, color: th.muted }}>{d.deviceModel}</div>}
-                  </div>
-                  <div style={{ fontSize: 11, color: d.isActive ? '#10b981' : '#ef4444', fontWeight: 700 }}>{d.isActive ? '● Connected' : '○ Disconnected'}</div>
+          {/* Connected Devices — always visible */}
+          <div style={{ borderRadius: 10, padding: '12px 14px', background: '#8b5cf610', border: '1px solid #8b5cf630' }}>
+            <div style={{ fontWeight: 800, fontSize: 13, color: th.text, marginBottom: 8 }}>📱 Connected Devices</div>
+            {adminSmsDevices.length === 0 ? (
+              <div style={{ fontSize: 12, color: th.muted, textAlign: 'center', padding: '10px 0' }}>
+                কোনো device connect হয়নি। App install করে Secret Token দিন।
+              </div>
+            ) : adminSmsDevices.map((d: any) => (
+              <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 8, background: th.surface, border: `1px solid ${d.isActive ? '#10b98133' : th.border}`, marginBottom: 6 }}>
+                <span style={{ fontSize: 18 }}>📱</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 700, fontSize: 12.5, color: th.text }}>{d.deviceName}</div>
+                  {d.deviceModel && <div style={{ fontSize: 11, color: th.muted }}>{d.deviceModel}</div>}
+                  <div style={{ fontSize: 10.5, color: th.muted, marginTop: 1 }}>সর্বশেষ: {new Date(d.lastSeenAt).toLocaleString('bn-BD')}</div>
                 </div>
-              ))}
-            </div>
-          )}
+                <div style={{ fontSize: 11, color: d.isActive ? '#10b981' : '#ef4444', fontWeight: 700 }}>{d.isActive ? '● Connected' : '○ Disconnected'}</div>
+              </div>
+            ))}
+          </div>
 
           <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: adminSmsDevices.length === 0 && !cfg.smsGatewayEnabled ? 'not-allowed' : 'pointer', opacity: adminSmsDevices.length === 0 && !cfg.smsGatewayEnabled ? 0.5 : 1 }}
             title={adminSmsDevices.length === 0 && !cfg.smsGatewayEnabled ? 'আগে একটি device connect করুন' : ''}>
