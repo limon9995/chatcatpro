@@ -107,4 +107,24 @@ export class SmsGatewayController {
   async getAdminStatus() {
     return this.svc.getAdminStatus();
   }
+
+  // ── Device connect (called by ChatCat PaySync app) — no auth ─────────────
+  @SkipThrottle({ global: true, auth: true, chat: true })
+  @Post('connect')
+  @HttpCode(200)
+  async connectDevice(@Body() body: { token: string; deviceName?: string; deviceModel?: string }) {
+    const { token, deviceName, deviceModel } = body;
+    if (!token) throw new UnauthorizedException('token required');
+    const result = await this.svc.connectDevice(token, deviceName || 'Unknown Device', deviceModel);
+    if (!result) throw new UnauthorizedException('Invalid token');
+    return { ok: true };
+  }
+
+  // ── Get connected devices (authenticated) ────────────────────────────────
+  @UseGuards(AuthGuard)
+  @SkipThrottle({ global: true, auth: true, chat: true })
+  @Get('devices')
+  async getDevices(@Query('pageId') pageId?: string) {
+    return this.svc.getDevices(pageId ? Number(pageId) : null);
+  }
 }

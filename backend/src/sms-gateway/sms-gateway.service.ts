@@ -280,4 +280,43 @@ export class SmsGatewayService {
     });
     return { lastReceived: last };
   }
+
+  async connectDevice(token: string, deviceName: string, deviceModel?: string): Promise<boolean> {
+    // Check if it's admin token
+    const adminToken = this.getAdminToken();
+    let pageId: number | null = null;
+    if (adminToken && token === adminToken) {
+      pageId = null;
+    } else {
+      const page = await this.prisma.page.findFirst({
+        where: { smsGatewayToken: token },
+        select: { id: true },
+      });
+      if (!page) return false;
+      pageId = page.id;
+    }
+    // Upsert device by name + pageId
+    const existing = await (this.prisma as any).smsDevice.findFirst({
+      where: { pageId, deviceName },
+    });
+    if (existing) {
+      await (this.prisma as any).smsDevice.update({
+        where: { id: existing.id },
+        data: { deviceModel: deviceModel || existing.deviceModel, lastSeenAt: new Date() },
+      });
+    } else {
+      await (this.prisma as any).smsDevice.create({
+        data: { pageId, deviceName, deviceModel: deviceModel || null },
+      });
+    }
+    return true;
+  }
+
+  async getDevices(pageId: number | null): Promise<any[]> {
+    return (this.prisma as any).smsDevice.findMany({
+      where: { pageId },
+      orderBy: { lastSeenAt: 'desc' },
+      select: { id: true, deviceName: true, deviceModel: true, lastSeenAt: true, createdAt: true },
+    });
+  }
 }

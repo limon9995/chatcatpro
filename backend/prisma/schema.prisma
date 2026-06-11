@@ -953,3 +953,14 @@ model LiveSession {
   @@index([pageId])
   @@index([pageId, isActive])
 }
+
+model SmsDevice {
+  id          Int      @id @default(autoincrement())
+  pageId      Int?     // null = admin device
+  deviceName  String
+  deviceModel String?
+  lastSeenAt  DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  @@index([pageId])
+}

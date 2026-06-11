@@ -239,6 +239,7 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
   const [smsToken, setSmsToken] = useState<string | null>(null);
   const [smsCopied, setSmsCopied] = useState(false);
   const [smsToggling, setSmsToggling] = useState(false);
+  const [smsDevices, setSmsDevices] = useState<any[]>([]);
   const [selectedPayModeKey, setSelectedPayModeKey] = useState<string>('sms');
   // WhatsApp settings state
   const [waToken, setWaToken] = useState('');
@@ -263,13 +264,14 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [biz, modes, tut, linked, payCr, smsTok] = await Promise.all([
+      const [biz, modes, tut, linked, payCr, smsTok, smsDevList] = await Promise.all([
         request<any>(`${BASE}/settings`),
         request<any>(`${BASE}/modes`),
         request<any>(`${BASE}/tutorials`).catch(() => null),
         request<any>(`${API_BASE}/page/${pageId}/linked-pages`).catch(() => []),
         request<any>(`${API_BASE}/pages/${pageId}/payment-credentials`).catch(() => []),
         request<any>(`${API_BASE}/sms-gateway/token?pageId=${pageId}`).catch(() => null),
+        request<any[]>(`${API_BASE}/sms-gateway/devices?pageId=${pageId}`).catch(() => []),
       ]);
       setS(prev => ({
         ...prev, ...biz, ...modes,
@@ -281,6 +283,7 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
       setLinkedPages(Array.isArray(linked) ? linked : []);
       setPayCreds(Array.isArray(payCr) ? payCr : []);
       if (smsTok?.token) setSmsToken(smsTok.token);
+      if (Array.isArray(smsDevList)) setSmsDevices(smsDevList);
     } catch (e: any) { onToast(e.message, 'error'); }
     finally { setLoading(false); }
   }, [pageId]);
@@ -1705,29 +1708,17 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
                   </div>
                 </div>
 
-                {/* Step 2 — Copy webhook URL */}
+                {/* Step 2 — Copy Secret Token */}
                 <div style={{ borderRadius: 12, padding: '14px 16px', background: th.surface, border: `1px solid ${th.border}` }}>
                   <div style={{ fontWeight: 800, fontSize: 13, color: th.text, marginBottom: 10 }}>
-                    🔗 {copy('ধাপ ২ — Webhook URL copy করুন', 'Step 2 — Copy Webhook URL')}
+                    🔑 {copy('ধাপ ২ — Secret Token copy করুন', 'Step 2 — Copy Secret Token')}
                   </div>
                   <div style={{ fontSize: 12.5, color: th.muted, marginBottom: 10, lineHeight: 1.5 }}>
-                    {copy('নিচের URL টা copy করে app-এ paste করুন।', 'Copy the URL below and paste it into the app.')}
+                    {copy('নিচের Secret Token টা copy করে ChatCat PaySync app-এ paste করুন।', 'Copy the Secret Token below and paste it into the ChatCat PaySync app.')}
                   </div>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <input
-                      readOnly
-                      value={`${API_BASE}/sms-gateway/incoming?pageToken=${smsToken}`}
-                      style={{ ...inp, flex: 1, fontSize: 11, color: th.muted, userSelect: 'all', fontFamily: 'monospace' }}
-                      onFocus={e => e.target.select()}
-                    />
-                    <button onClick={() => {
-                      navigator.clipboard.writeText(`${API_BASE}/sms-gateway/incoming?pageToken=${smsToken}`);
-                      setSmsCopied(true); setTimeout(() => setSmsCopied(false), 2500);
-                    }} style={{
-                      padding: '9px 16px', borderRadius: 8, border: 'none',
-                      background: smsCopied ? '#10b981' : th.accent, color: '#fff',
-                      fontWeight: 700, cursor: 'pointer', fontSize: 12, whiteSpace: 'nowrap', flexShrink: 0,
-                    }}>
+                    <input readOnly value={smsToken} style={{ ...inp, flex: 1, fontSize: 11, color: th.muted, userSelect: 'all' as any, fontFamily: 'monospace' }} onFocus={e => e.target.select()} />
+                    <button onClick={() => { navigator.clipboard.writeText(smsToken); setSmsCopied(true); setTimeout(() => setSmsCopied(false), 2500); }} style={{ padding: '9px 16px', borderRadius: 8, border: 'none', background: smsCopied ? '#10b981' : th.accent, color: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: 12, whiteSpace: 'nowrap', flexShrink: 0 }}>
                       {smsCopied ? '✅ Copied!' : '📋 Copy'}
                     </button>
                   </div>
@@ -1739,27 +1730,16 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
                   </button>
                 </div>
 
-                {/* Step 3 — App setup instructions */}
+                {/* Step 3 — App connect */}
                 <div style={{ borderRadius: 12, padding: '14px 16px', background: th.surface, border: `1px solid ${th.border}` }}>
                   <div style={{ fontWeight: 800, fontSize: 13, color: th.text, marginBottom: 10 }}>
-                    ⚙️ {copy('ধাপ ৩ — App-এ Settings করুন', 'Step 3 — Configure the App')}
-                  </div>
-                  <div style={{ fontSize: 12, color: th.muted, marginBottom: 10, lineHeight: 1.6 }}>
-                    {copy(
-                      '⚡ ChatCat PaySync app install করে নিচের steps follow করুন।',
-                      '⚡ Install ChatCat PaySync and follow the steps below.',
-                    )}
+                    ⚙️ {copy('ধাপ ৩ — App-এ connect করুন', 'Step 3 — Connect in App')}
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {[
                       copy('App install করে open করুন → সব SMS permission allow করুন', 'Install and open the app → Allow all SMS permissions'),
-                      copy('"Webhooks" বা "Settings" সেকশনে যান', 'Go to "Webhooks" or "Settings" section'),
-                      copy('Method: POST সেট করুন', 'Set Method: POST'),
-                      copy('URL: উপরের webhook URL paste করুন (ধাপ ২ এর URL)', 'URL: Paste the webhook URL from above (Step 2 URL)'),
-                      copy('Content-Type: application/json সিলেক্ট করুন', 'Select Content-Type: application/json'),
-                      copy('Body/Payload template-এ রাখুন: {"message": "{{message}}", "from": "{{from}}"}', 'Set Body/Payload template to: {"message": "{{message}}", "from": "{{from}}"}'),
-                      copy('(Optional) Filter: sender-এ "bKash" বা "16247" বা "Nagad" বা "16167" দিন — শুধু payment SMS forward হবে', '(Optional) Filter: set sender to "bKash" or "16247" or "Nagad" or "16167" — only payment SMS will forward'),
-                      copy('SMS Forwarding / Webhook চালু করুন ✅', 'Enable SMS Forwarding / Webhook ✅'),
+                      copy('App-এ Secret Token paste করুন (উপরের ধাপ ২ এর token)', 'Paste the Secret Token into the app (from Step 2 above)'),
+                      copy('"Connect" বা "Start" button চাপুন — connected হলে নিচে device দেখাবে', 'Tap "Connect" — connected devices will appear below'),
                       copy('⚠️ Battery Optimization OFF করুন (Settings → Battery → এই app → Unrestricted)', '⚠️ Disable Battery Optimization (Settings → Battery → This app → Unrestricted)'),
                       copy('Phone সবসময় internet-এ connected ও চার্জে রাখুন', 'Keep the phone always connected to internet and plugged in'),
                     ].map((step, i) => (
@@ -1768,25 +1748,6 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
                         <span style={{ fontSize: 12.5, color: th.muted, lineHeight: 1.5 }}>{step}</span>
                       </div>
                     ))}
-                  </div>
-
-                  {/* Android 13+ / MIUI Restricted settings warning */}
-                  <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px dashed ${th.border}`, fontSize: 12, color: th.muted, lineHeight: 1.6 }}>
-                    <div style={{ fontWeight: 800, color: '#eab308', marginBottom: 6 }}>
-                      ⚠️ {copy('Android 13+ / Xiaomi / MIUI / HyperOS ব্যবহারকারীদের জন্য:', 'For Android 13+ / Xiaomi / MIUI / HyperOS Users:')}
-                    </div>
-                    <div>
-                      {copy(
-                        'অ্যাপটি প্লে স্টোরের বাইরে থেকে ইনস্টল করায় অ্যান্ড্রয়েড ওএস পারমিশন ব্লক করে দিতে পারে (Restricted Setting)। পারমিশন দিতে নিচের ধাপগুলো অনুসরণ করুন:',
-                        'Android OS may block SMS permissions for sideloaded apps (Restricted Setting). Follow these steps to unlock:'
-                      )}
-                    </div>
-                    <div style={{ paddingLeft: 12, marginTop: 4, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      <div>• {copy('ফোনের Settings ➔ Apps ➔ Manage Apps ➔ ChatCat PaySync (বা আপনার ইনস্টল করা অ্যাপটি) সিলেক্ট করুন।', 'Go to Phone Settings ➔ Apps ➔ Manage Apps ➔ Select ChatCat PaySync (or your installed app).')}</div>
-                      <div>• {copy('পেজের একদম ওপরে ডান কোণায় থাকা ৩টি ডট (⋮) এ ক্লিক করুন (অথবা পেজের নিচের দিকে স্ক্রল করুন)।', 'Click the three dots (⋮) at the top-right corner (or scroll to the bottom).')}</div>
-                      <div>• {copy('"Allow restricted settings" (সীমাবদ্ধ সেটিংস অনুমোদন করুন) এ ক্লিক করে ফিঙ্গারপ্রিন্ট/পিন দিয়ে অ্যাক্টিভেট করুন।', 'Click "Allow restricted settings" and unlock with fingerprint/pin.')}</div>
-                      <div>• {copy('এবার অ্যাপটি আবার ওপেন করে পেমেন্ট SMS রিড করার অনুমতি (Allow SMS Permission) দিন।', 'Reopen the app and grant the SMS permission successfully.')}</div>
-                    </div>
                   </div>
                 </div>
 
@@ -1827,6 +1788,33 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
                       {copy('(নিজের নম্বরে ৳10 send করে test করুন)', '(Send ৳10 to yourself to test)')}
                     </span>
                   </div>
+                </div>
+
+                {/* Connected Devices */}
+                <div style={{ borderRadius: 12, padding: '14px 16px', background: th.surface, border: `1px solid ${th.border}` }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                    <div style={{ fontWeight: 800, fontSize: 13, color: th.text }}>
+                      📱 {copy('Connected Devices', 'Connected Devices')}
+                    </div>
+                    <button onClick={async () => { const d = await request<any[]>(`${API_BASE}/sms-gateway/devices?pageId=${pageId}`).catch(() => []); setSmsDevices(d); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: th.muted, fontSize: 12 }}>🔄</button>
+                  </div>
+                  {smsDevices.length === 0 ? (
+                    <div style={{ fontSize: 12, color: th.muted, textAlign: 'center', padding: '12px 0' }}>
+                      {copy('কোনো device connect হয়নি। App-এ token দিয়ে connect করুন।', 'No devices connected yet. Connect via the app using the token.')}
+                    </div>
+                  ) : smsDevices.map((d: any) => (
+                    <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 8, background: th.bg, border: `1px solid ${th.border}`, marginBottom: 6 }}>
+                      <span style={{ fontSize: 20 }}>📱</span>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 700, fontSize: 12.5, color: th.text }}>{d.deviceName}</div>
+                        {d.deviceModel && <div style={{ fontSize: 11.5, color: th.muted }}>{d.deviceModel}</div>}
+                      </div>
+                      <div style={{ fontSize: 11, color: th.muted, textAlign: 'right' }}>
+                        <div style={{ color: '#10b981', fontWeight: 700 }}>● Connected</div>
+                        <div>{copy('সর্বশেষ:', 'Last:')} {new Date(d.lastSeenAt).toLocaleDateString('bn-BD')}</div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
 
                 {/* bKash/Nagad sender numbers info */}

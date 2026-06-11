@@ -136,6 +136,7 @@ export function AdminPanel({ th, onToast, onLogout }: {
   const [adminPaySaving, setAdminPaySaving] = useState(false);
   const [adminPayTab, setAdminPayTab] = useState<'sms' | 'bkash' | 'nagad' | 'manual'>('sms');
   const [adminSmsLog, setAdminSmsLog] = useState<any[]>([]);
+  const [adminSmsDevices, setAdminSmsDevices] = useState<any[]>([]);
 
   // Wallet admin state
   const [walletPages, setWalletPages]       = useState<any[]>([]);
@@ -357,6 +358,7 @@ export function AdminPanel({ th, onToast, onLogout }: {
       setBillingSupport(globalCfg?.billingSupport || {});
       setAdminPayCfg(payCfg || {});
       setAdminSmsLog(payCfg?.recentSms || []);
+      request<any[]>(`${API_BASE}/sms-gateway/devices`).then(d => { if (Array.isArray(d)) setAdminSmsDevices(d); }).catch(() => {});
     } catch (e: any) { onToast(e.message, 'error'); }
     finally { setBillingLoading(false); }
   }, [BASE, billingSubFilter]);
@@ -1857,6 +1859,7 @@ export function AdminPanel({ th, onToast, onLogout }: {
               activeTab={adminPayTab}
               setActiveTab={setAdminPayTab}
               smsLog={adminSmsLog}
+              adminSmsDevices={adminSmsDevices}
               saving={adminPaySaving}
               onSave={saveAdminPayConfig}
             />
@@ -4174,10 +4177,10 @@ function PaymentGatewaySection({ th, pageId, request }: { th: any; pageId: numbe
 }
 
 // ── Admin Payment Setup Component ─────────────────────────────────────────
-function AdminPaymentSetup({ th, cfg, setCfg, activeTab, setActiveTab, smsLog, saving, onSave }: {
+function AdminPaymentSetup({ th, cfg, setCfg, activeTab, setActiveTab, smsLog, adminSmsDevices, saving, onSave }: {
   th: Theme; cfg: any; setCfg: (v: any) => void;
   activeTab: string; setActiveTab: (t: any) => void;
-  smsLog: any[]; saving: boolean; onSave: () => void;
+  smsLog: any[]; adminSmsDevices: any[]; saving: boolean; onSave: () => void;
 }) {
   const inp = { ...th.input, marginTop: 4 };
   const TABS = [
@@ -4256,20 +4259,33 @@ function AdminPaymentSetup({ th, cfg, setCfg, activeTab, setActiveTab, smsLog, s
             </div>
           </div>
 
-          {/* Step 3 — Webhook URL */}
-          {cfg.smsGatewayToken && (
+          {/* Step 3 — Connect in app */}
+          <div style={{ borderRadius: 10, padding: '12px 14px', background: '#8b5cf610', border: '1px solid #8b5cf630' }}>
+            <div style={{ fontWeight: 800, fontSize: 13, color: th.text, marginBottom: 8 }}>⚙️ ধাপ ৩ — App-এ connect করুন</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {['App install করে open করুন → সব SMS permission allow করুন', 'App-এ Secret Token paste করুন (উপরের ধাপ ২ এর token)', '"Connect" button চাপুন — connected হলে নিচে device দেখাবে', '⚠️ Battery Optimization OFF করুন'].map((step, i) => (
+                <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                  <span style={{ flexShrink: 0, width: 18, height: 18, borderRadius: '50%', background: '#8b5cf620', color: '#8b5cf6', fontWeight: 800, fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{i + 1}</span>
+                  <span style={{ fontSize: 12, color: th.muted }}>{step}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Connected Devices */}
+          {adminSmsDevices.length > 0 && (
             <div style={{ borderRadius: 10, padding: '12px 14px', background: '#8b5cf610', border: '1px solid #8b5cf630' }}>
-              <div style={{ fontWeight: 800, fontSize: 13, color: th.text, marginBottom: 8 }}>🔗 ধাপ ৩ — Webhook URL app-এ দিন</div>
-              <div style={{ fontSize: 12, color: th.muted, marginBottom: 8 }}>নিচের URL টা copy করে app-এর Webhook URL field-এ paste করুন।</div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <input readOnly value={`${API_BASE}/admin/sms-incoming?token=${cfg.smsGatewayToken}`}
-                  style={{ ...inp, flex: 1, fontSize: 11, fontFamily: 'monospace', userSelect: 'all' as any }}
-                  onFocus={(e: any) => e.target.select()} />
-                <button style={{ ...th.btnGhost, whiteSpace: 'nowrap', fontSize: 12 }}
-                  onClick={() => { navigator.clipboard.writeText(`${API_BASE}/admin/sms-incoming?token=${cfg.smsGatewayToken}`); }}>
-                  📋 Copy
-                </button>
-              </div>
+              <div style={{ fontWeight: 800, fontSize: 13, color: th.text, marginBottom: 8 }}>📱 Connected Devices</div>
+              {adminSmsDevices.map((d: any) => (
+                <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 8, background: th.surface, border: `1px solid ${th.border}`, marginBottom: 6 }}>
+                  <span style={{ fontSize: 18 }}>📱</span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 700, fontSize: 12.5, color: th.text }}>{d.deviceName}</div>
+                    {d.deviceModel && <div style={{ fontSize: 11, color: th.muted }}>{d.deviceModel}</div>}
+                  </div>
+                  <div style={{ fontSize: 11, color: '#10b981', fontWeight: 700 }}>● Connected</div>
+                </div>
+              ))}
             </div>
           )}
 
