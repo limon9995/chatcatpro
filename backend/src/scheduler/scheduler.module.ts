@@ -4,10 +4,11 @@ import { BillingModule } from '../billing/billing.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { AdminModule } from '../admin/admin.module';
 import { AutoPostModule } from '../auto-post/auto-post.module';
+import { SmsGatewayModule } from '../sms-gateway/sms-gateway.module';
 import { SchedulerService } from './scheduler.service';
 
 @Module({
-  imports: [FollowUpModule, BillingModule, PrismaModule, AdminModule, AutoPostModule],
+  imports: [FollowUpModule, BillingModule, PrismaModule, AdminModule, AutoPostModule, SmsGatewayModule],
   providers: [SchedulerService],
 })
 export class V9SchedulerModule {}

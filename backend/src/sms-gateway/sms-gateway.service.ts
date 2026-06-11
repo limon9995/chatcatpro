@@ -313,10 +313,46 @@ export class SmsGatewayService {
   }
 
   async getDevices(pageId: number | null): Promise<any[]> {
-    return (this.prisma as any).smsDevice.findMany({
+    const devices = await (this.prisma as any).smsDevice.findMany({
       where: { pageId },
       orderBy: { lastSeenAt: 'desc' },
       select: { id: true, deviceName: true, deviceModel: true, lastSeenAt: true, createdAt: true },
     });
+    const threshold = new Date(Date.now() - 30 * 60 * 1000);
+    return devices.map((d: any) => ({ ...d, isActive: new Date(d.lastSeenAt) > threshold }));
+  }
+
+  async autoDisableStaleGateways(): Promise<void> {
+    const threshold = new Date(Date.now() - 30 * 60 * 1000);
+    const enabledPages = await this.prisma.page.findMany({
+      where: { smsGatewayEnabled: true },
+      select: { id: true },
+    });
+    for (const page of enabledPages) {
+      const activeDevice = await (this.prisma as any).smsDevice.findFirst({
+        where: { pageId: page.id, lastSeenAt: { gte: threshold } },
+      });
+      if (!activeDevice) {
+        await this.prisma.page.update({ where: { id: page.id }, data: { smsGatewayEnabled: false } });
+        this.logger.log(`Auto-disabled SMS gateway for page ${page.id} — no active device`);
+      }
+    }
+    // Admin SMS gateway
+    const adminActive = await (this.prisma as any).smsDevice.findFirst({
+      where: { pageId: null, lastSeenAt: { gte: threshold } },
+    });
+    if (!adminActive) {
+      try {
+        const fs = require('fs');
+        const path = require('path');
+        const cfgPath = path.join(process.cwd(), 'storage', 'global-config.json');
+        const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+        if (cfg.adminPayment?.smsGatewayEnabled) {
+          cfg.adminPayment.smsGatewayEnabled = false;
+          fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
+          this.logger.log('Auto-disabled admin SMS gateway — no active device');
+        }
+      } catch { /* ignore */ }
+    }
   }
 }

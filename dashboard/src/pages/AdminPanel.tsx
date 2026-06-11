@@ -4277,13 +4277,13 @@ function AdminPaymentSetup({ th, cfg, setCfg, activeTab, setActiveTab, smsLog, a
             <div style={{ borderRadius: 10, padding: '12px 14px', background: '#8b5cf610', border: '1px solid #8b5cf630' }}>
               <div style={{ fontWeight: 800, fontSize: 13, color: th.text, marginBottom: 8 }}>📱 Connected Devices</div>
               {adminSmsDevices.map((d: any) => (
-                <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 8, background: th.surface, border: `1px solid ${th.border}`, marginBottom: 6 }}>
+                <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 8, background: th.surface, border: `1px solid ${d.isActive ? '#10b98133' : th.border}`, marginBottom: 6 }}>
                   <span style={{ fontSize: 18 }}>📱</span>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontWeight: 700, fontSize: 12.5, color: th.text }}>{d.deviceName}</div>
                     {d.deviceModel && <div style={{ fontSize: 11, color: th.muted }}>{d.deviceModel}</div>}
                   </div>
-                  <div style={{ fontSize: 11, color: '#10b981', fontWeight: 700 }}>● Connected</div>
+                  <div style={{ fontSize: 11, color: d.isActive ? '#10b981' : '#ef4444', fontWeight: 700 }}>{d.isActive ? '● Connected' : '○ Disconnected'}</div>
                 </div>
               ))}
             </div>

@@ -9,13 +9,31 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import androidx.core.app.NotificationCompat
+import okhttp3.*
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.IOException
 
 class PaySyncService : Service() {
 
     private val CHANNEL_ID = "PaySyncServiceChannel"
     private val NOTIFICATION_ID = 1001
+    private val httpClient = OkHttpClient()
+    private val heartbeatHandler = Handler(Looper.getMainLooper())
+    private val HEARTBEAT_INTERVAL = 15 * 60 * 1000L // 15 minutes
+
+    private val heartbeatRunnable = object : Runnable {
+        override fun run() {
+            sendHeartbeat()
+            heartbeatHandler.postDelayed(this, HEARTBEAT_INTERVAL)
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -57,12 +75,52 @@ class PaySyncService : Service() {
             startForeground(NOTIFICATION_ID, notification)
         }
 
+        // Start heartbeat immediately and every 15 minutes
+        heartbeatHandler.post(heartbeatRunnable)
+
         // START_STICKY ensures the service restarts if system kills it for memory
         return START_STICKY
     }
 
+    override fun onDestroy() {
+        super.onDestroy()
+        heartbeatHandler.removeCallbacks(heartbeatRunnable)
+    }
+
     override fun onBind(intent: Intent?): IBinder? {
         return null
+    }
+
+    private fun getTokens(): List<String> {
+        val prefs = getSharedPreferences("ChatCatPrefs", Context.MODE_PRIVATE)
+        val raw = prefs.getString("pageTokens", null) ?: return emptyList()
+        return try {
+            val arr = JSONArray(raw)
+            (0 until arr.length()).map { arr.getString(it) }
+        } catch (e: Exception) { emptyList() }
+    }
+
+    private fun sendHeartbeat() {
+        val tokens = getTokens()
+        if (tokens.isEmpty()) return
+        val deviceName  = Build.MODEL
+        val deviceModel = "${Build.MANUFACTURER} ${Build.MODEL}"
+        tokens.forEach { token ->
+            val json = JSONObject().apply {
+                put("token", token)
+                put("deviceName", deviceName)
+                put("deviceModel", deviceModel)
+            }
+            val body = json.toString().toRequestBody("application/json; charset=utf-8".toMediaTypeOrNull())
+            val request = Request.Builder()
+                .url("https://api.chatcat.pro/sms-gateway/connect")
+                .post(body)
+                .build()
+            httpClient.newCall(request).enqueue(object : Callback {
+                override fun onFailure(call: Call, e: IOException) { /* silent */ }
+                override fun onResponse(call: Call, response: Response) { response.close() }
+            })
+        }
     }
 
     private fun createNotificationChannel() {

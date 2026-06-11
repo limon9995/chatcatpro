@@ -335,14 +335,28 @@ class SetupActivity : AppCompatActivity() {
     private fun requestDefaultSmsApp() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val rm = getSystemService(RoleManager::class.java)
-            if (rm.isRoleAvailable(RoleManager.ROLE_SMS) && !rm.isRoleHeld(RoleManager.ROLE_SMS)) {
+            if (!rm.isRoleAvailable(RoleManager.ROLE_SMS)) { advanceStep(); return }
+            if (rm.isRoleHeld(RoleManager.ROLE_SMS)) { advanceStep(); return }
+            try {
                 startActivityForResult(rm.createRequestRoleIntent(RoleManager.ROLE_SMS), REQ_DEFAULT_SMS)
-            } else advanceStep()
+            } catch (e: Exception) {
+                // RoleManager failed — try legacy intent
+                tryLegacyDefaultSms()
+            }
         } else {
+            tryLegacyDefaultSms()
+        }
+    }
+
+    private fun tryLegacyDefaultSms() {
+        try {
             val intent = Intent(Telephony.Sms.Intents.ACTION_CHANGE_DEFAULT).apply {
                 putExtra(Telephony.Sms.Intents.EXTRA_PACKAGE_NAME, packageName)
             }
             startActivityForResult(intent, REQ_DEFAULT_SMS)
+        } catch (e: Exception) {
+            // Device doesn't support changing default SMS app — skip this step
+            advanceStep()
         }
     }
 

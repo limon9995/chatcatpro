@@ -6,6 +6,7 @@ import { WalletService } from '../wallet/wallet.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AdminService } from '../admin/admin.service';
 import { AutoPostService } from '../auto-post/auto-post.service';
+import { SmsGatewayService } from '../sms-gateway/sms-gateway.service';
 
 const BASE_FEE_BDT = 500;
 
@@ -20,7 +21,18 @@ export class SchedulerService {
     private readonly prisma: PrismaService,
     private readonly admin: AdminService,
     private readonly autoPost: AutoPostService,
+    private readonly smsGateway: SmsGatewayService,
   ) {}
+
+  // Every 15 minutes — disable SMS gateway for pages with no active device
+  @Cron('0 */15 * * * *')
+  async checkSmsGatewayDevices() {
+    try {
+      await this.smsGateway.autoDisableStaleGateways();
+    } catch (e: any) {
+      this.logger.error(`[Scheduler] SmsGateway check error: ${e.message}`);
+    }
+  }
 
   // Every 5 minutes — process scheduled auto posts
   @Cron(CronExpression.EVERY_5_MINUTES)

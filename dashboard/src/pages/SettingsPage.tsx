@@ -290,6 +290,21 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
 
   useEffect(() => { load(); }, [load]);
 
+  // Poll device status every 30s — auto-reflect disconnect/uninstall
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      try {
+        const [devList, biz] = await Promise.all([
+          request<any[]>(`${API_BASE}/sms-gateway/devices?pageId=${pageId}`).catch(() => null),
+          request<any>(`${API_BASE}/client-dashboard/${pageId}/settings`).catch(() => null),
+        ]);
+        if (Array.isArray(devList)) setSmsDevices(devList);
+        if (biz?.smsGatewayEnabled !== undefined) setS(p => ({ ...p, smsGatewayEnabled: biz.smsGatewayEnabled }));
+      } catch { /* silent */ }
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [pageId]);
+
   useEffect(() => {
     if (autoOpenReconnect && !loading) {
       setReconnectTab('request');
@@ -1808,14 +1823,14 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
                       {copy('কোনো device connect হয়নি। App-এ token দিয়ে connect করুন।', 'No devices connected yet. Connect via the app using the token.')}
                     </div>
                   ) : smsDevices.map((d: any) => (
-                    <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 8, background: th.bg, border: `1px solid ${th.border}`, marginBottom: 6 }}>
+                    <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 8, background: th.bg, border: `1px solid ${d.isActive ? '#10b98133' : th.border}`, marginBottom: 6 }}>
                       <span style={{ fontSize: 20 }}>📱</span>
                       <div style={{ flex: 1 }}>
                         <div style={{ fontWeight: 700, fontSize: 12.5, color: th.text }}>{d.deviceName}</div>
                         {d.deviceModel && <div style={{ fontSize: 11.5, color: th.muted }}>{d.deviceModel}</div>}
                       </div>
                       <div style={{ fontSize: 11, color: th.muted, textAlign: 'right' }}>
-                        <div style={{ color: '#10b981', fontWeight: 700 }}>● Connected</div>
+                        <div style={{ color: d.isActive ? '#10b981' : '#ef4444', fontWeight: 700 }}>{d.isActive ? '● Connected' : '○ Disconnected'}</div>
                         <div>{copy('সর্বশেষ:', 'Last:')} {new Date(d.lastSeenAt).toLocaleDateString('bn-BD')}</div>
                       </div>
                     </div>
