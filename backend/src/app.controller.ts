@@ -3,7 +3,7 @@ import { SkipThrottle } from '@nestjs/throttler';
 import { PrismaService } from './prisma/prisma.service';
 import { AdminService } from './admin/admin.service';
 
-@SkipThrottle()
+@SkipThrottle({ global: true, auth: true, chat: true })
 @Controller()
 export class AppController {
   private readonly startTime = Date.now();

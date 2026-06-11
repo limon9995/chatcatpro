@@ -17,7 +17,7 @@ import { WebhookService } from './webhook.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { EncryptionService } from '../common/encryption.service';
 
-@SkipThrottle() // Facebook can send many events — skip global rate limit
+@SkipThrottle({ global: true, auth: true, chat: true }) // Facebook can send many events — skip global rate limit
 @Controller('webhook')
 export class WebhookController {
   private readonly logger = new Logger(WebhookController.name);

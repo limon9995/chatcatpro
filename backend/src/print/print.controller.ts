@@ -3,7 +3,7 @@ import { SkipThrottle } from '@nestjs/throttler';
 import type { Response } from 'express';
 import { PrintService, PrintStyle } from './print.service';
 
-@SkipThrottle()
+@SkipThrottle({ global: true, auth: true, chat: true })
 @Controller('print')
 export class PrintController {
   constructor(private readonly printService: PrintService) {}

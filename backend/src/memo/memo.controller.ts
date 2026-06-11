@@ -23,7 +23,7 @@ import { AuthService } from '../auth/auth.service';
 import { MemoService } from './memo.service';
 import { MemoLayout, MemoTheme } from './memo.types';
 
-@SkipThrottle()
+@SkipThrottle({ global: true, auth: true, chat: true })
 @Controller('memo')
 export class MemoController {
   constructor(

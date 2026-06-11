@@ -14,7 +14,7 @@ import { AuthService } from '../auth/auth.service';
 import { FacebookService } from '../facebook/facebook.service';
 import { PageService } from './page.service';
 
-@SkipThrottle()
+@SkipThrottle({ global: true, auth: true, chat: true })
 @Controller('page')
 @UseGuards(AuthGuard)
 export class PageController {

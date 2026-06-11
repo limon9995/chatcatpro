@@ -17,7 +17,7 @@ import { WaWebhookService } from './wa-webhook.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { EncryptionService } from '../common/encryption.service';
 
-@SkipThrottle()
+@SkipThrottle({ global: true, auth: true, chat: true })
 @Controller('wa-webhook')
 export class WaWebhookController {
   private readonly logger = new Logger(WaWebhookController.name);

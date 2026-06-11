@@ -24,7 +24,7 @@ export class SmsGatewayController {
   constructor(private readonly svc: SmsGatewayService) {}
 
   // ── Android SMS forwarder webhook — no auth, secured by pageToken ─────────
-  @SkipThrottle()
+  @SkipThrottle({ global: true, auth: true, chat: true })
   @Post('incoming')
   @HttpCode(200)
   async incoming(
@@ -46,7 +46,7 @@ export class SmsGatewayController {
 
   // ── Client routes (authenticated) ─────────────────────────────────────────
   @UseGuards(AuthGuard)
-  @SkipThrottle()
+  @SkipThrottle({ global: true, auth: true, chat: true })
   @Get('token')
   async getToken(@Req() req: any) {
     const pageId = Number(req.query.pageId ?? req.authUser?.pageIds?.[0]);
@@ -55,7 +55,7 @@ export class SmsGatewayController {
   }
 
   @UseGuards(AuthGuard)
-  @SkipThrottle()
+  @SkipThrottle({ global: true, auth: true, chat: true })
   @Delete('token')
   async regenerateToken(@Req() req: any, @Query('pageId') pageId: string) {
     const token = await this.svc.regenerateToken(Number(pageId));
@@ -63,7 +63,7 @@ export class SmsGatewayController {
   }
 
   @UseGuards(AuthGuard)
-  @SkipThrottle()
+  @SkipThrottle({ global: true, auth: true, chat: true })
   @Patch('enabled')
   async setEnabled(
     @Req() req: any,
@@ -74,7 +74,7 @@ export class SmsGatewayController {
   }
 
   @UseGuards(AuthGuard)
-  @SkipThrottle()
+  @SkipThrottle({ global: true, auth: true, chat: true })
   @Get('status')
   async getStatus(@Query('pageId') pageId: string) {
     return this.svc.getStatus(Number(pageId));
@@ -82,7 +82,7 @@ export class SmsGatewayController {
 
   @UseGuards(AuthGuard, RolesGuard)
   @Roles('admin')
-  @SkipThrottle()
+  @SkipThrottle({ global: true, auth: true, chat: true })
   @Get('recent')
   async getRecent(@Query('pageId') pageId: string) {
     return this.svc.getRecent(Number(pageId));
@@ -91,7 +91,7 @@ export class SmsGatewayController {
   // ── Admin billing SMS gateway setup ───────────────────────────────────────
   @UseGuards(AuthGuard, RolesGuard)
   @Roles('admin')
-  @SkipThrottle()
+  @SkipThrottle({ global: true, auth: true, chat: true })
   @Post('admin-token/regenerate')
   async regenerateAdminToken() {
     const { randomUUID } = await import('crypto');
@@ -102,7 +102,7 @@ export class SmsGatewayController {
 
   @UseGuards(AuthGuard, RolesGuard)
   @Roles('admin')
-  @SkipThrottle()
+  @SkipThrottle({ global: true, auth: true, chat: true })
   @Get('admin-status')
   async getAdminStatus() {
     return this.svc.getAdminStatus();

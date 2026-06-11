@@ -14,7 +14,7 @@ import { AuthGuard } from '../auth/auth.guard';
 import { AuthService } from '../auth/auth.service';
 import { ProductsService } from './products.service';
 
-@SkipThrottle()
+@SkipThrottle({ global: true, auth: true, chat: true })
 @Controller('products')
 @UseGuards(AuthGuard)
 export class ProductsController {

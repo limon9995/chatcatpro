@@ -129,7 +129,7 @@ function poweredByBadge(): string {
 </a>`;
 }
 
-@SkipThrottle() // Public catalog page — no auth needed
+@SkipThrottle({ global: true, auth: true, chat: true }) // Public catalog page — no auth needed
 @Controller('catalog')
 export class CatalogController {
   constructor(

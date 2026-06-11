@@ -17,7 +17,7 @@ import { IgWebhookService } from './ig-webhook.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { EncryptionService } from '../common/encryption.service';
 
-@SkipThrottle()
+@SkipThrottle({ global: true, auth: true, chat: true })
 @Controller('ig-webhook')
 export class IgWebhookController {
   private readonly logger = new Logger(IgWebhookController.name);
