@@ -4207,6 +4207,7 @@ function AdminPaymentSetup({ th, cfg, setCfg, activeTab, setActiveTab, smsLog, a
   smsLog: any[]; adminSmsDevices: any[]; saving: boolean; onSave: () => void;
 }) {
   const inp = { ...th.input, marginTop: 4 };
+  const [tokenCopied, setTokenCopied] = (useState as any)(false);
   const TABS = [
     { key: 'sms',    icon: '📲', label: 'SMS Gateway',  color: '#8b5cf6' },
     { key: 'bkash',  icon: '💜', label: 'bKash API',    color: '#e11d9b' },
@@ -4272,9 +4273,9 @@ function AdminPaymentSetup({ th, cfg, setCfg, activeTab, setActiveTab, smsLog, a
             <div style={{ display: 'flex', gap: 8 }}>
               <input style={{ ...inp, flex: 1 }} value={cfg.smsGatewayToken || ''} placeholder="Random secret string"
                 onChange={e => setCfg({ ...cfg, smsGatewayToken: e.target.value })} />
-              <button style={{ ...th.btnGhost, whiteSpace: 'nowrap', fontSize: 12 }}
-                onClick={() => cfg.smsGatewayToken && navigator.clipboard.writeText(cfg.smsGatewayToken)}>
-                📋 Copy
+              <button style={{ ...th.btnGhost, whiteSpace: 'nowrap', fontSize: 12, background: tokenCopied ? '#10b98120' : undefined, color: tokenCopied ? '#10b981' : undefined }}
+                onClick={() => { if (cfg.smsGatewayToken) { navigator.clipboard.writeText(cfg.smsGatewayToken); setTokenCopied(true); setTimeout(() => setTokenCopied(false), 2000); } }}>
+                {tokenCopied ? '✅ Copied!' : '📋 Copy'}
               </button>
               <button style={{ ...th.btnGhost, whiteSpace: 'nowrap', fontSize: 12 }}
                 onClick={() => setCfg({ ...cfg, smsGatewayToken: Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2) })}>
