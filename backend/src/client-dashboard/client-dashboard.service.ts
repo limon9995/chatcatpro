@@ -1198,6 +1198,7 @@ Return ONLY valid JSON (no markdown):
       imageMediumConfidence: page.imageMediumConfidence ?? 0.45,
       imageFallbackAiOn: Boolean(page.imageFallbackAiOn),
       textFallbackAiOn: Boolean(page.textFallbackAiOn),
+      smsGatewayEnabled: Boolean(page.smsGatewayEnabled),
       // Dual Photo Mode
       dualPhotoMode: Boolean(page.dualPhotoMode),
       dualWearingProductId: page.dualWearingProductId ?? null,
