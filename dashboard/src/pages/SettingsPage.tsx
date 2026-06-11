@@ -1638,6 +1638,10 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
                 <div style={{ fontSize: 12, color: th.muted, marginTop: 2 }}>{copy('চালু থাকলে phone SMS-এ match করে payment verify হবে।', 'When enabled, payment is verified by matching with phone SMS.')}</div>
               </div>
               <button onClick={async () => {
+                if (!s.smsGatewayEnabled && smsDevices.length === 0) {
+                  onToast(copy('আগে একটি device connect করুন — app install করে Secret Token দিন', 'Connect a device first — install the app and enter the Secret Token'), 'error');
+                  return;
+                }
                 setSmsToggling(true);
                 try {
                   await request(`${API_BASE}/sms-gateway/enabled`, { method: 'PATCH', body: JSON.stringify({ pageId, enabled: !s.smsGatewayEnabled }) });
@@ -1645,12 +1649,13 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
                   onToast(copy('সেভ হয়েছে', 'Saved'));
                 } catch (e: any) { onToast(e.message, 'error'); }
                 finally { setSmsToggling(false); }
-              }} disabled={smsToggling} style={{
-                border: 'none', borderRadius: 20, padding: '7px 20px', cursor: 'pointer',
+              }} disabled={smsToggling} title={!s.smsGatewayEnabled && smsDevices.length === 0 ? copy('আগে device connect করুন', 'Connect a device first') : ''} style={{
+                border: 'none', borderRadius: 20, padding: '7px 20px', cursor: (!s.smsGatewayEnabled && smsDevices.length === 0) ? 'not-allowed' : 'pointer',
                 fontWeight: 800, fontSize: 13, fontFamily: 'inherit', flexShrink: 0,
-                background: s.smsGatewayEnabled ? '#059669' : th.border,
-                color: s.smsGatewayEnabled ? '#fff' : th.muted,
+                background: s.smsGatewayEnabled ? '#059669' : (!s.smsGatewayEnabled && smsDevices.length === 0) ? '#e5e7eb' : th.border,
+                color: s.smsGatewayEnabled ? '#fff' : (!s.smsGatewayEnabled && smsDevices.length === 0) ? '#9ca3af' : th.muted,
                 transition: 'all .15s',
+                opacity: (!s.smsGatewayEnabled && smsDevices.length === 0) ? 0.6 : 1,
               }}>
                 {s.smsGatewayEnabled ? '✅ চালু' : '⏸ বন্ধ'}
               </button>

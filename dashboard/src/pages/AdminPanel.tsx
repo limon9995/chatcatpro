@@ -4289,9 +4289,17 @@ function AdminPaymentSetup({ th, cfg, setCfg, activeTab, setActiveTab, smsLog, a
             </div>
           )}
 
-          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
-            <input type="checkbox" checked={!!cfg.smsGatewayEnabled} onChange={e => setCfg({ ...cfg, smsGatewayEnabled: e.target.checked })} />
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: adminSmsDevices.length === 0 && !cfg.smsGatewayEnabled ? 'not-allowed' : 'pointer', opacity: adminSmsDevices.length === 0 && !cfg.smsGatewayEnabled ? 0.5 : 1 }}
+            title={adminSmsDevices.length === 0 && !cfg.smsGatewayEnabled ? 'আগে একটি device connect করুন' : ''}>
+            <input type="checkbox" checked={!!cfg.smsGatewayEnabled}
+              onChange={e => {
+                if (e.target.checked && adminSmsDevices.length === 0) return;
+                setCfg({ ...cfg, smsGatewayEnabled: e.target.checked });
+              }} disabled={!cfg.smsGatewayEnabled && adminSmsDevices.length === 0} />
             <span style={{ fontWeight: 700, color: th.text }}>SMS Gateway চালু করুন</span>
+            {!cfg.smsGatewayEnabled && adminSmsDevices.length === 0 && (
+              <span style={{ fontSize: 11, color: '#ef4444', fontWeight: 600 }}>— আগে device connect করুন</span>
+            )}
           </label>
           {smsLog.length > 0 && (
             <div>
