@@ -439,9 +439,9 @@ export function CatalogPage({ th, pageId, onToast }: {
                     placeholder="shop.yourbrand.com"
                   />
                   <button
-                    style={{ ...th.btnPrimary, whiteSpace: 'nowrap', opacity: savingDomain ? 0.7 : 1 }}
+                    style={{ ...th.btnPrimary, whiteSpace: 'nowrap', opacity: (savingDomain || !customDomain.trim()) ? 0.5 : 1 }}
                     onClick={saveCustomDomain}
-                    disabled={savingDomain}
+                    disabled={savingDomain || !customDomain.trim()}
                   >
                     {savingDomain ? '...' : domainSaved ? '✅ Saved' : copy('💾 Save', 'Save')}
                   </button>
