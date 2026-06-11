@@ -193,9 +193,12 @@ export class ApiKeysService {
           const incoming: string[] = JSON.parse(v as string);
           let existing: string[] = [];
           try { existing = JSON.parse(this.cache.geminiApiKeys ?? '[]'); } catch {}
-          const merged = incoming.map((entry, i) =>
-            entry === '***SAVED***' ? (existing[i] ?? '') : entry,
-          ).filter(Boolean);
+          const merged = incoming.map((entry) => {
+            if (entry === '***SAVED***') return existing[0] ?? '';
+            const keepMatch = entry.match(/^\*\*\*SAVED:(\d+)\*\*\*$/);
+            if (keepMatch) return existing[parseInt(keepMatch[1])] ?? '';
+            return entry;
+          }).filter(Boolean);
           this.cache.geminiApiKeys = merged.length > 0 ? JSON.stringify(merged) : undefined;
           if (!this.cache.geminiApiKeys) delete this.cache.geminiApiKeys;
         } catch {

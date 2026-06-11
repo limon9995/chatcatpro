@@ -624,8 +624,8 @@ export function AdminPanel({ th, onToast, onLogout }: {
           const parsed: string[] = JSON.parse(raw);
           setGeminiKeys(parsed.length > 0 ? parsed : ['']);
         } else if (raw === '***SAVED***' && status?.total > 0) {
-          // Keys are saved but masked — show placeholder per saved key
-          setGeminiKeys(Array(status.total).fill('***SAVED***'));
+          // Keys are saved but masked — use positional IDs so delete works correctly
+          setGeminiKeys(Array.from({ length: status.total }, (_, i) => `***SAVED:${i}***`));
         } else {
           setGeminiKeys(['']);
         }
@@ -2285,11 +2285,13 @@ export function AdminPanel({ th, onToast, onLogout }: {
                   <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                     <div style={{ fontSize: 12, color: th.muted, width: 24, textAlign: 'right', flexShrink: 0 }}>#{i + 1}</div>
                     <input
-                      type="password"
-                      value={k}
-                      onChange={e => { const arr = [...geminiKeys]; arr[i] = e.target.value; setGeminiKeys(arr); }}
+                      type={k.startsWith('***SAVED:') ? 'text' : 'password'}
+                      value={k.startsWith('***SAVED:') ? `••••••••  (${geminiStatus?.keys?.[parseInt(k.slice(9, -3))]?.masked ?? 'saved'})` : k}
+                      readOnly={k.startsWith('***SAVED:')}
+                      onChange={e => { if (!k.startsWith('***SAVED:')) { const arr = [...geminiKeys]; arr[i] = e.target.value; setGeminiKeys(arr); } }}
+                      onFocus={e => { if (k.startsWith('***SAVED:')) { const arr = [...geminiKeys]; arr[i] = ''; setGeminiKeys(arr); e.currentTarget.readOnly = false; } }}
                       placeholder="AIza..."
-                      style={{ flex: 1, padding: '8px 12px', borderRadius: 8, border: `1px solid ${th.border}`, backgroundColor: 'rgba(255,255,255,.05)', color: th.text, fontSize: 13, fontFamily: 'monospace' }}
+                      style={{ flex: 1, padding: '8px 12px', borderRadius: 8, border: `1px solid ${th.border}`, backgroundColor: k.startsWith('***SAVED:') ? 'rgba(52,211,153,.07)' : 'rgba(255,255,255,.05)', color: k.startsWith('***SAVED:') ? '#34d399' : th.text, fontSize: 13, fontFamily: 'monospace' }}
                     />
                     <button
                       onClick={() => setGeminiKeys(geminiKeys.filter((_, j) => j !== i))}
