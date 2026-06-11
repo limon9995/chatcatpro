@@ -1137,9 +1137,14 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div style={{ background: dark ? 'rgba(99,102,241,0.08)' : 'rgba(99,102,241,0.05)', border: `1px solid rgba(99,102,241,0.18)`, borderRadius: 12, padding: '14px', fontSize: 12.5, color: muted, lineHeight: 1.8, textAlign: 'center' }}>
-              🎬<br />
-              {copy('Tutorial video শীঘ্রই আসছে', 'Tutorial video coming soon')}
+            <div style={{ borderRadius: 12, overflow: 'hidden', position: 'relative', paddingTop: '56.25%' }}>
+              <iframe
+                src="https://www.youtube.com/embed/pYQvc16iP4M"
+                title="Tutorial"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+                style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 'none', borderRadius: 12 }}
+              />
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <div style={{ fontSize: 11.5, fontWeight: 700, color: text, marginBottom: 2 }}>
