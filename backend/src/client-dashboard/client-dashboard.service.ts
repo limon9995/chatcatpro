@@ -121,6 +121,7 @@ export class ClientDashboardService {
       businessBotOn: Boolean(page.businessBotOn),
       businessInfo: page.businessInfo ?? '',
       commentReplyOn: Boolean(page.commentReplyOn),
+      recurringNotifMode: Boolean(page.recurringNotifMode),
       modeAccess: this.getModeAccess(page),
     };
   }
@@ -140,6 +141,7 @@ export class ClientDashboardService {
       'smartBotOn',
       'businessBotOn',
       'commentReplyOn',
+      'recurringNotifMode',
     ];
     const patch: any = {};
     for (const k of allowed) {
