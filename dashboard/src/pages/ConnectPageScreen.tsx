@@ -670,8 +670,14 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
                           <div style={{ fontSize: 11.5, color: muted, marginTop: 3 }}>💬 {r.adminNote}</div>
                         )}
                         {r.status === 'approved' && (
-                          <div style={{ marginTop: 8, padding: '8px 10px', background: 'rgba(34,197,94,0.08)', borderRadius: 8, fontSize: 12, color: '#16a34a', fontWeight: 600 }}>
-                            🎉 {copy('Approved! এখন "Access Token" tab-এ গিয়ে page connect করুন।', 'Approved! Now go to the "Access Token" tab to connect your page.')}
+                          <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                            <div style={{ padding: '8px 10px', background: 'rgba(34,197,94,0.08)', borderRadius: 8, fontSize: 12, color: '#16a34a', fontWeight: 600 }}>
+                              🎉 {copy('Approved! নিচের বাটনে click করে Facebook দিয়ে আপনার page connect করুন।', 'Approved! Click the button below to connect your page via Facebook.')}
+                            </div>
+                            <button onClick={handleOAuthClick} disabled={oauthBusy || oauthConnecting}
+                              style={{ width: '100%', padding: '12px', borderRadius: 11, border: 'none', background: (oauthBusy || oauthConnecting) ? 'rgba(24,119,242,0.5)' : '#1877f2', color: '#fff', fontWeight: 800, fontSize: 14, cursor: (oauthBusy || oauthConnecting) ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontFamily: 'inherit' }}>
+                              {(oauthBusy || oauthConnecting) ? <><Spinner size={14} /> {copy('অপেক্ষা করুন...', 'Please wait...')}</> : <>{copy('🔵 Facebook দিয়ে Page Connect করুন', '🔵 Connect Page with Facebook')}</>}
+                            </button>
                           </div>
                         )}
                       </div>
@@ -681,7 +687,7 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
                 </div>
               )}
 
-              {!reqSubmitted ? (
+              {!reqSubmitted && !myRequests.some(r => r.status === 'approved') ? (
                 <>
                   <div>
                     <label style={{ fontSize: 12, color: muted, fontWeight: 600, display: 'block', marginBottom: 5 }}>
