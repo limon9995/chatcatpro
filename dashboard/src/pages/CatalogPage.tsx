@@ -183,8 +183,9 @@ export function CatalogPage({ th, pageId, onToast }: {
                 onClick={() => {
                   if (m === 'own' && mode !== 'own') {
                     setEditingOwnUrl(true);
-                  } else if (m === 'chatcat' && mode !== 'chatcat') {
-                    switchToChatCat();
+                  } else if (m === 'chatcat') {
+                    if (editingOwnUrl) { setEditingOwnUrl(false); setOwnUrlInput(''); }
+                    else if (mode !== 'chatcat') switchToChatCat();
                   }
                 }}
                 style={{
