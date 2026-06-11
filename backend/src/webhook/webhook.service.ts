@@ -2679,10 +2679,14 @@ export class WebhookService implements OnModuleDestroy {
             name: m.productName,
           })),
         );
-        await this.safeSend(
-          token,
+        const catLabel = attrs.category ?? 'পণ্য';
+        const colorLabel = attrs.color ? ` ${attrs.color}` : '';
+        const introMed = `আপনার ছবিটা দেখে মনে হচ্ছে এটা${colorLabel} ${catLabel} টাইপের। এই ধরনের কয়েকটি product পেয়েছি 👇`;
+        await this.productHandler.sendVisionMatchCards(
+          page,
           psid,
-          this.buildVisionMediumConfidenceMsg(page, attrs, matches),
+          matches.map((m) => m.productCode),
+          introMed,
         );
       } else {
         // LOW confidence
@@ -2731,34 +2735,6 @@ export class WebhookService implements OnModuleDestroy {
   }
 
   /** Build reply for medium-confidence vision match — show options list */
-  private buildVisionMediumConfidenceMsg(
-    page: any,
-    attrs: import('../vision-analysis/vision-analysis.interface').VisionAttributes,
-    matches: ProductMatchResult[],
-  ): string {
-    const catLabel = attrs.category ?? 'পণ্য';
-    const colorLabel = attrs.color ? ` ${attrs.color}` : '';
-    const patternLabel =
-      attrs.pattern && attrs.pattern !== 'plain' ? ` ${attrs.pattern}` : '';
-
-    const header =
-      `আপনার ছবিটা দেখে মনে হচ্ছে এটা${colorLabel}${patternLabel} ${catLabel} টাইপের। ` +
-      `এই ধরনের কয়েকটি product পেয়েছি:\n\n`;
-
-    const lines = matches.map((m, i) => {
-      const name = m.productName ? ` — ${m.productName}` : '';
-      return `${i + 1}. ${m.productCode}${name} (৳${m.price})`;
-    });
-
-    return (
-      header +
-      lines.join('\n') +
-      `\n\nযেটা নিতে চান তার code বা নম্বর লিখুন। চাইলে shortlist link খুলে product page-এ গিয়ে "এই Product টা Select করুন" button চাপতে পারেন:\n${this.buildVisionShortlistUrl(
-        page,
-        matches.map((m) => m.productCode),
-      )}`
-    );
-  }
 
   /**
    * OCR queue overflow fallback: uses AI API to extract product codes from the image,
@@ -2823,10 +2799,29 @@ export class WebhookService implements OnModuleDestroy {
     page: any,
     psid: string,
     attrs: import('../vision-analysis/vision-analysis.interface').VisionAttributes,
-    _partialMatches: ProductMatchResult[] | null,
+    partialMatches: ProductMatchResult[] | null,
   ): Promise<void> {
     const token = page.pageToken as string;
     await this.ctx.clearPendingVisionMatches(page.id, psid);
+
+    // If we have partial matches, show product cards instead of giving up
+    if (partialMatches && partialMatches.length > 0) {
+      const catLabel = attrs.category ?? 'পণ্য';
+      const colorLabel = attrs.color ? ` ${attrs.color}` : '';
+      const introLow = `ছবিটা থেকে exact match বুঝতে পারিনি, তবে এই ধরনের${colorLabel} ${catLabel} product গুলো আছে 👇`;
+      await this.ctx.setLastPresentedProducts(
+        page.id,
+        psid,
+        partialMatches.map((m) => ({ code: m.productCode, price: m.price, name: m.productName })),
+      );
+      await this.productHandler.sendVisionMatchCards(
+        page,
+        psid,
+        partialMatches.map((m) => m.productCode),
+        introLow,
+      );
+      return;
+    }
 
     if (page.imageFallbackAiOn) {
       const fbResult = await this.fallbackAi.generateReply({

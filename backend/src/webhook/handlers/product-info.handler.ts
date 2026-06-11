@@ -136,4 +136,61 @@ export class ProductInfoHandler {
       where: { pageId, code: { in: codes } },
     });
   }
+
+  /**
+   * Sends vision match results as generic template cards (Messenger)
+   * + plain text with links (Facebook Lite fallback).
+   */
+  async sendVisionMatchCards(
+    page: any,
+    psid: string,
+    codes: string[],
+    introText: string,
+  ): Promise<void> {
+    const products = await this.prisma.product.findMany({
+      where: { pageId: page.id, code: { in: codes }, isActive: true },
+    });
+    if (!products.length) return;
+
+    const sym = page.currencySymbol || '৳';
+    const catalogBase = (page.catalogBaseUrl || '').replace(/\/$/, '') ||
+      `https://api.chatcat.pro/catalog/${page.id}`;
+
+    await this.messenger.sendText(page.pageToken, psid, introText);
+
+    // Generic template cards for Messenger
+    const elements = products.map((p: any) => {
+      const imageUrl = getFullImageUrl(p.imageUrl);
+      const productUrl = `${catalogBase}/product/${p.code}`;
+      return {
+        title: p.name || p.code,
+        image_url: imageUrl,
+        subtitle: `${sym}${Number(p.price).toLocaleString()}${p.stockQty <= 0 ? ' · স্টক নেই' : ''}`,
+        buttons: [
+          {
+            type: 'postback' as const,
+            title: '✅ এটা নিব',
+            payload: `SELECT_PRODUCT:${p.code}`,
+          },
+          {
+            type: 'web_url' as const,
+            url: productUrl,
+            title: '🔗 Details',
+          },
+        ],
+      };
+    });
+
+    await this.messenger.sendGenericTemplate(page.pageToken, psid, elements);
+
+    // Plain text links for Facebook Lite users
+    const linkLines = products
+      .map((p: any) => `• ${p.name || p.code} — ${sym}${Number(p.price).toLocaleString()}\n  ${catalogBase}/product/${p.code}`)
+      .join('\n');
+    await this.messenger.sendText(
+      page.pageToken,
+      psid,
+      `যেটা নিতে চান তার নিচের "✅ এটা নিব" button চাপুন অথবা product code লিখুন:\n\n${linkLines}`,
+    );
+  }
 }
