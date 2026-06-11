@@ -237,12 +237,18 @@ export class AdminController {
   }
 
   @Post('payment-config')
-  saveAdminPaymentConfig(@Body() b: any) {
+  async saveAdminPaymentConfig(@Body() b: any) {
     const current = this.svc.getGlobalConfig().adminPayment || {};
     // Don't overwrite secrets if placeholder sent
     const patch: any = { ...b };
     if (patch.bkashAppSecret === '••••••••') delete patch.bkashAppSecret;
     if (patch.nagadMerchantPrivateKey === '••••••••') delete patch.nagadMerchantPrivateKey;
+    // If token changed — disconnect all admin devices
+    const oldToken = current.smsGatewayToken;
+    const newToken = patch.smsGatewayToken;
+    if (newToken && oldToken && newToken !== oldToken) {
+      await this.svc.clearAdminSmsDevices();
+    }
     this.svc.saveGlobalConfig({ adminPayment: { ...current, ...patch } });
     return { success: true };
   }

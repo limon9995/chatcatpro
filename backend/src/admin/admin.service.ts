@@ -1526,4 +1526,8 @@ server {
       },
     });
   }
+
+  async clearAdminSmsDevices(): Promise<void> {
+    await (this.prisma as any).smsDevice.deleteMany({ where: { pageId: null } });
+  }
 }

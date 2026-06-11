@@ -150,8 +150,10 @@ export class SmsGatewayService {
     const token = randomUUID();
     await this.prisma.page.update({
       where: { id: pageId },
-      data: { smsGatewayToken: token },
+      data: { smsGatewayToken: token, smsGatewayEnabled: false },
     });
+    // Remove all connected devices — old token no longer valid
+    await (this.prisma as any).smsDevice.deleteMany({ where: { pageId } });
     return token;
   }
 
@@ -198,7 +200,8 @@ export class SmsGatewayService {
       const cfg = JSON.parse(
         fs.readFileSync(path.join(process.cwd(), 'storage', 'global-config.json'), 'utf8'),
       );
-      return cfg.smsGatewayAdminToken ?? null;
+      // Check both root-level and adminPayment nested (admin panel saves to adminPayment.smsGatewayToken)
+      return cfg.smsGatewayAdminToken ?? cfg.adminPayment?.smsGatewayToken ?? null;
     } catch {
       return null;
     }
@@ -214,6 +217,8 @@ export class SmsGatewayService {
     const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
     cfg.smsGatewayAdminToken = token;
     fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
+    // Remove all admin connected devices — old token no longer valid
+    await (this.prisma as any).smsDevice.deleteMany({ where: { pageId: null } });
   }
 
   async handleAdminIncoming(rawText: string, fromPhone?: string): Promise<void> {
