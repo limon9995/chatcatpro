@@ -1685,24 +1685,6 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
                         btnText: copy('⬇ APK Download', '⬇ APK Download'),
                         btnColor: '#10b981',
                       },
-                      {
-                        name: 'SMS to URL Forwarder',
-                        badge: copy('সহজ (বিকল্প)', 'Simple (Alternative)'),
-                        badgeColor: '#3b82f6',
-                        desc: copy('Lightweight, open source। শুধু incoming SMS কে URL-এ POST করে।', 'Lightweight, open source. Simply POSTs incoming SMS to a URL.'),
-                        url: 'https://github.com/bogkonstantin/android_income_sms_gateway_webhook/releases',
-                        btnText: copy('⬇ APK Download', '⬇ APK Download'),
-                        btnColor: '#2563eb',
-                      },
-                      {
-                        name: 'httpSMS',
-                        badge: copy('ওয়েব UI আছে', 'Has Web UI'),
-                        badgeColor: '#8b5cf6',
-                        desc: copy('Web dashboard + Android app। SMS পাঠানো ও পাওয়া দুটোই করা যায়। httpsms.com এ সাইন আপ করুন।', 'Web dashboard + Android app. Send and receive SMS. Sign up at httpsms.com.'),
-                        url: 'https://httpsms.com',
-                        btnText: copy('🌐 Website', '🌐 Website'),
-                        btnColor: '#7c3aed',
-                      },
                     ].map(app => (
                       <div key={app.name} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 9, background: th.bg, border: `1px solid ${th.border}` }}>
                         <div style={{ flex: 1 }}>
@@ -1764,8 +1746,8 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
                   </div>
                   <div style={{ fontSize: 12, color: th.muted, marginBottom: 10, lineHeight: 1.6 }}>
                     {copy(
-                      '⚡ "SMS to URL Forwarder" (bogkonstantin) app ব্যবহার করলে নিচের steps follow করুন। অন্য app-এও একই ধরনের settings থাকবে।',
-                      '⚡ Follow these steps if using "SMS to URL Forwarder" (bogkonstantin). Other apps have similar settings.',
+                      '⚡ ChatCat PaySync app install করে নিচের steps follow করুন।',
+                      '⚡ Install ChatCat PaySync and follow the steps below.',
                     )}
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
