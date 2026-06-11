@@ -14,7 +14,7 @@ import java.io.IOException
 class SmsNotificationListener : NotificationListenerService() {
 
     private val client = OkHttpClient()
-    private val WEBHOOK_URL = "https://api.chatcat.pro/admin/sms-incoming"
+    private val WEBHOOK_URL = "https://api.chatcat.pro/sms-gateway/incoming"
 
     private val smsPackages = setOf(
         "com.google.android.apps.messaging",
@@ -81,7 +81,7 @@ class SmsNotificationListener : NotificationListenerService() {
             put("source", "notification_listener")
         }
         val body = json.toString().toRequestBody("application/json; charset=utf-8".toMediaTypeOrNull())
-        val request = Request.Builder().url("$WEBHOOK_URL?token=$token").post(body).build()
+        val request = Request.Builder().url("$WEBHOOK_URL?pageToken=$token").post(body).build()
 
         client.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {

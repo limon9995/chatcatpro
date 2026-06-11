@@ -14,7 +14,7 @@ import java.io.IOException
 class SmsReceiver : BroadcastReceiver() {
 
     private val client = OkHttpClient()
-    private val WEBHOOK_URL = "https://api.chatcat.pro/admin/sms-incoming"
+    private val WEBHOOK_URL = "https://api.chatcat.pro/sms-gateway/incoming"
 
     private val paymentSenders = setOf(
         "bkash", "16247", "nagad", "16167",
@@ -61,7 +61,7 @@ class SmsReceiver : BroadcastReceiver() {
             put("source", "sms_direct")
         }
         val req = Request.Builder()
-            .url("$WEBHOOK_URL?token=$token")
+            .url("$WEBHOOK_URL?pageToken=$token")
             .post(json.toString().toRequestBody("application/json".toMediaTypeOrNull()))
             .build()
 

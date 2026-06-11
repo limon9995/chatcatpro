@@ -1684,7 +1684,7 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
                         badge: copy('⭐ অফিসিয়াল (প্রস্তাবিত)', '⭐ Official (Recommended)'),
                         badgeColor: '#10b981',
                         desc: copy('চ্যাটক্যাট-এর নিজস্ব পেমেন্ট সিঙ্ক অ্যাপ। সবচেয়ে সহজ ও সবচেয়ে বিশ্বস্ত।', 'ChatCat\'s own payment sync app. Simplest and most reliable.'),
-                        url: '/downloads/chatcat-paysync.apk',
+                        url: `${API_BASE}/storage/downloads/chatcat-paysync.apk`,
                         btnText: copy('⬇ APK Download', '⬇ APK Download'),
                         btnColor: '#10b981',
                       },

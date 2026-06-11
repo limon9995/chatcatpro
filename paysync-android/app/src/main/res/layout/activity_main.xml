@@ -323,7 +323,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="4dp"
-                        android:text="Admin Panel → Billing → আমার Payment System → Secret Token কপি করে Add করুন। একাধিক page থাকলে প্রতিটার token আলাদা করে Add করুন।"
+                        android:text="ChatCat Dashboard → Settings → SMS Gateway → Secret Token কপি করে Add করুন। একাধিক page থাকলে প্রতিটার token আলাদা করে Add করুন।"
                         android:textColor="@color/text_muted"
                         android:textSize="11sp"
                         android:lineSpacingMultiplier="1.3" />

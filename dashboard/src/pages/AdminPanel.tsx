@@ -4224,7 +4224,7 @@ function AdminPaymentSetup({ th, cfg, setCfg, activeTab, setActiveTab, smsLog, a
               ⚠️ এই app গুলো Google Play Store-এ নেই। GitHub থেকে APK download করে install করুন। Install-এর সময় "Unknown Sources" allow করুন।
             </div>
             {[
-              { name: 'ChatCat PaySync', badge: '⭐ Official (Recommended)', badgeColor: '#10b981', desc: 'ChatCat-এর নিজস্ব app। সবচেয়ে সহজ।', url: `${API_BASE.replace('/api', '')}/downloads/chatcat-paysync.apk`, btn: '⬇ APK Download', btnColor: '#10b981' },
+              { name: 'ChatCat PaySync', badge: '⭐ Official (Recommended)', badgeColor: '#10b981', desc: 'ChatCat-এর নিজস্ব app। সবচেয়ে সহজ।', url: `${API_BASE}/storage/downloads/chatcat-paysync.apk`, btn: '⬇ APK Download', btnColor: '#10b981' },
             ].map(app => (
               <div key={app.name} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 10px', borderRadius: 8, background: th.surface, border: `1px solid ${th.border}`, marginBottom: 6 }}>
                 <div style={{ flex: 1 }}>

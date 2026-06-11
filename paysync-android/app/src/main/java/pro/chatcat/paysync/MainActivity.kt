@@ -16,9 +16,17 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import com.google.android.material.textfield.TextInputEditText
+import okhttp3.*
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
+import org.json.JSONObject
+import java.io.IOException
 
 class MainActivity : AppCompatActivity() {
+
+    private val httpClient = OkHttpClient()
+    private val API_BASE = "https://api.chatcat.pro"
 
     private lateinit var statusDot:           View
     private lateinit var statusText:          TextView
@@ -77,11 +85,31 @@ class MainActivity : AppCompatActivity() {
             saveTokens(tokens)
             tokenInput.setText("")
             renderTokenList()
-            updateUIStatus()
-            startPaySyncService()
-            addLog("নতুন Token যোগ হয়েছে। মোট: ${tokens.size}টি।")
-            loadLogs()
-            Toast.makeText(this, "Token যোগ হয়েছে! ✅", Toast.LENGTH_SHORT).show()
+            // Show verifying state
+            statusDot.setBackgroundResource(R.drawable.circle_red)
+            statusText.text = "যাচাই হচ্ছে..."
+            connectDevice(token, onSuccess = {
+                runOnUiThread {
+                    markTokenVerified(token, true)
+                    updateUIStatus()
+                    startPaySyncService()
+                    addLog("Token যোগ ও যাচাই সফল। সার্ভারে connected।")
+                    loadLogs()
+                    Toast.makeText(this, "Connected! ✅", Toast.LENGTH_SHORT).show()
+                }
+            }, onFailure = { reason ->
+                runOnUiThread {
+                    markTokenVerified(token, false)
+                    // Remove invalid token
+                    val updated = getTokens().toMutableList().also { it.remove(token) }
+                    saveTokens(updated)
+                    renderTokenList()
+                    updateUIStatus()
+                    addLog("❌ Token যাচাই ব্যর্থ: $reason")
+                    loadLogs()
+                    Toast.makeText(this, "Invalid Token ❌ — আবার চেষ্টা করুন", Toast.LENGTH_LONG).show()
+                }
+            })
         }
 
         grantPermissionBtn.setOnClickListener {
@@ -109,6 +137,14 @@ class MainActivity : AppCompatActivity() {
         updatePermissionIndicators()
         loadLogs()
         updateStats()
+        // Heartbeat: re-verify all tokens so dashboard shows fresh last-seen
+        getTokens().forEach { token ->
+            connectDevice(token, onSuccess = {
+                runOnUiThread { markTokenVerified(token, true); updateUIStatus() }
+            }, onFailure = {
+                runOnUiThread { markTokenVerified(token, false); updateUIStatus() }
+            })
+        }
     }
 
     // ── Token helpers ─────────────────────────────────────────────────────────
@@ -191,6 +227,8 @@ class MainActivity : AppCompatActivity() {
                 val lp = LinearLayout.LayoutParams(36.dp, 36.dp)
                 layoutParams = lp
                 setOnClickListener {
+                    val removedToken = getTokens()[i]
+                    markTokenVerified(removedToken, false)
                     val updated = getTokens().toMutableList().also { it.removeAt(i) }
                     saveTokens(updated)
                     renderTokenList()
@@ -212,9 +250,20 @@ class MainActivity : AppCompatActivity() {
     // ── UI helpers ────────────────────────────────────────────────────────────
 
     private fun updateUIStatus() {
-        val active = getTokens().isNotEmpty() && isNotificationListenerEnabled()
+        val hasVerified = getTokens().any { isTokenVerified(it) }
+        val active = hasVerified && isNotificationListenerEnabled()
         statusDot.setBackgroundResource(if (active) R.drawable.circle_green else R.drawable.circle_red)
         statusText.text = if (active) "অনলাইন" else "অফলাইন"
+    }
+
+    private fun markTokenVerified(token: String, verified: Boolean) {
+        val key = "verified_${token.hashCode()}"
+        getSharedPreferences("ChatCatPrefs", Context.MODE_PRIVATE).edit().putBoolean(key, verified).apply()
+    }
+
+    private fun isTokenVerified(token: String): Boolean {
+        val key = "verified_${token.hashCode()}"
+        return getSharedPreferences("ChatCatPrefs", Context.MODE_PRIVATE).getBoolean(key, false)
     }
 
     private fun updatePermissionIndicators() {
@@ -271,5 +320,35 @@ class MainActivity : AppCompatActivity() {
         val time = java.text.SimpleDateFormat("hh:mm a", java.util.Locale.getDefault()).format(java.util.Date())
         val updated = "[$time] $message\n${prefs.getString("sync_logs", "") ?: ""}"
         prefs.edit().putString("sync_logs", updated.split("\n").take(20).joinToString("\n")).apply()
+    }
+
+    private fun connectDevice(
+        token: String,
+        onSuccess: (() -> Unit)? = null,
+        onFailure: ((String) -> Unit)? = null
+    ) {
+        val deviceName  = Build.MODEL
+        val deviceModel = "${Build.MANUFACTURER} ${Build.MODEL}"
+        val json = JSONObject().apply {
+            put("token", token)
+            put("deviceName", deviceName)
+            put("deviceModel", deviceModel)
+        }
+        val body = json.toString().toRequestBody("application/json; charset=utf-8".toMediaTypeOrNull())
+        val request = Request.Builder()
+            .url("$API_BASE/sms-gateway/connect")
+            .post(body)
+            .build()
+        httpClient.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                onFailure?.invoke(e.message ?: "Network error")
+            }
+            override fun onResponse(call: Call, response: Response) {
+                val code = response.code
+                response.close()
+                if (code in 200..299) onSuccess?.invoke()
+                else onFailure?.invoke("HTTP $code")
+            }
+        })
     }
 }
