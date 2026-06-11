@@ -33,3 +33,7 @@ logs/
 *.db-shm
 *.db-wal
 VPS_COMPLETE_BACKUP.md
+*.apk
+*.zip
+*.jks
+paysync-android/
