@@ -110,7 +110,8 @@ async function bootstrap() {
       }
       if (allowedOrigins.includes(origin)) return cb(null, true);
       // Allow any subdomain of allowed origins (e.g. api.chatcat.pro when app.chatcat.pro is allowed)
-      const originHost = new URL(origin).hostname;
+      let originHost: string;
+      try { originHost = new URL(origin).hostname; } catch { return cb(new Error(`CORS blocked: ${origin}`)); }
       const allowed = allowedOrigins.some(o => {
         try { return new URL(o).hostname.split('.').slice(-2).join('.') === originHost.split('.').slice(-2).join('.'); } catch { return false; }
       });
