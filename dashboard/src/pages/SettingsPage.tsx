@@ -1985,7 +1985,7 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
         </Section>
 
         {/* SmartBot */}
-        <Section title="🧠 SmartBot Mode" desc="ChatGPT-style AI — customer যেকোনো ভাষায় কথা বলবে, bot বুঝে order নেবে। Knowledge box-এর তথ্য দিয়ে reply দেবে।">
+        <Section title="🧠 SmartBot Mode" desc="AI — customer যেকোনো ভাষায় কথা বলবে, bot বুঝে order নেবে। Knowledge box-এর তথ্য দিয়ে reply দেবে।">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             <Toggle th={th}
               label="SmartBot চালু করুন"
