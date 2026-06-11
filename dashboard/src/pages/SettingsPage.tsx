@@ -2004,7 +2004,7 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
         <Section title="Bot Modes" desc="Toggle bot features on or off">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {[
-              { key: 'automationOn',      label: 'Bot Automation',    sub: copy('Bot সব message handle করবে', 'The bot will handle all messages') },
+              { key: 'automationOn',      label: 'Bot Automation',    sub: copy('⚠️ Master switch — এটা OFF থাকলে SmartBot, Info Mode, Order Mode সহ কোনো automation কাজ করবে না', '⚠️ Master switch — if OFF, SmartBot, Info Mode, Order Mode and all automation will stop') },
               { key: 'infoModeOn',        label: 'Info Mode',         sub: copy('Product info দিতে পারবে', 'The bot can answer product information questions') },
               { key: 'orderModeOn',       label: 'Order Mode',        sub: copy('Order নিতে পারবে', 'The bot can take orders') },
               { key: 'ocrOn',             label: 'OCR Mode',          sub: copy('Screenshot থেকে product code detect করবে', 'Detect product codes from screenshots') },
