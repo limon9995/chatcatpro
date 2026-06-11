@@ -185,7 +185,23 @@ export class ApiKeysService {
     for (const [k, v] of Object.entries(patch)) {
       if (v === '' || v === null || v === undefined) {
         delete (this.cache as any)[k];
-      } else if (v !== '***SAVED***') {
+      } else if (v === '***SAVED***') {
+        // skip — keep existing value
+      } else if (k === 'geminiApiKeys') {
+        // Merge: replace ***SAVED*** placeholders with existing stored keys
+        try {
+          const incoming: string[] = JSON.parse(v as string);
+          let existing: string[] = [];
+          try { existing = JSON.parse(this.cache.geminiApiKeys ?? '[]'); } catch {}
+          const merged = incoming.map((entry, i) =>
+            entry === '***SAVED***' ? (existing[i] ?? '') : entry,
+          ).filter(Boolean);
+          this.cache.geminiApiKeys = merged.length > 0 ? JSON.stringify(merged) : undefined;
+          if (!this.cache.geminiApiKeys) delete this.cache.geminiApiKeys;
+        } catch {
+          (this.cache as any)[k] = v;
+        }
+      } else {
         (this.cache as any)[k] = v;
       }
     }

@@ -611,24 +611,32 @@ export function AdminPanel({ th, onToast, onLogout }: {
       setApiKeys(data || {});
       setApiKeysDraft(data || {});
       setApiKeysLoaded(true);
+      // Load rotator status first (needed for masked key count)
+      let status: any = null;
+      try {
+        status = await request<any>(`${BASE}/gemini-key-status`);
+        setGeminiStatus(status);
+      } catch {}
       // Load multi-key list
       try {
         const raw = (data as any)?.geminiApiKeys;
-        const parsed: string[] = raw && raw !== '***SAVED***' ? JSON.parse(raw) : [];
-        setGeminiKeys(parsed.length > 0 ? parsed : ['']);
+        if (raw && raw !== '***SAVED***') {
+          const parsed: string[] = JSON.parse(raw);
+          setGeminiKeys(parsed.length > 0 ? parsed : ['']);
+        } else if (raw === '***SAVED***' && status?.total > 0) {
+          // Keys are saved but masked — show placeholder per saved key
+          setGeminiKeys(Array(status.total).fill('***SAVED***'));
+        } else {
+          setGeminiKeys(['']);
+        }
       } catch { setGeminiKeys(['']); }
-      // Load rotator status
-      try {
-        const status = await request<any>(`${BASE}/gemini-key-status`);
-        setGeminiStatus(status);
-      } catch {}
     } catch (e: any) { onToast(e.message, 'error'); }
   };
 
   const saveApiKeys = async () => {
     setApiKeysSaving(true);
     try {
-      // Save geminiApiKeys array (filter empty)
+      // Save geminiApiKeys array (filter empty, keep ***SAVED*** placeholders for existing keys)
       const keys = geminiKeys.filter(k => k.trim());
       const patch = { ...apiKeysDraft, geminiApiKeys: keys.length > 0 ? JSON.stringify(keys) : '' };
       await request(`${BASE}/api-keys`, { method: 'PATCH', body: JSON.stringify(patch) });
