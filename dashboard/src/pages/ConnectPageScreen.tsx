@@ -332,13 +332,9 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
         method: 'POST',
         body: JSON.stringify({ pageId: page.pageId, pageName: page.pageName, pageToken: page.pageToken }),
       });
-      setConnectResult({
-        verifyToken: res?.page?.verifyToken,
-        webhookUrl: res?.webhookUrl,
-        hasCustomApp: !!res?.page?.hasCustomApp,
-      });
       setManualSuccess(true);
       setShowPagePicker(false);
+      onConnected();
     } catch (e: any) {
       setOauthError(e?.message || copy('Page connect হয়নি।', 'Page connect failed.'));
     } finally {
