@@ -328,7 +328,7 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
   const connectOauthPage = async (page: { pageId: string; pageName: string; pageToken: string }) => {
     setOauthConnecting(true); setError(''); setOauthError('');
     try {
-      const res: any = await request(`${API_BASE}/facebook/connect`, {
+      await request(`${API_BASE}/facebook/connect`, {
         method: 'POST',
         body: JSON.stringify({ pageId: page.pageId, pageName: page.pageName, pageToken: page.pageToken }),
       });
