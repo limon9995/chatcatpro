@@ -580,8 +580,23 @@ export function AdminPanel({ th, onToast, onLogout }: {
   // Poll admin SMS devices every 30s when on billing tab
   useEffect(() => {
     if (tab !== 'billing') return;
-    const interval = setInterval(() => {
-      request<any[]>(`${API_BASE}/sms-gateway/devices`).then(d => { if (Array.isArray(d)) setAdminSmsDevices(d); }).catch(() => {});
+    const interval = setInterval(async () => {
+      try {
+        const devList = await request<any[]>(`${API_BASE}/sms-gateway/devices`).catch(() => null);
+        if (!Array.isArray(devList)) return;
+        setAdminSmsDevices(devList);
+        // If all devices inactive and gateway is on → disable immediately
+        const hasActive = devList.some((d: any) => d.isActive);
+        if (!hasActive) {
+          setAdminPayCfg((prev: any) => {
+            if (prev?.smsGatewayEnabled) {
+              // Save via the payment config save — just update local state, backend scheduler handles persistence
+              return { ...prev, smsGatewayEnabled: false };
+            }
+            return prev;
+          });
+        }
+      } catch { /* silent */ }
     }, 30000);
     return () => clearInterval(interval);
   }, [tab]);

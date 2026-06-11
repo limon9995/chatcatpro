@@ -294,12 +294,20 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
   useEffect(() => {
     const interval = setInterval(async () => {
       try {
-        const [devList, biz] = await Promise.all([
-          request<any[]>(`${API_BASE}/sms-gateway/devices?pageId=${pageId}`).catch(() => null),
-          request<any>(`${API_BASE}/client-dashboard/${pageId}/settings`).catch(() => null),
-        ]);
-        if (Array.isArray(devList)) setSmsDevices(devList);
-        if (biz?.smsGatewayEnabled !== undefined) setS(p => ({ ...p, smsGatewayEnabled: biz.smsGatewayEnabled }));
+        const devList = await request<any[]>(`${API_BASE}/sms-gateway/devices?pageId=${pageId}`).catch(() => null);
+        if (!Array.isArray(devList)) return;
+        setSmsDevices(devList);
+        // If all devices are inactive and gateway is on → disable immediately
+        const hasActive = devList.some((d: any) => d.isActive);
+        if (!hasActive) {
+          setS(p => {
+            if (p.smsGatewayEnabled) {
+              request(`${API_BASE}/sms-gateway/enabled`, { method: 'PATCH', body: JSON.stringify({ pageId, enabled: false }) }).catch(() => {});
+              return { ...p, smsGatewayEnabled: false };
+            }
+            return p;
+          });
+        }
       } catch { /* silent */ }
     }, 30000);
     return () => clearInterval(interval);
@@ -1759,7 +1767,7 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
                     {[
                       copy('App install করে open করুন → সব SMS permission allow করুন', 'Install and open the app → Allow all SMS permissions'),
                       copy('App-এ Secret Token paste করুন (উপরের ধাপ ২ এর token)', 'Paste the Secret Token into the app (from Step 2 above)'),
-                      copy('"Connect" বা "Start" button চাপুন — connected হলে নিচে device দেখাবে', 'Tap "Connect" — connected devices will appear below'),
+                      copy('App-এ Token ADD করুন — connected হলে নিচে device দেখাবে', 'ADD the token in the app — connected devices will appear below'),
                       copy('⚠️ Battery Optimization OFF করুন (Settings → Battery → এই app → Unrestricted)', '⚠️ Disable Battery Optimization (Settings → Battery → This app → Unrestricted)'),
                       copy('Phone সবসময় internet-এ connected ও চার্জে রাখুন', 'Keep the phone always connected to internet and plugged in'),
                     ].map((step, i) => (
