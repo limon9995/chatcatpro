@@ -731,42 +731,9 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
           ) : (
             /* ── Access Token (manual) tab ── */
             <>
-              {/* ── OAuth Quick Connect button ── */}
-              {!manualSuccess && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <button
-                    onClick={handleOAuthClick}
-                    disabled={oauthBusy || oauthConnecting}
-                    style={{
-                      width: '100%', padding: '14px', borderRadius: 13, border: 'none',
-                      background: (oauthBusy || oauthConnecting) ? 'rgba(24,119,242,0.5)' : '#1877f2',
-                      color: '#fff', fontWeight: 800, fontSize: 15,
-                      cursor: (oauthBusy || oauthConnecting) ? 'default' : 'pointer',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-                      fontFamily: 'inherit', transition: 'background .15s',
-                    }}
-                  >
-                    {(oauthBusy || oauthConnecting)
-                      ? <><Spinner size={15} /> {copy('অপেক্ষা করুন...', 'Please wait...')}</>
-                      : <><span style={{ fontSize: 18 }}>f</span> {copy('Facebook দিয়ে Connect করুন (সহজ)', 'Connect with Facebook (Easy)')}</>
-                    }
-                  </button>
-                  <div style={{ fontSize: 11.5, color: muted, textAlign: 'center' }}>
-                    {copy(
-                      'Tester হিসেবে add হওয়ার পর এই বাটনে click করুন — Facebook login করলেই page list আসবে।',
-                      'Click this after being added as a Tester — log in with Facebook and your pages will appear.',
-                    )}
-                  </div>
-                  {oauthError && (
-                    <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 9, padding: '9px 12px', fontSize: 12.5, color: '#ef4444', fontWeight: 600 }}>
-                      ⚠️ {oauthError}
-                    </div>
-                  )}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '4px 0' }}>
-                    <div style={{ flex: 1, height: 1, background: border }} />
-                    <span style={{ fontSize: 11, color: muted, fontWeight: 700 }}>{copy('অথবা manual token দিন', 'or paste token manually')}</span>
-                    <div style={{ flex: 1, height: 1, background: border }} />
-                  </div>
+              {oauthError && !manualSuccess && (
+                <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 9, padding: '9px 12px', fontSize: 12.5, color: '#ef4444', fontWeight: 600 }}>
+                  ⚠️ {oauthError}
                 </div>
               )}
 
