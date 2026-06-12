@@ -28,7 +28,7 @@ import { AiIntentService } from '../bot/ai-intent.service';
 import { BotContextService } from '../bot/bot-context.service';
 import { VisionOpsService } from '../vision-ops/vision-ops.service';
 import { BillingService } from '../billing/billing.service';
-import { WalletService } from '../wallet/wallet.service';
+import { WalletService, AiStatus } from '../wallet/wallet.service';
 import { WhisperService } from '../whisper/whisper.service';
 import { SmartBotService } from '../bot/smart-bot.service';
 import { ProductNameMatchService } from '../product-name-match/product-name-match.service';
@@ -558,16 +558,18 @@ export class WebhookService implements OnModuleDestroy {
       (draft?.pendingVisionMatches?.length ?? 0) > 0;
 
     const aiAllowed = await this.isAiAllowedForPage(page.ownerId);
+    const aiStatus: AiStatus = await this.walletService.getAiStatus(pageId);
+
+    // Trial daily limit exceeded — bot silent, agent can still reply manually
+    if (aiStatus === 'trial_limit_exceeded') return;
 
     // ── BUSINESS INFO BOT — replies using businessInfo as knowledge base ──
     if (page.businessBotOn) {
       if (!page.businessInfo) {
-        // businessInfo not filled yet — send a setup reminder and stop
         await this.safeSend(token, psid, 'আমাদের সাথে যোগাযোগ করার জন্য ধন্যবাদ! 🙏 শীঘ্রই আপনার সাথে যোগাযোগ করা হবে।');
         return;
       }
-      const canAi = await this.walletService.canProcessAi(pageId);
-      if (canAi) {
+      if (aiStatus === 'ok') {
         const reply = await this.generateBusinessBotReply(
           page.businessInfo as string,
           text,

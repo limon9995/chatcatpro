@@ -1,6 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
+export type AiStatus = 'ok' | 'no_balance' | 'trial_limit_exceeded' | 'suspended';
+const TRIAL_DAILY_AI_LIMIT = 100;
+
 @Injectable()
 export class WalletService {
   private readonly logger = new Logger(WalletService.name);
@@ -12,28 +15,67 @@ export class WalletService {
    * Returns false if balance is <= 0 or subscription is SUSPENDED.
    */
   async canProcessAi(pageId: number): Promise<boolean> {
+    const status = await this.getAiStatus(pageId);
+    return status === 'ok';
+  }
+
+  /**
+   * Returns detailed AI permission status for a page.
+   * 'ok'                  — AI allowed
+   * 'trial_limit_exceeded'— Free trial daily limit (100/day) reached — bot silent
+   * 'no_balance'          — Paid page with zero balance — send fallback message
+   * 'suspended'           — Subscription suspended
+   */
+  async getAiStatus(pageId: number): Promise<AiStatus> {
     try {
       const page = await this.prisma.page.findUnique({
         where: { id: pageId },
-        select: { walletBalanceBdt: true, subscriptionStatus: true },
+        select: { walletBalanceBdt: true, subscriptionStatus: true, ownerId: true },
       });
 
-      if (!page) return false;
-      if (page.subscriptionStatus !== 'ACTIVE') return false;
+      if (!page) return 'suspended';
+      if (page.subscriptionStatus !== 'ACTIVE') return 'suspended';
 
-      // Grace period: allow AI even with zero/negative balance (debt tracked, repaid on recharge)
+      // Grace period: allow AI even with zero/negative balance
       const isGrace = await this.isGracePeriod(pageId);
-      if (isGrace) return true;
+      if (isGrace) return 'ok';
 
-      if (page.walletBalanceBdt <= 0) return false;
+      // Free trial check
+      if (page.ownerId) {
+        const isTrial = await this.isTrialPage(page.ownerId);
+        if (isTrial) {
+          const todayCount = await this.getTrialDailyAiUsage(pageId);
+          if (todayCount >= TRIAL_DAILY_AI_LIMIT) return 'trial_limit_exceeded';
+          return 'ok';
+        }
+      }
 
-      return true;
+      if (page.walletBalanceBdt <= 0) return 'no_balance';
+      return 'ok';
     } catch (error) {
-      this.logger.error(
-        `Failed to check wallet balance for page ${pageId}: ${error}`,
-      );
-      return false;
+      this.logger.error(`Failed to check AI status for page ${pageId}: ${error}`);
+      return 'no_balance';
     }
+  }
+
+  private async isTrialPage(ownerId: string): Promise<boolean> {
+    const sub = await this.prisma.subscription.findFirst({
+      where: { userId: ownerId, status: 'trial' },
+      select: { id: true },
+    });
+    return !!sub;
+  }
+
+  private async getTrialDailyAiUsage(pageId: number): Promise<number> {
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    return this.prisma.walletTransaction.count({
+      where: {
+        pageId,
+        type: { startsWith: 'DEDUCT' },
+        createdAt: { gte: startOfDay },
+      },
+    });
   }
 
   /**
@@ -134,6 +176,15 @@ export class WalletService {
       }
 
       if (amountToDeduct <= 0) return true; // Free setup or overridden to 0
+
+      // Trial pages: log usage for daily count tracking but don't deduct balance
+      const pageForTrial = await this.prisma.page.findUnique({ where: { id: pageId }, select: { ownerId: true } });
+      if (pageForTrial?.ownerId && await this.isTrialPage(pageForTrial.ownerId)) {
+        await this.prisma.walletTransaction.create({
+          data: { pageId, type: `DEDUCT_${type}`, amountBdt: 0, description: `[Trial] ${description}` },
+        });
+        return true;
+      }
 
       // Transactionally deduct and log.
       // In grace mode: always deduct (balance may go negative — debt is repaid on next recharge).
