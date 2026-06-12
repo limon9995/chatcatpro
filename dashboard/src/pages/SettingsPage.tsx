@@ -283,7 +283,20 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
       setLinkedPages(Array.isArray(linked) ? linked : []);
       setPayCreds(Array.isArray(payCr) ? payCr : []);
       if (smsTok?.token) setSmsToken(smsTok.token);
-      if (Array.isArray(smsDevList)) setSmsDevices(smsDevList);
+      if (Array.isArray(smsDevList)) {
+        setSmsDevices(smsDevList);
+        // Auto-disable SMS gateway on load if no active device
+        const hasActive = smsDevList.some((d: any) => d.isActive);
+        if (!hasActive) {
+          setS(p => {
+            if (p.smsGatewayEnabled) {
+              request(`${API_BASE}/sms-gateway/enabled`, { method: 'PATCH', body: JSON.stringify({ pageId, enabled: false }) }).catch(() => {});
+              return { ...p, smsGatewayEnabled: false };
+            }
+            return p;
+          });
+        }
+      }
     } catch (e: any) { onToast(e.message, 'error'); }
     finally { setLoading(false); }
   }, [pageId]);
