@@ -483,10 +483,23 @@ export function DashboardLayout({
       );
     }
     switch (nav) {
-      case 'OVERVIEW':    return (
+      case 'OVERVIEW':    return universityMode === true ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: '4px 0' }}>
+          <div>
+            <h1 style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.04em', margin: 0 }}>Overview</h1>
+            <div style={{ fontSize: 13, color: th.muted, marginTop: 4 }}>University automation dashboard</div>
+          </div>
+          <div style={{ ...th.card, padding: '20px 24px' }}>
+            <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>University Bot is active</div>
+            <div style={{ fontSize: 13, color: th.muted, lineHeight: 1.7 }}>
+              Your university bot is running. Go to <b>University</b> to manage notices, group links, and bot settings.
+            </div>
+          </div>
+        </div>
+      ) : (
         <PageErrorBoundary name="AnalyticsPage">
           <Suspense fallback={pageFallback}>
-            <AnalyticsPage th={th} pageId={pageId} onToast={showToast} universityMode={universityMode === true} />
+            <AnalyticsPage th={th} pageId={pageId} onToast={showToast} />
           </Suspense>
         </PageErrorBoundary>
       );
