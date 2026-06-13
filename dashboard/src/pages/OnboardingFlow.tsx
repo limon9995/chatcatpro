@@ -612,7 +612,8 @@ function Step2AddProduct({ dark, border, text, muted, accent, accentSoft, active
       if (code.trim()) fd.append('code', code.trim());
       if (imageFile) fd.append('image', imageFile);
       const token = localStorage.getItem('dfbot_token') || '';
-      const res = await fetch(`${API_BASE}/products/${activePage.id}`, {
+      fd.append('pageId', String(activePage.id));
+      const res = await fetch(`${API_BASE}/products`, {
         method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd,
       });
       if (!res.ok) throw new Error('সংযোগ সমস্যা');
