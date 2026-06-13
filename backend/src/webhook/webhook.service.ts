@@ -164,6 +164,9 @@ export class WebhookService implements OnModuleDestroy {
             pageToken: page.pageToken,
             verifyToken: page.verifyToken,
             masterPageId: page.masterPageId,
+            // Preserve this page's own mode flags so university pages linked to commerce masters still work
+            universityModeOn: page.universityModeOn,
+            automationOn: page.automationOn ?? masterRows[0].automationOn,
           };
         }
       }

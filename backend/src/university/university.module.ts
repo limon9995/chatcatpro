@@ -11,11 +11,13 @@ import { UniversityBotService } from './university-bot.service';
 import { UniversityFaqService } from './university-faq.service';
 import { UniversityCrawlerService } from './university-crawler.service';
 import { UniversityController } from './university.controller';
+import { PrismaService } from '../prisma/prisma.service';
 
 @Module({
   imports: [PrismaModule, CommonModule, AutoPostModule, AuthModule],
   controllers: [UniversityController],
   providers: [
+    PrismaService,
     UniversityConfigService,
     UniversityGroupLinksService,
     UniversityScraperService,

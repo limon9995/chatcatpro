@@ -19,6 +19,8 @@ import type { FaqDto } from './university-faq.service';
 import { UniversityCrawlerService } from './university-crawler.service';
 import { UniversityScraperService } from './university-scraper.service';
 import { UniversityPosterService } from './university-poster.service';
+import { PrismaService } from '../prisma/prisma.service';
+import { EncryptionService } from '../common/encryption.service';
 
 @UseGuards(AuthGuard)
 @Controller('university')
@@ -30,6 +32,8 @@ export class UniversityController {
     private readonly poster: UniversityPosterService,
     private readonly faq: UniversityFaqService,
     private readonly crawler: UniversityCrawlerService,
+    private readonly prisma: PrismaService,
+    private readonly encryption: EncryptionService,
   ) {}
 
   // ── Config ────────────────────────────────────────────────────────────────
@@ -141,5 +145,31 @@ export class UniversityController {
   async fullCrawl(@Param('pageId', ParseIntPipe) pageId: number) {
     const { pagesCrawled } = await this.crawler.runFullCrawlForPage(pageId);
     return { pagesCrawled };
+  }
+
+  // ── Re-subscribe page to Facebook webhook ─────────────────────────────────
+
+  @Post('resubscribe/:pageId')
+  async resubscribeWebhook(@Param('pageId', ParseIntPipe) pageId: number) {
+    const page = await this.prisma.page.findUnique({ where: { id: pageId } });
+    if (!page || !page.pageToken) throw new Error('Page not found or no token');
+
+    let token: string;
+    try {
+      token = this.encryption.decrypt(page.pageToken);
+    } catch {
+      throw new Error('Failed to decrypt page token — check FB_TOKEN_ENCRYPTION_KEY');
+    }
+
+    const fields = 'messages,messaging_postbacks,messaging_optins,message_deliveries,message_reads,messaging_referrals,feed';
+    const url = `https://graph.facebook.com/v19.0/${page.pageId}/subscribed_apps?subscribed_fields=${encodeURIComponent(fields)}&access_token=${encodeURIComponent(token)}`;
+    const res = await fetch(url, { method: 'POST' });
+    const data: any = await res.json().catch(() => ({}));
+
+    if (!data.success) {
+      throw new Error(data?.error?.message || JSON.stringify(data));
+    }
+
+    return { success: true, pageId: page.pageId, pageName: page.pageName };
   }
 }

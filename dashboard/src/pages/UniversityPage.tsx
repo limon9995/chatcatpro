@@ -83,6 +83,7 @@ export function UniversityPage({ th, pageId, onToast }: Props) {
   // Action states
   const [scraping, setScraping] = useState(false);
   const [crawling, setCrawling] = useState(false);
+  const [resubscribing, setResubscribing] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
   const [savingManual, setSavingManual] = useState(false);
   const [savingLink, setSavingLink] = useState(false);
@@ -139,6 +140,14 @@ export function UniversityPage({ th, pageId, onToast }: Props) {
       onToast(`${res.newCount}টি নতুন নোটিশ পাওয়া গেছে`, 'success');
       await loadAll();
     } catch (e: any) { onToast(e.message, 'error'); } finally { setScraping(false); }
+  };
+
+  const handleResubscribe = async () => {
+    setResubscribing(true);
+    try {
+      await request(`${API_BASE}/university/resubscribe/${pageId}`, { method: 'POST' });
+      onToast('Facebook webhook সংযোগ সফল! Bot এখন message পাবে।', 'success');
+    } catch (e: any) { onToast(e.message || 'Resubscribe ব্যর্থ', 'error'); } finally { setResubscribing(false); }
   };
 
   const handleFullCrawl = async () => {
@@ -571,9 +580,14 @@ export function UniversityPage({ th, pageId, onToast }: Props) {
                 <option value={180}>{copy('৩ ঘন্টা', '3 hours')}</option>
               </select>
             </div>
-            <button style={{ ...btn(), padding: '10px 24px', fontSize: 13 }} onClick={handleSaveSettings} disabled={savingSettings}>
-              {savingSettings ? <Spinner /> : copy('সেটিংস সেভ করুন', 'Save Settings')}
-            </button>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+              <button style={{ ...btn(), padding: '10px 24px', fontSize: 13 }} onClick={handleSaveSettings} disabled={savingSettings}>
+                {savingSettings ? <Spinner /> : copy('সেটিংস সেভ করুন', 'Save Settings')}
+              </button>
+              <button style={{ ...btn('#6366f1'), padding: '10px 20px', fontSize: 13 }} onClick={handleResubscribe} disabled={resubscribing} title="Bot message পাচ্ছে না? এই বোতাম চাপুন">
+                {resubscribing ? <><Spinner /> {copy('সংযোগ হচ্ছে...', 'Connecting...')}</> : copy('🔌 Facebook সংযোগ ঠিক করুন', '🔌 Fix Facebook Connection')}
+              </button>
+            </div>
           </div>
         </div>
       )}
