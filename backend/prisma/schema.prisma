@@ -985,6 +985,7 @@ model UniversityConfig {
   lastFullCrawlAt DateTime?
   knowledgeText   String   @default("")       // manually typed extra info
   scrapedKnowledgeText String @default("")   // auto-populated by full site crawl
+  extractedMeta   String   @default("{}")    // AI-extracted: {departments,semesters,courses} for group link form
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

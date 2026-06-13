@@ -4,6 +4,12 @@ import { Spinner } from '../components/ui';
 import { API_BASE, useApi } from '../hooks/useApi';
 import { useLanguage } from '../i18n';
 
+interface ExtractedMeta {
+  departments: string[];
+  semesters: string[];
+  courses: string[];
+}
+
 interface UniversityConfig {
   id: number;
   pageId: number;
@@ -16,6 +22,7 @@ interface UniversityConfig {
   lastFullCrawlAt: string | null;
   knowledgeText: string;
   scrapedKnowledgeText: string;
+  extractedMeta: ExtractedMeta;
 }
 
 interface UniversityNotice {
@@ -282,6 +289,14 @@ export function UniversityPage({ th, pageId, onToast }: Props) {
                 ⚠️ {copy('প্রথমে "সেটিংস" ট্যাবে University Homepage URL দিন', 'Set the University Homepage URL in "Settings" tab first')}
               </div>
             )}
+            {config?.extractedMeta && (config.extractedMeta.departments.length > 0 || config.extractedMeta.semesters.length > 0) && (
+              <div style={{ marginTop: 8, fontSize: 12, color: '#3b82f6', background: 'rgba(59,130,246,0.08)', borderRadius: 6, padding: '7px 12px' }}>
+                🎓 {copy(
+                  `${config.extractedMeta.departments.length}টি ডিপার্টমেন্ট · ${config.extractedMeta.semesters.length}টি সেমিস্টার · ${config.extractedMeta.courses.length}টি কোর্স — Group Link ফর্মে auto-suggest চালু`,
+                  `${config.extractedMeta.departments.length} depts · ${config.extractedMeta.semesters.length} semesters · ${config.extractedMeta.courses.length} courses — auto-suggestions active in Group Link form`
+                )}
+              </div>
+            )}
             {config?.scrapedKnowledgeText && (
               <div style={{ marginTop: 12, fontSize: 12, color: '#22c55e' }}>
                 ✅ {copy(`${config.scrapedKnowledgeText.length.toLocaleString()} character-এর তথ্য সংগৃহীত আছে — bot এই তথ্য ব্যবহার করছে`, `${config.scrapedKnowledgeText.length.toLocaleString()} chars of knowledge collected — bot is using this`)}
@@ -441,15 +456,15 @@ export function UniversityPage({ th, pageId, onToast }: Props) {
             <div style={{ fontWeight: 700, fontSize: 14, color: th.text, marginBottom: 14 }}>
               {editingLink ? copy('লিংক সম্পাদনা', 'Edit Link') : copy('নতুন গ্রুপ লিংক যোগ করুন', 'Add Group Link')}
             </div>
-            {/* Datalist definitions */}
+            {/* Datalist definitions — populated from AI-extracted website data */}
             <datalist id="dept-list">
-              {['CSE', 'EEE', 'BBA', 'MBA', 'Civil Engineering', 'Architecture', 'Law', 'English', 'Pharmacy', 'Economics', 'Mathematics', 'Physics', 'Chemistry', 'Accounting', 'Finance', 'Marketing', 'Management', 'Public Health', 'Environmental Science'].map((d) => <option key={d} value={d} />)}
+              {(config?.extractedMeta?.departments ?? []).map((d) => <option key={d} value={d} />)}
             </datalist>
             <datalist id="sem-list">
-              {['১ম', '২য়', '৩য়', '৪র্থ', '৫ম', '৬ষ্ঠ', '৭ম', '৮ম', '৯ম', '১০ম', '১১তম', '১২তম', '1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', 'Spring 2025', 'Fall 2025', 'Spring 2026', 'Fall 2026', '১ম বর্ষ', '২য় বর্ষ', '৩য় বর্ষ', '৪র্থ বর্ষ'].map((s) => <option key={s} value={s} />)}
+              {(config?.extractedMeta?.semesters ?? []).map((s) => <option key={s} value={s} />)}
             </datalist>
             <datalist id="course-list">
-              {['Data Structures', 'Algorithms', 'Database', 'Operating Systems', 'Computer Networks', 'Software Engineering', 'Artificial Intelligence', 'Machine Learning', 'Web Development', 'Mobile Apps', 'Calculus', 'Linear Algebra', 'Statistics', 'Physics', 'Chemistry', 'Business Communication', 'Accounting', 'Marketing', 'Human Resource', 'Financial Management'].map((c) => <option key={c} value={c} />)}
+              {(config?.extractedMeta?.courses ?? []).map((c) => <option key={c} value={c} />)}
             </datalist>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>

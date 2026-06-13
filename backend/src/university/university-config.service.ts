@@ -6,7 +6,11 @@ export class UniversityConfigService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getConfig(pageId: number) {
-    return this.prisma.universityConfig.findUnique({ where: { pageId } });
+    const config = await this.prisma.universityConfig.findUnique({ where: { pageId } });
+    if (!config) return null;
+    let meta = { departments: [], semesters: [], courses: [] };
+    try { meta = JSON.parse(config.extractedMeta || '{}'); } catch {}
+    return { ...config, extractedMeta: meta };
   }
 
   async upsertConfig(

@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { GeminiKeyRotatorService } from '../common/gemini-key-rotator.service';
 import * as cheerio from 'cheerio';
 
 const MAX_PAGES = 40;
@@ -17,7 +18,10 @@ interface CrawledPage {
 export class UniversityCrawlerService {
   private readonly logger = new Logger(UniversityCrawlerService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly geminiRotator: GeminiKeyRotatorService,
+  ) {}
 
   async crawlSite(baseUrl: string): Promise<CrawledPage[]> {
     const base = new URL(baseUrl);
@@ -106,11 +110,76 @@ export class UniversityCrawlerService {
       .join('\n\n---\n\n')
       .slice(0, 80_000); // keep under 80k chars
 
+    // Extract structured metadata (departments, semesters, courses) using AI
+    const extractedMeta = await this.extractStructuredMeta(knowledge);
+
     await this.prisma.universityConfig.update({
       where: { id: config.id },
-      data: { scrapedKnowledgeText: knowledge, lastFullCrawlAt: new Date() },
+      data: {
+        scrapedKnowledgeText: knowledge,
+        lastFullCrawlAt: new Date(),
+        extractedMeta: JSON.stringify(extractedMeta),
+      },
     });
 
     return { pagesCrawled: pages.length };
+  }
+
+  private async extractStructuredMeta(knowledgeText: string): Promise<{
+    departments: string[];
+    semesters: string[];
+    courses: string[];
+  }> {
+    const empty = { departments: [], semesters: [], courses: [] };
+    if (!this.geminiRotator.isAvailable()) return empty;
+
+    const key = this.geminiRotator.getKey();
+    if (!key) return empty;
+
+    // Use first 15k chars — enough to find programs/departments
+    const sample = knowledgeText.slice(0, 15_000);
+
+    const prompt = `From the university website content below, extract:
+1. All department/faculty/program names (e.g. CSE, EEE, BBA, Civil Engineering)
+2. Semester/year structure used by this university (e.g. 1st Semester, 2nd Year, Spring 2025)
+3. Course/subject names mentioned (e.g. Data Structures, Calculus, Business Law)
+
+Return ONLY valid JSON in this exact format:
+{
+  "departments": ["CSE", "EEE", ...],
+  "semesters": ["1st", "2nd", ...],
+  "courses": ["Data Structures", ...]
+}
+
+University content:
+${sample}`;
+
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.1, maxOutputTokens: 800 },
+        }),
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (!res.ok) return empty;
+      const data: any = await res.json();
+      const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+      // Extract JSON block (may be wrapped in ```json)
+      const jsonMatch = raw.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) return empty;
+      const parsed = JSON.parse(jsonMatch[0]);
+      return {
+        departments: Array.isArray(parsed.departments) ? parsed.departments.slice(0, 30) : [],
+        semesters: Array.isArray(parsed.semesters) ? parsed.semesters.slice(0, 20) : [],
+        courses: Array.isArray(parsed.courses) ? parsed.courses.slice(0, 50) : [],
+      };
+    } catch (err: any) {
+      this.logger.warn(`[Crawler] Meta extraction failed: ${err.message}`);
+      return empty;
+    }
   }
 }
