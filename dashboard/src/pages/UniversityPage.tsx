@@ -441,24 +441,42 @@ export function UniversityPage({ th, pageId, onToast }: Props) {
             <div style={{ fontWeight: 700, fontSize: 14, color: th.text, marginBottom: 14 }}>
               {editingLink ? copy('লিংক সম্পাদনা', 'Edit Link') : copy('নতুন গ্রুপ লিংক যোগ করুন', 'Add Group Link')}
             </div>
+            {/* Datalist definitions */}
+            <datalist id="dept-list">
+              {['CSE', 'EEE', 'BBA', 'MBA', 'Civil Engineering', 'Architecture', 'Law', 'English', 'Pharmacy', 'Economics', 'Mathematics', 'Physics', 'Chemistry', 'Accounting', 'Finance', 'Marketing', 'Management', 'Public Health', 'Environmental Science'].map((d) => <option key={d} value={d} />)}
+            </datalist>
+            <datalist id="sem-list">
+              {['১ম', '২য়', '৩য়', '৪র্থ', '৫ম', '৬ষ্ঠ', '৭ম', '৮ম', '৯ম', '১০ম', '১১তম', '১২তম', '1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', 'Spring 2025', 'Fall 2025', 'Spring 2026', 'Fall 2026', '১ম বর্ষ', '২য় বর্ষ', '৩য় বর্ষ', '৪র্থ বর্ষ'].map((s) => <option key={s} value={s} />)}
+            </datalist>
+            <datalist id="course-list">
+              {['Data Structures', 'Algorithms', 'Database', 'Operating Systems', 'Computer Networks', 'Software Engineering', 'Artificial Intelligence', 'Machine Learning', 'Web Development', 'Mobile Apps', 'Calculus', 'Linear Algebra', 'Statistics', 'Physics', 'Chemistry', 'Business Communication', 'Accounting', 'Marketing', 'Human Resource', 'Financial Management'].map((c) => <option key={c} value={c} />)}
+            </datalist>
+
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
-              {[
-                ['label', copy('লেবেল *', 'Label *'), copy('CSE ৫ম সেমিস্টার গ্রুপ', 'CSE 5th Semester Group')],
-                ['department', copy('ডিপার্টমেন্ট', 'Department'), 'CSE, EEE, BBA...'],
-                ['semester', copy('সেমিস্টার', 'Semester'), '1, 2, 3...'],
-                ['course', copy('কোর্স (ঐচ্ছিক)', 'Course (optional)'), 'Data Structures...'],
-              ].map(([key, lbl, ph]) => (
-                <div key={key}>
-                  <label style={label12}>{lbl}</label>
-                  <input style={inp} placeholder={ph} value={(linkForm as any)[key]} onChange={(e) => setLinkForm((f) => ({ ...f, [key]: e.target.value }))} />
-                </div>
-              ))}
+              <div>
+                <label style={label12}>{copy('লেবেল *', 'Label *')}</label>
+                <input style={inp} placeholder={copy('CSE ৫ম সেমিস্টার গ্রুপ', 'CSE 5th Semester Group')} value={linkForm.label} onChange={(e) => setLinkForm((f) => ({ ...f, label: e.target.value }))} />
+              </div>
+              <div>
+                <label style={label12}>{copy('ডিপার্টমেন্ট', 'Department')}</label>
+                <input style={inp} list="dept-list" placeholder={copy('নির্বাচন করুন বা লিখুন...', 'Select or type...')} value={linkForm.department} onChange={(e) => setLinkForm((f) => ({ ...f, department: e.target.value }))} />
+              </div>
+              <div>
+                <label style={label12}>{copy('সেমিস্টার / বর্ষ', 'Semester / Year')}</label>
+                <input style={inp} list="sem-list" placeholder={copy('নির্বাচন করুন বা লিখুন...', 'Select or type...')} value={linkForm.semester} onChange={(e) => setLinkForm((f) => ({ ...f, semester: e.target.value }))} />
+              </div>
+              <div>
+                <label style={label12}>{copy('কোর্স (ঐচ্ছিক)', 'Course (optional)')}</label>
+                <input style={inp} list="course-list" placeholder={copy('নির্বাচন করুন বা লিখুন...', 'Select or type...')} value={linkForm.course} onChange={(e) => setLinkForm((f) => ({ ...f, course: e.target.value }))} />
+              </div>
               <div>
                 <label style={label12}>{copy('ধরন', 'Type')}</label>
                 <select style={inp} value={linkForm.linkType} onChange={(e) => setLinkForm((f) => ({ ...f, linkType: e.target.value }))}>
                   <option value="whatsapp">WhatsApp</option>
                   <option value="messenger">Messenger</option>
                   <option value="telegram">Telegram</option>
+                  <option value="discord">Discord</option>
+                  <option value="other">Other</option>
                 </select>
               </div>
               <div>
