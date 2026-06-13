@@ -1496,7 +1496,6 @@ function StepUniversitySetup({ dark, border, text, muted, accent, activePage, re
     try {
       await request(`${API_BASE}/university/config/${activePage.id}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ crawlBaseUrl: crawlUrl.trim(), scrapeUrl: crawlUrl.trim(), scrapeEnabled: true, autoPostEnabled: true }),
       });
     } catch {}
