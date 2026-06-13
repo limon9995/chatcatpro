@@ -1903,6 +1903,8 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
   );
 
   // ── SETTINGS_BOT ───────────────────────────────────────────────────────────
+  const isUniversityMode = (s as any).universityModeOn === true;
+
   if (tab === 'SETTINGS_BOT') return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 0, ...cssVars }}>
       <div style={{ marginBottom: 28 }}>
@@ -1910,8 +1912,8 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
         <p style={{ fontSize: 13, color: th.muted, margin: '3px 0 0' }}>{copy('Bot কী কী করতে পারবে তা এখানে চালু/বন্ধ করো', 'Control which features the bot can use')}</p>
       </div>
       <div style={{ ...th.card }}>
-        {/* Business Info Bot */}
-        <Section title="🏢 Business Info Bot" desc="Product বিক্রি না করে শুধু business সম্পর্কে তথ্য দিতে চাইলে এটি চালু করুন। Customer যেকোনো প্রশ্ন করলে AI আপনার দেওয়া business তথ্য থেকে উত্তর দেবে।">
+        {/* Business Info Bot — hidden in university mode */}
+        {!isUniversityMode && <Section title="🏢 Business Info Bot" desc="Product বিক্রি না করে শুধু business সম্পর্কে তথ্য দিতে চাইলে এটি চালু করুন। Customer যেকোনো প্রশ্ন করলে AI আপনার দেওয়া business তথ্য থেকে উত্তর দেবে।">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <Toggle th={th}
               label="Business Info Bot চালু করুন"
@@ -1994,10 +1996,10 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
               </div>
             )}
           </div>
-        </Section>
+        </Section>}
 
-        {/* SmartBot */}
-        <Section title="🧠 SmartBot Mode" desc="AI — customer যেকোনো ভাষায় কথা বলবে, bot বুঝে order নেবে। Knowledge box-এর তথ্য দিয়ে reply দেবে।">
+        {/* SmartBot — hidden in university mode */}
+        {!isUniversityMode && <Section title="🧠 SmartBot Mode" desc="AI — customer যেকোনো ভাষায় কথা বলবে, bot বুঝে order নেবে। Knowledge box-এর তথ্য দিয়ে reply দেবে।">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             <Toggle th={th}
               label="SmartBot চালু করুন"
@@ -2010,21 +2012,23 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
               </div>
             )}
           </div>
-        </Section>
+        </Section>}
 
-        {/* Bot Modes */}
+        {/* Bot Modes — university mode shows only automation + university toggle */}
         <Section title="Bot Modes" desc="Toggle bot features on or off">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {[
-              { key: 'automationOn',      label: 'Bot Automation',    sub: copy('⚠️ Master switch — এটা OFF থাকলে SmartBot, Info Mode, Order Mode সহ কোনো automation কাজ করবে না', '⚠️ Master switch — if OFF, SmartBot, Info Mode, Order Mode and all automation will stop') },
-              { key: 'infoModeOn',        label: 'Info Mode',         sub: copy('Product info দিতে পারবে', 'The bot can answer product information questions') },
-              { key: 'orderModeOn',       label: 'Order Mode',        sub: copy('Order নিতে পারবে', 'The bot can take orders') },
-              { key: 'ocrOn',             label: 'OCR Mode',          sub: copy('Screenshot থেকে product code detect করবে', 'Detect product codes from screenshots') },
-              { key: 'printModeOn',       label: 'Print Mode',        sub: copy('Invoice/memo print করা যাবে', 'Enable invoice and memo printing') },
-              { key: 'memoSaveModeOn',    label: 'Memo Save Mode',    sub: copy('Memo auto-save হবে', 'Memos will be auto-saved') },
-              { key: 'callConfirmModeOn', label: 'Call Confirm Mode', sub: copy('Phone call দিয়ে order confirm করবে', 'Confirm orders by phone call') },
-              { key: 'commentReplyOn',      label: 'Comment Reply',            sub: copy('Post-এর comment-এ auto reply দেবে', 'Auto-reply to Facebook post comments') },
-              { key: 'recurringNotifMode',  label: '🔔 Subscriber Notification', sub: copy('Order complete/cancel হলে customer কে subscribe করতে বলবে — ভবিষ্যতে নতুন পণ্যের update পাঠানো যাবে', 'After order complete/cancel, bot asks customer to subscribe for future product/offer updates') },
+              { key: 'automationOn', label: 'Bot Automation', sub: copy('⚠️ Master switch — এটা OFF থাকলে কোনো automation কাজ করবে না', '⚠️ Master switch — if OFF, all automation will stop') },
+              ...(!isUniversityMode ? [
+                { key: 'infoModeOn',        label: 'Info Mode',         sub: copy('Product info দিতে পারবে', 'The bot can answer product information questions') },
+                { key: 'orderModeOn',       label: 'Order Mode',        sub: copy('Order নিতে পারবে', 'The bot can take orders') },
+                { key: 'ocrOn',             label: 'OCR Mode',          sub: copy('Screenshot থেকে product code detect করবে', 'Detect product codes from screenshots') },
+                { key: 'printModeOn',       label: 'Print Mode',        sub: copy('Invoice/memo print করা যাবে', 'Enable invoice and memo printing') },
+                { key: 'memoSaveModeOn',    label: 'Memo Save Mode',    sub: copy('Memo auto-save হবে', 'Memos will be auto-saved') },
+                { key: 'callConfirmModeOn', label: 'Call Confirm Mode', sub: copy('Phone call দিয়ে order confirm করবে', 'Confirm orders by phone call') },
+                { key: 'commentReplyOn',    label: 'Comment Reply',     sub: copy('Post-এর comment-এ auto reply দেবে', 'Auto-reply to Facebook post comments') },
+                { key: 'recurringNotifMode', label: '🔔 Subscriber Notification', sub: copy('Order complete/cancel হলে customer কে subscribe করতে বলবে', 'After order complete/cancel, bot asks customer to subscribe') },
+              ] : []),
             ].map(m => (
               <Toggle key={m.key} th={th} label={m.label} sub={m.sub}
                 checked={(s as any)[m.key] ?? false}

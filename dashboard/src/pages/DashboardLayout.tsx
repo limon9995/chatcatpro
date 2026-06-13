@@ -407,16 +407,19 @@ export function DashboardLayout({
   const pageId = activePage.id;
   // University mode: hide e-commerce nav; Business mode: hide university nav
   const UNIVERSITY_ONLY_KEYS = new Set(['UNIVERSITY']);
-  const BUSINESS_ONLY_KEYS = new Set(['ORDERS', 'COURIER', 'PRINT', 'PRODUCTS', 'CATALOG', 'ACCOUNTING', 'MEMO_TEMPLATE']);
+  const BUSINESS_ONLY_KEYS = new Set([
+    'ORDERS', 'COURIER', 'PRINT', 'PRODUCTS', 'CATALOG', 'ACCOUNTING', 'MEMO_TEMPLATE',
+    'SETTINGS_DELIVERY', 'SETTINGS_CALL', 'SETTINGS_VOICE',
+  ]);
   const navGroups = GROUPS.map(g => ({
     ...g,
     items: NAV.filter(n => {
       if (n.group !== g.key) return false;
       if (universityMode === true) return !BUSINESS_ONLY_KEYS.has(n.key);
       if (universityMode === false) return !UNIVERSITY_ONLY_KEYS.has(n.key);
-      return true; // null = still loading, show all
+      return true;
     }),
-  })).filter(g => g.items.length > 0 || !g.en); // hide empty labeled groups
+  })).filter(g => g.items.length > 0 || !g.en);
 
   const pageFallback = (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 32, color: th.muted }}>

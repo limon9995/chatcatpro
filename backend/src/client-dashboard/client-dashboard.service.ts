@@ -1232,6 +1232,8 @@ Return ONLY valid JSON (no markdown):
       igTokenSet: Boolean(page.igToken), // never return the raw token
       // Recurring Notification Mode
       recurringNotifMode: Boolean(page.recurringNotifMode),
+      // University Mode
+      universityModeOn: Boolean(page.universityModeOn),
       // AI Knowledge
       knowledgeText: page.knowledgeText ?? '',
       // Pricing (from bot-knowledge config)
