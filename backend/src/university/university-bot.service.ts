@@ -95,26 +95,50 @@ export class UniversityBotService {
   }
 
   private async answerWithAI(config: any, question: string): Promise<string | null> {
-    const recentNotices = await this.prisma.universityNotice.findMany({
+    // Load FAQs for exact/near match first
+    const faqs = await this.prisma.universityFaq.findMany({
       where: { pageId: config.pageId },
-      orderBy: { createdAt: 'desc' },
-      take: 10,
-      select: { title: true, publishedAt: true },
+      orderBy: { sortOrder: 'asc' },
     });
 
-    const noticeList = recentNotices
-      .map((n, i) => `${i + 1}. ${n.title}${n.publishedAt ? ` (${n.publishedAt})` : ''}`)
-      .join('\n');
+    // Check for direct FAQ match (simple keyword overlap)
+    const qLower = question.toLowerCase();
+    for (const faq of faqs) {
+      const fqLower = faq.question.toLowerCase();
+      const words = fqLower.split(/\s+/).filter((w) => w.length > 3);
+      const matchCount = words.filter((w) => qLower.includes(w)).length;
+      if (matchCount >= 2 || (words.length <= 3 && matchCount >= 1)) {
+        return `${faq.answer}`;
+      }
+    }
 
-    const systemPrompt = `তুমি একটি বিশ্ববিদ্যালয়ের সহকারী বট। শিক্ষার্থীদের প্রশ্নের সংক্ষিপ্ত ও সহায়ক উত্তর দাও।
+    // Build combined knowledge context
+    const faqText = faqs.length
+      ? faqs.map((f) => `প্রশ্ন: ${f.question}\nউত্তর: ${f.answer}`).join('\n\n')
+      : '';
 
-নিচের তথ্য ব্যবহার করো:
-${config.knowledgeText || '(কোনো বিশেষ তথ্য যোগ করা হয়নি)'}
+    // Use scraped knowledge (full site) + manual text + FAQs
+    const scrapedKnowledge = config.scrapedKnowledgeText || '';
+    const manualKnowledge = config.knowledgeText || '';
 
-সাম্প্রতিক নোটিশ:
-${noticeList || '(কোনো নোটিশ নেই)'}
+    // Trim to fit within context (keep most relevant: manual first, then scraped)
+    const combinedKnowledge = [
+      manualKnowledge ? `=== ম্যানুয়াল তথ্য ===\n${manualKnowledge}` : '',
+      faqText ? `=== FAQ ===\n${faqText}` : '',
+      scrapedKnowledge ? `=== ওয়েবসাইট থেকে সংগৃহীত তথ্য ===\n${scrapedKnowledge.slice(0, 12_000)}` : '',
+    ].filter(Boolean).join('\n\n');
 
-উত্তর বাংলায় দাও, সংক্ষিপ্ত (২-৪ লাইন)।`;
+    const systemPrompt = `তুমি একটি বিশ্ববিদ্যালয়ের সহকারী বট। শিক্ষার্থীদের যেকোনো প্রশ্নের সঠিক ও সহায়ক উত্তর দাও।
+
+নিচের তথ্যভান্ডার ব্যবহার করো (শিক্ষক, প্রোগ্রাম, ভর্তি, ফি, নোটিশ সব আছে):
+
+${combinedKnowledge || '(এখনো কোনো তথ্য যোগ করা হয়নি — Settings → University Crawl চালান)'}
+
+নির্দেশনা:
+- উত্তর বাংলায় দাও
+- সংক্ষিপ্ত ও সরাসরি (২-৫ লাইন)
+- তথ্য না পেলে বলো "এই তথ্য আমার কাছে নেই, সরাসরি university-তে যোগাযোগ করুন"
+- কখনো তথ্য বানিয়ে দেবে না`;
 
     const messages = [
       { role: 'system', content: systemPrompt },

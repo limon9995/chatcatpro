@@ -976,17 +976,36 @@ model UniversityConfig {
   id              Int      @id @default(autoincrement())
   pageId          Int      @unique
   page            Page     @relation(fields: [pageId], references: [id], onDelete: Cascade)
-  scrapeUrl       String   @default("")
+  scrapeUrl       String   @default("")       // notice page URL for auto-posting
+  crawlBaseUrl    String   @default("")       // homepage URL for full site knowledge crawl
   scrapeInterval  Int      @default(30)
   scrapeEnabled   Boolean  @default(true)
   autoPostEnabled Boolean  @default(true)
   lastScrapedAt   DateTime?
-  knowledgeText   String   @default("")
+  lastFullCrawlAt DateTime?
+  knowledgeText   String   @default("")       // manually typed extra info
+  scrapedKnowledgeText String @default("")   // auto-populated by full site crawl
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
   notices    UniversityNotice[]
   groupLinks GroupLink[]
+  faqs       UniversityFaq[]
+}
+
+model UniversityFaq {
+  id        Int              @id @default(autoincrement())
+  configId  Int
+  config    UniversityConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+  pageId    Int
+  question  String
+  answer    String
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([pageId])
+  @@index([configId])
 }
 
 model UniversityNotice {

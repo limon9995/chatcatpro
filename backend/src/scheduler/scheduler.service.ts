@@ -9,6 +9,7 @@ import { AutoPostService } from '../auto-post/auto-post.service';
 import { SmsGatewayService } from '../sms-gateway/sms-gateway.service';
 import { UniversityScraperService } from '../university/university-scraper.service';
 import { UniversityPosterService } from '../university/university-poster.service';
+import { UniversityCrawlerService } from '../university/university-crawler.service';
 
 const BASE_FEE_BDT = 500;
 
@@ -26,9 +27,10 @@ export class SchedulerService {
     private readonly smsGateway: SmsGatewayService,
     private readonly universityScraper: UniversityScraperService,
     private readonly universityPoster: UniversityPosterService,
+    private readonly universityCrawler: UniversityCrawlerService,
   ) {}
 
-  // Every 30 minutes — scrape university websites and auto-post new notices
+  // Every 30 minutes — scrape notice page and auto-post new notices
   @Cron('0 */30 * * * *')
   async runUniversityScraper() {
     try {
@@ -45,6 +47,27 @@ export class SchedulerService {
       }
     } catch (e: any) {
       this.logger.error(`[Scheduler] University scraper error: ${e.message}`);
+    }
+  }
+
+  // Every 6 hours — full site crawl to keep knowledge base updated
+  @Cron('0 0 */6 * * *')
+  async runUniversityFullCrawl() {
+    try {
+      const configs = await this.prisma.universityConfig.findMany({
+        where: { page: { universityModeOn: true } },
+        select: { pageId: true, crawlBaseUrl: true, scrapeUrl: true },
+      });
+      for (const cfg of configs) {
+        if (!cfg.crawlBaseUrl && !cfg.scrapeUrl) continue;
+        await this.universityCrawler.runFullCrawlForPage(cfg.pageId).catch((e: any) =>
+          this.logger.error(`[Scheduler] Full crawl error pageId=${cfg.pageId}: ${e.message}`),
+        );
+        // 5 second gap between universities to avoid hammering servers
+        await new Promise((r) => setTimeout(r, 5000));
+      }
+    } catch (e: any) {
+      this.logger.error(`[Scheduler] University full crawl error: ${e.message}`);
     }
   }
 

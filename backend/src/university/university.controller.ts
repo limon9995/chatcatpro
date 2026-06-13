@@ -14,6 +14,9 @@ import { AuthGuard } from '../auth/auth.guard';
 import { UniversityConfigService } from './university-config.service';
 import { UniversityGroupLinksService } from './university-group-links.service';
 import type { GroupLinkDto } from './university-group-links.service';
+import { UniversityFaqService } from './university-faq.service';
+import type { FaqDto } from './university-faq.service';
+import { UniversityCrawlerService } from './university-crawler.service';
 import { UniversityScraperService } from './university-scraper.service';
 import { UniversityPosterService } from './university-poster.service';
 
@@ -25,6 +28,8 @@ export class UniversityController {
     private readonly groups: UniversityGroupLinksService,
     private readonly scraper: UniversityScraperService,
     private readonly poster: UniversityPosterService,
+    private readonly faq: UniversityFaqService,
+    private readonly crawler: UniversityCrawlerService,
   ) {}
 
   // ── Config ────────────────────────────────────────────────────────────────
@@ -99,5 +104,42 @@ export class UniversityController {
     @Param('id', ParseIntPipe) id: number,
   ) {
     return this.groups.deleteLink(id, pageId);
+  }
+
+  // ── FAQ ───────────────────────────────────────────────────────────────────
+
+  @Get('faqs/:pageId')
+  listFaqs(@Param('pageId', ParseIntPipe) pageId: number) {
+    return this.faq.listFaqs(pageId);
+  }
+
+  @Post('faqs/:pageId')
+  createFaq(@Param('pageId', ParseIntPipe) pageId: number, @Body() body: FaqDto) {
+    return this.faq.createFaq(pageId, body);
+  }
+
+  @Patch('faqs/:pageId/:id')
+  updateFaq(
+    @Param('pageId', ParseIntPipe) pageId: number,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: Partial<FaqDto>,
+  ) {
+    return this.faq.updateFaq(id, pageId, body);
+  }
+
+  @Delete('faqs/:pageId/:id')
+  deleteFaq(
+    @Param('pageId', ParseIntPipe) pageId: number,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.faq.deleteFaq(id, pageId);
+  }
+
+  // ── Full Site Crawl ───────────────────────────────────────────────────────
+
+  @Post('crawl/:pageId')
+  async fullCrawl(@Param('pageId', ParseIntPipe) pageId: number) {
+    const { pagesCrawled } = await this.crawler.runFullCrawlForPage(pageId);
+    return { pagesCrawled };
   }
 }

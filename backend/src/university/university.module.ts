@@ -7,6 +7,8 @@ import { UniversityGroupLinksService } from './university-group-links.service';
 import { UniversityScraperService } from './university-scraper.service';
 import { UniversityPosterService } from './university-poster.service';
 import { UniversityBotService } from './university-bot.service';
+import { UniversityFaqService } from './university-faq.service';
+import { UniversityCrawlerService } from './university-crawler.service';
 import { UniversityController } from './university.controller';
 
 @Module({
@@ -18,7 +20,9 @@ import { UniversityController } from './university.controller';
     UniversityScraperService,
     UniversityPosterService,
     UniversityBotService,
+    UniversityFaqService,
+    UniversityCrawlerService,
   ],
-  exports: [UniversityBotService, UniversityScraperService, UniversityPosterService],
+  exports: [UniversityBotService, UniversityScraperService, UniversityPosterService, UniversityCrawlerService],
 })
 export class UniversityModule {}
