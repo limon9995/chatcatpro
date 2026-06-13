@@ -187,7 +187,25 @@ export function AppContent() {
       setActivePage(nextPage);
       localStorage.setItem('dfbot_active_page', String(nextPage.id));
       const onboardingDone = localStorage.getItem(`chatcat_onboarding_${nextPage.id}`);
-      setScreen(onboardingDone ? 'dashboard' : 'onboarding');
+      if (onboardingDone) {
+        setScreen('dashboard');
+      } else {
+        // Check server-side if page already has a mode configured
+        try {
+          const settings = await fetch(`${API_BASE}/client-dashboard/${nextPage.id}/settings`, {
+            headers: { Authorization: `Bearer ${localStorage.getItem('dfbot_token')}` },
+          }).then((r) => r.json());
+          const alreadyConfigured = settings?.universityModeOn === true || settings?.automationOn === true || settings?.infoModeOn === true || settings?.orderModeOn === true;
+          if (alreadyConfigured) {
+            localStorage.setItem(`chatcat_onboarding_${nextPage.id}`, 'done');
+            setScreen('dashboard');
+          } else {
+            setScreen('onboarding');
+          }
+        } catch {
+          setScreen('onboarding');
+        }
+      }
     } catch {
       setMyPages([]);
       setActivePage(null);
