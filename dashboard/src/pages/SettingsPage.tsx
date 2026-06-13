@@ -2046,6 +2046,15 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
 
         </Section>
 
+        {/* University Mode */}
+        <Section title={copy('🎓 ইউনিভার্সিটি মোড', '🎓 University Mode')} desc={copy('সক্রিয় করলে কমার্স বট বন্ধ হয়ে ইউনিভার্সিটি বট চালু হবে — নোটিশ auto-post এবং student Q&A।', 'Activates university bot (notice auto-post & student Q&A), disables commerce pipeline.')}>
+          <Toggle th={th}
+            label={copy('ইউনিভার্সিটি মোড চালু করুন', 'Enable University Mode')}
+            sub={copy('চালু থাকলে OCR, order, product সব বন্ধ — শুধু ইউনিভার্সিটি bot কাজ করবে', 'When ON: orders, OCR, products are bypassed — only university bot runs')}
+            checked={(s as any).universityModeOn ?? false}
+            onChange={v => saveMode('universityModeOn', v)} />
+        </Section>
+
         {/* V18: Image Recognition */}
         <Section title={copy('Image Recognition (AI)', 'Image Recognition (AI)')} desc={copy('ছবি থেকে product চেনার feature। Customer product code না দিয়ে ছবি পাঠালে bot বুঝতে চেষ্টা করবে।', 'Let the bot recognize products from customer images — no product code needed.')}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>

@@ -44,6 +44,7 @@ import { AutoPostModule } from './auto-post/auto-post.module';
 import { SupportChatModule } from './support-chat/support-chat.module';
 import { PaymentVerifyModule } from './payment-verify/payment-verify.module';
 import { SmsGatewayModule } from './sms-gateway/sms-gateway.module';
+import { UniversityModule } from './university/university.module';
 
 @Module({
   imports: [
@@ -109,6 +110,7 @@ import { SmsGatewayModule } from './sms-gateway/sms-gateway.module';
     SupportChatModule,
     PaymentVerifyModule,
     SmsGatewayModule,
+    UniversityModule,
   ],
   controllers: [AppController],
   providers: [

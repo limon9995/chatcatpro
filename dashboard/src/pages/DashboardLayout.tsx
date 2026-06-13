@@ -26,6 +26,7 @@ const CatalogPage     = safeLazy(() => import('./CatalogPage').then(m => ({ defa
 const WalletPage      = safeLazy(() => import('./WalletPage') as any);
 const FraudCheckerPage = safeLazy(() => import('./FraudCheckerPage') as any);
 const AutoPostPage     = safeLazy(() => import('./AutoPostPage').then(m => ({ default: m.AutoPostPage })));
+const UniversityPage   = safeLazy(() => import('./UniversityPage').then(m => ({ default: m.UniversityPage })));
 
 // ── Error boundary for individual pages ───────────────────────────────────────
 class PageErrorBoundary extends Component<{ children: any; name: string }, { error: any }> {
@@ -54,7 +55,7 @@ class PageErrorBoundary extends Component<{ children: any; name: string }, { err
 // ── Types ─────────────────────────────────────────────────────────────────────
 type NavKey = 'OVERVIEW' | 'AGENT_TASKS' | 'ORDERS' | 'PRODUCTS' | 'ACCOUNTING' |
   'BOT_KNOWLEDGE' | 'PRINT' | 'MEMO_TEMPLATE' | 'CRM' | 'COURIER' |
-  'BROADCAST' | 'FOLLOWUP' | 'CATALOG' | 'FRAUD_CHECKER' | 'AUTO_POST' |
+  'BROADCAST' | 'FOLLOWUP' | 'CATALOG' | 'FRAUD_CHECKER' | 'AUTO_POST' | 'UNIVERSITY' |
   'WALLET' | 'CONNECT_FB_PAGE' |
   'SETTINGS_BUSINESS' | 'SETTINGS_DELIVERY' | 'SETTINGS_BOT' |
   'SETTINGS_KNOWLEDGE' | 'SETTINGS_CALL' | 'SETTINGS_VOICE';
@@ -85,6 +86,7 @@ const NAV: NavItem[] = [
   { key: 'CRM',                bn: 'কাস্টমার',            en: 'Customers',           icon: '👥', group: 'bot' },
   { key: 'BROADCAST',          bn: 'ব্রডকাস্ট',           en: 'Broadcast',           icon: '📣', group: 'bot' },
   { key: 'AUTO_POST',          bn: 'অটো পোস্ট',           en: 'Auto Post',           icon: '📲', group: 'bot' },
+  { key: 'UNIVERSITY',         bn: 'ইউনিভার্সিটি',          en: 'University',           icon: '🎓', group: 'bot' },
   { key: 'FOLLOWUP',           bn: 'ফলো-আপ',             en: 'Follow-up',           icon: '🔔', group: 'bot' },
   { key: 'MEMO_TEMPLATE',      bn: 'মেমো টেমপ্লেট',       en: 'Memo Template',       icon: '📄', group: 'bot' },
   { key: 'FRAUD_CHECKER',      bn: 'ফ্রড চেকার',          en: 'Fraud Checker',       icon: '🛡', group: 'bot' },
@@ -531,6 +533,13 @@ export function DashboardLayout({
         <PageErrorBoundary name="AutoPostPage">
           <Suspense fallback={pageFallback}>
             <AutoPostPage th={th} pageId={pageId} onToast={showToast} />
+          </Suspense>
+        </PageErrorBoundary>
+      );
+      case 'UNIVERSITY':  return (
+        <PageErrorBoundary name="UniversityPage">
+          <Suspense fallback={pageFallback}>
+            <UniversityPage th={th} pageId={pageId} onToast={showToast} />
           </Suspense>
         </PageErrorBoundary>
       );

@@ -7,6 +7,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AdminService } from '../admin/admin.service';
 import { AutoPostService } from '../auto-post/auto-post.service';
 import { SmsGatewayService } from '../sms-gateway/sms-gateway.service';
+import { UniversityScraperService } from '../university/university-scraper.service';
+import { UniversityPosterService } from '../university/university-poster.service';
 
 const BASE_FEE_BDT = 500;
 
@@ -22,7 +24,29 @@ export class SchedulerService {
     private readonly admin: AdminService,
     private readonly autoPost: AutoPostService,
     private readonly smsGateway: SmsGatewayService,
+    private readonly universityScraper: UniversityScraperService,
+    private readonly universityPoster: UniversityPosterService,
   ) {}
+
+  // Every 30 minutes — scrape university websites and auto-post new notices
+  @Cron('0 */30 * * * *')
+  async runUniversityScraper() {
+    try {
+      const configs = await this.prisma.universityConfig.findMany({
+        where: { scrapeEnabled: true, page: { universityModeOn: true } },
+        select: { pageId: true, scrapeInterval: true, lastScrapedAt: true },
+      });
+      for (const cfg of configs) {
+        const intervalMs = cfg.scrapeInterval * 60 * 1000;
+        const lastScrape = cfg.lastScrapedAt?.getTime() ?? 0;
+        if (Date.now() - lastScrape < intervalMs) continue;
+        const { newNotices } = await this.universityScraper.runScrapeForPage(cfg.pageId);
+        await this.universityPoster.postNewNotices(cfg.pageId, newNotices);
+      }
+    } catch (e: any) {
+      this.logger.error(`[Scheduler] University scraper error: ${e.message}`);
+    }
+  }
 
   // Every 15 minutes — disable SMS gateway for pages with no active device
   @Cron('0 */15 * * * *')

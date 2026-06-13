@@ -32,6 +32,7 @@ import { WalletService, AiStatus } from '../wallet/wallet.service';
 import { WhisperService } from '../whisper/whisper.service';
 import { SmartBotService } from '../bot/smart-bot.service';
 import { ProductNameMatchService } from '../product-name-match/product-name-match.service';
+import { UniversityBotService } from '../university/university-bot.service';
 
 function getFullImageUrl(url?: string | null): string | undefined {
   if (!url) return undefined;
@@ -89,6 +90,7 @@ export class WebhookService implements OnModuleDestroy {
     private readonly embeddingService: EmbeddingService,
     // V22: Product name matching for simple products
     private readonly productNameMatch: ProductNameMatchService,
+    private readonly universityBot: UniversityBotService,
   ) {}
 
   onModuleDestroy() {
@@ -458,6 +460,14 @@ export class WebhookService implements OnModuleDestroy {
       this.logger.log(
         `[Webhook] Bot muted (agent mode) — ignoring message. psid=${psid} page=${page.pageId}`,
       );
+      return;
+    }
+
+    // ── University Mode — bypass commerce pipeline entirely ───────────────
+    if (page.universityModeOn) {
+      const text = message.text?.trim() || '';
+      const reply = await this.universityBot.handleMessage(page, psid, text);
+      if (reply) await this.safeSend(token, psid, reply);
       return;
     }
 

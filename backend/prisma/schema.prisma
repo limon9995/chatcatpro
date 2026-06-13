@@ -193,6 +193,11 @@ model Page {
   dualWearingProduct   Product? @relation("DualWearing", fields: [dualWearingProductId], references: [id])
   dualHoldingProduct   Product? @relation("DualHolding", fields: [dualHoldingProductId], references: [id])
 
+  // -- UNIVERSITY MODE --
+  universityModeOn      Boolean @default(false) // When ON: routes all Messenger messages to university bot, bypasses commerce pipeline
+  universityModeAllowed Boolean @default(true)
+  universityConfig      UniversityConfig?
+
   // -- BUSINESS KNOWLEDGE --
   knowledgeText String @default("") // Client FAQ, policies, product info — fed to AI system prompt
 
@@ -962,5 +967,61 @@ model SmsDevice {
   lastSeenAt  DateTime @default(now())
   createdAt   DateTime @default(now())
 
+  @@index([pageId])
+}
+
+// ── UNIVERSITY AUTOMATION ─────────────────────────────────────────────────────
+
+model UniversityConfig {
+  id              Int      @id @default(autoincrement())
+  pageId          Int      @unique
+  page            Page     @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  scrapeUrl       String   @default("")
+  scrapeInterval  Int      @default(30)
+  scrapeEnabled   Boolean  @default(true)
+  autoPostEnabled Boolean  @default(true)
+  lastScrapedAt   DateTime?
+  knowledgeText   String   @default("")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  notices    UniversityNotice[]
+  groupLinks GroupLink[]
+}
+
+model UniversityNotice {
+  id          Int              @id @default(autoincrement())
+  configId    Int
+  config      UniversityConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+  pageId      Int
+  title       String
+  url         String?
+  publishedAt String?
+  contentHash String
+  fbPostId    String?
+  autoPosted  Boolean  @default(false)
+  postError   String?
+  createdAt   DateTime @default(now())
+
+  @@unique([configId, contentHash])
+  @@index([pageId])
+}
+
+model GroupLink {
+  id         Int              @id @default(autoincrement())
+  configId   Int
+  config     UniversityConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+  pageId     Int
+  label      String
+  semester   String?
+  department String?
+  course     String?
+  linkType   String           // "whatsapp" | "messenger"
+  link       String
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([configId])
   @@index([pageId])
 }
