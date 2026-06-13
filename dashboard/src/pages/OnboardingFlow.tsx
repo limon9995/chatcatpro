@@ -606,15 +606,28 @@ function Step2AddProduct({ dark, border, text, muted, accent, accentSoft, active
     }
     setLoading(true); setError('');
     try {
-      const fd = new FormData();
-      fd.append('name', name.trim());
-      fd.append('price', price.trim());
-      if (code.trim()) fd.append('code', code.trim());
-      if (imageFile) fd.append('image', imageFile);
       const token = localStorage.getItem('dfbot_token') || '';
-      fd.append('pageId', String(activePage.id));
+      // Step 1: upload image if provided
+      let imageUrl = '';
+      if (imageFile) {
+        const imgFd = new FormData();
+        imgFd.append('file', imageFile);
+        const imgRes = await fetch(`${API_BASE}/pages/${activePage.id}/products/upload-image`, {
+          method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: imgFd,
+        });
+        if (imgRes.ok) {
+          const imgData = await imgRes.json();
+          imageUrl = imgData.url || imgData.imageUrl || '';
+        }
+      }
+      // Step 2: create product with JSON
+      const productBody: any = { pageId: activePage.id, name: name.trim(), price: Number(price.trim()) };
+      if (code.trim()) productBody.code = code.trim();
+      if (imageUrl) productBody.imageUrl = imageUrl;
       const res = await fetch(`${API_BASE}/products`, {
-        method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd,
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(productBody),
       });
       if (!res.ok) throw new Error('সংযোগ সমস্যা');
       setSuccess(true);
