@@ -474,15 +474,15 @@ export function UniversityPage({ th, pageId, onToast }: Props) {
               </div>
               <div>
                 <label style={label12}>{copy('ডিপার্টমেন্ট', 'Department')}</label>
-                <input style={inp} list="dept-list" placeholder={copy('নির্বাচন করুন বা লিখুন...', 'Select or type...')} value={linkForm.department} onChange={(e) => setLinkForm((f) => ({ ...f, department: e.target.value }))} />
+                <input style={inp} list="dept-list" placeholder={copy('নির্বাচন করুন বা লিখুন...', 'Select or type...')} value={linkForm.department} onFocus={(e) => e.target.select()} onChange={(e) => setLinkForm((f) => ({ ...f, department: e.target.value }))} />
               </div>
               <div>
                 <label style={label12}>{copy('সেমিস্টার / বর্ষ', 'Semester / Year')}</label>
-                <input style={inp} list="sem-list" placeholder={copy('নির্বাচন করুন বা লিখুন...', 'Select or type...')} value={linkForm.semester} onChange={(e) => setLinkForm((f) => ({ ...f, semester: e.target.value }))} />
+                <input style={inp} list="sem-list" placeholder={copy('নির্বাচন করুন বা লিখুন...', 'Select or type...')} value={linkForm.semester} onFocus={(e) => e.target.select()} onChange={(e) => setLinkForm((f) => ({ ...f, semester: e.target.value }))} />
               </div>
               <div>
                 <label style={label12}>{copy('কোর্স (ঐচ্ছিক)', 'Course (optional)')}</label>
-                <input style={inp} list="course-list" placeholder={copy('নির্বাচন করুন বা লিখুন...', 'Select or type...')} value={linkForm.course} onChange={(e) => setLinkForm((f) => ({ ...f, course: e.target.value }))} />
+                <input style={inp} list="course-list" placeholder={copy('নির্বাচন করুন বা লিখুন...', 'Select or type...')} value={linkForm.course} onFocus={(e) => e.target.select()} onChange={(e) => setLinkForm((f) => ({ ...f, course: e.target.value }))} />
               </div>
               <div>
                 <label style={label12}>{copy('ধরন', 'Type')}</label>
