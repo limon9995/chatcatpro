@@ -164,7 +164,7 @@ type NavKey =
   | 'OVERVIEW' | 'AGENT_TASKS' | 'ORDERS' | 'PRODUCTS' | 'ACCOUNTING'
   | 'ANALYTICS' | 'BOT_KNOWLEDGE' | 'PRINT' | 'MEMO_TEMPLATE' | 'CRM'
   | 'COURIER' | 'BROADCAST' | 'FOLLOWUP' | 'CATALOG' | 'FRAUD_CHECKER'
-  | 'AUTO_POST' | 'WALLET' | 'CONNECT_FB_PAGE'
+  | 'AUTO_POST' | 'UNIVERSITY' | 'WALLET' | 'CONNECT_FB_PAGE'
   | 'SETTINGS_BUSINESS' | 'SETTINGS_DELIVERY' | 'SETTINGS_BOT'
   | 'SETTINGS_KNOWLEDGE' | 'SETTINGS_CALL' | 'SETTINGS_VOICE';
 
@@ -193,6 +193,7 @@ const PAGE_LABELS: Record<NavKey, string> = {
   CRM: 'কাস্টমার',
   BROADCAST: 'ব্রডকাস্ট',
   AUTO_POST: 'অটো পোস্ট',
+  UNIVERSITY: 'ইউনিভার্সিটি',
   FOLLOWUP: 'ফলো-আপ',
   MEMO_TEMPLATE: 'মেমো টেমপ্লেট',
   FRAUD_CHECKER: 'ফ্রড চেকার',
@@ -297,6 +298,13 @@ const PAGE_SUGGESTIONS: Record<NavKey, string[]> = {
     'Post template কীভাবে তৈরি করব?',
     'Auto post বন্ধ করব কীভাবে?',
     'Multiple page-এ একসাথে post করা যায়?',
+  ],
+  UNIVERSITY: [
+    'University website থেকে notice কীভাবে collect হয়?',
+    'নতুন notice auto-post কীভাবে চালু করব?',
+    'Group link কীভাবে যোগ করব?',
+    'Student question এর উত্তর bot কীভাবে দেয়?',
+    'Scrape interval কীভাবে পরিবর্তন করব?',
   ],
   FOLLOWUP: [
     'Follow-up sequence কীভাবে তৈরি করব?',
