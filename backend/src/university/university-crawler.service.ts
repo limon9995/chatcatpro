@@ -136,18 +136,38 @@ export class UniversityCrawlerService {
     const key = this.geminiRotator.getKey();
     if (!key) return empty;
 
-    // Use first 15k chars — enough to find programs/departments
-    const sample = knowledgeText.slice(0, 15_000);
+    // Extract sections most likely to contain department/program info
+    const keywords = ['department', 'faculty', 'program', 'course', 'semester', 'cse', 'eee', 'bba', 'engineering', 'science', 'bachelor', 'master', 'degree'];
+    const lines = knowledgeText.split('\n');
+    const relevantLines: string[] = [];
+    for (let i = 0; i < lines.length; i++) {
+      const lower = lines[i].toLowerCase();
+      if (keywords.some(k => lower.includes(k))) {
+        // Include surrounding context (3 lines before/after)
+        const start = Math.max(0, i - 2);
+        const end = Math.min(lines.length - 1, i + 3);
+        for (let j = start; j <= end; j++) relevantLines.push(lines[j]);
+      }
+    }
+    // Fallback to first portion if no relevant lines found
+    const sample = relevantLines.length > 100
+      ? relevantLines.slice(0, 400).join('\n').slice(0, 20_000)
+      : knowledgeText.slice(0, 20_000);
 
     const prompt = `From the university website content below, extract:
-1. All department/faculty/program names (e.g. CSE, EEE, BBA, Civil Engineering)
-2. Semester/year structure used by this university (e.g. 1st Semester, 2nd Year, Spring 2025)
+1. All department/faculty/program names (e.g. CSE, EEE, BBA, Civil Engineering, Pharmacy, Law, Architecture)
+2. Semester/year labels used (e.g. 1st Semester, 2nd Year, Spring 2025, Fall 2024)
 3. Course/subject names mentioned (e.g. Data Structures, Calculus, Business Law)
 
-Return ONLY valid JSON in this exact format:
+Rules:
+- For departments, use short names if available (CSE, EEE, BBA) otherwise full names
+- For semesters, include all numbered semesters (1st through 8th or 12th)
+- Return empty arrays if not found — never guess
+
+Return ONLY valid JSON:
 {
   "departments": ["CSE", "EEE", ...],
-  "semesters": ["1st", "2nd", ...],
+  "semesters": ["1st Semester", "2nd Semester", ...],
   "courses": ["Data Structures", ...]
 }
 
