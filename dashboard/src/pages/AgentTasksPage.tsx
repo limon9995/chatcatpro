@@ -149,7 +149,7 @@ function Ring({ pct, colorA, colorB, value, label, sub, th }: {
   );
 }
 
-export function AgentTasksPage({ th, pageId, onToast, onOpenOrders, onOpenPrint, onOpenFollowUp, onOpenAccounting, onOpenSettings }: {
+export function AgentTasksPage({ th, pageId, onToast, onOpenOrders, onOpenPrint, onOpenFollowUp, onOpenAccounting, onOpenSettings, universityMode = false }: {
   th: Theme;
   pageId: number;
   onToast: (m: string, t?: any) => void;
@@ -158,6 +158,7 @@ export function AgentTasksPage({ th, pageId, onToast, onOpenOrders, onOpenPrint,
   onOpenFollowUp?: (preset: FollowUpPagePreset) => void;
   onOpenAccounting?: (preset: AccountingPagePreset) => void;
   onOpenSettings?: (tab: SettingsTabKey) => void;
+  universityMode?: boolean;
 }) {
   const { copy } = useLanguage();
   const { request } = useApi();
@@ -335,8 +336,10 @@ export function AgentTasksPage({ th, pageId, onToast, onOpenOrders, onOpenPrint,
       ].filter((task) => task.count > 0)
     : [];
 
+  const visibleOnboardingTasks = universityMode ? [] : onboardingTasks;
+
   const tasks: TaskCard[] = [
-    ...onboardingTasks,
+    ...visibleOnboardingTasks,
     {
       key: 'not_answered',
       section: 'Orders',
@@ -508,10 +511,10 @@ export function AgentTasksPage({ th, pageId, onToast, onOpenOrders, onOpenPrint,
     (settings ? 2 : 0) +
     (settings && orderModeActive && settings.paymentMode !== 'cod' ? 1 : 0) +
     (settings && callModeActive ? 2 : 0);
-  const onboardingDone = Math.max(onboardingTotal - onboardingTasks.length, 0);
+  const onboardingDone = Math.max(onboardingTotal - visibleOnboardingTasks.length, 0);
   const pendingIds = new Set<number>();
   tasks.forEach((task) => task.orders.forEach((order) => pendingIds.add(order.id)));
-  const setupPending = onboardingTasks.reduce((sum, task) => sum + task.count, 0);
+  const setupPending = visibleOnboardingTasks.reduce((sum, task) => sum + task.count, 0);
   const pending = pendingIds.size + setupPending;
   const botHandled = Math.max(totalOrders - pending, 0);
   const totalWithSetup = totalOrders + setupPending;
@@ -610,19 +613,19 @@ export function AgentTasksPage({ th, pageId, onToast, onOpenOrders, onOpenPrint,
       </div>
 
       {settings && (
-        <div style={{ ...th.card, padding: '18px 20px', border: `1px solid ${onboardingTasks.length ? '#f59e0b33' : '#16a34a33'}` }}>
+        <div style={{ ...th.card, padding: '18px 20px', border: `1px solid ${visibleOnboardingTasks.length ? '#f59e0b33' : '#16a34a33'}` }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
             <div>
               <div style={{ fontSize: 11, fontWeight: 700, color: th.muted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                 {copy('Setup Progress', 'Setup Progress')}
               </div>
-              <div style={{ fontSize: 18, fontWeight: 800, marginTop: 6, color: onboardingTasks.length ? '#f59e0b' : '#16a34a' }}>
-                {onboardingTasks.length
+              <div style={{ fontSize: 18, fontWeight: 800, marginTop: 6, color: visibleOnboardingTasks.length ? '#f59e0b' : '#16a34a' }}>
+                {visibleOnboardingTasks.length
                   ? copy('Setup বাকি আছে', 'Setup still pending')
                   : copy('Your setup is complete', 'Your setup is complete')}
               </div>
               <div style={{ fontSize: 12.5, color: th.muted, marginTop: 4, maxWidth: 720 }}>
-                {onboardingTasks.length
+                {visibleOnboardingTasks.length
                   ? copy(
                       `মোট ${onboardingTotal}টি setup step-এর মধ্যে ${onboardingDone}টি complete হয়েছে। Client বা admin যেই settings save করুক, completed step এখান থেকে auto remove হবে।`,
                       `${onboardingDone} of ${onboardingTotal} setup steps are complete. Whether the client or admin saves the settings, completed steps are removed from here automatically.`,
@@ -633,14 +636,14 @@ export function AgentTasksPage({ th, pageId, onToast, onOpenOrders, onOpenPrint,
                     )}
               </div>
             </div>
-            <div style={{ fontSize: 32, fontWeight: 900, color: onboardingTasks.length ? '#f59e0b' : '#16a34a' }}>
+            <div style={{ fontSize: 32, fontWeight: 900, color: visibleOnboardingTasks.length ? '#f59e0b' : '#16a34a' }}>
               {onboardingDone}/{onboardingTotal}
             </div>
           </div>
 
-          {onboardingTasks.length > 0 ? (
+          {visibleOnboardingTasks.length > 0 ? (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10, marginTop: 16 }}>
-              {onboardingTasks.map((task) => (
+              {visibleOnboardingTasks.map((task) => (
                 <button
                   key={task.key}
                   style={{

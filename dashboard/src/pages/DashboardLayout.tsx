@@ -410,7 +410,7 @@ export function DashboardLayout({
   const BUSINESS_ONLY_KEYS = new Set([
     'ORDERS', 'COURIER', 'PRINT', 'PRODUCTS', 'CATALOG', 'ACCOUNTING', 'MEMO_TEMPLATE',
     'AUTO_POST', 'FOLLOWUP', 'FRAUD_CHECKER',
-    'SETTINGS_DELIVERY', 'SETTINGS_CALL', 'SETTINGS_VOICE',
+    'SETTINGS_DELIVERY', 'SETTINGS_CALL', 'SETTINGS_VOICE', 'SETTINGS_KNOWLEDGE',
   ]);
   const navGroups = GROUPS.map(g => ({
     ...g,
@@ -486,14 +486,14 @@ export function DashboardLayout({
       case 'OVERVIEW':    return (
         <PageErrorBoundary name="AnalyticsPage">
           <Suspense fallback={pageFallback}>
-            <AnalyticsPage th={th} pageId={pageId} onToast={showToast} />
+            <AnalyticsPage th={th} pageId={pageId} onToast={showToast} universityMode={universityMode === true} />
           </Suspense>
         </PageErrorBoundary>
       );
       case 'AGENT_TASKS': return (
         <PageErrorBoundary name="AgentTasksPage">
           <Suspense fallback={pageFallback}>
-            <AgentTasksPage th={th} pageId={pageId} onToast={showToast} onOpenOrders={openOrdersWithPreset} onOpenPrint={openPrintWithPreset} onOpenFollowUp={openFollowUpWithPreset} onOpenAccounting={openAccountingWithPreset} onOpenSettings={openSettingsTab} />
+            <AgentTasksPage th={th} pageId={pageId} onToast={showToast} onOpenOrders={openOrdersWithPreset} onOpenPrint={openPrintWithPreset} onOpenFollowUp={openFollowUpWithPreset} onOpenAccounting={openAccountingWithPreset} onOpenSettings={openSettingsTab} universityMode={universityMode === true} />
           </Suspense>
         </PageErrorBoundary>
       );

@@ -151,8 +151,8 @@ function ChartSection({ title, sub, show, children, th }: {
 }
 
 // ── Main Component ─────────────────────────────────────────────────────────────
-export function AnalyticsPage({ th, pageId, onToast }: {
-  th: Theme; pageId: number; onToast: (m: string, t?: any) => void;
+export function AnalyticsPage({ th, pageId, onToast, universityMode = false }: {
+  th: Theme; pageId: number; onToast: (m: string, t?: any) => void; universityMode?: boolean;
 }) {
   const { request }   = useApi();
   const [period, setPeriod] = useState<Period>('monthly');
@@ -244,9 +244,9 @@ export function AnalyticsPage({ th, pageId, onToast }: {
         <PeriodBar />
       </div>
 
-      <KPIRow />
+      {!universityMode && <KPIRow />}
 
-      {vision && (
+      {!universityMode && vision && (
         <>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(150px,1fr))', gap: 10 }}>
             {[
@@ -342,7 +342,7 @@ export function AnalyticsPage({ th, pageId, onToast }: {
       )}
 
       {/* Profit Trend */}
-      <ChartSection th={th} title="📈 Profit Trend" sub="Revenue · Expenses · Gross & Net Profit" show={flags.hasTrend}>
+      {!universityMode && <ChartSection th={th} title="📈 Profit Trend" sub="Revenue · Expenses · Gross & Net Profit" show={flags.hasTrend}>
         <LineChart data={data.profitTrend as any} keys={['revenue','expenses','grossProfit','netProfit']} colors={[th.accent,'#f97316','#10b981',isProfit ? '#16a34a' : '#dc2626']} />
         <div style={{ display: 'flex', gap: 16, marginTop: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
           {[['Revenue',th.accent],['Expenses','#f97316'],['Gross Profit','#10b981'],['Net Profit',isProfit ? '#16a34a' : '#dc2626']].map(([l,c]) => (
@@ -351,10 +351,10 @@ export function AnalyticsPage({ th, pageId, onToast }: {
             </div>
           ))}
         </div>
-      </ChartSection>
+      </ChartSection>}
 
       {/* 2-column charts */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+      {!universityMode && <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
 
         {/* Top Products */}
         <ChartSection th={th} title="🏆 Top Products" sub="By revenue" show={flags.hasProducts}>
@@ -448,11 +448,11 @@ export function AnalyticsPage({ th, pageId, onToast }: {
             })}
           </div>
         </div>
-      </div>
+      </div>}
 
       {/* ── Negotiation Analytics (CONDITIONAL) ──────────────────────────── */}
       {/* Rule: only render if eligible === true (priceMode=NEGOTIABLE && allowCustomerOffer=true) */}
-      {neg.eligible && (
+      {!universityMode && neg.eligible && (
         <div style={th.card}>
           <CardHeader th={th} title="🤝 Negotiation Analytics" sub="Only visible because negotiation mode is active for this page" />
           {!neg.hasEnoughData ? (
