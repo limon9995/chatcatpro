@@ -1397,18 +1397,10 @@ function StepModeSelector({ dark, text, muted, activePage, request, onSelectBusi
   const choose = async (mode: 'business' | 'university') => {
     setSaving(true);
     try {
-      // Set automation + mode via the correct /modes endpoint
-      await request(`${API_BASE}/client-dashboard/${activePage.id}/modes`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ automationOn: true }),
-      });
+      const modesUrl = `${API_BASE}/client-dashboard/${activePage.id}/modes`;
+      await request(modesUrl, { method: 'PATCH', body: JSON.stringify({ automationOn: true }) });
       if (mode === 'university') {
-        await request(`${API_BASE}/client-dashboard/${activePage.id}/modes`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ universityModeOn: true }),
-        });
+        await request(modesUrl, { method: 'PATCH', body: JSON.stringify({ universityModeOn: true }) });
       }
     } catch {}
     setSaving(false);

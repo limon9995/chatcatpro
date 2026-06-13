@@ -142,6 +142,7 @@ export class ClientDashboardService {
       'businessBotOn',
       'commentReplyOn',
       'recurringNotifMode',
+      'universityModeOn',
     ];
     const patch: any = {};
     for (const k of allowed) {
