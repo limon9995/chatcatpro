@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
 import { CommonModule } from '../common/common.module';
 import { AutoPostModule } from '../auto-post/auto-post.module';
+import { AuthModule } from '../auth/auth.module';
 import { UniversityConfigService } from './university-config.service';
 import { UniversityGroupLinksService } from './university-group-links.service';
 import { UniversityScraperService } from './university-scraper.service';
@@ -12,7 +13,7 @@ import { UniversityCrawlerService } from './university-crawler.service';
 import { UniversityController } from './university.controller';
 
 @Module({
-  imports: [PrismaModule, CommonModule, AutoPostModule],
+  imports: [PrismaModule, CommonModule, AutoPostModule, AuthModule],
   controllers: [UniversityController],
   providers: [
     UniversityConfigService,
