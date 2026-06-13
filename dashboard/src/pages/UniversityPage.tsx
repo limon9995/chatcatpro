@@ -289,11 +289,11 @@ export function UniversityPage({ th, pageId, onToast }: Props) {
                 ⚠️ {copy('প্রথমে "সেটিংস" ট্যাবে University Homepage URL দিন', 'Set the University Homepage URL in "Settings" tab first')}
               </div>
             )}
-            {config?.extractedMeta && (config.extractedMeta.departments.length > 0 || config.extractedMeta.semesters.length > 0) && (
+            {config?.extractedMeta && ((config.extractedMeta.departments?.length ?? 0) > 0 || (config.extractedMeta.semesters?.length ?? 0) > 0) && (
               <div style={{ marginTop: 8, fontSize: 12, color: '#3b82f6', background: 'rgba(59,130,246,0.08)', borderRadius: 6, padding: '7px 12px' }}>
                 🎓 {copy(
-                  `${config.extractedMeta.departments.length}টি ডিপার্টমেন্ট · ${config.extractedMeta.semesters.length}টি সেমিস্টার · ${config.extractedMeta.courses.length}টি কোর্স — Group Link ফর্মে auto-suggest চালু`,
-                  `${config.extractedMeta.departments.length} depts · ${config.extractedMeta.semesters.length} semesters · ${config.extractedMeta.courses.length} courses — auto-suggestions active in Group Link form`
+                  `${config.extractedMeta.departments?.length ?? 0}টি ডিপার্টমেন্ট · ${config.extractedMeta.semesters?.length ?? 0}টি সেমিস্টার · ${config.extractedMeta.courses?.length ?? 0}টি কোর্স — Group Link ফর্মে auto-suggest চালু`,
+                  `${config.extractedMeta.departments?.length ?? 0} depts · ${config.extractedMeta.semesters?.length ?? 0} semesters · ${config.extractedMeta.courses?.length ?? 0} courses — auto-suggestions active in Group Link form`
                 )}
               </div>
             )}
@@ -458,13 +458,13 @@ export function UniversityPage({ th, pageId, onToast }: Props) {
             </div>
             {/* Datalist definitions — populated from AI-extracted website data */}
             <datalist id="dept-list">
-              {(config?.extractedMeta?.departments ?? []).map((d) => <option key={d} value={d} />)}
+              {(config?.extractedMeta?.departments ?? []).filter(Boolean).map((d) => <option key={d} value={d} />)}
             </datalist>
             <datalist id="sem-list">
-              {(config?.extractedMeta?.semesters ?? []).map((s) => <option key={s} value={s} />)}
+              {(config?.extractedMeta?.semesters ?? []).filter(Boolean).map((s) => <option key={s} value={s} />)}
             </datalist>
             <datalist id="course-list">
-              {(config?.extractedMeta?.courses ?? []).map((c) => <option key={c} value={c} />)}
+              {(config?.extractedMeta?.courses ?? []).filter(Boolean).map((c) => <option key={c} value={c} />)}
             </datalist>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>

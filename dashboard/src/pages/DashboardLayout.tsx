@@ -409,6 +409,7 @@ export function DashboardLayout({
   const UNIVERSITY_ONLY_KEYS = new Set(['UNIVERSITY']);
   const BUSINESS_ONLY_KEYS = new Set([
     'ORDERS', 'COURIER', 'PRINT', 'PRODUCTS', 'CATALOG', 'ACCOUNTING', 'MEMO_TEMPLATE',
+    'AUTO_POST', 'FOLLOWUP', 'FRAUD_CHECKER',
     'SETTINGS_DELIVERY', 'SETTINGS_CALL', 'SETTINGS_VOICE',
   ]);
   const navGroups = GROUPS.map(g => ({
