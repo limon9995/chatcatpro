@@ -156,7 +156,14 @@ export class UniversityCrawlerService {
       if (name.length > 2 && name.length < 60) deptSet.add(name);
     }
 
-    const departments = [...deptSet].slice(0, 30);
+    // Clean up: remove too-short, ends with common titles, duplicates of abbreviations
+    const deptClean = [...deptSet].filter(d => {
+      if (d.length < 3) return false;
+      if (/^(Dr|Prof|Mr|Ms|Md|the|and|of)\.?$/i.test(d)) return false;
+      if (d.endsWith(' Dr') || d.endsWith(' Prof') || d.endsWith(' Mr')) return false;
+      return true;
+    });
+    const departments = deptClean.slice(0, 30);
 
     // ── 2. Regex-based semester extraction ────────────────────────────────────
     const semSet = new Set<string>();
