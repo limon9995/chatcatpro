@@ -1480,6 +1480,7 @@ function StepUniversitySetup({ dark, border, text, muted, accent, activePage, re
   onSkip: () => void;
 }) {
   const [crawlUrl, setCrawlUrl] = useState('');
+  const [noticeUrl, setNoticeUrl] = useState('');
   const [saving, setSaving] = useState(false);
 
   const inp = {
@@ -1496,7 +1497,12 @@ function StepUniversitySetup({ dark, border, text, muted, accent, activePage, re
     try {
       await request(`${API_BASE}/university/config/${activePage.id}`, {
         method: 'POST',
-        body: JSON.stringify({ crawlBaseUrl: crawlUrl.trim(), scrapeUrl: crawlUrl.trim(), scrapeEnabled: true, autoPostEnabled: true }),
+        body: JSON.stringify({
+          crawlBaseUrl: crawlUrl.trim(),
+          scrapeUrl: noticeUrl.trim() || crawlUrl.trim(),
+          scrapeEnabled: true,
+          autoPostEnabled: true,
+        }),
       });
     } catch {}
     setSaving(false);
@@ -1513,9 +1519,9 @@ function StepUniversitySetup({ dark, border, text, muted, accent, activePage, re
         Bot এই website crawl করে সব তথ্য সংগ্রহ করবে।<br />
         পরে Settings থেকেও পরিবর্তন করা যাবে।
       </div>
-      <div style={{ marginBottom: 20 }}>
+      <div style={{ marginBottom: 16 }}>
         <label style={{ fontSize: 12, fontWeight: 600, color: muted, display: 'block', marginBottom: 6 }}>
-          Homepage URL
+          Homepage URL (Knowledge Crawl)
         </label>
         <input
           style={inp}
@@ -1523,6 +1529,19 @@ function StepUniversitySetup({ dark, border, text, muted, accent, activePage, re
           value={crawlUrl}
           onChange={e => setCrawlUrl(e.target.value)}
         />
+        <div style={{ fontSize: 11, color: muted, marginTop: 4 }}>Bot সব তথ্য এই site থেকে সংগ্রহ করবে</div>
+      </div>
+      <div style={{ marginBottom: 20 }}>
+        <label style={{ fontSize: 12, fontWeight: 600, color: muted, display: 'block', marginBottom: 6 }}>
+          Notice Page URL (Facebook Auto-Post)
+        </label>
+        <input
+          style={inp}
+          placeholder="https://uap-bd.edu/news-events/news-events.php"
+          value={noticeUrl}
+          onChange={e => setNoticeUrl(e.target.value)}
+        />
+        <div style={{ fontSize: 11, color: muted, marginTop: 4 }}>নতুন notice এই page থেকে নিয়ে Facebook-এ auto-post হবে</div>
       </div>
       <div style={{ display: 'flex', gap: 10 }}>
         <button
