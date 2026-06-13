@@ -159,6 +159,8 @@ export class UniversityCrawlerService {
     // Clean up: remove too-short, ends with common titles, duplicates of abbreviations
     const deptClean = [...deptSet].filter(d => {
       if (d.length < 3) return false;
+      // Short words must be ALL CAPS (proper abbreviations like CSE, EEE)
+      if (d.length < 5 && d !== d.toUpperCase()) return false;
       if (/^(Dr|Prof|Mr|Ms|Md|the|and|of)\.?$/i.test(d)) return false;
       if (d.endsWith(' Dr') || d.endsWith(' Prof') || d.endsWith(' Mr')) return false;
       return true;
