@@ -9,7 +9,7 @@ interface Props {
   onSkip: () => void;
 }
 
-type OBStep = 1 | 2 | 3 | 4 | 5;
+type OBStep = 0 | 1 | 2 | 3 | 4 | 5 | 'uni_setup' | 'uni_done';
 
 const CONFETTI_COLORS = ['#6366f1', '#8b5cf6', '#f59e0b', '#10b981', '#ef4444', '#3b82f6', '#ec4899', '#f97316'];
 const CONFETTI = Array.from({ length: 36 }, (_, i) => ({
@@ -31,7 +31,7 @@ const STEP_CONFIG = [
 ];
 
 export function OnboardingFlow({ dark, user, activePage, onComplete, onSkip }: Props) {
-  const [step, setStep] = useState<OBStep>(1);
+  const [step, setStep] = useState<OBStep>(0);
   const [dir, setDir] = useState<1 | -1>(1);
   const [animating, setAnimating] = useState(false);
   const [exiting, setExiting] = useState(false);
@@ -55,12 +55,15 @@ export function OnboardingFlow({ dark, user, activePage, onComplete, onSkip }: P
   const advanceStep = useCallback((nextStep: OBStep) => {
     if (animating) return;
     setAnimating(true);
-    setDir(nextStep > step ? 1 : -1);
+    const numCur = typeof step === 'number' ? step : 99;
+    const numNext = typeof nextStep === 'number' ? nextStep : 99;
+    setDir(numNext > numCur ? 1 : -1);
     setExiting(true);
     setTimeout(() => {
       setStep(nextStep);
       setExiting(false);
-      setJustCompleted(nextStep > 1 ? (nextStep - 1) as OBStep : null);
+      const prev = typeof nextStep === 'number' && nextStep > 1 ? (nextStep - 1) as OBStep : null;
+      setJustCompleted(prev);
       setTimeout(() => { setAnimating(false); setJustCompleted(null); }, 500);
     }, 280);
   }, [animating, step]);
@@ -77,7 +80,9 @@ export function OnboardingFlow({ dark, user, activePage, onComplete, onSkip }: P
     setTimeout(onSkip, 550);
   };
 
-  const progress = ((step - 1) / 4) * 100;
+  const progress = step === 0 || step === 'uni_setup' || step === 'uni_done'
+    ? 0
+    : ((step as number) - 1) / 4 * 100;
 
   return (
     <div style={{
@@ -184,7 +189,7 @@ export function OnboardingFlow({ dark, user, activePage, onComplete, onSkip }: P
           }}>
             🐱 Chatcat
           </div>
-          {step < 4 && (
+          {typeof step === 'number' && step > 0 && step < 4 && (
             <button className="ob-btn-ghost" onClick={() => setShowSkipConfirm(true)} style={{
               background: 'none', border: 'none', color: muted,
               cursor: 'pointer', fontSize: 13, padding: '6px 10px', transition: 'opacity 150ms',
@@ -194,8 +199,8 @@ export function OnboardingFlow({ dark, user, activePage, onComplete, onSkip }: P
           )}
         </div>
 
-        {/* Progress stepper */}
-        <div style={{ paddingBottom: 32, flexShrink: 0 }}>
+        {/* Progress stepper — only show for business flow steps 1-5 */}
+        <div style={{ paddingBottom: 32, flexShrink: 0, display: (step === 0 || step === 'uni_setup' || step === 'uni_done') ? 'none' : undefined }}>
           {/* Line bar */}
           <div style={{ position: 'relative', height: 4, borderRadius: 4, background: dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)', marginBottom: 20 }}>
             <div style={{
@@ -210,7 +215,8 @@ export function OnboardingFlow({ dark, user, activePage, onComplete, onSkip }: P
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
             {STEP_CONFIG.map((cfg, i) => {
               const s = (i + 1) as OBStep;
-              const completed = step > s;
+              const stepNum = typeof step === 'number' ? step : 0;
+              const completed = stepNum > (s as number);
               const active = step === s;
               const popped = justCompleted === s;
               return (
@@ -264,6 +270,28 @@ export function OnboardingFlow({ dark, user, activePage, onComplete, onSkip }: P
               ? (dir === 1 ? 'ob-out-fwd 280ms cubic-bezier(0.4,0,1,1) forwards' : 'ob-out-bwd 280ms cubic-bezier(0.4,0,1,1) forwards')
               : (dir === 1 ? 'ob-in-fwd 350ms cubic-bezier(0,0,0.2,1) forwards' : 'ob-in-bwd 350ms cubic-bezier(0,0,0.2,1) forwards'),
           }}>
+            {step === 0 && (
+              <StepModeSelector
+                dark={dark} text={text} muted={muted}
+                activePage={activePage} request={request}
+                onSelectBusiness={() => advanceStep(1)}
+                onSelectUniversity={() => advanceStep('uni_setup')}
+              />
+            )}
+            {step === 'uni_setup' && (
+              <StepUniversitySetup
+                dark={dark} border={border} text={text} muted={muted} accent={accent}
+                activePage={activePage} request={request}
+                onDone={() => advanceStep('uni_done')}
+                onSkip={() => advanceStep('uni_done')}
+              />
+            )}
+            {step === 'uni_done' && (
+              <StepUniversityDone
+                text={text} muted={muted}
+                onFinish={handleFinish}
+              />
+            )}
             {step === 1 && (
               <Step1BusinessProfile
                 dark={dark} border={border} text={text} muted={muted} accent={accent}
@@ -315,7 +343,7 @@ export function OnboardingFlow({ dark, user, activePage, onComplete, onSkip }: P
       </div>
 
       {/* Mascot */}
-      {step < 5 && (
+      {typeof step === 'number' && step >= 1 && step < 5 && (
         <div style={{
           position: 'fixed', bottom: 24, left: 20, zIndex: 10102,
           display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 8,
@@ -333,7 +361,7 @@ export function OnboardingFlow({ dark, user, activePage, onComplete, onSkip }: P
             animation: 'ob-bubble-in 400ms cubic-bezier(0.34,1.56,0.64,1) both',
             whiteSpace: 'pre-line',
           }}>
-            {STEP_CONFIG[step - 1].mascot}
+            {STEP_CONFIG[(step as number) - 1].mascot}
           </div>
           <div style={{
             fontSize: 30, paddingLeft: 10,
@@ -1348,6 +1376,224 @@ function Step5Complete({ dark, text, muted, accent, accentSoft, pageConnected, p
           letterSpacing: 0.2,
           animation: 'ob-fade-up 400ms ease 2.3s both',
           opacity: 0,
+        }}
+      >
+        Dashboard-এ যান →
+      </button>
+    </div>
+  );
+}
+
+// ─── Step 0: Mode Selector ────────────────────────────────────────────────────
+function StepModeSelector({ dark, text, muted, activePage, request, onSelectBusiness, onSelectUniversity }: {
+  dark: boolean; text: string; muted: string;
+  activePage: { id: number };
+  request: any;
+  onSelectBusiness: () => void;
+  onSelectUniversity: () => void;
+}) {
+  const [saving, setSaving] = useState(false);
+
+  const choose = async (mode: 'business' | 'university') => {
+    setSaving(true);
+    try {
+      await request(`${API_BASE}/client-dashboard/${activePage.id}/settings`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          automationOn: true,
+          universityModeOn: mode === 'university',
+        }),
+      });
+    } catch {}
+    setSaving(false);
+    mode === 'university' ? onSelectUniversity() : onSelectBusiness();
+  };
+
+  const card = (
+    emoji: string, title: string, desc: string, bullets: string[],
+    color: string, onClick: () => void
+  ) => (
+    <button
+      onClick={onClick}
+      disabled={saving}
+      style={{
+        flex: 1, background: dark ? 'rgba(255,255,255,0.04)' : '#fff',
+        border: `2px solid ${dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)'}`,
+        borderRadius: 18, padding: '28px 22px', cursor: 'pointer', textAlign: 'left',
+        transition: 'all 0.2s', outline: 'none',
+      }}
+      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = color; (e.currentTarget as HTMLElement).style.transform = 'translateY(-3px)'; }}
+      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)'; (e.currentTarget as HTMLElement).style.transform = 'none'; }}
+    >
+      <div style={{ fontSize: 48, marginBottom: 14 }}>{emoji}</div>
+      <div style={{ fontSize: 18, fontWeight: 800, color: text, marginBottom: 6 }}>{title}</div>
+      <div style={{ fontSize: 13, color: muted, marginBottom: 16, lineHeight: 1.5 }}>{desc}</div>
+      <ul style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {bullets.map((b, i) => (
+          <li key={i} style={{ fontSize: 12.5, color: muted }}>{b}</li>
+        ))}
+      </ul>
+      <div style={{
+        marginTop: 22, display: 'inline-block', padding: '9px 20px',
+        background: color, borderRadius: 10, color: '#fff',
+        fontSize: 13, fontWeight: 700,
+      }}>
+        এটি বেছে নিন →
+      </div>
+    </button>
+  );
+
+  return (
+    <div style={{ animation: 'ob-fade-up 400ms ease both' }}>
+      <div style={{ textAlign: 'center', marginBottom: 28 }}>
+        <div style={{ fontSize: 15, fontWeight: 700, color: text, marginBottom: 6 }}>
+          আপনার automation-এর ধরন বেছে নিন
+        </div>
+        <div style={{ fontSize: 13, color: muted }}>
+          পরে Settings থেকে যেকোনো সময় পরিবর্তন করা যাবে
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+        {card(
+          '🛍️', 'E-Commerce / Business',
+          'পণ্য বিক্রি, অর্ডার ম্যানেজমেন্ট ও কুরিয়ার automation',
+          ['OCR দিয়ে product detect', 'Auto order management', 'Courier integration', 'Payment verification', 'Broadcast & follow-up'],
+          '#6366f1',
+          () => choose('business')
+        )}
+        {card(
+          '🎓', 'University Automation',
+          'বিশ্ববিদ্যালয়ের website crawl, notice auto-post ও student Q&A bot',
+          ['Website থেকে auto info collect', 'নতুন notice Facebook-এ auto-post', 'Messenger-এ 24/7 student Q&A', 'Group link smart suggestion', 'FAQ ও manual knowledge base'],
+          '#10b981',
+          () => choose('university')
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── University Setup Step ─────────────────────────────────────────────────────
+function StepUniversitySetup({ dark, border, text, muted, accent, activePage, request, onDone, onSkip }: {
+  dark: boolean; border: string; text: string; muted: string; accent: string;
+  activePage: { id: number };
+  request: any;
+  onDone: () => void;
+  onSkip: () => void;
+}) {
+  const [crawlUrl, setCrawlUrl] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const inp = {
+    width: '100%', boxSizing: 'border-box' as const,
+    padding: '10px 13px', borderRadius: 10, fontSize: 14,
+    background: dark ? 'rgba(255,255,255,0.05)' : '#f8f9ff',
+    border: `1px solid ${border}`, color: text, outline: 'none',
+    fontFamily: 'inherit',
+  };
+
+  const handleSave = async () => {
+    if (!crawlUrl.trim()) { onSkip(); return; }
+    setSaving(true);
+    try {
+      await request(`${API_BASE}/university/config/${activePage.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ crawlBaseUrl: crawlUrl.trim(), scrapeUrl: crawlUrl.trim(), scrapeEnabled: true, autoPostEnabled: true }),
+      });
+    } catch {}
+    setSaving(false);
+    onDone();
+  };
+
+  return (
+    <div style={{ animation: 'ob-fade-up 400ms ease both' }}>
+      <div style={{ fontSize: 28, marginBottom: 8 }}>🌐</div>
+      <div style={{ fontSize: 17, fontWeight: 800, color: text, marginBottom: 6 }}>
+        University Website URL দিন
+      </div>
+      <div style={{ fontSize: 13, color: muted, marginBottom: 22, lineHeight: 1.6 }}>
+        Bot এই website crawl করে সব তথ্য সংগ্রহ করবে।<br />
+        পরে Settings থেকেও পরিবর্তন করা যাবে।
+      </div>
+      <div style={{ marginBottom: 20 }}>
+        <label style={{ fontSize: 12, fontWeight: 600, color: muted, display: 'block', marginBottom: 6 }}>
+          Homepage URL
+        </label>
+        <input
+          style={inp}
+          placeholder="https://uap-bd.edu"
+          value={crawlUrl}
+          onChange={e => setCrawlUrl(e.target.value)}
+        />
+      </div>
+      <div style={{ display: 'flex', gap: 10 }}>
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          style={{
+            flex: 1, padding: '12px', background: `linear-gradient(135deg,${accent},#8b5cf6)`,
+            border: 'none', borderRadius: 12, color: '#fff', fontSize: 14,
+            fontWeight: 700, cursor: 'pointer',
+          }}
+        >
+          {saving ? 'সেভ হচ্ছে...' : 'সেভ করুন ও এগিয়ে যান →'}
+        </button>
+        <button
+          onClick={onSkip}
+          style={{
+            padding: '12px 18px', background: 'transparent',
+            border: `1px solid ${border}`, borderRadius: 12, color: muted,
+            fontSize: 13, cursor: 'pointer',
+          }}
+        >
+          পরে দেব
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── University Done Step ──────────────────────────────────────────────────────
+function StepUniversityDone({ text, muted, onFinish }: {
+  text: string; muted: string;
+  onFinish: () => void;
+}) {
+  return (
+    <div style={{ textAlign: 'center', animation: 'ob-fade-up 400ms ease both' }}>
+      <div style={{ fontSize: 56, marginBottom: 16, animation: 'ob-dot-pop 600ms cubic-bezier(0.34,1.56,0.64,1) both' }}>🎓</div>
+      <div style={{ fontSize: 20, fontWeight: 800, color: text, marginBottom: 10 }}>
+        University Automation প্রস্তুত!
+      </div>
+      <div style={{ fontSize: 13.5, color: muted, lineHeight: 1.7, marginBottom: 24 }}>
+        এখন University সেকশনে গিয়ে website crawl করুন।<br />
+        Bot শিক্ষার্থীদের প্রশ্নের উত্তর দিতে শুরু করবে।
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, textAlign: 'left', marginBottom: 28 }}>
+        {[
+          ['🌐', 'Website crawl → bot-এর knowledge base তৈরি হবে'],
+          ['📢', 'নতুন notice → Facebook-এ auto-post'],
+          ['💬', 'Messenger → 24/7 student Q&A চালু'],
+          ['👥', 'Group link → Department/Semester অনুযায়ী'],
+        ].map(([icon, label], i) => (
+          <div key={i} style={{
+            display: 'flex', gap: 10, alignItems: 'center',
+            padding: '10px 14px', borderRadius: 10,
+            background: 'rgba(16,185,129,0.07)',
+            animation: `ob-fade-up 400ms ease ${i * 120 + 200}ms both`,
+          }}>
+            <span style={{ fontSize: 20 }}>{icon}</span>
+            <span style={{ fontSize: 13, color: text }}>{label}</span>
+          </div>
+        ))}
+      </div>
+      <button
+        onClick={onFinish}
+        style={{
+          padding: '14px 36px', fontSize: 15, fontWeight: 800,
+          background: 'linear-gradient(135deg,#10b981,#059669)',
+          border: 'none', borderRadius: 14, color: '#fff', cursor: 'pointer',
         }}
       >
         Dashboard-এ যান →

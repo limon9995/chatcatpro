@@ -202,6 +202,7 @@ export function DashboardLayout({
     bot: false,
     settings: false,
   });
+  const [universityMode, setUniversityMode] = useState<boolean | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const { request } = useApi();
 
@@ -255,6 +256,14 @@ export function DashboardLayout({
   useEffect(() => {
     request(`${API_BASE}/billing/status`).then(setBillingStatus).catch(() => {});
   }, []);
+
+  // Fetch universityModeOn for the active page to filter nav
+  useEffect(() => {
+    if (!activePage?.id) return;
+    request<any>(`${API_BASE}/client-dashboard/${activePage.id}/settings`)
+      .then((s) => setUniversityMode(s?.universityModeOn ?? false))
+      .catch(() => setUniversityMode(false));
+  }, [activePage?.id]);
 
   useEffect(() => {
     if (!activePage?.id) return;
@@ -396,7 +405,18 @@ export function DashboardLayout({
   );
 
   const pageId = activePage.id;
-  const navGroups = GROUPS.map(g => ({ ...g, items: NAV.filter(n => n.group === g.key) }));
+  // University mode: hide e-commerce nav; Business mode: hide university nav
+  const UNIVERSITY_ONLY_KEYS = new Set(['UNIVERSITY']);
+  const BUSINESS_ONLY_KEYS = new Set(['ORDERS', 'COURIER', 'PRINT', 'PRODUCTS', 'CATALOG', 'ACCOUNTING', 'MEMO_TEMPLATE']);
+  const navGroups = GROUPS.map(g => ({
+    ...g,
+    items: NAV.filter(n => {
+      if (n.group !== g.key) return false;
+      if (universityMode === true) return !BUSINESS_ONLY_KEYS.has(n.key);
+      if (universityMode === false) return !UNIVERSITY_ONLY_KEYS.has(n.key);
+      return true; // null = still loading, show all
+    }),
+  })).filter(g => g.items.length > 0 || !g.en); // hide empty labeled groups
 
   const pageFallback = (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 32, color: th.muted }}>
