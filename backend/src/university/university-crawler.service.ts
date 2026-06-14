@@ -104,14 +104,17 @@ export class UniversityCrawlerService {
       return { pagesCrawled: 0 };
     }
 
-    // Build knowledge text: "Page Title\nURL\n<text>\n---\n"
+    // Build knowledge text
     const knowledge = pages
       .map((p) => `### ${p.title}\n${p.url}\n${p.text}`)
       .join('\n\n---\n\n')
-      .slice(0, 80_000); // keep under 80k chars
+      .slice(0, 80_000);
 
-    // Extract structured metadata (departments, semesters, courses) using AI
+    // Extract structured metadata
     const extractedMeta = await this.extractStructuredMeta(knowledge);
+
+    // Auto-update structured knowledge from important pages (fees, contacts, departments)
+    const autoKnowledge = await this.buildAutoKnowledge(crawlUrl, pages);
 
     await this.prisma.universityConfig.update({
       where: { id: config.id },
@@ -119,10 +122,90 @@ export class UniversityCrawlerService {
         scrapedKnowledgeText: knowledge,
         lastFullCrawlAt: new Date(),
         extractedMeta: JSON.stringify(extractedMeta),
+        ...(autoKnowledge ? { knowledgeText: autoKnowledge } : {}),
       },
     });
 
     return { pagesCrawled: pages.length };
+  }
+
+  // Finds and fetches important pages (fees, contacts, departments) from the crawled site
+  private async buildAutoKnowledge(baseUrl: string, crawledPages: CrawledPage[]): Promise<string | null> {
+    const IMPORTANT_KEYWORDS = /fee|tuition|cost|contact|admission|department|faculty|program|scholarship|waiver/i;
+    const base = new URL(baseUrl);
+
+    // Collect URLs from crawled pages that match important keywords
+    const importantUrls = new Set<string>();
+
+    // Also discover links from the homepage that match keywords
+    try {
+      const homeRes = await fetch(baseUrl, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; ChatcatBot/1.0)' },
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (homeRes.ok) {
+        const html = await homeRes.text();
+        const $ = (await import('cheerio')).load(html);
+        $('a[href]').each((_, el) => {
+          const href = $(el).attr('href') || '';
+          try {
+            const abs = new URL(href, baseUrl);
+            // Allow same domain AND common subdomains (e.g. cse.uap-bd.edu)
+            const sameDomain = abs.hostname === base.hostname ||
+              abs.hostname.endsWith('.' + base.hostname);
+            if (!sameDomain) return;
+            const text = ($(el).text() + ' ' + abs.pathname).toLowerCase();
+            if (IMPORTANT_KEYWORDS.test(text) || IMPORTANT_KEYWORDS.test(abs.pathname)) {
+              importantUrls.add(abs.href.split('#')[0]);
+            }
+          } catch {}
+        });
+      }
+    } catch {}
+
+    // Also add already-crawled important pages
+    for (const p of crawledPages) {
+      if (IMPORTANT_KEYWORDS.test(p.title) || IMPORTANT_KEYWORDS.test(p.url)) {
+        importantUrls.add(p.url);
+      }
+    }
+
+    if (importantUrls.size === 0) return null;
+
+    // Fetch up to 10 important pages
+    const sections: string[] = [];
+    let fetched = 0;
+    for (const url of importantUrls) {
+      if (fetched >= 10) break;
+      try {
+        const res = await fetch(url, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (compatible; ChatcatBot/1.0)' },
+          signal: AbortSignal.timeout(10_000),
+        });
+        if (!res.ok) continue;
+        const html = await res.text();
+        const $ = (await import('cheerio')).load(html);
+        $('script, style, nav, footer, header, .menu, .navbar, noscript').remove();
+        const title = $('title').text().trim() || $('h1').first().text().trim();
+        const textParts: string[] = [];
+        $('h1, h2, h3, h4, p, li, td, th, table').each((_, el) => {
+          const t = $(el).text().replace(/\s+/g, ' ').trim();
+          if (t.length > 15) textParts.push(t);
+        });
+        const text = [...new Set(textParts)].join('\n').slice(0, 4_000);
+        if (text.length > 100) {
+          sections.push(`=== ${title} ===\n${text}`);
+          fetched++;
+        }
+        await new Promise((r) => setTimeout(r, 300));
+      } catch {}
+    }
+
+    if (sections.length === 0) return null;
+
+    const result = sections.join('\n\n').slice(0, 30_000);
+    this.logger.log(`[Crawler] Auto-knowledge updated: ${sections.length} important pages, ${result.length} chars`);
+    return result;
   }
 
   private async extractStructuredMeta(knowledgeText: string): Promise<{
