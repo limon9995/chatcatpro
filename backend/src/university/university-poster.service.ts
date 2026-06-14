@@ -144,17 +144,20 @@ If already in English, keep and translate to Bengali. If already in Bengali, kee
     const config = await this.prisma.universityConfig.findUnique({ where: { pageId } });
     if (!config?.autoPostEnabled) return;
 
-    // Only post notices from current month or last 30 days — skip old archived content
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    // Only post notices from current month — skip old archived content
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth(); // 0-indexed
     const recentNotices = newNotices.filter((n) => {
       if (!n.publishedAt) return true; // no date = assume recent (just scraped)
       const d = new Date(n.publishedAt);
-      return !isNaN(d.getTime()) ? d >= thirtyDaysAgo : true;
+      if (isNaN(d.getTime())) return true; // unparseable date = allow
+      // Only post if same month and year
+      return d.getFullYear() === currentYear && d.getMonth() === currentMonth;
     });
 
     if (!recentNotices.length) {
-      this.logger.log(`[Poster] Skipping ${newNotices.length} old notices (all > 30 days)`);
+      this.logger.log(`[Poster] Skipping ${newNotices.length} notices — none from current month (${now.toLocaleString('default',{month:'long',year:'numeric'})})`);
       return;
     }
 
