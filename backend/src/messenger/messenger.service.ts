@@ -48,7 +48,7 @@ export class MessengerService {
         });
 
         if (res.ok) {
-          this.logger.debug(`[Messenger] Sent psid=${psid} len=${text.length}`);
+          this.logger.log(`[Messenger] Sent psid=${psid} len=${text.length}`);
           return;
         }
 
