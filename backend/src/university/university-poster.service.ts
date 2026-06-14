@@ -67,23 +67,23 @@ export class UniversityPosterService {
       const key = this.geminiRotator.getKey();
       if (!key) return null;
 
-      const prompt = `You are a university social media manager. Write a Facebook post for this university notice.
+      const prompt = `You are a Bangladeshi university social media manager writing Facebook posts.
 
 Notice Title: "${title}"
-Notice Category: ${category.labelBn} / ${category.labelEn}
 ${content ? `Notice Content:\n${content.slice(0, 1000)}` : ''}
 
-Rules:
-- Write BOTH Bengali and English versions
-- Bengali: 3-5 sentences, friendly and informative, no URLs
-- English: 3-5 sentences, friendly and informative, no URLs
-- Extract key info: dates, deadlines, departments, requirements if available
-- DO NOT include any URLs or web links
-- End Bengali with: "বিস্তারিত জানতে বিশ্ববিদ্যালয়ের অফিসে যোগাযোগ করুন।"
-- End English with: "Contact the university office for more details."
+TASK: Write a Facebook post in Bengali AND English.
 
-Reply ONLY with valid JSON:
-{"bn": "Bengali post text", "en": "English post text"}`;
+CRITICAL RULES:
+1. "bn" field MUST be written in Bengali script (বাংলা ভাষায়). NOT English words in Bengali.
+2. "en" field must be in English.
+3. Each version: 2-4 sentences, friendly tone, key info only.
+4. NO URLs or links in either version.
+5. End "bn" with: "বিস্তারিত জানতে অফিসে যোগাযোগ করুন।"
+6. End "en" with: "Contact the office for more details."
+
+Reply ONLY with this exact JSON format:
+{"bn": "এখানে বাংলায় পোস্ট লিখুন।", "en": "Write English post here."}`;
 
       const res = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`,
@@ -144,7 +144,21 @@ If already in English, keep and translate to Bengali. If already in Bengali, kee
     const config = await this.prisma.universityConfig.findUnique({ where: { pageId } });
     if (!config?.autoPostEnabled) return;
 
-    const toPost = newNotices.slice(0, MAX_POSTS_PER_RUN);
+    // Only post notices from current month or last 30 days — skip old archived content
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const recentNotices = newNotices.filter((n) => {
+      if (!n.publishedAt) return true; // no date = assume recent (just scraped)
+      const d = new Date(n.publishedAt);
+      return !isNaN(d.getTime()) ? d >= thirtyDaysAgo : true;
+    });
+
+    if (!recentNotices.length) {
+      this.logger.log(`[Poster] Skipping ${newNotices.length} old notices (all > 30 days)`);
+      return;
+    }
+
+    const toPost = recentNotices.slice(0, MAX_POSTS_PER_RUN);
     for (const notice of toPost) {
       try {
         const category = detectCategory(notice.title);
@@ -181,17 +195,18 @@ If already in English, keep and translate to Bengali. If already in Bengali, kee
               year: 'numeric',
             });
 
-        const divider = '━━━━━━━━━━━━━━━━━━━━';
+        const divider = '─────────────────────';
         const tagLine = `#নোটিশ #${category.labelEn.replace(/\s+/g, '')} #বিশ্ববিদ্যালয় #UAP`;
 
         const parts: string[] = [
-          `${category.emoji} ${category.labelBn.toUpperCase()} | ${category.labelEn.toUpperCase()}`,
+          `${category.emoji} ${category.labelBn} | ${category.labelEn}`,
           divider,
-          `বাংলা: ${bn}`,
+          bn,
           ``,
-          `English: ${en}`,
           divider,
-          `📅 তারিখ: ${dateStr}`,
+          en,
+          divider,
+          `📅 ${dateStr}`,
           ``,
           tagLine,
         ];
