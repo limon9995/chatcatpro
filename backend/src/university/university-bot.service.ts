@@ -146,12 +146,13 @@ ${combinedKnowledge || '(এখনো কোনো তথ্য যোগ কর
     ];
 
     try {
+      let aiReply: string | null = null;
       if (this.provider === 'gemini' && this.geminiRotator.isAvailable()) {
-        return await this.callGemini(messages);
+        aiReply = await this.callGemini(messages);
+      } else if (this.openaiKey) {
+        aiReply = await this.callOpenAI(messages);
       }
-      if (this.openaiKey) {
-        return await this.callOpenAI(messages);
-      }
+      if (aiReply) return aiReply;
     } catch (err: any) {
       this.logger.error(`[UniversityBot] AI call failed: ${err.message}`);
     }
@@ -175,9 +176,15 @@ ${combinedKnowledge || '(এখনো কোনো তথ্য যোগ কর
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(8_000),
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      this.logger.error(`[UniversityBot] Gemini error status=${res.status} body=${errText.slice(0, 300)}`);
+      return null;
+    }
     const data: any = await res.json();
-    return data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null;
+    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null;
+    this.logger.log(`[UniversityBot] Gemini reply len=${text?.length ?? 0}`);
+    return text;
   }
 
   private async callOpenAI(messages: { role: string; content: string }[]): Promise<string | null> {
