@@ -187,9 +187,9 @@ If already in English, keep and translate to Bengali. If already in Bengali, kee
         const parts: string[] = [
           `${category.emoji} ${category.labelBn.toUpperCase()} | ${category.labelEn.toUpperCase()}`,
           divider,
-          `🇧🇩 ${bn}`,
+          `বাংলা: ${bn}`,
           ``,
-          `🇬🇧 ${en}`,
+          `English: ${en}`,
           divider,
           `📅 তারিখ: ${dateStr}`,
           ``,

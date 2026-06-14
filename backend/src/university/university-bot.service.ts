@@ -140,7 +140,7 @@ ${combinedKnowledge || '(No knowledge loaded yet — run Website Crawl in Settin
 
 STRICT RULES:
 - Reply in BOTH Bengali and English, Bengali first
-- Format: 🇧🇩 [Bengali answer]\n\n🇬🇧 [English answer]
+- Format: [Bengali answer]\n\n[English answer]
 - Keep each answer short: 2–4 sentences max
 - Extract actual information from the knowledge (names, fees, dates, departments, procedures)
 - NEVER share any URLs or links in your reply
