@@ -137,7 +137,7 @@ export class WebhookController {
       }
     }
 
-    this.logger.debug(
+    this.logger.log(
       `[Webhook] Received object=${parsedBody?.object} entries=${parsedBody?.entry?.length ?? 0}`,
     );
     try {
