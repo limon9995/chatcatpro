@@ -29,6 +29,14 @@ export class UniversityScraperService {
     'linkedin', 'instagram', 'social media', 'sitemap', 'privacy policy',
     'terms', 'faq', 'help', 'career', 'alumni', 'library', 'portal',
     'student portal', 'teacher portal', 'email', 'webmail',
+    'career opportunities', 'news/notice/upcomig event', 'news/notice/upcoming event',
+    'no vacancy', 'vacancies', 'vacancy', 'resources', 'faculty members',
+    'academic calendar', 'class schedule', 'uap webmail', 'library opac',
+    'openathens access', 'automation(ucam) login', 'uap annual report: 2018-2019',
+    'plagiarism checker', 'papers & publications', 'call for paper',
+    'uap media release', '11th convocation', 'uap@ranking',
+    'apply now', 'spring 2026', 'view details', 'view fees', 'view options',
+    'download pdf', 'download forms', 'download',
   ]);
 
   async scrapeNotices(scrapeUrl: string): Promise<ScrapedNotice[]> {
