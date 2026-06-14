@@ -40,33 +40,52 @@ export class UniversityScraperService {
     const html = await res.text();
     const $ = cheerio.load(html);
 
-    // Remove navigation, menu, sidebar, footer noise BEFORE selecting links
-    $('nav, header, footer, .navbar, .nav, .menu, .sidebar, .breadcrumb, .pagination, aside, .social, .footer, #footer, #header, #nav, #menu').remove();
+    const notices: ScrapedNotice[] = [];
+
+    // Strategy 1: news-card pattern (UAP-style cards with h4 title + read-more link)
+    const newsCards = $('.news-card, .news-item, .notice-card, .event-card, article.card');
+    if (newsCards.length > 0) {
+      this.logger.log(`[Scraper] Found ${newsCards.length} news cards`);
+      newsCards.each((_, card) => {
+        const $card = $(card);
+        const title = $card.find('h1, h2, h3, h4, h5, .title, .card-title').first().text().replace(/\s+/g, ' ').trim();
+        if (!title || title.length < 10) return;
+
+        // Get the article link (read-more or any link inside the card)
+        let href = $card.find('.read-more, a[href]').first().attr('href') || null;
+        if (href && !href.startsWith('http')) {
+          try { href = new URL(href, new URL(scrapeUrl).origin).toString(); } catch { href = null; }
+        }
+        if (href?.startsWith('#')) href = null;
+
+        // Get date from .news-date or similar
+        const dateText = $card.find('.news-date, .date, .card-date, time').first().text().trim();
+        const publishedAt = dateText || null;
+
+        const contentHash = crypto.createHash('sha256').update(title + (href || '')).digest('hex');
+        notices.push({ title, url: href, publishedAt, contentHash });
+      });
+
+      if (notices.length > 0) {
+        this.logger.log(`[Scraper] Found ${notices.length} notices via news-card strategy`);
+        return notices;
+      }
+    }
+
+    // Strategy 2: standard notice list / table (remove nav noise first)
+    $('nav, header, footer, .navbar, .nav, .menu, .sidebar, .breadcrumb, .pagination, aside, .social, .footer, #footer, #header, #nav, #menu, .quick-links').remove();
 
     const selectors = [
-      // Specific notice/news containers first
-      '.notice-list li a',
-      '.news-list li a',
-      '.notice-board li a',
-      '.notification-list li a',
-      '#notice li a',
-      '#news li a',
-      '.announcement li a',
-      'table.notice-table td a',
-      // Generic containers — only if specific ones not found
-      '.content-area ul li a',
-      'ul.list-group li a',
-      '.main-content ul li a',
-      '#content ul li a',
-      // Fallback
-      'ul li a',
-      'table td a',
+      '.notice-list li a', '.news-list li a', '.notice-board li a',
+      '.notification-list li a', '#notice li a', '#news li a',
+      '.announcement li a', 'table.notice-table td a',
+      '.content-area ul li a', 'ul.list-group li a',
     ];
 
     let links: cheerio.Cheerio<AnyNode> | null = null;
     for (const sel of selectors) {
       const found = $(sel);
-      if (found.length > 2) {
+      if (found.length > 1) {
         links = found;
         this.logger.log(`[Scraper] Using selector: ${sel} (${found.length} links)`);
         break;
@@ -78,44 +97,27 @@ export class UniversityScraperService {
       return [];
     }
 
-    const notices: ScrapedNotice[] = [];
     links.each((_, el) => {
       const $el = $(el);
       const title = $el.text().replace(/\s+/g, ' ').trim();
-      if (!title || title.length < 10) return; // skip very short titles
+      if (!title || title.length < 15) return;
 
-      // Skip known menu/nav items
       const titleLower = title.toLowerCase();
       if (UniversityScraperService.JUNK_TITLES.has(titleLower)) return;
-
-      // Skip single-word titles (likely menu items)
-      if (!title.includes(' ') && title.length < 20) return;
-
-      // Skip titles that look like file extensions / generic links
+      if (!title.includes(' ')) return;
       if (/\.(pdf|jpg|png|doc|xlsx)$/i.test(title)) return;
 
       let href = $el.attr('href') || null;
       if (href && !href.startsWith('http')) {
-        try {
-          const base = new URL(scrapeUrl);
-          href = new URL(href, base.origin).toString();
-        } catch {
-          href = null;
-        }
+        try { href = new URL(href, new URL(scrapeUrl).origin).toString(); } catch { href = null; }
       }
-      // Skip anchor-only links
-      if (href && href.startsWith('#')) href = null;
+      if (href?.startsWith('#')) href = null;
 
       const parentText = $el.parent().text().replace(title, '').trim();
       const dateMatch = parentText.match(/\d{1,2}[-\/]\w{2,9}[-\/]\d{2,4}/);
-      const publishedAt = dateMatch ? dateMatch[0] : null;
 
-      const contentHash = crypto
-        .createHash('sha256')
-        .update(title + (href || ''))
-        .digest('hex');
-
-      notices.push({ title, url: href, publishedAt, contentHash });
+      const contentHash = crypto.createHash('sha256').update(title + (href || '')).digest('hex');
+      notices.push({ title, url: href, publishedAt: dateMatch?.[0] || null, contentHash });
     });
 
     this.logger.log(`[Scraper] Found ${notices.length} valid notices at ${scrapeUrl}`);
