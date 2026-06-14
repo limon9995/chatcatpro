@@ -118,27 +118,35 @@ export class UniversityBotService {
       : '';
 
     // Use scraped knowledge (full site) + manual text + FAQs
-    const scrapedKnowledge = config.scrapedKnowledgeText || '';
+    // Strip raw URLs from scraped content so AI doesn't paste them in replies
+    const rawScraped = config.scrapedKnowledgeText || '';
+    const scrapedKnowledge = rawScraped
+      .replace(/https?:\/\/\S+/g, '')          // remove URLs
+      .replace(/#{1,4}\s+https?:\/\/\S+/g, '') // remove URL headings
+      .replace(/\n{3,}/g, '\n\n')              // collapse blank lines
+      .trim();
     const manualKnowledge = config.knowledgeText || '';
 
-    // Trim to fit within context (keep most relevant: manual first, then scraped)
     const combinedKnowledge = [
-      manualKnowledge ? `=== ম্যানুয়াল তথ্য ===\n${manualKnowledge}` : '',
+      manualKnowledge ? `=== অতিরিক্ত তথ্য ===\n${manualKnowledge}` : '',
       faqText ? `=== FAQ ===\n${faqText}` : '',
-      scrapedKnowledge ? `=== ওয়েবসাইট থেকে সংগৃহীত তথ্য ===\n${scrapedKnowledge.slice(0, 12_000)}` : '',
+      scrapedKnowledge ? `=== বিশ্ববিদ্যালয়ের তথ্য ===\n${scrapedKnowledge.slice(0, 10_000)}` : '',
     ].filter(Boolean).join('\n\n');
 
-    const systemPrompt = `তুমি একটি বিশ্ববিদ্যালয়ের সহকারী বট। শিক্ষার্থীদের যেকোনো প্রশ্নের সঠিক ও সহায়ক উত্তর দাও।
+    const systemPrompt = `You are a helpful university assistant bot. Answer student questions clearly and accurately using the knowledge below.
 
-নিচের তথ্যভান্ডার ব্যবহার করো (শিক্ষক, প্রোগ্রাম, ভর্তি, ফি, নোটিশ সব আছে):
+KNOWLEDGE BASE:
+${combinedKnowledge || '(No knowledge loaded yet — run Website Crawl in Settings)'}
 
-${combinedKnowledge || '(এখনো কোনো তথ্য যোগ করা হয়নি — Settings → University Crawl চালান)'}
-
-নির্দেশনা:
-- উত্তর বাংলায় দাও
-- সংক্ষিপ্ত ও সরাসরি (২-৫ লাইন)
-- তথ্য না পেলে বলো "এই তথ্য আমার কাছে নেই, সরাসরি university-তে যোগাযোগ করুন"
-- কখনো তথ্য বানিয়ে দেবে না`;
+STRICT RULES:
+- Reply in BOTH Bengali and English, Bengali first
+- Format: 🇧🇩 [Bengali answer]\n\n🇬🇧 [English answer]
+- Keep each answer short: 2–4 sentences max
+- Extract actual information from the knowledge (names, fees, dates, departments, procedures)
+- NEVER share any URLs or links in your reply
+- NEVER make up information not found in the knowledge
+- If info not found: reply "এই তথ্য এখন আমার কাছে নেই। সরাসরি বিশ্ববিদ্যালয়ের অফিসে যোগাযোগ করুন। / This information is not available right now. Please contact the university office directly."
+- Be friendly and conversational`;
 
     const messages = [
       { role: 'system', content: systemPrompt },
@@ -147,9 +155,13 @@ ${combinedKnowledge || '(এখনো কোনো তথ্য যোগ কর
 
     try {
       let aiReply: string | null = null;
-      if (this.provider === 'gemini' && this.geminiRotator.isAvailable()) {
+      // Try Gemini — always attempt even if rotator thinks quota is hit,
+      // since university bot has low traffic and may succeed on a fresh try
+      const geminiKey = this.geminiRotator.getKey();
+      if (geminiKey) {
         aiReply = await this.callGemini(messages);
-      } else if (this.openaiKey) {
+      }
+      if (!aiReply && this.openaiKey) {
         aiReply = await this.callOpenAI(messages);
       }
       if (aiReply) return aiReply;
@@ -157,7 +169,7 @@ ${combinedKnowledge || '(এখনো কোনো তথ্য যোগ কর
       this.logger.error(`[UniversityBot] AI call failed: ${err.message}`);
     }
 
-    return 'আপনার প্রশ্নের উত্তর এই মুহূর্তে দেওয়া সম্ভব হচ্ছে না। অনুগ্রহ করে পরে আবার চেষ্টা করুন।';
+    return 'এই মুহূর্তে উত্তর দিতে পারছি না। অনুগ্রহ করে কিছুক্ষণ পরে আবার চেষ্টা করুন।\n\nUnable to answer right now. Please try again shortly.';
   }
 
   private async callGemini(messages: { role: string; content: string }[]): Promise<string | null> {
