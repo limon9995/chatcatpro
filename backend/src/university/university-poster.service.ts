@@ -144,24 +144,11 @@ If already in English, keep and translate to Bengali. If already in Bengali, kee
     const config = await this.prisma.universityConfig.findUnique({ where: { pageId } });
     if (!config?.autoPostEnabled) return;
 
-    // Only post notices from current month AND must have a date AND title must be real content
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth(); // 0-indexed
-    const recentNotices = newNotices.filter((n) => {
-      // Must have a URL (real news article, not a nav link)
-      if (!n.url) return false;
-      // Must have a date
-      if (!n.publishedAt) return false;
-      // Date must parse correctly
-      const d = new Date(n.publishedAt);
-      if (isNaN(d.getTime())) return false;
-      // Only post if same month and year
-      return d.getFullYear() === currentYear && d.getMonth() === currentMonth;
-    });
+    // Only post notices that have a real URL (article link) — filters out nav/menu items
+    const recentNotices = newNotices.filter((n) => !!n.url);
 
     if (!recentNotices.length) {
-      this.logger.log(`[Poster] Skipping ${newNotices.length} notices — none qualify for current month (${now.toLocaleString('default',{month:'long',year:'numeric'})})`);
+      this.logger.log(`[Poster] Skipping ${newNotices.length} notices — none have a URL (likely nav items)`);
       return;
     }
 
