@@ -163,9 +163,23 @@ export class UniversityPosterService {
     if (!config?.autoPostEnabled) return;
 
     // Only post notices with a real URL (filters out nav/menu items without links)
-    const validNotices = newNotices.filter((n) => !!n.url && n.title?.length > 15);
+    // Also skip notices older than 21 days based on publishedAt or createdAt
+    const cutoff = Date.now() - 21 * 24 * 60 * 60 * 1000;
+    const validNotices = newNotices.filter((n) => {
+      if (!n.url || n.title?.length <= 15) return false;
+      // Try to parse publishedAt date string
+      const dateRef = n.publishedAt || n.createdAt;
+      if (dateRef) {
+        const parsed = new Date(dateRef);
+        if (!isNaN(parsed.getTime()) && parsed.getTime() < cutoff) {
+          this.logger.log(`[Poster] Skipping old notice "${n.title}" (${dateRef})`);
+          return false;
+        }
+      }
+      return true;
+    });
     if (!validNotices.length) {
-      this.logger.log(`[Poster] Skipping — no notices with valid URLs`);
+      this.logger.log(`[Poster] Skipping — no recent notices with valid URLs`);
       return;
     }
 
