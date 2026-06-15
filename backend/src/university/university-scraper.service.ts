@@ -136,6 +136,9 @@ export class UniversityScraperService {
     const config = await this.prisma.universityConfig.findUnique({ where: { pageId } });
     if (!config || !config.scrapeUrl) return { newNotices: [] };
 
+    // First-ever scrape for this config: treat all notices as baseline (don't auto-post)
+    const isInitialScrape = !config.lastScrapedAt;
+
     let scraped: ScrapedNotice[] = [];
     try {
       scraped = await this.scrapeNotices(config.scrapeUrl);
@@ -155,12 +158,18 @@ export class UniversityScraperService {
             url: item.url,
             publishedAt: item.publishedAt,
             contentHash: item.contentHash,
+            // Mark all notices from initial scrape as already posted (baseline — don't spam old content)
+            autoPosted: isInitialScrape,
           },
         });
-        newNotices.push(created);
+        if (!isInitialScrape) newNotices.push(created);
       } catch {
         // unique constraint violation = already exists, skip
       }
+    }
+
+    if (isInitialScrape) {
+      this.logger.log(`[Scraper] Page ${pageId}: initial baseline scrape — ${scraped.length} notices saved, none will auto-post`);
     }
 
     await this.prisma.universityConfig.update({
