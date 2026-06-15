@@ -48,9 +48,12 @@ export function useApi() {
     const token = localStorage.getItem('dfbot_token') || '';
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (token && !opts?.skipAuth) headers['Authorization'] = `Bearer ${token}`;
+    // Merge caller's headers into our headers (Authorization must not be overwritten)
+    const mergedHeaders = { ...headers, ...(opts?.headers as Record<string, string> || {}) };
+    const { headers: _ignored, ...restOpts } = opts || {};
     let res: Response;
     try {
-      res = await fetch(url, { headers, ...opts });
+      res = await fetch(url, { ...restOpts, headers: mergedHeaders });
     } catch {
       throw new Error('সার্ভারে সংযোগ করা যাচ্ছে না। ইন্টারনেট চেক করুন বা একটু পরে আবার চেষ্টা করুন।');
     }
