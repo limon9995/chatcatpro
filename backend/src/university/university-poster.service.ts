@@ -145,10 +145,10 @@ If already in English, keep and translate to Bengali. If already in Bengali, kee
     if (!config?.autoPostEnabled) return;
 
     // Only post notices that have a real URL (article link) — filters out nav/menu items
-    const recentNotices = newNotices.filter((n) => !!n.url);
+    const recentNotices = newNotices.filter((n) => !!n.url && !!n.title && n.title.length > 15);
 
     if (!recentNotices.length) {
-      this.logger.log(`[Poster] Skipping ${newNotices.length} notices — none have a URL (likely nav items)`);
+      this.logger.log(`[Poster] Skipping ${newNotices.length} notices — none have a URL`);
       return;
     }
 
