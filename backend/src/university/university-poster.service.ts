@@ -2,20 +2,20 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AutoPostService } from '../auto-post/auto-post.service';
 import { GeminiKeyRotatorService } from '../common/gemini-key-rotator.service';
+import { ApiKeysService } from '../common/api-keys.service';
 import * as cheerio from 'cheerio';
 
 const MAX_POSTS_PER_RUN = 3;
 
-// Notice category detection — maps keywords to emoji + label
 const NOTICE_CATEGORIES: Array<{ keywords: RegExp; emoji: string; labelBn: string; labelEn: string }> = [
   { keywords: /exam|পরীক্ষা|result|ফলাফল|grade|cgpa|routine|রুটিন/i, emoji: '📝', labelBn: 'পরীক্ষা বিজ্ঞপ্তি', labelEn: 'Exam Notice' },
   { keywords: /admission|ভর্তি|apply|application|আবেদন/i, emoji: '🎓', labelBn: 'ভর্তি বিজ্ঞপ্তি', labelEn: 'Admission Notice' },
   { keywords: /holiday|ছুটি|বন্ধ|vacation|leave/i, emoji: '📅', labelBn: 'ছুটির বিজ্ঞপ্তি', labelEn: 'Holiday Notice' },
-  { keywords: /seminar|workshop|event|অনুষ্ঠান|উৎসব|festival|প্রতিযোগিতা|competition/i, emoji: '🎯', labelBn: 'অনুষ্ঠান বিজ্ঞপ্তি', labelEn: 'Event Notice' },
+  { keywords: /seminar|workshop|event|অনুষ্ঠান|উৎসব|festival|cultural|evening|competition|প্রতিযোগিতা/i, emoji: '🎯', labelBn: 'অনুষ্ঠান বিজ্ঞপ্তি', labelEn: 'Event Notice' },
   { keywords: /fee|ফি|payment|টাকা|tuition|বেতন/i, emoji: '💳', labelBn: 'ফি বিজ্ঞপ্তি', labelEn: 'Fee Notice' },
   { keywords: /scholarship|বৃত্তি|waiver|ছাড়/i, emoji: '🏆', labelBn: 'বৃত্তি বিজ্ঞপ্তি', labelEn: 'Scholarship Notice' },
   { keywords: /class|ক্লাস|lecture|course|semester|সেমিস্টার|schedule|সময়সূচি/i, emoji: '📚', labelBn: 'একাডেমিক বিজ্ঞপ্তি', labelEn: 'Academic Notice' },
-  { keywords: /job|চাকরি|career|internship|ইন্টার্ন/i, emoji: '💼', labelBn: 'ক্যারিয়ার বিজ্ঞপ্তি', labelEn: 'Career Notice' },
+  { keywords: /job|চাকরি|career|internship|ইন্টার্ন|visit|industry|tour/i, emoji: '💼', labelBn: 'ক্যারিয়ার বিজ্ঞপ্তি', labelEn: 'Career Notice' },
 ];
 
 function detectCategory(title: string): { emoji: string; labelBn: string; labelEn: string } {
@@ -25,17 +25,41 @@ function detectCategory(title: string): { emoji: string; labelBn: string; labelE
   return { emoji: '📢', labelBn: 'সাধারণ বিজ্ঞপ্তি', labelEn: 'General Notice' };
 }
 
+// Shared prompt for both Gemini and OpenAI
+function buildPrompt(title: string, content: string): string {
+  return `You are a Bangladeshi university social media manager writing Facebook posts.
+
+Notice Title: "${title}"
+${content ? `Notice Content:\n${content.slice(0, 1200)}` : ''}
+
+TASK: Write a Facebook post in Bengali AND English summarizing the key highlights.
+
+CRITICAL RULES:
+1. "bn" MUST be in Bengali script (বাংলা ভাষায়) — 3-4 sentences, mention key names/dates/events from the content.
+2. "en" must be in English — 3-4 sentences, same key info.
+3. NO URLs or web links in either version.
+4. End "bn" with: "বিস্তারিত জানতে বিশ্ববিদ্যালয়ের অফিসে যোগাযোগ করুন।"
+5. End "en" with: "Contact the university office for more details."
+
+Reply ONLY with valid JSON:
+{"bn": "বাংলায় পোস্ট এখানে।", "en": "English post here."}`;
+}
+
 @Injectable()
 export class UniversityPosterService {
   private readonly logger = new Logger(UniversityPosterService.name);
+  private openaiKey: string | null;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly autoPost: AutoPostService,
     private readonly geminiRotator: GeminiKeyRotatorService,
-  ) {}
+    private readonly apiKeys: ApiKeysService,
+  ) {
+    this.openaiKey = apiKeys.getSync('openaiApiKey');
+  }
 
-  // Fetch notice URL and extract meaningful text content
+  // Fetch notice URL and extract article content
   private async fetchNoticeContent(url: string): Promise<string> {
     try {
       const res = await fetch(url, {
@@ -57,85 +81,79 @@ export class UniversityPosterService {
     }
   }
 
-  // Use Gemini to write a proper bilingual Facebook post from the notice
-  private async generatePost(
-    title: string,
-    content: string,
-    category: { labelBn: string; labelEn: string },
-  ): Promise<{ bn: string; en: string } | null> {
-    try {
-      const key = this.geminiRotator.getKey();
-      if (!key) return null;
+  // Try Gemini first, then OpenAI — same prompt for both
+  private async generatePost(title: string, content: string): Promise<{ bn: string; en: string } | null> {
+    const prompt = buildPrompt(title, content);
 
-      const prompt = `You are a Bangladeshi university social media manager writing Facebook posts.
-
-Notice Title: "${title}"
-${content ? `Notice Content:\n${content.slice(0, 1000)}` : ''}
-
-TASK: Write a Facebook post in Bengali AND English.
-
-CRITICAL RULES:
-1. "bn" field MUST be written in Bengali script (বাংলা ভাষায়). NOT English words in Bengali.
-2. "en" field must be in English.
-3. Each version: 2-4 sentences, friendly tone, key info only.
-4. NO URLs or links in either version.
-5. End "bn" with: "বিস্তারিত জানতে অফিসে যোগাযোগ করুন।"
-6. End "en" with: "Contact the office for more details."
-
-Reply ONLY with this exact JSON format:
-{"bn": "এখানে বাংলায় পোস্ট লিখুন।", "en": "Write English post here."}`;
-
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { temperature: 0.5, maxOutputTokens: 600 },
-          }),
-          signal: AbortSignal.timeout(12_000),
-        },
-      );
-      const json = (await res.json()) as any;
-      const text = (json?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]);
-        if (parsed.bn && parsed.en) return parsed;
+    // 1. Try Gemini
+    const geminiKey = this.geminiRotator.getKey();
+    if (geminiKey) {
+      try {
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: prompt }] }],
+              generationConfig: { temperature: 0.5, maxOutputTokens: 700 },
+            }),
+            signal: AbortSignal.timeout(12_000),
+          },
+        );
+        if (res.ok) {
+          const json = (await res.json()) as any;
+          const text = (json?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+          const m = text.match(/\{[\s\S]*\}/);
+          if (m) {
+            const parsed = JSON.parse(m[0]);
+            if (parsed.bn && parsed.en && parsed.bn !== parsed.en) {
+              this.logger.log(`[Poster] Gemini generated post for notice`);
+              return parsed;
+            }
+          }
+        } else {
+          const errText = await res.text().catch(() => '');
+          this.logger.warn(`[Poster] Gemini failed status=${res.status} — trying OpenAI. ${errText.slice(0, 100)}`);
+        }
+      } catch (e: any) {
+        this.logger.warn(`[Poster] Gemini error: ${e.message} — trying OpenAI`);
       }
-    } catch (e) {
-      this.logger.warn(`[Poster] AI post generation failed: ${e}`);
     }
-    return null;
-  }
 
-  // Fallback: simple bilingual translation of title only
-  private async translateTitle(title: string): Promise<{ bn: string; en: string }> {
-    try {
-      const key = this.geminiRotator.getKey();
-      if (!key) return { bn: title, en: title };
-      const prompt = `Translate this university notice title into both Bengali and English.
-Title: "${title}"
-Reply ONLY with valid JSON: {"bn": "Bengali translation", "en": "English translation"}
-If already in English, keep and translate to Bengali. If already in Bengali, keep and translate to English.`;
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`,
-        {
+    // 2. Fallback: OpenAI
+    const openaiKey = this.openaiKey || this.apiKeys.getSync('openaiApiKey');
+    if (openaiKey) {
+      try {
+        const res = await fetch('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
-          signal: AbortSignal.timeout(8_000),
-        },
-      );
-      const json = (await res.json()) as any;
-      const text = (json?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (jsonMatch) return JSON.parse(jsonMatch[0]);
-    } catch (e) {
-      this.logger.warn(`[Poster] Translation failed: ${e}`);
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${openaiKey}` },
+          body: JSON.stringify({
+            model: 'gpt-4o-mini',
+            messages: [{ role: 'user', content: prompt }],
+            max_tokens: 700,
+            temperature: 0.5,
+          }),
+          signal: AbortSignal.timeout(20_000),
+        });
+        if (res.ok) {
+          const data = (await res.json()) as any;
+          const text = (data?.choices?.[0]?.message?.content || '').trim();
+          const m = text.match(/\{[\s\S]*\}/);
+          if (m) {
+            const parsed = JSON.parse(m[0]);
+            if (parsed.bn && parsed.en) {
+              this.logger.log(`[Poster] OpenAI generated post for notice`);
+              return parsed;
+            }
+          }
+        }
+      } catch (e: any) {
+        this.logger.warn(`[Poster] OpenAI error: ${e.message}`);
+      }
     }
-    return { bn: title, en: title };
+
+    return null;
   }
 
   async postNewNotices(pageId: number, newNotices: any[]): Promise<void> {
@@ -144,55 +162,44 @@ If already in English, keep and translate to Bengali. If already in Bengali, kee
     const config = await this.prisma.universityConfig.findUnique({ where: { pageId } });
     if (!config?.autoPostEnabled) return;
 
-    // Only post notices that have a real URL (article link) — filters out nav/menu items
-    const recentNotices = newNotices.filter((n) => !!n.url && !!n.title && n.title.length > 15);
-
-    if (!recentNotices.length) {
-      this.logger.log(`[Poster] Skipping ${newNotices.length} notices — none have a URL`);
+    // Only post notices with a real URL (filters out nav/menu items without links)
+    const validNotices = newNotices.filter((n) => !!n.url && n.title?.length > 15);
+    if (!validNotices.length) {
+      this.logger.log(`[Poster] Skipping — no notices with valid URLs`);
       return;
     }
 
-    const toPost = recentNotices.slice(0, MAX_POSTS_PER_RUN);
+    const toPost = validNotices.slice(0, MAX_POSTS_PER_RUN);
     for (const notice of toPost) {
       try {
         const category = detectCategory(notice.title);
+        const noticeContent = await this.fetchNoticeContent(notice.url);
 
-        // Try to fetch notice page content for richer AI post
-        const noticeContent = notice.url ? await this.fetchNoticeContent(notice.url) : '';
+        const generated = await this.generatePost(notice.title, noticeContent);
 
-        // Try AI-generated full post; fallback to title-only translation
         let bn: string;
         let en: string;
-
-        const generated = await this.generatePost(notice.title, noticeContent, category);
         if (generated) {
           bn = generated.bn;
           en = generated.en;
-          this.logger.log(`[Poster] AI-generated post for notice ${notice.id}`);
         } else {
-          const translated = await this.translateTitle(notice.title);
-          bn = translated.bn;
-          en = translated.en;
-          this.logger.log(`[Poster] Fallback title post for notice ${notice.id}`);
+          // Last resort: use title as-is (no AI available)
+          bn = notice.title;
+          en = notice.title;
+          this.logger.warn(`[Poster] No AI available for notice ${notice.id} — using title only`);
         }
 
-        // Format date
-        const dateStr = notice.publishedAt
-          ? new Date(notice.publishedAt).toLocaleDateString('bn-BD', {
-              day: 'numeric',
-              month: 'long',
-              year: 'numeric',
-            })
-          : new Date().toLocaleDateString('bn-BD', {
-              day: 'numeric',
-              month: 'long',
-              year: 'numeric',
-            });
+        // Format date in Bengali
+        const dateStr = (() => {
+          if (!notice.publishedAt) return new Date().toLocaleDateString('bn-BD', { day: 'numeric', month: 'long', year: 'numeric' });
+          const d = new Date(notice.publishedAt);
+          return isNaN(d.getTime())
+            ? notice.publishedAt
+            : d.toLocaleDateString('bn-BD', { day: 'numeric', month: 'long', year: 'numeric' });
+        })();
 
         const divider = '─────────────────────';
-        const tagLine = `#নোটিশ #${category.labelEn.replace(/\s+/g, '')} #বিশ্ববিদ্যালয় #UAP`;
-
-        const parts: string[] = [
+        const caption = [
           `${category.emoji} ${category.labelBn} | ${category.labelEn}`,
           divider,
           bn,
@@ -202,10 +209,8 @@ If already in English, keep and translate to Bengali. If already in Bengali, kee
           divider,
           `📅 ${dateStr}`,
           ``,
-          tagLine,
-        ];
-
-        const caption = parts.join('\n');
+          `#নোটিশ #${category.labelEn.replace(/\s+/g, '')} #বিশ্ববিদ্যালয় #UAP`,
+        ].join('\n');
 
         const fbPostId = await this.autoPost.publishToFacebook(pageId, caption);
         await this.prisma.universityNotice.update({
