@@ -33,6 +33,7 @@ import { WhisperService } from '../whisper/whisper.service';
 import { SmartBotService } from '../bot/smart-bot.service';
 import { ProductNameMatchService } from '../product-name-match/product-name-match.service';
 import { UniversityBotService } from '../university/university-bot.service';
+import { TelegramNotificationService } from '../telegram/telegram-notification.service';
 
 function getFullImageUrl(url?: string | null): string | undefined {
   if (!url) return undefined;
@@ -91,6 +92,7 @@ export class WebhookService implements OnModuleDestroy {
     // V22: Product name matching for simple products
     private readonly productNameMatch: ProductNameMatchService,
     private readonly universityBot: UniversityBotService,
+    private readonly telegram: TelegramNotificationService,
   ) {}
 
   onModuleDestroy() {
@@ -186,10 +188,13 @@ export class WebhookService implements OnModuleDestroy {
 
         // V21: m.me catalog referral — ORDER_PRODUCTCODE ref triggers auto order flow
         if (event.referral?.ref || event.postback?.referral?.ref) {
-          const ref: string = event.referral?.ref ?? event.postback?.referral?.ref ?? '';
+          const ref: string =
+            event.referral?.ref ?? event.postback?.referral?.ref ?? '';
           if (ref.startsWith('ORDER_')) {
             const productCode = ref.slice(6).toUpperCase();
-            this.handleCatalogReferral(resolvedPage, psid, productCode).catch(() => {});
+            this.handleCatalogReferral(resolvedPage, psid, productCode).catch(
+              () => {},
+            );
           }
           if (!event.message) continue;
         }
@@ -222,9 +227,16 @@ export class WebhookService implements OnModuleDestroy {
         const commenterId: string = String(val.from?.id ?? '').trim();
         if (!commentId || !commentText) continue;
 
-
-        this.handleCommentReply(resolvedPage, commentId, postId, commentText, commenterName, commenterId)
-          .catch(err => this.logger.error(`[Webhook] Comment reply error: ${err}`));
+        this.handleCommentReply(
+          resolvedPage,
+          commentId,
+          postId,
+          commentText,
+          commenterName,
+          commenterId,
+        ).catch((err) =>
+          this.logger.error(`[Webhook] Comment reply error: ${err}`),
+        );
       }
     }
   }
@@ -243,10 +255,24 @@ export class WebhookService implements OnModuleDestroy {
     // M-4: skip if page has no token
     if (!page.pageToken) return;
 
-    const postIdPart = postId.includes('_') ? postId.split('_').slice(1).join('_') : postId;
+    const postIdPart = postId.includes('_')
+      ? postId.split('_').slice(1).join('_')
+      : postId;
 
-    type ProductInfo = { code: string; name: string | null; price: number; stockQty: number; description: string | null };
-    const productSelect = { code: true, name: true, price: true, stockQty: true, description: true } as const;
+    type ProductInfo = {
+      code: string;
+      name: string | null;
+      price: number;
+      stockQty: number;
+      description: string | null;
+    };
+    const productSelect = {
+      code: true,
+      name: true,
+      price: true,
+      stockQty: true,
+      description: true,
+    } as const;
 
     // Try post-linked products first; fall back to full page catalog (capped at 15)
     let products: ProductInfo[] = await this.prisma.product.findMany({
@@ -262,23 +288,38 @@ export class WebhookService implements OnModuleDestroy {
       });
     }
 
-    const classification = await this.botIntent.classifyComment(products, commentText);
+    const classification = await this.botIntent.classifyComment(
+      products,
+      commentText,
+    );
     if (!classification?.shouldReply) return;
 
     const { productCodes, intent } = classification;
-    const mention = commenterId ? `@[${commenterId}] ` : (commenterName ? `${commenterName} ` : '');
+    const mention = commenterId
+      ? `@[${commenterId}] `
+      : commenterName
+        ? `${commenterName} `
+        : '';
     const inboxCta = `\n\n📩 Order বা আরও তথ্যের জন্য আমাদের Inbox-এ message করুন।`;
 
     // M-8: deduct wallet before send so cost is always recorded even if send fails
-    const deduct = () => this.walletService.deductUsage(page.id, 'COMMENT_REPLY');
+    const deduct = () =>
+      this.walletService.deductUsage(page.id, 'COMMENT_REPLY');
 
     // All-prices intent: list every post product's price
-    if (intent === 'all_prices' || (intent === 'price' && productCodes.length === 0 && products.length > 0)) {
-      const lines = products.map((p, i) => `${i + 1}. ${p.name ?? p.code} — ${p.price}৳`).join('\n');
+    if (
+      intent === 'all_prices' ||
+      (intent === 'price' && productCodes.length === 0 && products.length > 0)
+    ) {
+      const lines = products
+        .map((p, i) => `${i + 1}. ${p.name ?? p.code} — ${p.price}৳`)
+        .join('\n');
       const reply = `${mention}📦 আমাদের সব product এর দাম:\n${lines}${inboxCta}`;
       await deduct();
       await this.messenger.sendCommentReply(page.pageToken, commentId, reply);
-      this.logger.log(`[Webhook] All-prices comment reply page=${page.pageId} commentId=${commentId}`);
+      this.logger.log(
+        `[Webhook] All-prices comment reply page=${page.pageId} commentId=${commentId}`,
+      );
       return;
     }
 
@@ -287,33 +328,49 @@ export class WebhookService implements OnModuleDestroy {
       const reply = `${mention}ধন্যবাদ! ❤️ আপনার ভালোবাসাই আমাদের অনুপ্রেরণা! 😊 কোনো product সম্পর্কে জানতে চাইলে Inbox-এ message করুন। 📩`;
       await deduct();
       await this.messenger.sendCommentReply(page.pageToken, commentId, reply);
-      this.logger.log(`[Webhook] Emoji/praise comment reply page=${page.pageId} commentId=${commentId}`);
+      this.logger.log(
+        `[Webhook] Emoji/praise comment reply page=${page.pageId} commentId=${commentId}`,
+      );
       return;
     }
 
     // No specific product or general question → generic inbox CTA
     if (productCodes.length === 0 || intent === 'other') {
       await deduct();
-      await this.messenger.sendCommentReply(page.pageToken, commentId, mention + this.getGenericCommentReply());
-      this.logger.log(`[Webhook] Generic comment reply page=${page.pageId} commentId=${commentId}`);
+      await this.messenger.sendCommentReply(
+        page.pageToken,
+        commentId,
+        mention + this.getGenericCommentReply(),
+      );
+      this.logger.log(
+        `[Webhook] Generic comment reply page=${page.pageId} commentId=${commentId}`,
+      );
       return;
     }
 
-    const matched = products.filter(p => productCodes.includes(p.code));
+    const matched = products.filter((p) => productCodes.includes(p.code));
     if (matched.length === 0) {
       await deduct();
-      await this.messenger.sendCommentReply(page.pageToken, commentId, mention + this.getGenericCommentReply());
+      await this.messenger.sendCommentReply(
+        page.pageToken,
+        commentId,
+        mention + this.getGenericCommentReply(),
+      );
       return;
     }
 
     // Multiple specific products matched — combine replies without per-item CTA
     if (matched.length > 1) {
-      const parts = matched.map(p => this.buildProductLine(p, intent, page)).filter(Boolean);
+      const parts = matched
+        .map((p) => this.buildProductLine(p, intent, page))
+        .filter(Boolean);
       if (!parts.length) return;
       const reply = mention + parts.join('\n') + inboxCta;
       await deduct();
       await this.messenger.sendCommentReply(page.pageToken, commentId, reply);
-      this.logger.log(`[Webhook] Multi-product comment reply page=${page.pageId} commentId=${commentId} codes=${productCodes.join(',')}`);
+      this.logger.log(
+        `[Webhook] Multi-product comment reply page=${page.pageId} commentId=${commentId} codes=${productCodes.join(',')}`,
+      );
       return;
     }
 
@@ -321,12 +378,22 @@ export class WebhookService implements OnModuleDestroy {
     const reply = this.buildCommentReply(matched[0], intent, page);
     if (!reply) return;
     await deduct();
-    await this.messenger.sendCommentReply(page.pageToken, commentId, mention + reply);
-    this.logger.log(`[Webhook] Comment replied page=${page.pageId} commentId=${commentId} code=${productCodes[0]} intent=${intent}`);
+    await this.messenger.sendCommentReply(
+      page.pageToken,
+      commentId,
+      mention + reply,
+    );
+    this.logger.log(
+      `[Webhook] Comment replied page=${page.pageId} commentId=${commentId} code=${productCodes[0]} intent=${intent}`,
+    );
   }
 
   // Single-line summary for multi-product reply (no CTA — added once at the end)
-  private buildProductLine(product: any, intent: string, page: any): string | null {
+  private buildProductLine(
+    product: any,
+    intent: string,
+    page: any,
+  ): string | null {
     const label = product.name ?? product.code;
     switch (intent) {
       case 'price':
@@ -336,22 +403,32 @@ export class WebhookService implements OnModuleDestroy {
       case 'delivery':
         return `• ঢাকার ভেতরে ${page.deliveryFeeInsideDhaka ?? 80}৳, বাইরে ${page.deliveryFeeOutsideDhaka ?? 120}৳ 🚚`;
       case 'description':
-        return product.description ? `• ${label}: ${product.description}` : null;
+        return product.description
+          ? `• ${label}: ${product.description}`
+          : null;
       default:
         return null;
     }
   }
 
-  private buildCommentReply(product: any, intent: string, page: any): string | null {
-    const label = product.name ? `${product.name} (${product.code})` : product.code;
+  private buildCommentReply(
+    product: any,
+    intent: string,
+    page: any,
+  ): string | null {
+    const label = product.name
+      ? `${product.name} (${product.code})`
+      : product.code;
     const inboxCta = `\n\n📩 Order বা আরও তথ্যের জন্য আমাদের Inbox-এ message করুন।`;
     switch (intent) {
       case 'price':
         return `${label} এর দাম ${product.price}৳ 🏷️${inboxCta}`;
       case 'stock':
-        return (product.stockQty > 0
-          ? `${label} এ ${product.stockQty} টি stock আছে ✅`
-          : `${label} বর্তমানে stock এ নেই ❌`) + inboxCta;
+        return (
+          (product.stockQty > 0
+            ? `${label} এ ${product.stockQty} টি stock আছে ✅`
+            : `${label} বর্তমানে stock এ নেই ❌`) + inboxCta
+        );
       case 'delivery':
         return `ঢাকার ভেতরে ডেলিভারি ${page.deliveryFeeInsideDhaka ?? 80}৳, বাইরে ${page.deliveryFeeOutsideDhaka ?? 120}৳ 🚚${inboxCta}`;
       case 'description':
@@ -367,17 +444,30 @@ export class WebhookService implements OnModuleDestroy {
 
   // ── V21: Catalog referral handler ─────────────────────────────────────────
 
-  private async handleCatalogReferral(page: any, psid: string, productCode: string): Promise<void> {
+  private async handleCatalogReferral(
+    page: any,
+    psid: string,
+    productCode: string,
+  ): Promise<void> {
     const pageId = page.id as number;
     const tok = page.pageToken as string;
 
     const product = await this.prisma.product.findFirst({
       where: { pageId, code: productCode, isActive: true },
-      select: { id: true, code: true, name: true, price: true, stockQty: true, imageUrl: true },
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        price: true,
+        stockQty: true,
+        imageUrl: true,
+      },
     });
 
     if (!product) {
-      this.logger.warn(`[CatalogRef] Product ${productCode} not found for page ${pageId}`);
+      this.logger.warn(
+        `[CatalogRef] Product ${productCode} not found for page ${pageId}`,
+      );
       return;
     }
 
@@ -386,24 +476,35 @@ export class WebhookService implements OnModuleDestroy {
     const priceFormatted = Number(product.price).toLocaleString();
 
     // Increment product view from referral click
-    void this.prisma.product.update({ where: { id: product.id }, data: { productViews: { increment: 1 } } }).catch(() => {});
+    void this.prisma.product
+      .update({
+        where: { id: product.id },
+        data: { productViews: { increment: 1 } },
+      })
+      .catch(() => {});
 
     const msg = inStock
       ? `🛍️ ${product.name || product.code}\n\n💰 মূল্য: ${currency}${priceFormatted}\n✅ Stock আছে\n\nঅর্ডার confirm করতে আপনার নাম লিখুন।`
       : `🛍️ ${product.name || product.code}\n\n💰 মূল্য: ${currency}${priceFormatted}\n❌ এই product এর stock শেষ।\n\nআমাদের অন্য product দেখতে চাইলে বলুন।`;
 
-    await this.messenger.sendText(tok, psid, msg).catch((err) =>
-      this.logger.error(`[CatalogRef] sendText failed psid=${psid}: ${err}`),
-    );
+    await this.messenger
+      .sendText(tok, psid, msg)
+      .catch((err) =>
+        this.logger.error(`[CatalogRef] sendText failed psid=${psid}: ${err}`),
+      );
 
     if (inStock) {
       const draft = this.ctx.emptyDraft();
-      draft.items = [{ productCode: product.code, qty: 1, unitPrice: Number(product.price) }];
+      draft.items = [
+        { productCode: product.code, qty: 1, unitPrice: Number(product.price) },
+      ];
       draft.currentStep = 'name';
       await this.ctx.saveDraft(pageId, psid, draft).catch(() => {});
     }
 
-    this.logger.log(`[CatalogRef] psid=${psid} opened catalog for product ${productCode} — referral handled`);
+    this.logger.log(
+      `[CatalogRef] psid=${psid} opened catalog for product ${productCode} — referral handled`,
+    );
   }
 
   // ── Message router ─────────────────────────────────────────────────────────
@@ -492,8 +593,13 @@ export class WebhookService implements OnModuleDestroy {
         );
         if (!payAccepted) {
           // Queue full — run directly via Gemini (API, no local CPU needed)
-          void this.handlePaymentScreenshot(page, psid, img.payload.url, currentDraft, true)
-            .catch(() => {});
+          void this.handlePaymentScreenshot(
+            page,
+            psid,
+            img.payload.url,
+            currentDraft,
+            true,
+          ).catch(() => {});
         }
         return;
       }
@@ -532,8 +638,11 @@ export class WebhookService implements OnModuleDestroy {
       );
       if (!audioAccepted) {
         // Queue full — Whisper is already an external API (no local CPU), run directly
-        void this.handleAudioMessage(page, psid, audioAttachment.payload.url)
-          .catch(() => {});
+        void this.handleAudioMessage(
+          page,
+          psid,
+          audioAttachment.payload.url,
+        ).catch(() => {});
       }
       return;
     }
@@ -579,7 +688,11 @@ export class WebhookService implements OnModuleDestroy {
     // ── BUSINESS INFO BOT — replies using businessInfo as knowledge base ──
     if (page.businessBotOn) {
       if (!page.businessInfo) {
-        await this.safeSend(token, psid, 'আমাদের সাথে যোগাযোগ করার জন্য ধন্যবাদ! 🙏 শীঘ্রই আপনার সাথে যোগাযোগ করা হবে।');
+        await this.safeSend(
+          token,
+          psid,
+          'আমাদের সাথে যোগাযোগ করার জন্য ধন্যবাদ! 🙏 শীঘ্রই আপনার সাথে যোগাযোগ করা হবে।',
+        );
         return;
       }
       if (aiStatus === 'ok') {
@@ -595,7 +708,11 @@ export class WebhookService implements OnModuleDestroy {
           return;
         }
       } else {
-        await this.safeSend(token, psid, 'আমাদের সাথে যোগাযোগ করার জন্য ধন্যবাদ! 🙏 শীঘ্রই আপনার সাথে যোগাযোগ করা হবে।');
+        await this.safeSend(
+          token,
+          psid,
+          'আমাদের সাথে যোগাযোগ করার জন্য ধন্যবাদ! 🙏 শীঘ্রই আপনার সাথে যোগাযোগ করা হবে।',
+        );
         return;
       }
     }
@@ -648,7 +765,11 @@ export class WebhookService implements OnModuleDestroy {
         businessContext.lastBotReply = this.inFlightReply.get(psid) ?? null;
         businessContext.lastPresentedProducts = (
           await this.ctx.getLastPresentedProducts(pageId, psid)
-        ).map((p) => ({ code: p.code, price: p.price, name: p.name ?? undefined }));
+        ).map((p) => ({
+          code: p.code,
+          price: p.price,
+          name: p.name ?? undefined,
+        }));
 
         // Pass conversation history only when the message is ambiguous (no keyword match)
         // or for intents that need contextual replies. Skipping history for clear keywords
@@ -856,7 +977,11 @@ export class WebhookService implements OnModuleDestroy {
         },
       });
       if (simpleProds.length > 0) {
-        const nameMatches = this.productNameMatch.matchProducts(text, simpleProds, { simpleOnly: true });
+        const nameMatches = this.productNameMatch.matchProducts(
+          text,
+          simpleProds,
+          { simpleOnly: true },
+        );
         const strong = nameMatches.filter(
           (m) => m.confidence === 'HIGH' || m.confidence === 'MEDIUM',
         );
@@ -1297,6 +1422,12 @@ export class WebhookService implements OnModuleDestroy {
         this.logger.log(
           `[Webhook] order #${open.id} cancelled by customer psid=${psid}`,
         );
+        this.telegram
+          .notify(
+            page.id,
+            `❌ Order #${open.id} was cancelled by the customer.`,
+          )
+          .catch(() => {});
       }
     }
     // Use AI-generated cancel reply if available, else knowledge base
@@ -1464,7 +1595,10 @@ export class WebhookService implements OnModuleDestroy {
       );
     }
 
-    const explicitCodes = this.botIntent.extractAllCodes(asciiNormalized, prefix);
+    const explicitCodes = this.botIntent.extractAllCodes(
+      asciiNormalized,
+      prefix,
+    );
     const byCode = explicitCodes.find((code) =>
       shortlist.some((item) => item.code.toUpperCase() === code.toUpperCase()),
     );
@@ -1533,7 +1667,8 @@ export class WebhookService implements OnModuleDestroy {
 
     let logoUrl = getFullImageUrl(page.logoUrl);
     if (!logoUrl) {
-      logoUrl = 'https://images.unsplash.com/photo-1557821552-17105176677c?q=80&w=1000&auto=format&fit=crop';
+      logoUrl =
+        'https://images.unsplash.com/photo-1557821552-17105176677c?q=80&w=1000&auto=format&fit=crop';
     }
 
     try {
@@ -1577,7 +1712,8 @@ export class WebhookService implements OnModuleDestroy {
         p.stockQty > 0 ? `✅ ${p.stockQty} ${unit} আছে` : '❌ Stock শেষ';
       let msg = `🛍️ *${p.productName}*\n💰 মূল্য: ${sym}${Number(p.price).toLocaleString()}/${unit}\n📦 ${stockText}`;
       if (p.description) msg += `\n\nℹ️ ${p.description}`;
-      if (p.orderEnabled && p.stockQty > 0) msg += `\n\nOrder করতে চাইলে বলুন 😊`;
+      if (p.orderEnabled && p.stockQty > 0)
+        msg += `\n\nOrder করতে চাইলে বলুন 😊`;
       await this.safeSend(token, psid, msg);
     } else {
       // Multiple matches — list them
@@ -1823,7 +1959,10 @@ export class WebhookService implements OnModuleDestroy {
     }
 
     // ── Quantity change ────────────────────────────────────────────────────
-    const qtyMap = this.botIntent.extractQuantityMap(text, (page.productCodePrefix as string | undefined) || 'DF');
+    const qtyMap = this.botIntent.extractQuantityMap(
+      text,
+      (page.productCodePrefix as string | undefined) || 'DF',
+    );
     if (qtyMap.size > 0) {
       qtyMap.forEach((qty, code) => {
         const item = draft.items.find((i) => i.productCode === code);
@@ -1942,6 +2081,12 @@ export class WebhookService implements OnModuleDestroy {
     });
     await this.ctx.setAgentHandling(page.id, psid, true);
     await this.safeSend(page.pageToken, psid, parsed.prompt);
+    this.telegram
+      .notify(
+        page.id,
+        `✏️ Order #${order.id}: customer requested a <b>${parsed.label}</b> change. Bot has handed off to agent.`,
+      )
+      .catch(() => {});
   }
 
   /** V17: Payment screenshot OCR — called when draft.currentStep === 'advance_payment' */
@@ -2115,7 +2260,11 @@ export class WebhookService implements OnModuleDestroy {
     ) {
       const activeDraft = await this.ctx.getActiveDraft(pageId, psid);
       const updatedDraft = activeDraft ?? {
-        items: [], customerName: null, phone: null, address: null, currentStep: 'idle',
+        items: [],
+        customerName: null,
+        phone: null,
+        address: null,
+        currentStep: 'idle',
       };
       updatedDraft.pendingDualImageUrl = imageUrls[0];
       updatedDraft.pendingDualAllImageUrls = imageUrls;
@@ -2259,7 +2408,11 @@ export class WebhookService implements OnModuleDestroy {
       const activeDraft = await this.ctx.getActiveDraft(pageId, psid);
       // Store the image so we can process after customer picks
       const updatedDraft = activeDraft ?? {
-        items: [], customerName: null, phone: null, address: null, currentStep: 'idle',
+        items: [],
+        customerName: null,
+        phone: null,
+        address: null,
+        currentStep: 'idle',
       };
       updatedDraft.pendingDualImageUrl = imageUrl;
       await this.ctx.saveDraft(pageId, psid, updatedDraft as any);
@@ -2362,7 +2515,10 @@ export class WebhookService implements OnModuleDestroy {
               productType: true,
             },
           });
-          const nameMatches = this.productNameMatch.matchProducts(ocrText, allProds);
+          const nameMatches = this.productNameMatch.matchProducts(
+            ocrText,
+            allProds,
+          );
           const strong = nameMatches.filter(
             (m) => m.confidence === 'HIGH' || m.confidence === 'MEDIUM',
           );
@@ -2444,7 +2600,9 @@ export class WebhookService implements OnModuleDestroy {
         .slice(0, 4);
     }
 
-    const embedMap = new Map(embedMatches.map((m) => [m.productCode, m.matchScore]));
+    const embedMap = new Map(
+      embedMatches.map((m) => [m.productCode, m.matchScore]),
+    );
     const attrMap = new Map(attrMatches.map((m) => [m.productCode, m]));
     const merged = new Map<string, ProductMatchResult>();
 
@@ -2457,9 +2615,10 @@ export class WebhookService implements OnModuleDestroy {
       merged.set(code, {
         ...attrMatch,
         matchScore: finalScore,
-        matchReasons: embedSim > 0
-          ? [...attrMatch.matchReasons, 'visual_similarity']
-          : attrMatch.matchReasons,
+        matchReasons:
+          embedSim > 0
+            ? [...attrMatch.matchReasons, 'visual_similarity']
+            : attrMatch.matchReasons,
       });
     }
 
@@ -2534,9 +2693,14 @@ export class WebhookService implements OnModuleDestroy {
         ? visionSettled.value
         : {
             attrs: {
-              category: null, color: null, pattern: null,
-              sleeveType: null, gender: null, confidence: 0,
-              rawDescription: 'Vision analysis failed', usedApi: false,
+              category: null,
+              color: null,
+              pattern: null,
+              sleeveType: null,
+              gender: null,
+              confidence: 0,
+              rawDescription: 'Vision analysis failed',
+              usedApi: false,
             },
             matches: [] as ProductMatchResult[],
           };
@@ -2598,7 +2762,9 @@ export class WebhookService implements OnModuleDestroy {
           `[VisionRecog] Both tracks returned nothing — falling back`,
         );
         await this.visionOps.logVisionAttempt({
-          pageId, psid, imageUrl,
+          pageId,
+          psid,
+          imageUrl,
           type: 'low_confidence',
           confidence: attrs.confidence,
           note: 'Vision provider zero confidence and no embedding matches',
@@ -2766,7 +2932,10 @@ export class WebhookService implements OnModuleDestroy {
     const prefix = (page.productCodePrefix as string | undefined) || 'DF';
 
     if (!(await this.walletService.canProcessAi(pageId))) {
-      const reply = await this.botKnowledge.resolveSystemReply(pageId, 'ocr_fail');
+      const reply = await this.botKnowledge.resolveSystemReply(
+        pageId,
+        'ocr_fail',
+      );
       await this.safeSend(token, psid, reply);
       await this.sendCatalogFallback(token, psid, page);
       return;
@@ -2776,14 +2945,20 @@ export class WebhookService implements OnModuleDestroy {
       imageUrl,
       prefix,
     );
-    await this.walletService.deductUsage(pageId, usedApi ? 'IMAGE' : 'IMAGE_OCR');
+    await this.walletService.deductUsage(
+      pageId,
+      usedApi ? 'IMAGE' : 'IMAGE_OCR',
+    );
 
     if (!codes.length) {
       if (page.imageRecognitionOn) {
         await this.visionProductRecognition(page, psid, imageUrl);
         return;
       }
-      const reply = await this.botKnowledge.resolveSystemReply(pageId, 'ocr_fail');
+      const reply = await this.botKnowledge.resolveSystemReply(
+        pageId,
+        'ocr_fail',
+      );
       await this.safeSend(token, psid, reply);
       await this.sendCatalogFallback(token, psid, page);
       return;
@@ -2827,7 +3002,11 @@ export class WebhookService implements OnModuleDestroy {
       await this.ctx.setLastPresentedProducts(
         page.id,
         psid,
-        partialMatches.map((m) => ({ code: m.productCode, price: m.price, name: m.productName })),
+        partialMatches.map((m) => ({
+          code: m.productCode,
+          price: m.price,
+          name: m.productName,
+        })),
       );
       await this.productHandler.sendVisionMatchCards(
         page,

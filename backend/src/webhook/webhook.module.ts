@@ -22,6 +22,8 @@ import { ProductNameMatchModule } from '../product-name-match/product-name-match
 import { PaymentVerifyModule } from '../payment-verify/payment-verify.module';
 import { SmsGatewayModule } from '../sms-gateway/sms-gateway.module';
 import { UniversityModule } from '../university/university.module';
+import { CourierModule } from '../courier/courier.module';
+import { TelegramModule } from '../telegram/telegram.module';
 import { WebhookController } from './webhook.controller';
 import { WebhookService } from './webhook.service';
 import { SmartBotService } from '../bot/smart-bot.service';
@@ -58,6 +60,8 @@ import {
     forwardRef(() => PaymentVerifyModule),
     SmsGatewayModule,
     UniversityModule,
+    CourierModule,
+    TelegramModule,
   ],
   controllers: [WebhookController],
   providers: [

@@ -172,6 +172,13 @@ model Page {
   // -- WALLET SYSTEM --
   walletBalanceBdt Float @default(0.0) // Core currency balance for usage
 
+  // -- TELEGRAM MERCHANT NOTIFICATIONS --
+  telegramBotToken     String? // encrypted (AES-256-GCM via EncryptionService)
+  telegramChatId       String? // plaintext, not sensitive
+  telegramNotifEnabled Boolean @default(false)
+  lowBalanceNotifiedAt DateTime? // debounce: last low-balance alert sent
+  subExpiryNotifiedAt  DateTime? // debounce: last subscription-expiry alert sent
+
   // -- PRICING CONFIG --
   costPerTextMsgBdt       Float @default(0.05)
   costPerVoiceMsgBdt      Float @default(1.00)  // For processing audio voice notes
@@ -434,6 +441,8 @@ model ConversationSession {
 
   // Conversation memory — last 8 exchanges [{role,content,ts}]
   chatHistoryJson String?
+
+  abandonedCartNotifiedAt DateTime? // debounce: when the abandoned-cart reminder was sent
 
   updatedAt DateTime @updatedAt
   createdAt DateTime @default(now())

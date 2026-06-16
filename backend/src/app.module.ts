@@ -45,6 +45,7 @@ import { SupportChatModule } from './support-chat/support-chat.module';
 import { PaymentVerifyModule } from './payment-verify/payment-verify.module';
 import { SmsGatewayModule } from './sms-gateway/sms-gateway.module';
 import { UniversityModule } from './university/university.module';
+import { TelegramModule } from './telegram/telegram.module';
 
 @Module({
   imports: [
@@ -111,6 +112,7 @@ import { UniversityModule } from './university/university.module';
     PaymentVerifyModule,
     SmsGatewayModule,
     UniversityModule,
+    TelegramModule,
   ],
   controllers: [AppController],
   providers: [

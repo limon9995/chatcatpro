@@ -80,6 +80,20 @@ export class PageService {
     if (typeof body.igVerifyToken === 'string')
       data.igVerifyToken = body.igVerifyToken.trim() || null;
 
+    // Telegram merchant notifications
+    if (typeof body.telegramNotifEnabled === 'boolean')
+      data.telegramNotifEnabled = body.telegramNotifEnabled;
+    if (typeof body.telegramChatId === 'string')
+      data.telegramChatId = body.telegramChatId.trim() || null;
+    if (
+      typeof body.telegramBotToken === 'string' &&
+      body.telegramBotToken.trim()
+    ) {
+      data.telegramBotToken = this.encryption.encryptIfNeeded(
+        body.telegramBotToken.trim(),
+      );
+    }
+
     if (typeof body.isActive === 'boolean') data.isActive = body.isActive;
     if (typeof body.automationOn === 'boolean')
       data.automationOn = body.automationOn;

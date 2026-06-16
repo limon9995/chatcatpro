@@ -271,8 +271,14 @@ export class ClientDashboardService {
       await this.ordersService.markDelivered(orderId, pageId);
       void this.orderNotification.notifyDelivered(pageId, orderId);
       // Also sync courier shipment status if exists
-      const shipment = await this.prisma.courierShipment.findUnique({ where: { orderId } });
-      if (shipment && shipment.pageId === pageId && shipment.status !== 'delivered') {
+      const shipment = await this.prisma.courierShipment.findUnique({
+        where: { orderId },
+      });
+      if (
+        shipment &&
+        shipment.pageId === pageId &&
+        shipment.status !== 'delivered'
+      ) {
         await this.prisma.courierShipment.update({
           where: { orderId },
           data: { status: 'delivered', deliveredAt: new Date() },
@@ -283,8 +289,14 @@ export class ClientDashboardService {
     if (a === 'cancel-delivery') {
       await this.ordersService.cancelOrder(orderId, pageId);
       void this.orderNotification.notifyDeliveryCancelled(pageId, orderId);
-      const shipment = await this.prisma.courierShipment.findUnique({ where: { orderId } });
-      if (shipment && shipment.pageId === pageId && shipment.status !== 'cancelled') {
+      const shipment = await this.prisma.courierShipment.findUnique({
+        where: { orderId },
+      });
+      if (
+        shipment &&
+        shipment.pageId === pageId &&
+        shipment.status !== 'cancelled'
+      ) {
         await this.prisma.courierShipment.update({
           where: { orderId },
           data: { status: 'cancelled' },
@@ -306,7 +318,16 @@ export class ClientDashboardService {
     results: any[];
   }> {
     const a = String(action || '').toLowerCase();
-    if (!['confirm', 'cancel', 'issue', 'pack', 'deliver', 'cancel-delivery'].includes(a))
+    if (
+      ![
+        'confirm',
+        'cancel',
+        'issue',
+        'pack',
+        'deliver',
+        'cancel-delivery',
+      ].includes(a)
+    )
       throw new BadRequestException(`Unknown action: ${action}`);
     let success = 0,
       failed = 0;
@@ -325,7 +346,8 @@ export class ClientDashboardService {
             data: { status: 'PACKED', updatedAt: new Date() },
           });
         if (a === 'deliver') await this.applyOrderAction(pageId, id, 'deliver');
-        if (a === 'cancel-delivery') await this.applyOrderAction(pageId, id, 'cancel-delivery');
+        if (a === 'cancel-delivery')
+          await this.applyOrderAction(pageId, id, 'cancel-delivery');
         results.push({ id, success: true });
         success++;
       } catch (e: any) {
@@ -378,10 +400,16 @@ export class ClientDashboardService {
     const settingsRaw = await this.courierService.getSettings(pageId);
     const settings = this.courierService.parseSettings(settingsRaw);
 
-    const results: { orderId: number; newStatus: string; error?: string }[] = [];
+    const results: { orderId: number; newStatus: string; error?: string }[] =
+      [];
 
     for (const shipment of shipments) {
-      if (!shipment.trackingId || shipment.order.status === 'DELIVERED' || shipment.order.status === 'CANCELLED') continue;
+      if (
+        !shipment.trackingId ||
+        shipment.order.status === 'DELIVERED' ||
+        shipment.order.status === 'CANCELLED'
+      )
+        continue;
       try {
         const apiStatus = await this.fetchCourierStatus(
           shipment.courierName as any,
@@ -393,21 +421,35 @@ export class ClientDashboardService {
         const normalized = this.normalizeCourierStatus(apiStatus);
         if (normalized === shipment.status) continue;
 
-        await this.courierAccounting.updateShipmentStatus(pageId, shipment.orderId, normalized);
+        await this.courierAccounting.updateShipmentStatus(
+          pageId,
+          shipment.orderId,
+          normalized,
+        );
         results.push({ orderId: shipment.orderId, newStatus: normalized });
       } catch (e: any) {
-        results.push({ orderId: shipment.orderId, newStatus: '', error: e.message });
+        results.push({
+          orderId: shipment.orderId,
+          newStatus: '',
+          error: e.message,
+        });
       }
     }
 
-    return { synced: results.filter(r => !r.error).length, results };
+    return { synced: results.filter((r) => !r.error).length, results };
   }
 
   private normalizeCourierStatus(raw: string): string {
     const s = (raw || '').toLowerCase();
     if (['delivered', 'deliver', 'success'].includes(s)) return 'delivered';
-    if (['returned', 'return', 'cancelled', 'canceled', 'failed'].includes(s)) return 'returned';
-    if (['picked', 'picked_up', 'in_transit', 'intransit', 'on_the_way'].includes(s)) return 'in_transit';
+    if (['returned', 'return', 'cancelled', 'canceled', 'failed'].includes(s))
+      return 'returned';
+    if (
+      ['picked', 'picked_up', 'in_transit', 'intransit', 'on_the_way'].includes(
+        s,
+      )
+    )
+      return 'in_transit';
     return s;
   }
 
@@ -421,16 +463,25 @@ export class ClientDashboardService {
       if (courier === 'steadfast') {
         const res = await axios.get(
           `https://portal.steadfast.com.bd/api/v1/status/by-cid/${trackingId}`,
-          { headers: { 'Api-Key': settings.steadfast?.apiKey, 'Secret-Key': settings.steadfast?.secretKey }, timeout: 10000 },
+          {
+            headers: {
+              'Api-Key': settings.steadfast?.apiKey,
+              'Secret-Key': settings.steadfast?.secretKey,
+            },
+            timeout: 10000,
+          },
         );
-        return (res.data as any)?.delivery_status ?? null;
+        return res.data?.delivery_status ?? null;
       }
       if (courier === 'redx') {
         const res = await axios.get(
           `https://openapi.redx.com.bd/v1.0.0-beta/parcel/track/${trackingId}`,
-          { headers: { 'API-ACCESS-TOKEN': `Bearer ${settings.redx?.apiKey}` }, timeout: 10000 },
+          {
+            headers: { 'API-ACCESS-TOKEN': `Bearer ${settings.redx?.apiKey}` },
+            timeout: 10000,
+          },
         );
-        return (res.data as any)?.info?.status ?? null;
+        return res.data?.info?.status ?? null;
       }
       return null;
     } catch {
@@ -1232,6 +1283,10 @@ Return ONLY valid JSON (no markdown):
       igTokenSet: Boolean(page.igToken), // never return the raw token
       // Recurring Notification Mode
       recurringNotifMode: Boolean(page.recurringNotifMode),
+      // Telegram merchant notifications
+      telegramNotifEnabled: Boolean(page.telegramNotifEnabled),
+      telegramChatId: page.telegramChatId ?? '',
+      telegramTokenSet: Boolean(page.telegramBotToken), // never return the raw token
       // University Mode
       universityModeOn: Boolean(page.universityModeOn),
       // AI Knowledge
@@ -1314,6 +1369,9 @@ Return ONLY valid JSON (no markdown):
       'waEnabled',
       'waPhoneNumberId',
       'waVerifyToken',
+      // Telegram merchant notifications (token handled separately below)
+      'telegramNotifEnabled',
+      'telegramChatId',
       // AI / Bot
       'knowledgeText',
       'textFallbackAiOn',
@@ -1351,10 +1409,18 @@ Return ONLY valid JSON (no markdown):
     }
     if (Object.keys(pagePatch).length > 0) {
       try {
-        await this.prisma.page.update({ where: { id: pageId }, data: pagePatch });
+        await this.prisma.page.update({
+          where: { id: pageId },
+          data: pagePatch,
+        });
       } catch (err: any) {
-        if (err?.code === 'P2002' && err?.meta?.target?.includes?.('catalogSlug')) {
-          throw new ConflictException('এই URL slug অন্য কেউ ব্যবহার করছে। অন্য নাম দিন।');
+        if (
+          err?.code === 'P2002' &&
+          err?.meta?.target?.includes?.('catalogSlug')
+        ) {
+          throw new ConflictException(
+            'এই URL slug অন্য কেউ ব্যবহার করছে। অন্য নাম দিন।',
+          );
         }
         throw err;
       }
@@ -1362,7 +1428,19 @@ Return ONLY valid JSON (no markdown):
 
     // waToken requires encryption — route through pageService.updateById
     if (typeof pageFields.waToken === 'string' && pageFields.waToken.trim()) {
-      await this.pageService.updateById(pageId, { waToken: pageFields.waToken.trim() });
+      await this.pageService.updateById(pageId, {
+        waToken: pageFields.waToken.trim(),
+      });
+    }
+
+    // telegramBotToken requires encryption — route through pageService.updateById
+    if (
+      typeof pageFields.telegramBotToken === 'string' &&
+      pageFields.telegramBotToken.trim()
+    ) {
+      await this.pageService.updateById(pageId, {
+        telegramBotToken: pageFields.telegramBotToken.trim(),
+      });
     }
 
     // Pricing policy
@@ -1818,37 +1896,56 @@ Return ONLY valid JSON (no markdown):
     let autoVerified = false;
 
     if (adminPay.smsGatewayEnabled) {
-      const match = this.adminService.matchAdminSms(transactionId.trim(), amountBdt);
+      const match = this.adminService.matchAdminSms(
+        transactionId.trim(),
+        amountBdt,
+      );
       if (match.matched) {
         await this.prisma.walletRechargeRequest.update({
           where: { id: req.id },
-          data: { status: 'approved', approvedAt: new Date(), approvedBy: 'auto-sms' },
+          data: {
+            status: 'approved',
+            approvedAt: new Date(),
+            approvedBy: 'auto-sms',
+          },
         });
-        await this.walletService.rechargeWallet(pageId, amountBdt, `${method}:${transactionId.trim()}`);
+        await this.walletService.rechargeWallet(
+          pageId,
+          amountBdt,
+          `${method}:${transactionId.trim()}`,
+        );
         autoVerified = true;
       }
     }
 
-    const page = await this.prisma.page.findUnique({ where: { id: pageId }, select: { pageName: true } });
+    const page = await this.prisma.page.findUnique({
+      where: { id: pageId },
+      select: { pageName: true },
+    });
 
     if (autoVerified) {
       void this.telegram.sendMessage(
         `✅ <b>Wallet Auto-Verified!</b>\n` +
-        `🏪 Page: ${page?.pageName || pageId}\n` +
-        `💵 Amount: ৳${amountBdt}\n` +
-        `📱 Method: ${method} | TxID: ${transactionId.trim()}`,
+          `🏪 Page: ${page?.pageName || pageId}\n` +
+          `💵 Amount: ৳${amountBdt}\n` +
+          `📱 Method: ${method} | TxID: ${transactionId.trim()}`,
       );
-      return { success: true, requestId: req.id, autoVerified: true, message: 'Payment auto-verified! Balance যোগ হয়েছে।' };
+      return {
+        success: true,
+        requestId: req.id,
+        autoVerified: true,
+        message: 'Payment auto-verified! Balance যোগ হয়েছে।',
+      };
     }
 
     void this.telegram.sendMessage(
       `💰 <b>নতুন Wallet Recharge Request!</b>\n` +
-      `🏪 Page: ${page?.pageName || pageId}\n` +
-      `💵 Amount: ${amountBdt} BDT\n` +
-      `📱 Method: ${method}\n` +
-      `🔖 TxID: ${transactionId.trim()}\n` +
-      (note ? `📝 Note: ${note}\n` : '') +
-      `🕐 সময়: ${new Date().toLocaleString('bn-BD', { timeZone: 'Asia/Dhaka' })}`,
+        `🏪 Page: ${page?.pageName || pageId}\n` +
+        `💵 Amount: ${amountBdt} BDT\n` +
+        `📱 Method: ${method}\n` +
+        `🔖 TxID: ${transactionId.trim()}\n` +
+        (note ? `📝 Note: ${note}\n` : '') +
+        `🕐 সময়: ${new Date().toLocaleString('bn-BD', { timeZone: 'Asia/Dhaka' })}`,
     );
 
     return { success: true, requestId: req.id, autoVerified: false };

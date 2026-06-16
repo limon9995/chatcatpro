@@ -25,6 +25,7 @@ interface Settings {
   businessInfo: string;
   commentReplyOn: boolean;
   recurringNotifMode: boolean;
+  telegramNotifEnabled: boolean; telegramChatId: string; telegramTokenSet: boolean;
   // V18: Image recognition
   imageRecognitionOn: boolean; imageHighConfidence: number;
   imageMediumConfidence: number; imageFallbackAiOn: boolean;
@@ -68,6 +69,7 @@ const S0: Settings = {
   businessInfo: '',
   commentReplyOn: false,
   recurringNotifMode: false,
+  telegramNotifEnabled: false, telegramChatId: '', telegramTokenSet: false,
   imageRecognitionOn: false, imageHighConfidence: 0.75, imageMediumConfidence: 0.45, imageFallbackAiOn: false, textFallbackAiOn: false,
   pricingPolicy: {
     priceMode: 'FIXED', allowCustomerOffer: false, agentApprovalRequired: true,
@@ -247,6 +249,10 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
   // Instagram settings state
   const [igToken, setIgToken] = useState('');
   const [igSaving, setIgSaving] = useState(false);
+  // Telegram bot settings state
+  const [tgToken, setTgToken] = useState('');
+  const [tgSaving, setTgSaving] = useState(false);
+  const [tgTesting, setTgTesting] = useState(false);
   const banglaVoiceUploadRef = useRef<HTMLInputElement>(null);
   const englishVoiceUploadRef = useRef<HTMLInputElement>(null);
   const BASE = `${API_BASE}/client-dashboard/${pageId}`;
@@ -420,6 +426,41 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
       load();
     } catch (e: any) { onToast(e.message, 'error'); }
     finally { setWaSaving(false); }
+  };
+
+  const saveTelegram = async () => {
+    setTgSaving(true);
+    try {
+      const body: any = {
+        telegramNotifEnabled: s.telegramNotifEnabled,
+        telegramChatId: s.telegramChatId.trim(),
+      };
+      if (tgToken.trim()) body.telegramBotToken = tgToken.trim();
+      await request(`${BASE}/settings`, { method: 'PATCH', body: JSON.stringify(body) });
+      onToast(copy('✅ Telegram settings সেভ হয়েছে', '✅ Telegram settings saved'));
+      setTgToken('');
+      load();
+    } catch (e: any) { onToast(e.message, 'error'); }
+    finally { setTgSaving(false); }
+  };
+
+  const testTelegram = async () => {
+    const token = tgToken.trim();
+    const chatId = s.telegramChatId.trim();
+    if (!token || !chatId) {
+      onToast(copy('Token এবং Chat ID দিন', 'Enter token and Chat ID first'), 'error');
+      return;
+    }
+    setTgTesting(true);
+    try {
+      const res = await request<{ ok: boolean; error?: string }>(`${API_BASE}/telegram/test`, {
+        method: 'POST',
+        body: JSON.stringify({ token, chatId }),
+      });
+      if (res.ok) onToast(copy('✅ Test message পাঠানো হয়েছে! Telegram চেক করুন', '✅ Test message sent! Check Telegram'));
+      else onToast(res.error || copy('Test failed', 'Test failed'), 'error');
+    } catch (e: any) { onToast(e.message, 'error'); }
+    finally { setTgTesting(false); }
   };
 
   const saveInstagram = async () => {
@@ -966,6 +1007,100 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
               style={{ ...th.btnPrimary, opacity: waSaving ? 0.6 : 1 }}
             >
               {waSaving ? <><Spinner size={13} /> Saving...</> : '💾 WhatsApp Save করুন'}
+            </button>
+          </div></>}
+        </Section>
+
+        {/* ── Telegram Bot Setup (merchant notifications) ── */}
+        <Section title={copy('🤖 Telegram Bot সেটআপ', '🤖 Telegram Bot Setup')} desc={copy('নতুন order, cancel, কম balance ও subscription notification নিজের Telegram-এ পান', 'Get new order, cancel, low-balance and subscription alerts on your own Telegram')}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700 }}>{copy('Telegram নোটিফিকেশন', 'Telegram Notifications')}</div>
+              <div style={{ fontSize: 11.5, color: th.muted }}>
+                {s.telegramTokenSet
+                  ? (s.telegramChatId ? `Chat ID: ${s.telegramChatId}` : copy('Token সেভ আছে — Chat ID নেই', 'Token saved — Chat ID missing'))
+                  : copy('এখনো connect করা হয়নি', 'Not connected yet')}
+              </div>
+            </div>
+            <Toggle
+              th={th}
+              checked={s.telegramNotifEnabled}
+              onChange={v => setS(prev => ({ ...prev, telegramNotifEnabled: v }))}
+              label=""
+            />
+          </div>
+
+          {s.telegramNotifEnabled && <><details style={{ marginBottom: 14 }}>
+            <summary style={{ fontSize: 12, fontWeight: 700, cursor: 'pointer', color: th.accent, userSelect: 'none', marginBottom: 6 }}>
+              📋 {copy('কিভাবে নিজের Telegram Bot তৈরি করবেন? (ধাপে ধাপে)', 'How to create your own Telegram bot? (Step by step)')}
+            </summary>
+            <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {[
+                copy('১. Telegram অ্যাপ খুলুন → সার্চ করুন "@BotFather" → চ্যাট শুরু করুন', '1. Open Telegram → search "@BotFather" → start a chat'),
+                copy('২. /newbot লিখে পাঠান → আপনার bot-এর একটি নাম দিন → একটি username দিন (শেষে "bot" থাকতে হবে, যেমন MyShopAlertBot)', '2. Send /newbot → give your bot a name → give it a username (must end in "bot", e.g. MyShopAlertBot)'),
+                copy('৩. BotFather একটি Token দেবে (যেমন 123456:ABC-xxxxx) → এটি কপি করে নিচের "Bot Token" field-এ দিন', '3. BotFather will give you a Token (e.g. 123456:ABC-xxxxx) → copy it into the "Bot Token" field below'),
+                copy('৪. আপনার তৈরি bot-টি Telegram-এ সার্চ করে খুলুন → একটি মেসেজ পাঠান (যেমন "hi")', '4. Search for your new bot in Telegram → open it → send it a message (e.g. "hi")'),
+                copy('৫. ব্রাউজারে যান: https://api.telegram.org/bot<TOKEN>/getUpdates (TOKEN এর জায়গায় আপনার token দিন) → "chat":{"id": ...} খুঁজুন → এই নাম্বারটাই আপনার Chat ID', '5. Visit https://api.telegram.org/bot<TOKEN>/getUpdates (replace TOKEN with your token) → find "chat":{"id": ...} → that number is your Chat ID'),
+                copy('৬. Token ও Chat ID নিচে দিয়ে "Test Connection" চাপুন — Telegram-এ একটি test মেসেজ পাবেন', '6. Enter the Token and Chat ID below and click "Test Connection" — you should receive a test message on Telegram'),
+              ].map((step, i) => (
+                <div key={i} style={{ display: 'flex', gap: 8, fontSize: 12, padding: '7px 10px', borderRadius: 8, background: th.surface, border: `1px solid ${th.border}` }}>
+                  <span style={{ color: th.accent, flexShrink: 0 }}>→</span>
+                  <span style={{ color: th.text, lineHeight: 1.5 }}>{step}</span>
+                </div>
+              ))}
+            </div>
+          </details>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>
+                Bot Token {s.telegramTokenSet && <span style={{ color: '#22c55e', fontWeight: 400 }}>✓ saved</span>}
+              </label>
+              <input
+                type="password"
+                style={{ ...inp }}
+                placeholder={s.telegramTokenSet ? '••••••• (পরিবর্তন করতে নতুন token দিন)' : '123456:ABC-xxxxxxxxxxxxxxxxxxxxxxxxxxx'}
+                value={tgToken}
+                onChange={e => setTgToken(e.target.value)}
+              />
+              <div style={{ fontSize: 11, color: th.muted, marginTop: 3 }}>
+                @BotFather থেকে পাওয়া token
+              </div>
+            </div>
+
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>
+                Chat ID
+              </label>
+              <input
+                style={{ ...inp }}
+                placeholder="123456789"
+                value={s.telegramChatId}
+                onChange={e => setS(prev => ({ ...prev, telegramChatId: e.target.value }))}
+              />
+              <div style={{ fontSize: 11, color: th.muted, marginTop: 3 }}>
+                getUpdates API থেকে পাওয়া আপনার chat id
+              </div>
+            </div>
+
+            <div>
+              <button
+                onClick={testTelegram}
+                disabled={tgTesting}
+                style={{ ...th.btnGhost, fontSize: 12.5, opacity: tgTesting ? 0.6 : 1 }}
+              >
+                {tgTesting ? <><Spinner size={13} /> Testing...</> : `🧪 ${copy('Connection Test করুন', 'Test Connection')}`}
+              </button>
+            </div>
+          </div>
+
+          <div style={{ marginTop: 14 }}>
+            <button
+              onClick={saveTelegram}
+              disabled={tgSaving}
+              style={{ ...th.btnPrimary, opacity: tgSaving ? 0.6 : 1 }}
+            >
+              {tgSaving ? <><Spinner size={13} /> Saving...</> : `💾 ${copy('Telegram Save করুন', 'Save Telegram')}`}
             </button>
           </div></>}
         </Section>

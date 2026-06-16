@@ -16,6 +16,8 @@ import { BillingService } from '../../billing/billing.service';
 import { SpamCheckerService } from '../../spam-checker/spam-checker.service';
 import { PaymentVerifyService } from '../../payment-verify/payment-verify.service';
 import { SmsGatewayService } from '../../sms-gateway/sms-gateway.service';
+import { CourierService } from '../../courier/courier.service';
+import { TelegramNotificationService } from '../../telegram/telegram-notification.service';
 
 @Injectable()
 export class DraftOrderHandler {
@@ -33,9 +35,14 @@ export class DraftOrderHandler {
     private readonly followUpSvc: FollowUpService,
     private readonly billing: BillingService,
     private readonly spamChecker: SpamCheckerService,
+    private readonly courier: CourierService,
+    private readonly telegram: TelegramNotificationService,
     @Optional() private readonly paymentVerify?: PaymentVerifyService,
     @Optional() private readonly smsGateway?: SmsGatewayService,
   ) {}
+
+  // Duplicate-confirm guard: pageId:psid -> last finalize timestamp
+  private readonly recentConfirms = new Map<string, number>();
 
   normalizeVariantOptions(raw: any): CustomFieldDef[] {
     if (!Array.isArray(raw) || raw.length === 0) return [];
@@ -292,8 +299,15 @@ export class DraftOrderHandler {
             draft.paymentVerified = true;
             draft.currentStep = 'confirm';
             await this.ctx.saveDraft(pageId, psid, draft);
-            return `✅ Payment verify হয়েছে! (${activeCred.method.toUpperCase()})\n\n` + this.buildSummary(draft, page);
-          } else if (!result.needsManual && result.errorMessage && !result.errorMessage.startsWith('credentials')) {
+            return (
+              `✅ Payment verify হয়েছে! (${activeCred.method.toUpperCase()})\n\n` +
+              this.buildSummary(draft, page)
+            );
+          } else if (
+            !result.needsManual &&
+            result.errorMessage &&
+            !result.errorMessage.startsWith('credentials')
+          ) {
             // Transaction genuinely not found — ask customer to retry
             return `❌ Transaction ID টি verify হয়নি। সঠিক ID দিন অথবা screenshot পাঠান 💖`;
           }
@@ -304,7 +318,7 @@ export class DraftOrderHandler {
 
       // ── SMS Gateway match — check merchant's phone received SMS ─────────────
       if (this.smsGateway && !screenshotAlreadySent) {
-        const page2 = page as any;
+        const page2 = page;
         if (page2.smsGatewayEnabled) {
           const expectedAmount = this.calcAdvanceAmount(draft, page);
           const smsMatch = await this.smsGateway.matchPayment(
@@ -318,7 +332,10 @@ export class DraftOrderHandler {
             draft.paymentVerified = true;
             draft.currentStep = 'confirm';
             await this.ctx.saveDraft(pageId, psid, draft);
-            return `✅ Payment verify হয়েছে! (${(smsMatch.method ?? 'SMS').toUpperCase()})\n\n` + this.buildSummary(draft, page);
+            return (
+              `✅ Payment verify হয়েছে! (${(smsMatch.method ?? 'SMS').toUpperCase()})\n\n` +
+              this.buildSummary(draft, page)
+            );
           }
         }
       }
@@ -433,13 +450,22 @@ export class DraftOrderHandler {
         const activeCred = await this.paymentVerify.getActiveCredential(pageId);
         if (activeCred?.type === 'gateway') {
           const amount = this.calcAdvanceAmount(draft, page);
-          const apiBaseUrl = process.env.API_BASE_URL || `https://api.chatcat.pro`;
+          const apiBaseUrl =
+            process.env.API_BASE_URL || `https://api.chatcat.pro`;
           try {
             const pending = await this.paymentVerify.createPendingPayment(
-              pageId, psid, draft, amount, activeCred.method,
+              pageId,
+              psid,
+              draft,
+              amount,
+              activeCred.method,
             );
             const paymentLink = await this.paymentVerify.generateGatewayLink(
-              pageId, activeCred.method, pending.sessionToken, amount, apiBaseUrl,
+              pageId,
+              activeCred.method,
+              pending.sessionToken,
+              amount,
+              apiBaseUrl,
             );
             if (paymentLink) {
               draft.currentStep = 'awaiting_gateway_payment';
@@ -453,7 +479,9 @@ export class DraftOrderHandler {
               return `💳 *Payment করুন* (${sym}${amount})\n\n🔗 এই লিংকে ক্লিক করে সহজে পেমেন্ট করুন:\n${paymentLink}\n(bKash / Nagad / Rocket সব option থাকবে)\n\nপেমেন্ট হলে অর্ডার automatically confirm হবে ✅${manualSection}`;
             }
           } catch (err) {
-            this.logger.error(`[DraftOrder] gateway link error: ${err.message}`);
+            this.logger.error(
+              `[DraftOrder] gateway link error: ${err.message}`,
+            );
           }
         }
       }
@@ -545,6 +573,18 @@ export class DraftOrderHandler {
     draft: DraftSession,
     page: any,
   ): Promise<number> {
+    // Duplicate-confirm guard — ignore a second finalize call for the same
+    // customer within 10s (fast double-tap "confirm" or a webhook retry)
+    const confirmKey = `${pageId}:${psid}`;
+    const lastConfirm = this.recentConfirms.get(confirmKey);
+    if (lastConfirm && Date.now() - lastConfirm < 10_000) {
+      this.logger.warn(
+        `[DraftOrder] Duplicate confirm ignored for ${confirmKey}`,
+      );
+      return -1;
+    }
+    this.recentConfirms.set(confirmKey, Date.now());
+
     // Merge custom fields + payment proof + issue note into order note
     const cfNote = Object.entries(draft.customFieldValues || {})
       .map(([k, v]) => `${k}: ${v}`)
@@ -596,9 +636,7 @@ export class DraftOrderHandler {
         select: { stockQty: true, name: true },
       });
       if (product && product.stockQty <= 0) {
-        throw new Error(
-          `Product ${item.productCode} is out of stock`,
-        );
+        throw new Error(`Product ${item.productCode} is out of stock`);
       }
     }
 
@@ -618,7 +656,9 @@ export class DraftOrderHandler {
           items: { create: [] },
         },
       });
-      this.logger.log(`[DraftOrder] Lead saved orderId=${lead.id} name=${lead.customerName} phone=${lead.phone}`);
+      this.logger.log(
+        `[DraftOrder] Lead saved orderId=${lead.id} name=${lead.customerName} phone=${lead.phone}`,
+      );
       return lead.id;
     }
 
@@ -677,6 +717,58 @@ export class DraftOrderHandler {
 
     // V9: upsert CRM customer record
     const subtotal = draft.items.reduce((s, i) => s + i.unitPrice * i.qty, 0);
+
+    // Telegram merchant alert — new order
+    this.telegram
+      .notify(
+        pageId,
+        `🛒 <b>New Order #${order.id}</b>\n👤 ${order.customerName}\n📞 ${order.phone || '-'}\n📍 ${order.address || '-'}\n💰 ৳${subtotal}`,
+      )
+      .catch(() => {});
+
+    // Auto courier booking — only when the order is already CONFIRMED and the
+    // merchant has enabled autoBookOnConfirm with a non-manual default courier
+    if (orderStatus === 'CONFIRMED') {
+      this.courier
+        .getSettings(pageId)
+        .then((raw) => {
+          const settings = this.courier.parseSettings(raw);
+          if (
+            settings.autoBookOnConfirm &&
+            settings.defaultCourier !== 'manual'
+          ) {
+            return this.courier
+              .bookShipment(pageId, {
+                orderId: order.id,
+                pageId,
+                courier: settings.defaultCourier,
+                recipientName: order.customerName || 'Customer',
+                recipientPhone: order.phone || '',
+                recipientAddress: order.address || '',
+                codAmount: subtotal,
+              })
+              .then(() =>
+                this.telegram.notify(
+                  pageId,
+                  `📦 Order #${order.id} auto-booked with ${settings.defaultCourier}`,
+                ),
+              )
+              .catch((e: any) => {
+                this.logger.error(
+                  `[AutoBook] Failed for order ${order.id}: ${e.message}`,
+                );
+                this.telegram.notify(
+                  pageId,
+                  `⚠️ Auto courier booking failed for Order #${order.id}: ${e.message}`,
+                );
+              });
+          }
+        })
+        .catch((e: any) =>
+          this.logger.error(`[AutoBook] Settings lookup failed: ${e.message}`),
+        );
+    }
+
     this.crm
       .upsertFromOrder(pageId, {
         customerPsid: psid,
@@ -787,11 +879,20 @@ export class DraftOrderHandler {
   calcAdvanceAmount(draft: DraftSession, page: any): number {
     const sym = page.currencySymbol || '৳';
     const isOut = !this.isInsideDhaka(draft.address || '', page);
-    const fee = Number(isOut ? (page.deliveryFeeOutsideDhaka ?? 120) : (page.deliveryFeeInsideDhaka ?? 80));
-    const subtotal = draft.items.reduce((s: number, i: any) => s + i.unitPrice * i.qty, 0);
+    const fee = Number(
+      isOut
+        ? (page.deliveryFeeOutsideDhaka ?? 120)
+        : (page.deliveryFeeInsideDhaka ?? 80),
+    );
+    const subtotal = draft.items.reduce(
+      (s: number, i: any) => s + i.unitPrice * i.qty,
+      0,
+    );
     const mode = (page.paymentMode as string) || 'cod';
     if (mode === 'full_advance') return subtotal + fee;
-    return page.advanceAmount && Number(page.advanceAmount) > 0 ? Number(page.advanceAmount) : fee;
+    return page.advanceAmount && Number(page.advanceAmount) > 0
+      ? Number(page.advanceAmount)
+      : fee;
   }
 
   private isAdvanceNeeded(draft: DraftSession, page: any): boolean {
@@ -845,9 +946,12 @@ export class DraftOrderHandler {
       `পরিমাণ: ${sym}${amount}`,
       '',
     ];
-    if (page.advanceBkash) lines.push(`📱 Bkash (Send Money): ${page.advanceBkash}`);
-    if (page.advanceNagad) lines.push(`📱 Nagad (Send Money): ${page.advanceNagad}`);
-    if (page.advanceRocket) lines.push(`📱 Rocket (Send Money): ${page.advanceRocket}`);
+    if (page.advanceBkash)
+      lines.push(`📱 Bkash (Send Money): ${page.advanceBkash}`);
+    if (page.advanceNagad)
+      lines.push(`📱 Nagad (Send Money): ${page.advanceNagad}`);
+    if (page.advanceRocket)
+      lines.push(`📱 Rocket (Send Money): ${page.advanceRocket}`);
     lines.push('');
     lines.push('Payment করার পর **Transaction ID** অথবা screenshot পাঠান 💖');
     return lines.join('\n');

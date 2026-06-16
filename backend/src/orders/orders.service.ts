@@ -7,6 +7,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { OrderNotificationService } from './order-notification.service';
 import { ConversationContextService } from '../conversation-context/conversation-context.service';
 import { BroadcastService } from '../broadcast/broadcast.service';
+import { TelegramNotificationService } from '../telegram/telegram-notification.service';
 
 export type OrderStatus =
   | 'RECEIVED'
@@ -24,6 +25,7 @@ export class OrdersService {
     private readonly notification: OrderNotificationService,
     private readonly ctx: ConversationContextService,
     private readonly broadcast: BroadcastService,
+    private readonly telegram: TelegramNotificationService,
   ) {}
 
   // ── List / Summary ─────────────────────────────────────────────────────────
@@ -184,10 +186,16 @@ export class OrdersService {
     });
     // Fire-and-forget: send subscribe prompt even on cancel (customer is still engaged)
     void this.tryRecurringSubscribePrompt(order.pageIdRef, order.customerPsid);
+    this.telegram
+      .notify(order.pageIdRef, `❌ Order #${order.id} was cancelled.`)
+      .catch(() => {});
     return result;
   }
 
-  private async tryRecurringSubscribePrompt(pageId: number, psid: string | null): Promise<void> {
+  private async tryRecurringSubscribePrompt(
+    pageId: number,
+    psid: string | null,
+  ): Promise<void> {
     if (!psid) return;
     try {
       const page = await this.prisma.page.findUnique({
@@ -238,13 +246,24 @@ export class OrdersService {
         let lastCustomerMsg: string | null = null;
         if (o.customerPsid) {
           const sess = await this.prisma.conversationSession.findUnique({
-            where: { pageIdRef_customerPsid: { pageIdRef: o.pageIdRef, customerPsid: o.customerPsid } },
+            where: {
+              pageIdRef_customerPsid: {
+                pageIdRef: o.pageIdRef,
+                customerPsid: o.customerPsid,
+              },
+            },
             select: { agentHandlingAt: true, lastCustomerMsg: true },
           });
           agentHandlingAt = sess?.agentHandlingAt?.toISOString() ?? null;
           lastCustomerMsg = sess?.lastCustomerMsg ?? null;
         }
-        return { ...o, botMuted, issueType: 'payment' as const, agentHandlingAt, lastCustomerMsg };
+        return {
+          ...o,
+          botMuted,
+          issueType: 'payment' as const,
+          agentHandlingAt,
+          lastCustomerMsg,
+        };
       }),
     );
 
@@ -400,11 +419,17 @@ export class OrdersService {
     phone: string;
     address: string;
     orderNote?: string;
-    items: { productCode: string; qty: number; unitPrice: number; productName?: string }[];
+    items: {
+      productCode: string;
+      qty: number;
+      unitPrice: number;
+      productName?: string;
+    }[];
     paymentMode: string;
   }) {
     const psid = `WEB-${data.phone.replace(/\D/g, '')}`;
-    const paymentStatus = data.paymentMode === 'cod' ? 'not_required' : 'pending_proof';
+    const paymentStatus =
+      data.paymentMode === 'cod' ? 'not_required' : 'pending_proof';
     return this.prisma.order.create({
       data: {
         pageIdRef: data.pageIdRef,
@@ -430,7 +455,9 @@ export class OrdersService {
   }
 
   async confirmWebOrderPayment(orderId: number, pageIdRef: number) {
-    const order = await this.prisma.order.findFirst({ where: { id: orderId, pageIdRef } });
+    const order = await this.prisma.order.findFirst({
+      where: { id: orderId, pageIdRef },
+    });
     if (!order) throw new NotFoundException('Order not found');
     return this.prisma.order.update({
       where: { id: orderId },
@@ -449,20 +476,31 @@ export class OrdersService {
     file: any,
     transactionId?: string,
   ) {
-    const order = await this.prisma.order.findFirst({ where: { id: orderId, pageIdRef } });
+    const order = await this.prisma.order.findFirst({
+      where: { id: orderId, pageIdRef },
+    });
     if (!order) throw new NotFoundException('Order not found');
     if (order.paymentStatus !== 'pending_proof') {
-      throw new BadRequestException('Payment proof not expected for this order');
+      throw new BadRequestException(
+        'Payment proof not expected for this order',
+      );
     }
 
     const path = require('path') as typeof import('path');
     const fs = require('fs/promises') as typeof import('fs/promises');
     const { randomUUID } = require('crypto') as typeof import('crypto');
 
-    const dir = path.join(process.cwd(), 'storage', 'payment-proofs', String(pageIdRef));
+    const dir = path.join(
+      process.cwd(),
+      'storage',
+      'payment-proofs',
+      String(pageIdRef),
+    );
     await fs.mkdir(dir, { recursive: true });
     const rawExt = path.extname(file.originalname || '').toLowerCase();
-    const ext = ['.jpg', '.jpeg', '.png', '.webp'].includes(rawExt) ? rawExt : '.jpg';
+    const ext = ['.jpg', '.jpeg', '.png', '.webp'].includes(rawExt)
+      ? rawExt
+      : '.jpg';
     const filename = `${Date.now()}-${randomUUID().slice(0, 8)}${ext}`;
     await fs.writeFile(path.join(dir, filename), file.buffer);
     const url = `/storage/payment-proofs/${pageIdRef}/${filename}`;
@@ -486,7 +524,14 @@ export class OrdersService {
         status: true,
         paymentStatus: true,
         createdAt: true,
-        items: { select: { productCode: true, qty: true, productName: true, unitPrice: true } },
+        items: {
+          select: {
+            productCode: true,
+            qty: true,
+            productName: true,
+            unitPrice: true,
+          },
+        },
       },
     });
     if (!order) throw new NotFoundException('Order not found');

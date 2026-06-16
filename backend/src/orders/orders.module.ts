@@ -8,6 +8,7 @@ import { BotKnowledgeModule } from '../bot-knowledge/bot-knowledge.module';
 import { ConversationContextModule } from '../conversation-context/conversation-context.module';
 import { AuthModule } from '../auth/auth.module';
 import { BroadcastModule } from '../broadcast/broadcast.module';
+import { TelegramModule } from '../telegram/telegram.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { BroadcastModule } from '../broadcast/broadcast.module';
     ConversationContextModule,
     AuthModule,
     BroadcastModule,
+    TelegramModule,
   ],
   controllers: [OrdersController],
   providers: [OrdersService, OrderNotificationService],
