@@ -314,6 +314,15 @@ export class SmsGatewayService {
         data: { pageId, deviceName, deviceModel: deviceModel || null },
       });
     }
+
+    // Auto-enable SMS gateway when a merchant device connects
+    if (pageId !== null) {
+      await this.prisma.page.update({
+        where: { id: pageId },
+        data: { smsGatewayEnabled: true },
+      });
+    }
+
     return true;
   }
 

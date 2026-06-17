@@ -207,6 +207,15 @@ const PAGE_LABELS: Record<NavKey, string> = {
   SETTINGS_VOICE: 'ভয়েস সেটিংস',
 };
 
+// Cross-page suggestions always shown alongside page-specific ones
+const CROSS_PAGE_SUGGESTIONS: string[] = [
+  'WhatsApp connect করব কীভাবে?',
+  'Courier API কীভাবে setup করব?',
+  'Bot কীভাবে automatically order নেয়?',
+  'bKash payment verify কীভাবে হয়?',
+  'Instagram automation চালু করব কীভাবে?',
+];
+
 const PAGE_SUGGESTIONS: Record<NavKey, string[]> = {
   OVERVIEW: [
     'আজকের কতটা অর্ডার এসেছে?',
@@ -486,7 +495,11 @@ export function ChatbotWidget({ currentPage, dark, pageId }: Props) {
   const isMobile =
     typeof window !== 'undefined' && window.innerWidth < 768;
 
-  const suggestions = PAGE_SUGGESTIONS[currentPage] ?? [];
+  const pageSpecific = PAGE_SUGGESTIONS[currentPage] ?? [];
+  const suggestions = [
+    ...pageSpecific.slice(0, 3),
+    ...CROSS_PAGE_SUGGESTIONS.slice(0, 2),
+  ];
   const pageLabel = PAGE_LABELS[currentPage] ?? '';
 
   return (
@@ -578,14 +591,14 @@ export function ChatbotWidget({ currentPage, dark, pageId }: Props) {
                 maxWidth: '88%',
               }}
             >
-              👋 হ্যালো! আমি <strong>Liza</strong> — Chatcat-এর AI সহকারী। <strong>{pageLabel}</strong> পেজের অর্ডার, পণ্য, বিক্রি সব বিষয়ে আমাকে জিজ্ঞেস করুন!
+              👋 হ্যালো! আমি <strong>Liza</strong> — Chatcat-এর AI সহকারী। Orders, Courier, Bot, WhatsApp, Payment — Dashboard-এর <strong>যেকোনো পেজের</strong> যেকোনো প্রশ্ন করুন!
             </div>
 
             {/* Suggestions */}
             {showSuggestions && suggestions.length > 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 <div style={{ fontSize: 11, color: muted, paddingLeft: 2 }}>
-                  সাধারণ প্রশ্ন:
+                  যেকোনো বিষয়ে জিজ্ঞেস করুন:
                 </div>
                 {suggestions.map((s, i) => (
                   <button
