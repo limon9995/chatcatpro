@@ -500,7 +500,6 @@ export function ChatbotWidget({ currentPage, dark, pageId }: Props) {
     ...pageSpecific.slice(0, 3),
     ...CROSS_PAGE_SUGGESTIONS.slice(0, 2),
   ];
-  const pageLabel = PAGE_LABELS[currentPage] ?? '';
 
   return (
     <div style={{ position: 'fixed', bottom: 24, right: 24, zIndex: 9500 }}>
