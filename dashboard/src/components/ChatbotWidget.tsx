@@ -500,6 +500,7 @@ export function ChatbotWidget({ currentPage, dark, pageId }: Props) {
     ...pageSpecific.slice(0, 3),
     ...CROSS_PAGE_SUGGESTIONS.slice(0, 2),
   ];
+  const pageLabel = PAGE_LABELS[currentPage] ?? '';
 
   return (
     <div style={{ position: 'fixed', bottom: 24, right: 24, zIndex: 9500 }}>
@@ -547,7 +548,7 @@ export function ChatbotWidget({ currentPage, dark, pageId }: Props) {
                 Liza ✨
               </div>
               <div style={{ fontSize: 11, color: '#22c55e', marginTop: 1, fontWeight: 600 }}>
-                ● অনলাইন · AI সহকারী
+                ● অনলাইন · AI সহকারী{pageLabel ? ` · ${pageLabel}` : ''}
               </div>
             </div>
             <button
