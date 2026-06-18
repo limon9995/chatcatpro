@@ -173,6 +173,22 @@ Rules:
   }
 
   private async callAPI(imageUrls: string[]): Promise<VisionAttributes> {
+    // Retry with different keys on 429
+    const maxAttempts = Math.min(this.rotator.getStatus().total || 1, 4);
+    let lastError: Error = new Error('No keys available');
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        return await this.callAPIWithKey(imageUrls);
+      } catch (err: any) {
+        lastError = err;
+        if (!err.message?.includes('429') && !err.message?.includes('quota')) break;
+        // 429 — rotator already marked this key; try next
+      }
+    }
+    throw lastError;
+  }
+
+  private async callAPIWithKey(imageUrls: string[]): Promise<VisionAttributes> {
     const apiKey = this.getKey();
     const isMulti = imageUrls.length > 1;
     const dataUrls = await Promise.all(
