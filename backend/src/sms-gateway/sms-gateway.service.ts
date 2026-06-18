@@ -332,12 +332,12 @@ export class SmsGatewayService {
       orderBy: { lastSeenAt: 'desc' },
       select: { id: true, deviceName: true, deviceModel: true, lastSeenAt: true, createdAt: true },
     });
-    const threshold = new Date(Date.now() - 30 * 60 * 1000);
+    const threshold = new Date(Date.now() - 6 * 60 * 1000);
     return devices.map((d: any) => ({ ...d, isActive: new Date(d.lastSeenAt) > threshold }));
   }
 
   async autoDisableStaleGateways(): Promise<void> {
-    const threshold = new Date(Date.now() - 30 * 60 * 1000);
+    const threshold = new Date(Date.now() - 6 * 60 * 1000);
     const enabledPages = await this.prisma.page.findMany({
       where: { smsGatewayEnabled: true },
       select: { id: true },
