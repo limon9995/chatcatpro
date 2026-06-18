@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ApiKeysService } from '../../common/api-keys.service';
+import { GeminiKeyRotatorService } from '../../common/gemini-key-rotator.service';
 import axios from 'axios';
 import { readFile } from 'fs/promises';
 import { join, extname } from 'path';
@@ -11,12 +12,17 @@ import {
 @Injectable()
 export class GeminiVisionProvider implements VisionAnalysisProvider {
   private readonly logger = new Logger(GeminiVisionProvider.name);
-  private readonly apiKey: string;
   private readonly model: string;
 
-  constructor(private readonly apiKeysService: ApiKeysService) {
-    this.apiKey = apiKeysService.getSync('geminiApiKey');
+  constructor(
+    private readonly apiKeysService: ApiKeysService,
+    private readonly rotator: GeminiKeyRotatorService,
+  ) {
     this.model = apiKeysService.getSync('visionModel') || 'gemini-2.5-flash';
+  }
+
+  private getKey(): string {
+    return this.rotator.getKey() ?? this.apiKeysService.getSync('geminiApiKey');
   }
 
   private buildCodeExtractionPrompt(prefix: string): string {
@@ -29,12 +35,14 @@ Respond with ONLY the JSON array — no other text, no markdown.`;
   }
 
   async extractProductCodes(imageUrl: string, prefix: string): Promise<string[]> {
-    if (!this.apiKey) throw new Error('GEMINI_API_KEY not configured');
+    const apiKey = this.getKey();
+    if (!apiKey) throw new Error('GEMINI_API_KEY not configured');
     const dataUrl = await this.toBase64DataUrl(imageUrl);
     const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
     const mimeType = match?.[1] ?? 'image/jpeg';
     const data = match?.[2] ?? '';
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent?key=${this.apiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent?key=${apiKey}`;
+    const t0 = Date.now();
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -54,8 +62,10 @@ Respond with ONLY the JSON array — no other text, no markdown.`;
     });
     if (!response.ok) {
       const err = await response.text().catch(() => String(response.status));
+      this.rotator.markError(apiKey, response.status, err.slice(0, 100));
       throw new Error(`Gemini extractCodes error ${response.status}: ${err.slice(0, 100)}`);
     }
+    this.rotator.markSuccess(apiKey, Date.now() - t0);
     const resp = await response.json();
     const content: string =
       resp?.candidates?.[0]?.content?.parts?.[0]?.text ?? '[]';
@@ -163,6 +173,7 @@ Rules:
   }
 
   private async callAPI(imageUrls: string[]): Promise<VisionAttributes> {
+    const apiKey = this.getKey();
     const isMulti = imageUrls.length > 1;
     const dataUrls = await Promise.all(
       imageUrls.map((u) => this.toBase64DataUrl(u)),
@@ -176,7 +187,8 @@ Rules:
       return { inlineData: { mimeType, data } };
     });
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent?key=${this.apiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent?key=${apiKey}`;
+    const t0 = Date.now();
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -199,8 +211,10 @@ Rules:
       const errText = await response.text();
       const msg = `Gemini API error ${response.status}: ${errText.slice(0, 200)}`;
       this.logger.error(`[GeminiVision] ${msg}`);
+      this.rotator.markError(apiKey, response.status, errText.slice(0, 100));
       throw new Error(msg);
     }
+    this.rotator.markSuccess(apiKey, Date.now() - t0);
 
     const data = await response.json();
     const content: string =
@@ -212,10 +226,8 @@ Rules:
   }
 
   async analyze(imageUrl: string): Promise<VisionAttributes> {
-    if (!this.apiKey) {
-      this.logger.warn(
-        '[GeminiVision] GEMINI_API_KEY not set — returning zero confidence',
-      );
+    if (!this.getKey()) {
+      this.logger.warn('[GeminiVision] No Gemini key available — returning zero confidence');
       return this.emptyResult('GEMINI_API_KEY not configured');
     }
     // Let errors propagate so callers can fall back to another provider
@@ -223,10 +235,8 @@ Rules:
   }
 
   async analyzeMultiple(imageUrls: string[]): Promise<VisionAttributes> {
-    if (!this.apiKey) {
-      this.logger.warn(
-        '[GeminiVision] GEMINI_API_KEY not set — returning zero confidence',
-      );
+    if (!this.getKey()) {
+      this.logger.warn('[GeminiVision] No Gemini key available — returning zero confidence');
       return this.emptyResult('GEMINI_API_KEY not configured');
     }
     if (!imageUrls.length) return this.emptyResult('No images provided');
