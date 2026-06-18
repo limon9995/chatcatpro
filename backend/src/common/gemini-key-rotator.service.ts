@@ -19,6 +19,7 @@ export class GeminiKeyRotatorService {
   private readonly logger = new Logger(GeminiKeyRotatorService.name);
   private states: KeyState[] = [];
   private lastLoadHash = '';
+  private roundRobinIndex = 0;
 
   constructor(private readonly apiKeysService: ApiKeysService) {}
 
@@ -83,20 +84,13 @@ export class GeminiKeyRotatorService {
       return null;
     }
 
-    // Sort available keys by:
-    // 1. Health score (higher is better). If health is same,
-    // 2. Average latency (lower is better, keys with no recorded latency are treated as 0 ms to test them first)
-    // 3. Fallback to insertion order (since it's a stable sort)
-    available.sort((a, b) => {
-      if (b.healthScore !== a.healthScore) {
-        return b.healthScore - a.healthScore;
-      }
-      const avgA = a.avgLatencyMs ?? 0;
-      const avgB = b.avgLatencyMs ?? 0;
-      return avgA - avgB;
-    });
-
-    return available[0].key;
+    // Round-robin across all active keys so load is spread evenly.
+    // Only fall back to health-score sorting when all keys have been tried
+    // at least once (avoids hammering a single key until it hits quota).
+    this.roundRobinIndex = this.roundRobinIndex % available.length;
+    const key = available[this.roundRobinIndex].key;
+    this.roundRobinIndex = (this.roundRobinIndex + 1) % available.length;
+    return key;
   }
 
   /** True if at least one key is available */
