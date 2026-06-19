@@ -1639,28 +1639,61 @@ export class WebhookService implements OnModuleDestroy {
   ): Promise<void> {
     const catalogUrl = this.buildCatalogUrl(page);
     const businessName = page.businessName || page.pageName || 'আমাদের';
+    const sym = page.currencySymbol || '৳';
+    const base = (process.env.CATALOG_BASE_URL || 'https://chatcat.pro').replace(/\/$/, '');
+    const slug = page.catalogSlug || String(page.id);
+
+    // Fetch top active products with stock
+    const products = await this.prisma.product.findMany({
+      where: { pageId: page.id, isActive: true, stockQty: { gt: 0 } },
+      select: { code: true, name: true, price: true, imageUrl: true, description: true },
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+    });
 
     let logoUrl = getFullImageUrl(page.logoUrl);
     if (!logoUrl) {
-      logoUrl =
-        'https://images.unsplash.com/photo-1557821552-17105176677c?q=80&w=1000&auto=format&fit=crop';
+      logoUrl = 'https://images.unsplash.com/photo-1557821552-17105176677c?q=80&w=1000&auto=format&fit=crop';
     }
 
     try {
-      await this.messenger.sendGenericTemplate(token, psid, [
-        {
-          title: `${businessName}-এর Online Catalog`,
-          image_url: logoUrl,
-          subtitle: `আমাদের সব product দেখুন এবং সহজেই order করুন 💖`,
+      if (products.length > 0) {
+        // Individual product cards (max 10 for Messenger)
+        const elements = products.map((p) => ({
+          title: `${p.name || p.code} — ${sym}${Number(p.price).toLocaleString()}`,
+          image_url: getFullImageUrl(p.imageUrl) || logoUrl,
+          subtitle: p.description ? p.description.slice(0, 80) : `Code: ${p.code}`,
           buttons: [
             {
               type: 'web_url' as const,
-              url: catalogUrl,
-              title: 'সব Product দেখুন',
+              url: `${base}/catalog/${encodeURIComponent(slug)}/product/${encodeURIComponent(p.code)}`,
+              title: 'বিস্তারিত দেখুন',
+            },
+            {
+              type: 'postback' as const,
+              title: 'Order করব',
+              payload: `ORDER_${p.code}`,
             },
           ],
-        },
-      ]);
+        }));
+        await this.messenger.sendGenericTemplate(token, psid, elements);
+      } else {
+        // No products — send single catalog card
+        await this.messenger.sendGenericTemplate(token, psid, [
+          {
+            title: `${businessName}-এর Online Catalog`,
+            image_url: logoUrl,
+            subtitle: `আমাদের সব product দেখুন এবং সহজেই order করুন 💖`,
+            buttons: [
+              {
+                type: 'web_url' as const,
+                url: catalogUrl,
+                title: 'সব Product দেখুন',
+              },
+            ],
+          },
+        ]);
+      }
     } catch (err) {
       this.logger.error(`[Webhook] sendCatalogFallback card failed: ${err}`);
     }
