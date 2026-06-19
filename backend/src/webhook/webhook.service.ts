@@ -471,6 +471,7 @@ export class WebhookService implements OnModuleDestroy {
         price: true,
         stockQty: true,
         imageUrl: true,
+        variantOptions: true,
       },
     });
 
@@ -485,6 +486,16 @@ export class WebhookService implements OnModuleDestroy {
     const inStock = product.stockQty > 0;
     const priceFormatted = Number(product.price).toLocaleString();
 
+    // Parse variant options (size, color, etc.)
+    let variantOptions: CustomFieldDef[] = [];
+    if (product.variantOptions) {
+      try {
+        variantOptions = this.draftHandler.normalizeVariantOptions(
+          JSON.parse(product.variantOptions as string),
+        );
+      } catch {}
+    }
+
     // Increment product view from referral click
     void this.prisma.product
       .update({
@@ -493,24 +504,39 @@ export class WebhookService implements OnModuleDestroy {
       })
       .catch(() => {});
 
-    const msg = inStock
-      ? `🛍️ ${product.name || product.code}\n\n💰 মূল্য: ${currency}${priceFormatted}\n✅ Stock আছে\n\nঅর্ডার confirm করতে আপনার নাম লিখুন।`
-      : `🛍️ ${product.name || product.code}\n\n💰 মূল্য: ${currency}${priceFormatted}\n❌ এই product এর stock শেষ।\n\nআমাদের অন্য product দেখতে চাইলে বলুন।`;
+    if (!inStock) {
+      await this.messenger
+        .sendText(tok, psid, `🛍️ ${product.name || product.code}\n\n💰 মূল্য: ${currency}${priceFormatted}\n❌ এই product এর stock শেষ।\n\nআমাদের অন্য product দেখতে চাইলে বলুন।`)
+        .catch(() => {});
+      return;
+    }
+
+    const newDraft = this.draftHandler.startDraftFromCodes(
+      [product.code],
+      [{ code: product.code, price: Number(product.price) }],
+      variantOptions,
+    );
+    await this.ctx.saveDraft(pageId, psid, newDraft).catch(() => {});
+
+    // First prompt: variant if exists, else name
+    let firstMsg: string;
+    if (variantOptions.length > 0) {
+      const firstField = variantOptions[0];
+      firstMsg = `🛍️ ${product.name || product.code} — ${currency}${priceFormatted}\n✅ Stock আছে\n\n`;
+      if (firstField.choices?.length) {
+        firstMsg += `${firstField.label} কোনটা নেবেন?\n${firstField.choices.map((c, i) => `${i + 1}. ${c}`).join('\n')}`;
+      } else {
+        firstMsg += `${firstField.label} জানান 💖`;
+      }
+    } else {
+      firstMsg = `🛍️ ${product.name || product.code} — ${currency}${priceFormatted}\n✅ Stock আছে\n\nঅর্ডার করতে আপনার নামটা বলুন 💖`;
+    }
 
     await this.messenger
-      .sendText(tok, psid, msg)
+      .sendText(tok, psid, firstMsg)
       .catch((err) =>
         this.logger.error(`[CatalogRef] sendText failed psid=${psid}: ${err}`),
       );
-
-    if (inStock) {
-      const draft = this.ctx.emptyDraft();
-      draft.items = [
-        { productCode: product.code, qty: 1, unitPrice: Number(product.price) },
-      ];
-      draft.currentStep = 'name';
-      await this.ctx.saveDraft(pageId, psid, draft).catch(() => {});
-    }
 
     this.logger.log(
       `[CatalogRef] psid=${psid} opened catalog for product ${productCode} — referral handled`,

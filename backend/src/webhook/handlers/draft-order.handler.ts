@@ -381,6 +381,20 @@ export class DraftOrderHandler {
     // Try to extract all three from a single customer message first.
     // Then fall back to strict per-step handling for whatever is still missing.
     //
+    // Name correction at phone/address step — e.g. "na amr name Limon", "naam change"
+    if ((step === 'phone' || step === 'address') && draft.customerName) {
+      const nameCorrection = workingText.match(
+        /(?:amr?|amar|আমার|ami|নাম|naam?|name)\s+(?:holo|হলো|হচ্ছে|হবে|is|:)?\s*([^\d\n,।]{3,40})/i,
+      );
+      if (nameCorrection) {
+        draft.customerName = nameCorrection[1].trim().slice(0, 80);
+        await this.ctx.saveDraft(pageId, psid, draft);
+        return step === 'phone'
+          ? `নাম আপডেট হয়েছে: ${draft.customerName} 💖 এখন ফোন নম্বর দিন।`
+          : `নাম আপডেট হয়েছে: ${draft.customerName} 💖 এখন পুরো ঠিকানা দিন।`;
+      }
+    }
+
     // For phone/address steps, name is already collected — skip multi-field parsing
     // to prevent unrelated text being mis-classified as a name and bypassing validation.
     const parsed =
