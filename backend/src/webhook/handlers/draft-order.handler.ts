@@ -269,18 +269,33 @@ export class DraftOrderHandler {
       if (this.isPaymentProblem(workingText)) {
         draft.paymentIssueNote = workingText.trim().slice(0, 300);
         await this.finalizeDraftOrder(pageId, psid, draft, page);
-        // Mute bot for this customer — agent will handle manually
         await this.ctx.setAgentHandling(pageId, psid, true);
-        return '⚠️ সমস্যার কথা বুঝতে পেরেছি। আমাদের agent শীঘ্রই আপনার সাথে যোগাযোগ করবে। অসুবিধার জন্য দুঃখিত 💙';
+        return '⚠️ সমস্যার কথা বুঝতে পেরেছি। আমাদের agent শীঘ্রই যোগাযোগ করবে 💙';
       }
-      // Try to extract TxID from natural sentences like:
-      // "আমার last digit হলো 1234" / "আমার txid হলো 8N7G3DKXYZ" / "আমি 8N7 দিয়ে পাঠিয়েছি"
+
+      const screenshotAlreadySent = Boolean(draft.paymentScreenshotUrl);
+
+      // Phone number as payment sender — match via SMS gateway
+      const senderPhoneMatch = workingText.trim().match(/^(?:\+?88)?01[3-9]\d{8}$/);
+      if (senderPhoneMatch && this.smsGateway && page.smsGatewayEnabled) {
+        const expectedAmount = this.calcAdvanceAmount(draft, page);
+        const smsMatch = await this.smsGateway.matchPayment(pageId, null, workingText.trim(), expectedAmount);
+        if (smsMatch.matched) {
+          draft.paymentProof = `Phone: ${workingText.trim()}`;
+          draft.paymentVerified = true;
+          draft.currentStep = 'confirm';
+          await this.ctx.saveDraft(pageId, psid, draft);
+          return `✅ Payment পাওয়া গেছে! ৳${smsMatch.amount} (${(smsMatch.method ?? 'SMS').toUpperCase()})\n\n${this.buildSummary(draft, page)}`;
+        }
+        return `এই নম্বর থেকে payment পাইনি এখনো 😊 একটু পর আবার চেষ্টা করুন, অথবা Transaction ID দিন।`;
+      }
+
+      // Try to extract TxID from natural sentences
       const extracted = this.extractTxIdFromSentence(workingText);
       const proofText = extracted || workingText.trim();
 
-      const screenshotAlreadySent = Boolean(draft.paymentScreenshotUrl);
       if (!screenshotAlreadySent && !this.isValidTransactionId(proofText)) {
-        return 'Transaction ID টা সঠিকভাবে দিন 💖\nযেমন: *8N7G3DKXYZ* বা screenshot পাঠান।';
+        return 'Transaction ID টা দিন 💖 (যেমন: 8N7G3DKXYZ) অথবা payment-এর screenshot পাঠান।';
       }
 
       // ── Auto-verify via bKash/Nagad API if credentials configured ──────────
