@@ -1286,42 +1286,10 @@ export class WebhookService implements OnModuleDestroy {
 
     // ── CATALOG REQUEST ────────────────────────────────────────────────────
     if (intent === 'CATALOG_REQUEST') {
-      const businessName = page.businessName || page.pageName || 'আমাদের';
-      const websiteUrl = String(page.websiteUrl || '').trim();
-      const catalogBaseUrl = (
-        process.env.CATALOG_BASE_URL || 'https://chatcat.pro'
-      ).replace(/\/$/, '');
-      const slug = page.catalogSlug || String(page.id);
-      const catalogUrl = websiteUrl || `${catalogBaseUrl}/catalog/${slug}`;
-
       if (aiResult.reply) {
-        // AI listed products from context — append catalog URL
-        await this.safeSend(
-          token,
-          psid,
-          `${aiResult.reply}\n\n🛍️ সব product দেখতে:\n${catalogUrl}`,
-        );
-        return;
+        await this.safeSend(token, psid, aiResult.reply);
       }
-
-      // AI unavailable — dynamic DB-driven fallback with real product list
-      const topProducts = await this.prisma.product.findMany({
-        where: { pageId, isActive: true, stockQty: { gt: 0 } },
-        select: { name: true, price: true },
-        orderBy: { createdAt: 'desc' },
-        take: 6,
-      });
-
-      let catalogMsg: string;
-      if (topProducts.length > 0) {
-        const list = topProducts
-          .map((p) => `• ${p.name} — ৳${p.price}`)
-          .join('\n');
-        catalogMsg = `${businessName}-এর কিছু popular product:\n\n${list}\n\n🛍️ সব দেখতে:\n${catalogUrl}\n\nপছন্দের product-এর code বা screenshot দিন, order নেব 💖`;
-      } else {
-        catalogMsg = `${businessName}-এর সব product দেখতে:\n\n${catalogUrl}\n\nপছন্দের product-এর code বা screenshot দিন 💖`;
-      }
-      await this.safeSend(token, psid, catalogMsg);
+      await this.sendCatalogFallback(token, psid, page);
       return;
     }
 
