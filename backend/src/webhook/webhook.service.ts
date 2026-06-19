@@ -717,6 +717,13 @@ export class WebhookService implements OnModuleDestroy {
       }
     }
 
+    // ── CATALOG REQUEST (pre-SmartBot) — always send card view ──────────
+    const preSmartBotIntent = this.botIntent.detectIntent(text, awaitingConfirm);
+    if (preSmartBotIntent === 'CATALOG_REQUEST') {
+      await this.sendCatalogFallback(token, psid, page);
+      return;
+    }
+
     // ── SMART BOT (V19) — single AI call replaces keyword pipeline ────────
     if (page.smartBotOn && aiAllowed && this.smartBot.isAvailable()) {
       const reply = await this.smartBot.handle(
