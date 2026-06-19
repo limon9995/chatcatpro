@@ -1618,7 +1618,7 @@ export class WebhookService implements OnModuleDestroy {
     const base = (
       process.env.CATALOG_BASE_URL || 'https://chatcat.pro'
     ).replace(/\/$/, '');
-    const pageKey = page.catalogSlug || page.pageId || page.id;
+    const pageKey = page.catalogSlug || String(page.id);
     return `${base}/catalog/${encodeURIComponent(String(pageKey))}?select=1&codes=${encodeURIComponent(codes.join(','))}`;
   }
 
@@ -1628,7 +1628,7 @@ export class WebhookService implements OnModuleDestroy {
     const base = (
       process.env.CATALOG_BASE_URL || 'https://chatcat.pro'
     ).replace(/\/$/, '');
-    const slug = page.catalogSlug || page.pageId || String(page.id);
+    const slug = page.catalogSlug || String(page.id);
     return `${base}/catalog/${encodeURIComponent(String(slug))}`;
   }
 
