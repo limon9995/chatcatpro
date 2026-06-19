@@ -199,6 +199,16 @@ export class WebhookService implements OnModuleDestroy {
           if (!event.message) continue;
         }
 
+        // Card view "Order করব" postback — payload: ORDER_<code>
+        if (event.postback?.payload && !event.message) {
+          const payload: string = String(event.postback.payload);
+          if (payload.startsWith('ORDER_')) {
+            const productCode = payload.slice(6).toUpperCase();
+            this.handleCatalogReferral(resolvedPage, psid, productCode).catch(() => {});
+          }
+          continue;
+        }
+
         if (!event.message) continue;
 
         // Push to persistent queue — returns immediately, worker processes async
