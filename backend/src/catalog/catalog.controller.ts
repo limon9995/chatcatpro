@@ -1323,10 +1323,19 @@ ${page.webOrderEnabled ? `
           <div id="woPNum" style="font-size:20px;font-weight:800;letter-spacing:1px;color:var(--p,#6366f1);margin-bottom:8px"></div>
           <div style="font-size:13px">পরিমাণ: <strong id="woPAmt" style="font-size:16px"></strong></div>
         </div>
-        <div style="font-size:12px;color:var(--muted,#64748b);background:var(--surface-2,#f1f5f9);padding:9px 12px;border-radius:8px;margin-bottom:14px;line-height:1.6">
+        <div style="font-size:12px;color:var(--muted,#64748b);background:var(--surface-2,#f1f5f9);padding:9px 12px;border-radius:8px;margin-bottom:12px;line-height:1.6">
           ✅ Payment পাঠানোর পর নিচে <strong>Transaction ID</strong> দিন।
         </div>
-        <div><div class="wo-lbl">TRANSACTION ID *</div><input class="wo-inp" id="woFinalTxId" type="text" placeholder="যেমন: 8N7XXXXXX" autocomplete="off"></div>
+        <div style="margin-bottom:10px"><div class="wo-lbl">TRANSACTION ID *</div><input class="wo-inp" id="woFinalTxId" type="text" placeholder="যেমন: 8N7XXXXXX" autocomplete="off"></div>
+        <div style="margin-bottom:10px">
+          <div class="wo-lbl" style="display:flex;align-items:center;justify-content:space-between">
+            <span>PAYMENT SCREENSHOT</span><span style="font-size:11px;font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted,#94a3b8)">(optional — Telegram এ যাবে)</span>
+          </div>
+          <label class="wo-file-area" for="woPScreenshot" id="woPFileArea">
+            <span id="woPFileLabel">📷 Screenshot বেছে নিন</span>
+          </label>
+          <input type="file" id="woPScreenshot" accept="image/*" style="display:none" onchange="woPFileChosen(this)">
+        </div>
         <div class="wo-err" id="woErrP"></div>
         <div style="display:flex;gap:8px;margin-top:4px">
           <button class="wo-btn" style="background:var(--surface-2,#e2e8f0);color:var(--fg,#1e293b);flex:0 0 auto;width:44px;font-size:18px;padding:0" onclick="woShowStep('M')">←</button>
@@ -1430,6 +1439,8 @@ async function woSubmit(){
 
 function woGoGateway(){ if(woPaymentUrl) window.location.href=woPaymentUrl; }
 
+function woPFileChosen(inp){ var lbl=document.getElementById('woPFileLabel'); if(inp.files&&inp.files[0]) lbl.textContent='✅ '+inp.files[0].name; else lbl.textContent='📷 Screenshot বেছে নিন'; }
+
 function woSelectMethod(method){
   var icons={bkash:'📱',nagad:'📱',rocket:'🚀'};
   var names={bkash:'বিকাশ',nagad:'নগদ',rocket:'রকেট'};
@@ -1439,12 +1450,15 @@ function woSelectMethod(method){
   document.getElementById('woPNum').textContent=nums[method]||'';
   document.getElementById('woPAmt').textContent=woAdvData.amt||'';
   document.getElementById('woFinalTxId').value='';
+  var ss=document.getElementById('woPScreenshot'); if(ss) ss.value='';
+  document.getElementById('woPFileLabel').textContent='📷 Screenshot বেছে নিন';
   woSetErr('woErrP','');
   woShowStep('P'); document.getElementById('woTitle').textContent='💸 Payment করুন';
 }
 
 async function woPaySubmit(){
   var txId=document.getElementById('woFinalTxId').value.trim();
+  var ssFile=document.getElementById('woPScreenshot').files[0];
   if(!txId){woSetErr('woErrP','Transaction ID দিন');return;}
   woSetErr('woErrP','');
   var btn=document.getElementById('woBtnPaySubmit');
@@ -1452,6 +1466,7 @@ async function woPaySubmit(){
   try {
     var fd=new FormData();
     fd.append('transactionId',txId);
+    if(ssFile) fd.append('screenshot',ssFile);
     var r=await fetch('/catalog/'+WO_PAGE_ID+'/web-order/'+woOrderIdVal+'/payment-proof',{method:'POST',body:fd});
     var d=await r.json();
     if(!r.ok) throw new Error(d.message||'Submit failed');
