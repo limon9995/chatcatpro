@@ -1011,99 +1011,6 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
           </div></>}
         </Section>
 
-        {/* ── Telegram Bot Setup (merchant notifications) ── */}
-        <Section title={copy('🤖 Telegram Bot সেটআপ', '🤖 Telegram Bot Setup')} desc={copy('নতুন order, cancel, কম balance ও subscription notification নিজের Telegram-এ পান', 'Get new order, cancel, low-balance and subscription alerts on your own Telegram')}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 700 }}>{copy('Telegram নোটিফিকেশন', 'Telegram Notifications')}</div>
-              <div style={{ fontSize: 11.5, color: th.muted }}>
-                {s.telegramTokenSet
-                  ? (s.telegramChatId ? `Chat ID: ${s.telegramChatId}` : copy('Token সেভ আছে — Chat ID নেই', 'Token saved — Chat ID missing'))
-                  : copy('এখনো connect করা হয়নি', 'Not connected yet')}
-              </div>
-            </div>
-            <Toggle
-              th={th}
-              checked={s.telegramNotifEnabled}
-              onChange={v => setS(prev => ({ ...prev, telegramNotifEnabled: v }))}
-              label=""
-            />
-          </div>
-
-          {s.telegramNotifEnabled && <><details style={{ marginBottom: 14 }}>
-            <summary style={{ fontSize: 12, fontWeight: 700, cursor: 'pointer', color: th.accent, userSelect: 'none', marginBottom: 6 }}>
-              📋 {copy('কিভাবে নিজের Telegram Bot তৈরি করবেন? (ধাপে ধাপে)', 'How to create your own Telegram bot? (Step by step)')}
-            </summary>
-            <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {[
-                copy('১. Telegram অ্যাপ খুলুন → সার্চ করুন "@BotFather" → চ্যাট শুরু করুন', '1. Open Telegram → search "@BotFather" → start a chat'),
-                copy('২. /newbot লিখে পাঠান → আপনার bot-এর একটি নাম দিন → একটি username দিন (শেষে "bot" থাকতে হবে, যেমন MyShopAlertBot)', '2. Send /newbot → give your bot a name → give it a username (must end in "bot", e.g. MyShopAlertBot)'),
-                copy('৩. BotFather একটি Token দেবে (যেমন 123456:ABC-xxxxx) → এটি কপি করে নিচের "Bot Token" field-এ দিন', '3. BotFather will give you a Token (e.g. 123456:ABC-xxxxx) → copy it into the "Bot Token" field below'),
-                copy('৪. আপনার তৈরি bot-টি Telegram-এ সার্চ করে খুলুন → একটি মেসেজ পাঠান (যেমন "hi")', '4. Search for your new bot in Telegram → open it → send it a message (e.g. "hi")'),
-                copy('৫. ব্রাউজারে যান: https://api.telegram.org/bot<TOKEN>/getUpdates (TOKEN এর জায়গায় আপনার token দিন) → "chat":{"id": ...} খুঁজুন → এই নাম্বারটাই আপনার Chat ID', '5. Visit https://api.telegram.org/bot<TOKEN>/getUpdates (replace TOKEN with your token) → find "chat":{"id": ...} → that number is your Chat ID'),
-                copy('৬. Token ও Chat ID নিচে দিয়ে "Test Connection" চাপুন — Telegram-এ একটি test মেসেজ পাবেন', '6. Enter the Token and Chat ID below and click "Test Connection" — you should receive a test message on Telegram'),
-              ].map((step, i) => (
-                <div key={i} style={{ display: 'flex', gap: 8, fontSize: 12, padding: '7px 10px', borderRadius: 8, background: th.surface, border: `1px solid ${th.border}` }}>
-                  <span style={{ color: th.accent, flexShrink: 0 }}>→</span>
-                  <span style={{ color: th.text, lineHeight: 1.5 }}>{step}</span>
-                </div>
-              ))}
-            </div>
-          </details>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div>
-              <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>
-                Bot Token {s.telegramTokenSet && <span style={{ color: '#22c55e', fontWeight: 400 }}>✓ saved</span>}
-              </label>
-              <input
-                type="password"
-                style={{ ...inp }}
-                placeholder={s.telegramTokenSet ? '••••••• (পরিবর্তন করতে নতুন token দিন)' : '123456:ABC-xxxxxxxxxxxxxxxxxxxxxxxxxxx'}
-                value={tgToken}
-                onChange={e => setTgToken(e.target.value)}
-              />
-              <div style={{ fontSize: 11, color: th.muted, marginTop: 3 }}>
-                @BotFather থেকে পাওয়া token
-              </div>
-            </div>
-
-            <div>
-              <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>
-                Chat ID
-              </label>
-              <input
-                style={{ ...inp }}
-                placeholder="123456789"
-                value={s.telegramChatId}
-                onChange={e => setS(prev => ({ ...prev, telegramChatId: e.target.value }))}
-              />
-              <div style={{ fontSize: 11, color: th.muted, marginTop: 3 }}>
-                getUpdates API থেকে পাওয়া আপনার chat id
-              </div>
-            </div>
-
-            <div>
-              <button
-                onClick={testTelegram}
-                disabled={tgTesting}
-                style={{ ...th.btnGhost, fontSize: 12.5, opacity: tgTesting ? 0.6 : 1 }}
-              >
-                {tgTesting ? <><Spinner size={13} /> Testing...</> : `🧪 ${copy('Connection Test করুন', 'Test Connection')}`}
-              </button>
-            </div>
-          </div>
-
-          <div style={{ marginTop: 14 }}>
-            <button
-              onClick={saveTelegram}
-              disabled={tgSaving}
-              style={{ ...th.btnPrimary, opacity: tgSaving ? 0.6 : 1 }}
-            >
-              {tgSaving ? <><Spinner size={13} /> Saving...</> : `💾 ${copy('Telegram Save করুন', 'Save Telegram')}`}
-            </button>
-          </div></>}
-        </Section>
 
         {/* ── Instagram Connection ── */}
         <Section title="📸 Instagram Connection" desc="Instagram Business API দিয়ে DM ও post comment automation চালু করুন">
@@ -2840,6 +2747,105 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
       </div>
     );
   }
+
+  // ── TELEGRAM NOTIFICATIONS ────────────────────────────────────────────────
+  if (tab === 'SETTINGS_TELEGRAM') return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 0, position: 'relative', ...cssVars }}>
+              {/* ── Telegram Bot Setup (merchant notifications) ── */}
+        <Section title={copy('🤖 Telegram Bot সেটআপ', '🤖 Telegram Bot Setup')} desc={copy('নতুন order, cancel, কম balance ও subscription notification নিজের Telegram-এ পান', 'Get new order, cancel, low-balance and subscription alerts on your own Telegram')}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700 }}>{copy('Telegram নোটিফিকেশন', 'Telegram Notifications')}</div>
+              <div style={{ fontSize: 11.5, color: th.muted }}>
+                {s.telegramTokenSet
+                  ? (s.telegramChatId ? `Chat ID: ${s.telegramChatId}` : copy('Token সেভ আছে — Chat ID নেই', 'Token saved — Chat ID missing'))
+                  : copy('এখনো connect করা হয়নি', 'Not connected yet')}
+              </div>
+            </div>
+            <Toggle
+              th={th}
+              checked={s.telegramNotifEnabled}
+              onChange={v => setS(prev => ({ ...prev, telegramNotifEnabled: v }))}
+              label=""
+            />
+          </div>
+
+          {s.telegramNotifEnabled && <><details style={{ marginBottom: 14 }}>
+            <summary style={{ fontSize: 12, fontWeight: 700, cursor: 'pointer', color: th.accent, userSelect: 'none', marginBottom: 6 }}>
+              📋 {copy('কিভাবে নিজের Telegram Bot তৈরি করবেন? (ধাপে ধাপে)', 'How to create your own Telegram bot? (Step by step)')}
+            </summary>
+            <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {[
+                copy('১. Telegram অ্যাপ খুলুন → সার্চ করুন "@BotFather" → চ্যাট শুরু করুন', '1. Open Telegram → search "@BotFather" → start a chat'),
+                copy('২. /newbot লিখে পাঠান → আপনার bot-এর একটি নাম দিন → একটি username দিন (শেষে "bot" থাকতে হবে, যেমন MyShopAlertBot)', '2. Send /newbot → give your bot a name → give it a username (must end in "bot", e.g. MyShopAlertBot)'),
+                copy('৩. BotFather একটি Token দেবে (যেমন 123456:ABC-xxxxx) → এটি কপি করে নিচের "Bot Token" field-এ দিন', '3. BotFather will give you a Token (e.g. 123456:ABC-xxxxx) → copy it into the "Bot Token" field below'),
+                copy('৪. আপনার তৈরি bot-টি Telegram-এ সার্চ করে খুলুন → একটি মেসেজ পাঠান (যেমন "hi")', '4. Search for your new bot in Telegram → open it → send it a message (e.g. "hi")'),
+                copy('৫. ব্রাউজারে যান: https://api.telegram.org/bot<TOKEN>/getUpdates (TOKEN এর জায়গায় আপনার token দিন) → "chat":{"id": ...} খুঁজুন → এই নাম্বারটাই আপনার Chat ID', '5. Visit https://api.telegram.org/bot<TOKEN>/getUpdates (replace TOKEN with your token) → find "chat":{"id": ...} → that number is your Chat ID'),
+                copy('৬. Token ও Chat ID নিচে দিয়ে "Test Connection" চাপুন — Telegram-এ একটি test মেসেজ পাবেন', '6. Enter the Token and Chat ID below and click "Test Connection" — you should receive a test message on Telegram'),
+              ].map((step, i) => (
+                <div key={i} style={{ display: 'flex', gap: 8, fontSize: 12, padding: '7px 10px', borderRadius: 8, background: th.surface, border: `1px solid ${th.border}` }}>
+                  <span style={{ color: th.accent, flexShrink: 0 }}>→</span>
+                  <span style={{ color: th.text, lineHeight: 1.5 }}>{step}</span>
+                </div>
+              ))}
+            </div>
+          </details>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>
+                Bot Token {s.telegramTokenSet && <span style={{ color: '#22c55e', fontWeight: 400 }}>✓ saved</span>}
+              </label>
+              <input
+                type="password"
+                style={{ ...inp }}
+                placeholder={s.telegramTokenSet ? '••••••• (পরিবর্তন করতে নতুন token দিন)' : '123456:ABC-xxxxxxxxxxxxxxxxxxxxxxxxxxx'}
+                value={tgToken}
+                onChange={e => setTgToken(e.target.value)}
+              />
+              <div style={{ fontSize: 11, color: th.muted, marginTop: 3 }}>
+                @BotFather থেকে পাওয়া token
+              </div>
+            </div>
+
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>
+                Chat ID
+              </label>
+              <input
+                style={{ ...inp }}
+                placeholder="123456789"
+                value={s.telegramChatId}
+                onChange={e => setS(prev => ({ ...prev, telegramChatId: e.target.value }))}
+              />
+              <div style={{ fontSize: 11, color: th.muted, marginTop: 3 }}>
+                getUpdates API থেকে পাওয়া আপনার chat id
+              </div>
+            </div>
+
+            <div>
+              <button
+                onClick={testTelegram}
+                disabled={tgTesting}
+                style={{ ...th.btnGhost, fontSize: 12.5, opacity: tgTesting ? 0.6 : 1 }}
+              >
+                {tgTesting ? <><Spinner size={13} /> Testing...</> : `🧪 ${copy('Connection Test করুন', 'Test Connection')}`}
+              </button>
+            </div>
+          </div>
+
+          <div style={{ marginTop: 14 }}>
+            <button
+              onClick={saveTelegram}
+              disabled={tgSaving}
+              style={{ ...th.btnPrimary, opacity: tgSaving ? 0.6 : 1 }}
+            >
+              {tgSaving ? <><Spinner size={13} /> Saving...</> : `💾 ${copy('Telegram Save করুন', 'Save Telegram')}`}
+            </button>
+          </div></>}
+        </Section>
+    </div>
+  );
 
   return null;
 }

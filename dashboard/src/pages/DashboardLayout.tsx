@@ -58,7 +58,7 @@ type NavKey = 'OVERVIEW' | 'AGENT_TASKS' | 'ORDERS' | 'PRODUCTS' | 'ACCOUNTING' 
   'BROADCAST' | 'FOLLOWUP' | 'CATALOG' | 'FRAUD_CHECKER' | 'AUTO_POST' | 'UNIVERSITY' |
   'WALLET' | 'CONNECT_FB_PAGE' |
   'SETTINGS_BUSINESS' | 'SETTINGS_DELIVERY' | 'SETTINGS_BOT' |
-  'SETTINGS_KNOWLEDGE' | 'SETTINGS_CALL' | 'SETTINGS_VOICE';
+  'SETTINGS_KNOWLEDGE' | 'SETTINGS_CALL' | 'SETTINGS_VOICE' | 'SETTINGS_TELEGRAM';
 
 interface NavItem {
   key:   NavKey;
@@ -99,6 +99,7 @@ const NAV: NavItem[] = [
   { key: 'SETTINGS_KNOWLEDGE', bn: 'নলেজ ও দর',           en: 'Knowledge & Pricing', icon: '🧠', group: 'settings' },
   { key: 'SETTINGS_CALL',      bn: 'কল কনফার্ম',          en: 'Call Confirm',        icon: '📞', group: 'settings' },
   { key: 'SETTINGS_VOICE',     bn: 'ভয়েস ও TTS',          en: 'Voice & TTS',         icon: '🎤', group: 'settings' },
+  { key: 'SETTINGS_TELEGRAM',  bn: 'টেলিগ্রাম নোটিফিকেশন', en: 'Notifications',        icon: '✈', group: 'settings' },
 ];
 
 const GROUPS = [
@@ -448,7 +449,7 @@ export function DashboardLayout({
     setNav('ACCOUNTING');
   }, []);
 
-  const openSettingsTab = useCallback((tab: 'SETTINGS_BUSINESS' | 'SETTINGS_DELIVERY' | 'SETTINGS_BOT' | 'SETTINGS_KNOWLEDGE' | 'SETTINGS_CALL' | 'SETTINGS_VOICE') => {
+  const openSettingsTab = useCallback((tab: 'SETTINGS_BUSINESS' | 'SETTINGS_DELIVERY' | 'SETTINGS_BOT' | 'SETTINGS_KNOWLEDGE' | 'SETTINGS_CALL' | 'SETTINGS_VOICE' | 'SETTINGS_TELEGRAM') => {
     setNav(tab);
   }, []);
 
@@ -463,7 +464,7 @@ export function DashboardLayout({
 
   const renderPage = () => {
     // Settings tabs — nav key IS the tab key
-    const SETTINGS_KEYS = new Set(['SETTINGS_BUSINESS','SETTINGS_DELIVERY','SETTINGS_BOT','SETTINGS_KNOWLEDGE','SETTINGS_CALL','SETTINGS_VOICE']);
+    const SETTINGS_KEYS = new Set(['SETTINGS_BUSINESS','SETTINGS_DELIVERY','SETTINGS_BOT','SETTINGS_KNOWLEDGE','SETTINGS_CALL','SETTINGS_VOICE','SETTINGS_TELEGRAM']);
     if (SETTINGS_KEYS.has(nav)) {
       return (
         <PageErrorBoundary name="SettingsPage">

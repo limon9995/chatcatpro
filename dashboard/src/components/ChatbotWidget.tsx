@@ -166,7 +166,7 @@ type NavKey =
   | 'COURIER' | 'BROADCAST' | 'FOLLOWUP' | 'CATALOG' | 'FRAUD_CHECKER'
   | 'AUTO_POST' | 'UNIVERSITY' | 'WALLET' | 'CONNECT_FB_PAGE'
   | 'SETTINGS_BUSINESS' | 'SETTINGS_DELIVERY' | 'SETTINGS_BOT'
-  | 'SETTINGS_KNOWLEDGE' | 'SETTINGS_CALL' | 'SETTINGS_VOICE';
+  | 'SETTINGS_KNOWLEDGE' | 'SETTINGS_CALL' | 'SETTINGS_VOICE' | 'SETTINGS_TELEGRAM';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -205,6 +205,7 @@ const PAGE_LABELS: Record<NavKey, string> = {
   SETTINGS_KNOWLEDGE: 'নলেজ সেটিংস',
   SETTINGS_CALL: 'কল সেটিংস',
   SETTINGS_VOICE: 'ভয়েস সেটিংস',
+  SETTINGS_TELEGRAM: 'টেলিগ্রাম নোটিফিকেশন',
 };
 
 // Cross-page suggestions always shown alongside page-specific ones
@@ -391,6 +392,13 @@ const PAGE_SUGGESTIONS: Record<NavKey, string[]> = {
     'Voice message charge কত?',
     'TTS ভয়েস কীভাবে পরিবর্তন করব?',
     'Voice quality কীভাবে improve করব?',
+  ],
+  SETTINGS_TELEGRAM: [
+    'Telegram bot কীভাবে তৈরি করব?',
+    'Chat ID কোথায় পাব?',
+    'Payment notification Telegram-এ আসবে কীভাবে?',
+    'Telegram notification enable করব কীভাবে?',
+    'BotFather থেকে token কীভাবে নেব?',
   ],
 };
 
