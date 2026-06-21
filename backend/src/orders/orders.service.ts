@@ -478,7 +478,7 @@ export class OrdersService {
   ) {
     const order = await this.prisma.order.findFirst({
       where: { id: orderId, pageIdRef },
-      select: { id: true, paymentStatus: true, customerName: true, customerPhone: true },
+      select: { id: true, paymentStatus: true, customerName: true, phone: true },
     });
     if (!order) throw new NotFoundException('Order not found');
     if (order.paymentStatus !== 'pending_proof') {
@@ -486,7 +486,7 @@ export class OrdersService {
     }
 
     // Send screenshot to merchant's Telegram instead of storing on server
-    const caption = `📸 Payment Screenshot\nOrder #${orderId}${transactionId ? `\nTxID: ${transactionId}` : ''}\nCustomer: ${order.customerName ?? '?'} | ${order.customerPhone ?? '?'}`;
+    const caption = `📸 Payment Screenshot\nOrder #${orderId}${transactionId ? `\nTxID: ${transactionId}` : ''}\nCustomer: ${order.customerName ?? '?'} | ${order.phone ?? '?'}`;
     void this.telegram.sendPhoto(pageIdRef, file.buffer, caption).catch(() => {});
 
     return this.prisma.order.update({
