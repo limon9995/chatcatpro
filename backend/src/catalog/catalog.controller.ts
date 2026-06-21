@@ -495,12 +495,28 @@ export class CatalogController {
   ) {
     const page = await this.prisma.page.findFirst({
       where: pageWhere(pid),
-      select: { id: true },
+      select: { id: true, smsGatewayEnabled: true, advanceAmount: true },
     });
     if (!page) throw new NotFoundException('Page not found');
-    if (!file?.buffer) throw new BadRequestException('Screenshot required');
+    if (!file?.buffer && !transactionId?.trim()) throw new BadRequestException('Transaction ID or screenshot required');
+
+    // If only TxID provided (no screenshot) — try SMS gateway match first
+    if (!file?.buffer && transactionId?.trim()) {
+      const smsMatch = await this.smsGatewayService.matchPayment(page.id, transactionId.trim(), null, page.advanceAmount ?? 0);
+      await this.prisma.order.update({
+        where: { id: orderId },
+        data: {
+          paymentStatus: 'advance_paid',
+          transactionId: transactionId.trim(),
+          paymentVerifyStatus: smsMatch.matched ? 'verified' : 'pending_review',
+        },
+      });
+      return { success: true, autoVerified: smsMatch.matched };
+    }
+
+    // Screenshot provided — send to Telegram, don't store on server
     await this.ordersService.uploadWebOrderScreenshot(orderId, page.id, file, transactionId);
-    return { success: true };
+    return { success: true, autoVerified: false };
   }
 
   @Get(':pageId/order-status/:orderId')
@@ -1298,11 +1314,12 @@ ${page.webOrderEnabled ? `
         <div class="wo-payment-box" id="woManualMsg"></div>
         <div id="woManualTxIdRow"><div class="wo-lbl">Transaction ID (ঐচ্ছিক)</div><input class="wo-inp" id="woManualTxId" type="text" placeholder="যেমন: 8N7XXXXXX"></div>
         <div>
-          <div class="wo-lbl">Payment Screenshot *</div>
+          <div class="wo-lbl" style="display:flex;align-items:center;gap:6px">PAYMENT SCREENSHOT <span style="font-size:11px;color:var(--muted,#94a3b8);font-weight:400">(ঐচ্ছিক)</span></div>
           <label class="wo-file-area" for="woScreenshot">
-            <span id="woFileLabel">📸 Screenshot বেছে নিন</span>
+            <span id="woFileLabel">📸 Screenshot বেছে নিন (optional)</span>
           </label>
           <input type="file" id="woScreenshot" accept="image/*" style="display:none" onchange="woFileChosen(this)">
+          <div style="font-size:11px;color:var(--muted,#94a3b8);margin-top:4px">Transaction ID দিলে screenshot না দিলেও হবে</div>
         </div>
         <div class="wo-err" id="woErr1c"></div>
         <button class="wo-btn" id="woBtnUpload" onclick="woUpload()">Submit করুন →</button>
@@ -1456,22 +1473,30 @@ async function woSmsSubmit(){
 
 async function woUpload(){
   var file=document.getElementById('woScreenshot').files[0];
-  if(!file){woSetErr('woErr1c','Screenshot বেছে নিন');return;}
+  var txId=document.getElementById('woManualTxId').value.trim();
+  if(!file && !txId){woSetErr('woErr1c','Transaction ID অথবা Screenshot দিন');return;}
   woSetErr('woErr1c','');
   var btn=document.getElementById('woBtnUpload');
-  btn.disabled=true; btn.textContent='Upload হচ্ছে...';
+  btn.disabled=true; btn.textContent='Submit হচ্ছে...';
   try {
-    var fd=new FormData();
-    fd.append('screenshot',file);
-    var txId=document.getElementById('woManualTxId').value.trim();
-    if(txId) fd.append('transactionId',txId);
-    var r=await fetch('/catalog/'+WO_PAGE_ID+'/web-order/'+woOrderIdVal+'/payment-proof',{method:'POST',body:fd});
-    var d=await r.json();
-    if(!r.ok) throw new Error(d.message||'Upload failed');
+    var r,d;
+    if(file){
+      var fd=new FormData();
+      fd.append('screenshot',file);
+      if(txId) fd.append('transactionId',txId);
+      r=await fetch('/catalog/'+WO_PAGE_ID+'/web-order/'+woOrderIdVal+'/payment-proof',{method:'POST',body:fd});
+    } else {
+      // TxID only — no screenshot
+      var fd2=new FormData();
+      fd2.append('transactionId',txId);
+      r=await fetch('/catalog/'+WO_PAGE_ID+'/web-order/'+woOrderIdVal+'/payment-proof',{method:'POST',body:fd2});
+    }
+    d=await r.json();
+    if(!r.ok) throw new Error(d.message||'Submit failed');
     document.getElementById('woOrderId').textContent='#'+woOrderIdVal;
     document.getElementById('woMsgId').textContent='#'+woOrderIdVal;
     woShowStep(2);
-  } catch(e){ woSetErr('woErr1c',e.message||'Upload করা যায়নি'); }
+  } catch(e){ woSetErr('woErr1c',e.message||'Submit করা যায়নি'); }
   btn.disabled=false; btn.textContent='Submit করুন →';
 }
 </script>

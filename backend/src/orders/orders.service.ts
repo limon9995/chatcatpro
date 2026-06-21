@@ -478,38 +478,22 @@ export class OrdersService {
   ) {
     const order = await this.prisma.order.findFirst({
       where: { id: orderId, pageIdRef },
+      select: { id: true, paymentStatus: true, customerName: true, customerPhone: true },
     });
     if (!order) throw new NotFoundException('Order not found');
     if (order.paymentStatus !== 'pending_proof') {
-      throw new BadRequestException(
-        'Payment proof not expected for this order',
-      );
+      throw new BadRequestException('Payment proof not expected for this order');
     }
 
-    const path = require('path') as typeof import('path');
-    const fs = require('fs/promises') as typeof import('fs/promises');
-    const { randomUUID } = require('crypto') as typeof import('crypto');
-
-    const dir = path.join(
-      process.cwd(),
-      'storage',
-      'payment-proofs',
-      String(pageIdRef),
-    );
-    await fs.mkdir(dir, { recursive: true });
-    const rawExt = path.extname(file.originalname || '').toLowerCase();
-    const ext = ['.jpg', '.jpeg', '.png', '.webp'].includes(rawExt)
-      ? rawExt
-      : '.jpg';
-    const filename = `${Date.now()}-${randomUUID().slice(0, 8)}${ext}`;
-    await fs.writeFile(path.join(dir, filename), file.buffer);
-    const url = `/storage/payment-proofs/${pageIdRef}/${filename}`;
+    // Send screenshot to merchant's Telegram instead of storing on server
+    const caption = `📸 Payment Screenshot\nOrder #${orderId}${transactionId ? `\nTxID: ${transactionId}` : ''}\nCustomer: ${order.customerName ?? '?'} | ${order.customerPhone ?? '?'}`;
+    void this.telegram.sendPhoto(pageIdRef, file.buffer, caption).catch(() => {});
 
     return this.prisma.order.update({
       where: { id: orderId },
       data: {
         paymentStatus: 'advance_paid',
-        paymentScreenshotUrl: url,
+        paymentScreenshotUrl: 'telegram',
         transactionId: transactionId ?? null,
         paymentVerifyStatus: 'pending_review',
       },
