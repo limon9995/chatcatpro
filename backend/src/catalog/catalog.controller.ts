@@ -20,6 +20,7 @@ import { ProductsService } from '../products/products.service';
 import { OrdersService } from '../orders/orders.service';
 import { PaymentVerifyService } from '../payment-verify/payment-verify.service';
 import { SmsGatewayService } from '../sms-gateway/sms-gateway.service';
+import { TelegramNotificationService } from '../telegram/telegram-notification.service';
 
 // ── Video URL helpers ─────────────────────────────────────────────────────────
 
@@ -138,6 +139,7 @@ export class CatalogController {
     private readonly ordersService: OrdersService,
     private readonly paymentVerify: PaymentVerifyService,
     private readonly smsGatewayService: SmsGatewayService,
+    private readonly telegram: TelegramNotificationService,
   ) {}
 
   private normalizeCodeList(raw?: string): string[] {
@@ -503,14 +505,20 @@ export class CatalogController {
     // If only TxID provided (no screenshot) — try SMS gateway match first
     if (!file?.buffer && transactionId?.trim()) {
       const smsMatch = await this.smsGatewayService.matchPayment(page.id, transactionId.trim(), null, page.advanceAmount ?? 0);
-      await this.prisma.order.update({
+      const order = await this.prisma.order.update({
         where: { id: orderId },
         data: {
           paymentStatus: 'advance_paid',
           transactionId: transactionId.trim(),
           paymentVerifyStatus: smsMatch.matched ? 'verified' : 'pending_review',
         },
+        select: { id: true, customerName: true, phone: true },
       });
+      const status = smsMatch.matched ? '✅ Auto-verified' : '⏳ Pending review';
+      void this.telegram.notify(
+        page.id,
+        `💸 Payment Received\nOrder #${order.id}\nTxID: ${transactionId.trim()}\nCustomer: ${order.customerName ?? '?'} | ${order.phone ?? '?'}\nStatus: ${status}`,
+      ).catch(() => {});
       return { success: true, autoVerified: smsMatch.matched };
     }
 
@@ -1221,6 +1229,8 @@ ${page.webOrderEnabled ? `
 .wo-num{font-size:22px;font-weight:900;color:var(--p);letter-spacing:.04em}
 .wo-file-area{display:flex;align-items:center;justify-content:center;gap:8px;padding:14px;border-radius:12px;border:2px dashed var(--border);cursor:pointer;font-size:13.5px;font-weight:600;color:var(--muted);transition:border-color .15s;background:var(--bg)}
 .wo-file-area:hover{border-color:var(--p);color:var(--p)}
+.wo-method-btn{display:flex;align-items:center;gap:14px;width:100%;padding:14px 16px;border-radius:14px;border:2px solid var(--border);background:var(--bg);color:var(--text);font-family:inherit;cursor:pointer;text-align:left;transition:border-color .15s,background .15s}
+.wo-method-btn:hover{border-color:var(--p);background:color-mix(in srgb,var(--p) 6%,transparent)}
 .wo-success{text-align:center;padding:20px 0 8px}
 .wo-success .wo-icon{font-size:52px;margin-bottom:12px}
 .wo-success h3{font-size:18px;font-weight:800;color:#059669;margin-bottom:6px}
@@ -1271,6 +1281,7 @@ ${page.webOrderEnabled ? `
         <button class="wo-btn" id="woBtnSubmit" onclick="woSubmit()">অর্ডার দিন →</button>
       </div>
 
+
       <!-- Step 1a: Gateway Payment -->
       <div class="wo-step" id="woStep1a">
         <div class="wo-payment-box">
@@ -1280,50 +1291,49 @@ ${page.webOrderEnabled ? `
         <button class="wo-btn" id="woBtnGw" onclick="woGoGateway()">পেমেন্ট করুন →</button>
       </div>
 
-      <!-- Step 1b: Direct (bKash/Nagad TxID) -->
-      <div class="wo-step" id="woStep1b">
-        <div class="wo-payment-box">
-          <div style="font-size:13px;font-weight:700;margin-bottom:8px">💸 Advance পাঠান</div>
-          <div id="woBkashLine" style="display:none">📱 বিকাশ: <span class="wo-num" id="woBkashNum"></span></div>
-          <div id="woNagadLine" style="display:none">📱 নগদ: <span class="wo-num" id="woNagadNum"></span></div>
-          <div id="woRocketLine" style="display:none">🚀 রকেট: <span class="wo-num" id="woRocketNum"></span></div>
-          <div style="font-size:13px;margin-top:6px">পরিমাণ: <strong id="woDirectAmt"></strong></div>
+      <!-- Step M: Method Selection -->
+      <div class="wo-step" id="woStepM">
+        <div style="text-align:center;margin-bottom:18px">
+          <div style="font-size:16px;font-weight:700;margin-bottom:4px">💸 Advance Payment</div>
+          <div style="font-size:13px;color:var(--muted,#94a3b8)">পরিমাণ: <strong id="woMethodAmt" style="color:var(--fg)"></strong></div>
         </div>
-        <div><div class="wo-lbl">Transaction ID *</div><input class="wo-inp" id="woTxId" type="text" placeholder="যেমন: 8N7XXXXXX"></div>
-        <div class="wo-err" id="woErr1b"></div>
-        <button class="wo-btn" id="woBtnVerify" onclick="woVerify()">Verify করুন →</button>
+        <div style="font-size:12px;color:var(--muted,#64748b);margin-bottom:14px;text-align:center">কোন মেথডে পাঠাবেন বেছে নিন</div>
+        <div id="woMethodBtns" style="display:flex;flex-direction:column;gap:10px">
+          <button id="woBtnBkash" class="wo-method-btn" onclick="woSelectMethod('bkash')" style="display:none">
+            <span style="font-size:20px">📱</span>
+            <div><div style="font-weight:700;font-size:14px">বিকাশ</div><div id="woMBkashNum" style="font-size:12px;opacity:.8"></div></div>
+          </button>
+          <button id="woBtnNagad" class="wo-method-btn" onclick="woSelectMethod('nagad')" style="display:none">
+            <span style="font-size:20px">📱</span>
+            <div><div style="font-weight:700;font-size:14px">নগদ</div><div id="woMNagadNum" style="font-size:12px;opacity:.8"></div></div>
+          </button>
+          <button id="woBtnRocket" class="wo-method-btn" onclick="woSelectMethod('rocket')" style="display:none">
+            <span style="font-size:20px">🚀</span>
+            <div><div style="font-weight:700;font-size:14px">রকেট</div><div id="woMRocketNum" style="font-size:12px;opacity:.8"></div></div>
+          </button>
+        </div>
       </div>
 
-      <!-- Step 1s: SMS Gateway TxID -->
-      <div class="wo-step" id="woStep1s">
-        <div class="wo-payment-box">
-          <div style="font-size:13px;font-weight:700;margin-bottom:8px">💸 Advance পাঠান</div>
-          <div id="woSmsBkashLine" style="display:none">📱 বিকাশ: <span class="wo-num" id="woSmsBkashNum"></span></div>
-          <div id="woSmsNagadLine" style="display:none">📱 নগদ: <span class="wo-num" id="woSmsNagadNum"></span></div>
-          <div id="woSmsRocketLine" style="display:none">🚀 রকেট: <span class="wo-num" id="woSmsRocketNum"></span></div>
-          <div style="font-size:13px;margin-top:6px">পরিমাণ: <strong id="woSmsAmt"></strong></div>
+      <!-- Step P: Pay + TxID -->
+      <div class="wo-step" id="woStepP">
+        <div class="wo-payment-box" style="text-align:center;padding:16px">
+          <div id="woPIcon" style="font-size:28px;margin-bottom:6px"></div>
+          <div id="woPName" style="font-size:13px;font-weight:700;margin-bottom:10px"></div>
+          <div style="font-size:12px;color:var(--muted,#94a3b8);margin-bottom:4px">এই নম্বরে পাঠান</div>
+          <div id="woPNum" style="font-size:20px;font-weight:800;letter-spacing:1px;color:var(--p,#6366f1);margin-bottom:8px"></div>
+          <div style="font-size:13px">পরিমাণ: <strong id="woPAmt" style="font-size:16px"></strong></div>
         </div>
-        <div style="font-size:12px;color:var(--muted,#64748b);background:var(--surface-2,#f8fafc);padding:8px 10px;border-radius:6px;margin-bottom:12px;line-height:1.5">✅ Payment পাঠানোর পর TxID দিন — bot SMS থেকে auto-verify করবে। Screenshot লাগবে না।</div>
-        <div><div class="wo-lbl">Transaction ID *</div><input class="wo-inp" id="woSmsTxId" type="text" placeholder="যেমন: 8N7XXXXXX"></div>
-        <div class="wo-err" id="woErrSms"></div>
-        <button class="wo-btn" id="woBtnSms" onclick="woSmsSubmit()">Confirm করুন →</button>
+        <div style="font-size:12px;color:var(--muted,#64748b);background:var(--surface-2,#f1f5f9);padding:9px 12px;border-radius:8px;margin-bottom:14px;line-height:1.6">
+          ✅ Payment পাঠানোর পর নিচে <strong>Transaction ID</strong> দিন।
+        </div>
+        <div><div class="wo-lbl">TRANSACTION ID *</div><input class="wo-inp" id="woFinalTxId" type="text" placeholder="যেমন: 8N7XXXXXX" autocomplete="off"></div>
+        <div class="wo-err" id="woErrP"></div>
+        <div style="display:flex;gap:8px;margin-top:4px">
+          <button class="wo-btn" style="background:var(--surface-2,#e2e8f0);color:var(--fg,#1e293b);flex:0 0 auto;width:44px;font-size:18px;padding:0" onclick="woShowStep('M')">←</button>
+          <button class="wo-btn" id="woBtnPaySubmit" style="flex:1" onclick="woPaySubmit()">Submit করুন →</button>
+        </div>
       </div>
 
-      <!-- Step 1c: Manual Screenshot -->
-      <div class="wo-step" id="woStep1c">
-        <div class="wo-payment-box" id="woManualMsg"></div>
-        <div id="woManualTxIdRow"><div class="wo-lbl">Transaction ID (ঐচ্ছিক)</div><input class="wo-inp" id="woManualTxId" type="text" placeholder="যেমন: 8N7XXXXXX"></div>
-        <div>
-          <div class="wo-lbl" style="display:flex;align-items:center;gap:6px">PAYMENT SCREENSHOT <span style="font-size:11px;color:var(--muted,#94a3b8);font-weight:400">(ঐচ্ছিক)</span></div>
-          <label class="wo-file-area" for="woScreenshot">
-            <span id="woFileLabel">📸 Screenshot বেছে নিন (optional)</span>
-          </label>
-          <input type="file" id="woScreenshot" accept="image/*" style="display:none" onchange="woFileChosen(this)">
-          <div style="font-size:11px;color:var(--muted,#94a3b8);margin-top:4px">Transaction ID দিলে screenshot না দিলেও হবে</div>
-        </div>
-        <div class="wo-err" id="woErr1c"></div>
-        <button class="wo-btn" id="woBtnUpload" onclick="woUpload()">Submit করুন →</button>
-      </div>
 
       <!-- Step 2: Success -->
       <div class="wo-step" id="woStep2">
@@ -1360,11 +1370,12 @@ var woPaymentUrl = null;
 
 function woOpen(){ document.getElementById('woModal').classList.add('open'); document.body.style.overflow='hidden'; }
 function woClose(){ document.getElementById('woModal').classList.remove('open'); document.body.style.overflow=''; }
-function woShowStep(n){ ['woStep0','woStep1a','woStep1b','woStep1c','woStep1s','woStep2'].forEach(function(id){ document.getElementById(id).classList.remove('active'); }); document.getElementById('woStep'+n).classList.add('active'); }
-function woSetErr(id,msg){ var el=document.getElementById(id); el.textContent=msg; el.style.display=msg?'block':'none'; }
-function woSetLoading(btnId,v){ var b=document.getElementById(btnId); if(b){ b.disabled=v; if(!v) b.textContent=b.dataset.orig||b.textContent; } }
+function woOpen(){ document.getElementById('woModal').classList.add('open'); document.body.style.overflow='hidden'; }
+function woClose(){ document.getElementById('woModal').classList.remove('open'); document.body.style.overflow=''; }
+function woShowStep(n){ ['woStep0','woStep1a','woStepM','woStepP','woStep2'].forEach(function(id){ var el=document.getElementById(id); if(el) el.classList.remove('active'); }); var t=document.getElementById('woStep'+n); if(t) t.classList.add('active'); }
+function woSetErr(id,msg){ var el=document.getElementById(id); if(el){ el.textContent=msg; el.style.display=msg?'block':'none'; } }
 
-function woFileChosen(inp){ var lbl=document.getElementById('woFileLabel'); if(inp.files&&inp.files[0]) lbl.textContent='✅ '+inp.files[0].name; else lbl.textContent='📸 Screenshot বেছে নিন'; }
+var woAdvData={};
 
 async function woSubmit(){
   var name=document.getElementById('woName').value.trim();
@@ -1381,7 +1392,7 @@ async function woSubmit(){
   if(!addr){woSetErr('woErr0','ঠিকানা দিন');return;}
   woSetErr('woErr0','');
   var btn=document.getElementById('woBtnSubmit');
-  btn.dataset.orig='অর্ডার দিন →'; btn.disabled=true; btn.textContent='পাঠানো হচ্ছে...';
+  btn.disabled=true; btn.textContent='পাঠানো হচ্ছে...';
   try {
     var body={customerName:name,phone:phone,address:addr,productCode:WO_CODE,qty:qty,price:WO_PRICE,productName:WO_NAME,orderNote:note};
     var r=await fetch('/catalog/'+WO_PAGE_ID+'/web-order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
@@ -1396,26 +1407,22 @@ async function woSubmit(){
       woPaymentUrl=d.paymentUrl;
       document.getElementById('woGwAmount').textContent=WO_CURRENCY+(d.advanceAmount||WO_ADV_AMT);
       woShowStep('1a'); document.getElementById('woTitle').textContent='💳 Payment করুন';
-    } else if(d.method==='direct'){
-      document.getElementById('woDirectAmt').textContent=WO_CURRENCY+(d.advanceAmount||WO_ADV_AMT);
-      if(d.advanceBkash){document.getElementById('woBkashNum').textContent=d.advanceBkash;document.getElementById('woBkashLine').style.display='block';}
-      if(d.advanceNagad){document.getElementById('woNagadNum').textContent=d.advanceNagad;document.getElementById('woNagadLine').style.display='block';}
-      if(d.advanceRocket){document.getElementById('woRocketNum').textContent=d.advanceRocket;document.getElementById('woRocketLine').style.display='block';}
-      woShowStep('1b'); document.getElementById('woTitle').textContent='💸 Payment করুন';
-    } else if(d.method==='sms'){
-      var smsAmt=WO_CURRENCY+(d.advanceAmount||WO_ADV_AMT);
-      document.getElementById('woSmsAmt').textContent=smsAmt;
-      if(d.advanceBkash){document.getElementById('woSmsBkashNum').textContent=d.advanceBkash;document.getElementById('woSmsBkashLine').style.display='block';}
-      if(d.advanceNagad){document.getElementById('woSmsNagadNum').textContent=d.advanceNagad;document.getElementById('woSmsNagadLine').style.display='block';}
-      if(d.advanceRocket){document.getElementById('woSmsRocketNum').textContent=d.advanceRocket;document.getElementById('woSmsRocketLine').style.display='block';}
-      woShowStep('1s'); document.getElementById('woTitle').textContent='💸 Payment করুন';
     } else {
-      var nums=(WO_BKASH?'📱 বিকাশ: '+WO_BKASH+'\\n':'')+(WO_NAGAD?'📱 নগদ: '+WO_NAGAD+'\\n':'')+(WO_ROCKET?'🚀 রকেট: '+WO_ROCKET+'\\n':'');
-      var msg=WO_ADV_MSG||('Advance '+WO_CURRENCY+(WO_ADV_AMT||'')+' পাঠান:\\n'+nums.replace(/\\n$/,''));
-      document.getElementById('woManualMsg').innerHTML='<strong style="font-size:13px;font-weight:700">💸 Advance পাঠান</strong><br><div style="margin-top:6px;font-size:13.5px;white-space:pre-line">'+msg+'</div>';
-      document.getElementById('woManualTxIdRow').style.display='block';
-      document.getElementById('woManualTxId').value='';
-      woShowStep('1c'); document.getElementById('woTitle').textContent='📸 Payment Proof';
+      // All direct/sms/manual methods → method selection screen
+      var amt=WO_CURRENCY+(d.advanceAmount||WO_ADV_AMT);
+      woAdvData={bkash:d.advanceBkash||WO_BKASH,nagad:d.advanceNagad||WO_NAGAD,rocket:d.advanceRocket||WO_ROCKET,amt:amt};
+      document.getElementById('woMethodAmt').textContent=amt;
+      // Show only available method buttons
+      var bkashBtn=document.getElementById('woBtnBkash');
+      var nagadBtn=document.getElementById('woBtnNagad');
+      var rocketBtn=document.getElementById('woBtnRocket');
+      if(woAdvData.bkash){ document.getElementById('woMBkashNum').textContent=woAdvData.bkash; bkashBtn.style.display='flex'; } else { bkashBtn.style.display='none'; }
+      if(woAdvData.nagad){ document.getElementById('woMNagadNum').textContent=woAdvData.nagad; nagadBtn.style.display='flex'; } else { nagadBtn.style.display='none'; }
+      if(woAdvData.rocket){ document.getElementById('woMRocketNum').textContent=woAdvData.rocket; rocketBtn.style.display='flex'; } else { rocketBtn.style.display='none'; }
+      // If only 1 method, auto-select it
+      var available=[woAdvData.bkash&&'bkash',woAdvData.nagad&&'nagad',woAdvData.rocket&&'rocket'].filter(Boolean);
+      if(available.length===1){ woSelectMethod(available[0]); }
+      else { woShowStep('M'); document.getElementById('woTitle').textContent='💸 Payment করুন'; }
     }
   } catch(e){ woSetErr('woErr0',e.message||'কিছু একটা সমস্যা হয়েছে'); }
   btn.disabled=false; btn.textContent='অর্ডার দিন →';
@@ -1423,82 +1430,38 @@ async function woSubmit(){
 
 function woGoGateway(){ if(woPaymentUrl) window.location.href=woPaymentUrl; }
 
-async function woVerify(){
-  var txId=document.getElementById('woTxId').value.trim();
-  if(!txId){woSetErr('woErr1b','Transaction ID দিন');return;}
-  woSetErr('woErr1b','');
-  var btn=document.getElementById('woBtnVerify');
-  btn.disabled=true; btn.textContent='Verify হচ্ছে...';
-  try {
-    var r=await fetch('/catalog/'+WO_PAGE_ID+'/web-order/'+woOrderIdVal+'/verify-direct',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({transactionId:txId})});
-    var d=await r.json();
-    if(d.verified){
-      document.getElementById('woOrderId').textContent='#'+woOrderIdVal;
-      document.getElementById('woMsgId').textContent='#'+woOrderIdVal;
-      woShowStep(2);
-    } else {
-      // fallback to screenshot — pre-fill TxID from step 1b and hide the TxID input (already entered)
-      var enteredTxId=document.getElementById('woTxId').value.trim();
-      var nums=(WO_BKASH?'📱 বিকাশ: '+WO_BKASH+'\\n':'')+(WO_NAGAD?'📱 নগদ: '+WO_NAGAD+'\\n':'')+(WO_ROCKET?'🚀 রকেট: '+WO_ROCKET+'\\n':'');
-      var msg=WO_ADV_MSG||('Advance '+WO_CURRENCY+(WO_ADV_AMT||'')+' পাঠান:\\n'+nums.replace(/\\n$/,''));
-      document.getElementById('woManualMsg').innerHTML='<strong style="font-size:13px;font-weight:700">💸 Advance পাঠান</strong><br><div style="margin-top:6px;font-size:13.5px;white-space:pre-line">'+msg+'</div>';
-      if(enteredTxId){
-        document.getElementById('woManualTxId').value=enteredTxId;
-        document.getElementById('woManualTxIdRow').style.display='none';
-      } else {
-        document.getElementById('woManualTxIdRow').style.display='block';
-      }
-      woShowStep('1c'); document.getElementById('woTitle').textContent='📸 Payment Proof';
-    }
-  } catch(e){ woSetErr('woErr1b',e.message||'Verify করা যায়নি'); }
-  btn.disabled=false; btn.textContent='Verify করুন →';
+function woSelectMethod(method){
+  var icons={bkash:'📱',nagad:'📱',rocket:'🚀'};
+  var names={bkash:'বিকাশ',nagad:'নগদ',rocket:'রকেট'};
+  var nums={bkash:woAdvData.bkash,nagad:woAdvData.nagad,rocket:woAdvData.rocket};
+  document.getElementById('woPIcon').textContent=icons[method]||'📱';
+  document.getElementById('woPName').textContent=names[method]||method;
+  document.getElementById('woPNum').textContent=nums[method]||'';
+  document.getElementById('woPAmt').textContent=woAdvData.amt||'';
+  document.getElementById('woFinalTxId').value='';
+  woSetErr('woErrP','');
+  woShowStep('P'); document.getElementById('woTitle').textContent='💸 Payment করুন';
 }
 
-async function woSmsSubmit(){
-  var txId=document.getElementById('woSmsTxId').value.trim();
-  if(!txId){woSetErr('woErrSms','Transaction ID দিন');return;}
-  woSetErr('woErrSms','');
-  var btn=document.getElementById('woBtnSms');
-  btn.disabled=true; btn.textContent='Confirm হচ্ছে...';
-  try {
-    var r=await fetch('/catalog/'+WO_PAGE_ID+'/web-order/'+woOrderIdVal+'/sms-txid',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({transactionId:txId})});
-    var d=await r.json();
-    if(!r.ok) throw new Error(d.message||'Error');
-    document.getElementById('woOrderId').textContent='#'+woOrderIdVal;
-    document.getElementById('woMsgId').textContent='#'+woOrderIdVal;
-    woShowStep(2);
-  } catch(e){ woSetErr('woErrSms',e.message||'কিছু একটা সমস্যা হয়েছে'); }
-  btn.disabled=false; btn.textContent='Confirm করুন →';
-}
-
-async function woUpload(){
-  var file=document.getElementById('woScreenshot').files[0];
-  var txId=document.getElementById('woManualTxId').value.trim();
-  if(!file && !txId){woSetErr('woErr1c','Transaction ID অথবা Screenshot দিন');return;}
-  woSetErr('woErr1c','');
-  var btn=document.getElementById('woBtnUpload');
+async function woPaySubmit(){
+  var txId=document.getElementById('woFinalTxId').value.trim();
+  if(!txId){woSetErr('woErrP','Transaction ID দিন');return;}
+  woSetErr('woErrP','');
+  var btn=document.getElementById('woBtnPaySubmit');
   btn.disabled=true; btn.textContent='Submit হচ্ছে...';
   try {
-    var r,d;
-    if(file){
-      var fd=new FormData();
-      fd.append('screenshot',file);
-      if(txId) fd.append('transactionId',txId);
-      r=await fetch('/catalog/'+WO_PAGE_ID+'/web-order/'+woOrderIdVal+'/payment-proof',{method:'POST',body:fd});
-    } else {
-      // TxID only — no screenshot
-      var fd2=new FormData();
-      fd2.append('transactionId',txId);
-      r=await fetch('/catalog/'+WO_PAGE_ID+'/web-order/'+woOrderIdVal+'/payment-proof',{method:'POST',body:fd2});
-    }
-    d=await r.json();
+    var fd=new FormData();
+    fd.append('transactionId',txId);
+    var r=await fetch('/catalog/'+WO_PAGE_ID+'/web-order/'+woOrderIdVal+'/payment-proof',{method:'POST',body:fd});
+    var d=await r.json();
     if(!r.ok) throw new Error(d.message||'Submit failed');
     document.getElementById('woOrderId').textContent='#'+woOrderIdVal;
     document.getElementById('woMsgId').textContent='#'+woOrderIdVal;
     woShowStep(2);
-  } catch(e){ woSetErr('woErr1c',e.message||'Submit করা যায়নি'); }
+  } catch(e){ woSetErr('woErrP',e.message||'Submit করা যায়নি'); }
   btn.disabled=false; btn.textContent='Submit করুন →';
 }
+
 </script>
 ` : ''}
 

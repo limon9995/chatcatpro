@@ -4,10 +4,11 @@ import { ProductsModule } from '../products/products.module';
 import { OrdersModule } from '../orders/orders.module';
 import { PaymentVerifyModule } from '../payment-verify/payment-verify.module';
 import { SmsGatewayModule } from '../sms-gateway/sms-gateway.module';
+import { TelegramModule } from '../telegram/telegram.module';
 import { CatalogController } from './catalog.controller';
 
 @Module({
-  imports: [PrismaModule, ProductsModule, OrdersModule, PaymentVerifyModule, SmsGatewayModule],
+  imports: [PrismaModule, ProductsModule, OrdersModule, PaymentVerifyModule, SmsGatewayModule, TelegramModule],
   controllers: [CatalogController],
 })
 export class CatalogModule {}
