@@ -821,7 +821,7 @@ export function BotKnowledgePage({ th, pageId, onToast }: {
           rows={14}
           style={{
             width: '100%', boxSizing: 'border-box', padding: '10px 12px',
-            background: th.input, border: `1px solid ${th.border}`, borderRadius: 8,
+            backgroundColor: th.input, border: `1px solid ${th.border}`, borderRadius: 8,
             color: th.text, fontSize: 13, fontFamily: 'monospace', resize: 'vertical',
           }}
           placeholder={`উদাহরণ:\n- Free trial: ১০০ AI reply/দিন\n- Paid: ৳০.১০/AI reply\n- Monthly base fee: ৳৬৯৯/মাস`}
