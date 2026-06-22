@@ -504,6 +504,13 @@ export class ClientDashboardController {
   ) {
     return this.botKnowledge.updatePricingPolicy(this.pid(r, p), b || {});
   }
+  @Patch(':pageId/bot-knowledge/pricing-info') updatePricingInfo(
+    @Param('pageId') p: string,
+    @Body() b: any,
+    @Req() r: any,
+  ) {
+    return this.botKnowledge.updatePricingInfo(this.pid(r, p), b?.pricingInfo ?? '');
+  }
   @Post(':pageId/bot-knowledge/import-global/:key') importGlobal(
     @Param('pageId') p: string,
     @Param('key') key: string,

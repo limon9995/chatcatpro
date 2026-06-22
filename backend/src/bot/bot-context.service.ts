@@ -28,6 +28,7 @@ export interface BusinessContext {
   paymentRules: Record<string, any>;
   pricingPolicy: Record<string, any>;
   knowledgeText: string;
+  pricingInfo: string;
   dualPhotoMode: boolean;
   dualWearingProduct: DualProduct | null;
   dualHoldingProduct: DualProduct | null;
@@ -123,6 +124,7 @@ export class BotContextService {
       paymentRules: (knowledgeConfig as any)?.paymentRules ?? {},
       pricingPolicy: (knowledgeConfig as any)?.pricingPolicy ?? {},
       knowledgeText: (page as any)?.knowledgeText ?? '',
+      pricingInfo: (knowledgeConfig as any)?.pricingInfo ?? '',
       dualPhotoMode: Boolean((page as any)?.dualPhotoMode),
       dualWearingProduct,
       dualHoldingProduct,

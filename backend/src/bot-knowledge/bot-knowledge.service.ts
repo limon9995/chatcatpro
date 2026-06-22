@@ -80,6 +80,7 @@ export class BotKnowledgeService {
           pageCfg.areaRules?.clientCustomAreas || [],
         ),
       },
+      pricingInfo: pageCfg.pricingInfo || globalCfg.pricingInfo || '',
       globalSuggestions: this.buildGlobalSuggestions(
         globalCfg.questions || [],
         pageCfg.questions || [],
@@ -263,6 +264,17 @@ export class BotKnowledgeService {
       updatedAt: new Date().toISOString(),
     };
     this.writePage(eid, next);
+    return this.getConfig(pageId);
+  }
+
+  async updatePricingInfo(pageId: number, pricingInfo: string) {
+    const eid = await this.effectiveId(pageId);
+    const prev = this.readPage(eid);
+    this.writePage(eid, {
+      ...prev,
+      pricingInfo: String(pricingInfo ?? ''),
+      updatedAt: new Date().toISOString(),
+    });
     return this.getConfig(pageId);
   }
 

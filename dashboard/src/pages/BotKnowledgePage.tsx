@@ -23,7 +23,7 @@ interface LearningLog {
   customer?: { psid: string; name?: string; phone?: string } | null;
 }
 
-type BkTab = 'questions' | 'system-replies' | 'area-rules' | 'learning';
+type BkTab = 'questions' | 'system-replies' | 'pricing-info' | 'area-rules' | 'learning';
 
 const SYSTEM_REPLY_KEYS = [
   'ocr_processing','ocr_fail','order_received','order_confirmed',
@@ -72,6 +72,8 @@ export function BotKnowledgePage({ th, pageId, onToast }: {
   const [editReplies, setEditReplies] = useState<Record<string, string>>({});
   const [kwInput, setKwInput] = useState('');
   const [expandedKw, setExpandedKw] = useState<Set<string>>(new Set());
+  const [pricingInfo, setPricingInfo]   = useState('');
+  const [savingPricing, setSavingPricing] = useState(false);
   const [customAreas, setCustomAreas] = useState<AreaRule[]>([]);
   const [areaForm, setAreaForm] = useState({ areaName: '', aliases: '', zoneType: 'inside_dhaka' as 'inside_dhaka' | 'outside_dhaka' });
   const [savingArea, setSavingArea] = useState(false);
@@ -94,6 +96,7 @@ export function BotKnowledgePage({ th, pageId, onToast }: {
       const c = await request<BotConfig>(BASE);
       setCfg(c);
       setCustomAreas(c.areaRules?.clientCustomAreas || []);
+      setPricingInfo((c as any).pricingInfo || '');
       const r: Record<string, string> = {};
       for (const k of SYSTEM_REPLY_KEYS) r[k] = c.systemReplies?.[k]?.template || '';
       setEditReplies(r);
@@ -163,6 +166,7 @@ export function BotKnowledgePage({ th, pageId, onToast }: {
       {([
         ['questions',       '💬 Questions'],
         ['system-replies',  '🔔 System Replies'],
+        ['pricing-info',    '💰 Pricing Info'],
         ['area-rules',      '🗺️ Area Rules'],
         ['learning',        '🧠 Learning Log'],
       ] as const).map(([k, l]) => (
@@ -790,6 +794,51 @@ export function BotKnowledgePage({ th, pageId, onToast }: {
 
   const removeArea = (i: number) => saveAreaRules(customAreas.filter((_, idx) => idx !== i));
 
+  const savePricingInfo = async () => {
+    setSavingPricing(true);
+    try {
+      await request(`${BASE}/pricing-info`, { method: 'PATCH', body: JSON.stringify({ pricingInfo }) });
+      onToast('Pricing info saved ✓', 'success');
+    } catch (e: any) { onToast(e.message, 'error'); }
+    finally { setSavingPricing(false); }
+  };
+
+  const PricingInfoTab = () => (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ ...th.card2, background: th.accentSoft, border: `1px solid ${th.accent}40`, borderRadius: 12, padding: '12px 16px' }}>
+        <div style={{ fontWeight: 700, fontSize: 13, color: th.accent, marginBottom: 4 }}>💰 Pricing Info — Auto-Injected</div>
+        <div style={{ fontSize: 12, color: th.text, lineHeight: 1.7 }}>
+          এখানে যা লিখবেন, bot সেটা <b>automatically মনে রাখবে</b>।
+          Customer price জিজ্ঞেস করলে এই info থেকেই reply করবে।<br />
+          Price change করলে শুধু এখানে update করুন — bot এর পরের reply থেকেই নতুন price বলবে।
+        </div>
+      </div>
+      <div style={th.card}>
+        <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 10 }}>Service Pricing Text</div>
+        <textarea
+          value={pricingInfo}
+          onChange={e => setPricingInfo(e.target.value)}
+          rows={14}
+          style={{
+            width: '100%', boxSizing: 'border-box', padding: '10px 12px',
+            background: th.input, border: `1px solid ${th.border}`, borderRadius: 8,
+            color: th.text, fontSize: 13, fontFamily: 'monospace', resize: 'vertical',
+          }}
+          placeholder={`উদাহরণ:\n- Free trial: ১০০ AI reply/দিন\n- Paid: ৳০.১০/AI reply\n- Monthly base fee: ৳৬৯৯/মাস`}
+        />
+        <button
+          onClick={savePricingInfo}
+          disabled={savingPricing}
+          style={{
+            marginTop: 10, padding: '9px 20px', background: th.accent, color: '#fff',
+            border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 13,
+            cursor: savingPricing ? 'not-allowed' : 'pointer', opacity: savingPricing ? 0.7 : 1,
+          }}
+        >{savingPricing ? 'Saving…' : 'Save Pricing Info'}</button>
+      </div>
+    </div>
+  );
+
   const AreaRulesTab = () => (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
@@ -903,6 +952,7 @@ export function BotKnowledgePage({ th, pageId, onToast }: {
       <TabBar />
       {tab === 'questions'      && <QuestionsTab />}
       {tab === 'system-replies' && <SystemRepliesTab />}
+      {tab === 'pricing-info'   && <PricingInfoTab />}
       {tab === 'area-rules'     && <AreaRulesTab />}
       {tab === 'learning'       && <LearningTab />}
     </div>
