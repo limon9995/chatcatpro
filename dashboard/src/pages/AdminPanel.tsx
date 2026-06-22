@@ -164,6 +164,8 @@ export function AdminPanel({ th, onToast, onLogout }: {
   };
   const [pricingForm, setPricingForm] = useState(DEFAULT_PRICING);
   const [pricingSaving, setPricingSaving] = useState(false);
+  const [globalPricingInfo, setGlobalPricingInfo] = useState('');
+  const [pricingInfoSaving, setPricingInfoSaving] = useState(false);
 
   // Subscriptions tab state
   const [subPages, setSubPages] = useState<any[]>([]);
@@ -456,7 +458,23 @@ export function AdminPanel({ th, onToast, onLogout }: {
         costPerMemoPrintBdt:        data.costPerMemoPrintBdt        ?? DEFAULT_PRICING.costPerMemoPrintBdt,
       });
     } catch { /* silent — fallback to defaults */ }
+    try {
+      const g = await request<any>(`${BASE}/bot-knowledge/global`);
+      if (g?.pricingInfo) setGlobalPricingInfo(g.pricingInfo);
+    } catch { /* silent */ }
   }, [BASE]);
+
+  const saveGlobalPricingInfo = async () => {
+    setPricingInfoSaving(true);
+    try {
+      await request(`${BASE}/bot-knowledge/global/pricing-info`, {
+        method: 'PATCH',
+        body: JSON.stringify({ pricingInfo: globalPricingInfo }),
+      });
+      onToast('✅ Bot pricing text saved — bot এর পরের reply থেকেই নতুন price বলবে', 'success');
+    } catch (e: any) { onToast(e.message, 'error'); }
+    finally { setPricingInfoSaving(false); }
+  };
 
   const saveDefaultPricing = async () => {
     setPricingSaving(true);
@@ -1935,6 +1953,10 @@ export function AdminPanel({ th, onToast, onLogout }: {
             saving={pricingSaving}
             onSaveDefault={saveDefaultPricing}
             onApplyAll={applyPricingToAll}
+            globalPricingInfo={globalPricingInfo}
+            setGlobalPricingInfo={setGlobalPricingInfo}
+            pricingInfoSaving={pricingInfoSaving}
+            onSavePricingInfo={saveGlobalPricingInfo}
           />
         )}
         {tab === 'subscriptions' && (
@@ -3628,13 +3650,17 @@ const PRICING_FIELDS: { key: keyof PricingForm; label: string; help: string }[] 
   { key: 'costPerMemoPrintBdt',      label: 'Memo Print (৳)',                help: 'প্রতিটি invoice/memo print এর charge' },
 ];
 
-function AdminPricingTab({ th, form, setForm, saving, onSaveDefault, onApplyAll }: {
+function AdminPricingTab({ th, form, setForm, saving, onSaveDefault, onApplyAll, globalPricingInfo, setGlobalPricingInfo, pricingInfoSaving, onSavePricingInfo }: {
   th: Theme;
   form: PricingForm;
   setForm: (v: PricingForm | ((p: PricingForm) => PricingForm)) => void;
   saving: boolean;
   onSaveDefault: () => void;
   onApplyAll: () => void;
+  globalPricingInfo: string;
+  setGlobalPricingInfo: (v: string) => void;
+  pricingInfoSaving: boolean;
+  onSavePricingInfo: () => void;
 }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 520 }}>
@@ -3732,6 +3758,31 @@ function AdminPricingTab({ th, form, setForm, saving, onSaveDefault, onApplyAll 
             </div>
           ))}
         </div>
+      </div>
+
+      {/* Bot Pricing Info */}
+      <div style={{ ...th.card }}>
+        <CardHeader th={th} title="💰 Bot Pricing Text (Auto-Injected)" sub="এখানে যা লিখবেন bot সেটা মনে রেখে customer কে price বলবে — সব page এ global ভাবে apply হবে" />
+        <div style={{ marginBottom: 10, padding: '10px 12px', background: th.accentSoft, borderRadius: 8, fontSize: 12, color: th.muted, lineHeight: 1.7 }}>
+          Price change করলে শুধু এখানে update করুন → <strong style={{ color: th.accent }}>Save</strong> → bot পরের reply থেকেই নতুন price বলবে।<br />
+          Individual page এ আলাদা pricing দিতে Bot Knowledge → 💰 Pricing Info ব্যবহার করুন।
+        </div>
+        <textarea
+          value={globalPricingInfo}
+          onChange={e => setGlobalPricingInfo(e.target.value)}
+          rows={12}
+          style={{ ...th.input, width: '100%', resize: 'vertical' as const, fontFamily: 'monospace', fontSize: 12.5, boxSizing: 'border-box' }}
+          placeholder={'উদাহরণ:\n- Free trial: ১০০ AI reply/দিন\n- Paid: ৳০.১০/AI reply\n- Monthly base fee: ৳৬৯৯/মাস\n- একটা complete order conversation গড়ে ৳১ এরও কম'}
+        />
+        <button
+          onClick={onSavePricingInfo}
+          disabled={pricingInfoSaving}
+          style={{
+            marginTop: 10, padding: '10px 20px', background: th.accent, color: '#fff',
+            border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 13,
+            cursor: pricingInfoSaving ? 'not-allowed' : 'pointer', opacity: pricingInfoSaving ? 0.7 : 1,
+          }}
+        >{pricingInfoSaving ? 'Saving…' : '💾 Save Bot Pricing Text'}</button>
       </div>
     </div>
   );

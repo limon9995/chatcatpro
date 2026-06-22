@@ -304,6 +304,14 @@ export class BotKnowledgeService {
     return current;
   }
 
+  updateGlobalPricingInfo(pricingInfo: string) {
+    const current = this.readGlobal();
+    current.pricingInfo = String(pricingInfo ?? '');
+    current.updatedAt = new Date().toISOString();
+    this.writeGlobal(current);
+    return current;
+  }
+
   async importGlobalQuestion(pageId: number, key: string) {
     const eid = await this.effectiveId(pageId);
     const globalCfg = this.readGlobal();

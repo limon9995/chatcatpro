@@ -156,6 +156,11 @@ export class AdminController {
     return this.svc.getBotLearningLog();
   }
 
+  @Patch('bot-knowledge/global/pricing-info')
+  updateGlobalPricingInfo(@Body('pricingInfo') pricingInfo: string) {
+    return this.svc.updateGlobalBotPricingInfo(pricingInfo ?? '');
+  }
+
   @Post('bot-knowledge/learning-log/create-question')
   createFromLearning(@Body() b: any) {
     return this.svc.createQuestionFromLearning(b || {});

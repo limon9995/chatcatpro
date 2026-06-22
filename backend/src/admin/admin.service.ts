@@ -332,6 +332,9 @@ export class AdminService {
   updateGlobalBotAreas(areas: any[]) {
     return this.botKnowledge.updateGlobalAreas(areas || []);
   }
+  updateGlobalBotPricingInfo(pricingInfo: string) {
+    return this.botKnowledge.updateGlobalPricingInfo(pricingInfo);
+  }
   getBotLearningLog() {
     return this.botKnowledge.getLearningLog();
   }
