@@ -777,6 +777,41 @@ export class WebhookService implements OnModuleDestroy {
       return;
     }
 
+    // ── STRUCTURED DRAFT STEPS — bypass SmartBot, use deterministic handler ─
+    // cf:*, name, phone, address steps need strict validation (choice lists, phone
+    // format, address heuristics). SmartBot does not handle these reliably.
+    const structuredStep =
+      draft?.currentStep &&
+      (draft.currentStep.startsWith('cf:') ||
+        ['name', 'phone', 'address', 'advance_payment'].includes(
+          draft.currentStep,
+        ));
+    if (structuredStep && page.orderModeOn) {
+      const result = await this.draftHandler.captureField(
+        pageId,
+        psid,
+        text,
+        draft!,
+        page,
+      );
+      if (result === null) {
+        const stillExists = await this.ctx.getActiveDraft(pageId, psid);
+        if (!stillExists) {
+          const wasConfirm =
+            draft!.currentStep === 'confirm' &&
+            this.botIntent.detectIntent(text, true) === 'CONFIRM';
+          const key = wasConfirm ? 'order_received' : 'order_cancelled';
+          const msg = await this.botKnowledge.resolveSystemReply(pageId, key);
+          await this.safeSend(token, psid, msg);
+        }
+        return;
+      }
+      if (typeof result === 'string') {
+        await this.safeSend(token, psid, result);
+        return;
+      }
+    }
+
     // ── SMART BOT (V19) — single AI call replaces keyword pipeline ────────
     if (page.smartBotOn && aiAllowed && this.smartBot.isAvailable()) {
       const reply = await this.smartBot.handle(
