@@ -566,6 +566,9 @@ export class WebhookService implements OnModuleDestroy {
     const pageId = page.id as number;
     const customerText = (message.text || '').trim();
 
+    // Master automation switch — if OFF, bot stays completely silent
+    if (!page.automationOn) return;
+
     // Clear any stale reply tracking for this page+psid before processing
     const replyKey = `${pageId}:${psid}`;
     this.inFlightReply.delete(replyKey);
