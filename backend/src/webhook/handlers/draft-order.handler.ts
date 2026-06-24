@@ -425,15 +425,18 @@ export class DraftOrderHandler {
     if (!draft.phone && parsed.phone) draft.phone = parsed.phone;
     if (!draft.address && parsed.address) draft.address = parsed.address;
 
+    // At name step: if parser didn't find a name (may have mis-classified as address
+    // due to length heuristic), treat the raw input as the name directly.
+    if (step === 'name' && !parsed.name && !parsed.phone) {
+      if (this.botIntent.detectIntent(workingText, false) === 'CANCEL') {
+        return 'আপনার নামটা দিন 💖 (যেমন: রাহেলা বেগম)';
+      }
+      draft.customerName = workingText.trim().slice(0, 80);
+    }
+
     // If smart parser found nothing, apply strict current-step logic
     if (!parsed.name && !parsed.phone && !parsed.address) {
-      if (step === 'name') {
-        // Reject clearly negative/cancel responses as names
-        if (this.botIntent.detectIntent(workingText, false) === 'CANCEL') {
-          return 'আপনার নামটা দিন 💖 (যেমন: রাহেলা বেগম)';
-        }
-        draft.customerName = workingText.trim().slice(0, 80);
-      } else if (step === 'phone') {
+      if (step === 'phone') {
         if (this.botIntent.detectIntent(workingText, false) === 'CANCEL') {
           await this.ctx.clearDraft(pageId, psid);
           return null;
@@ -1035,7 +1038,7 @@ export class DraftOrderHandler {
       .filter(Boolean);
     const hasComma = parts.length >= 2;
     const hasGeo = this.hasGeoKeyword(remaining);
-    const isLong = remaining.length >= 15;
+    const isLong = remaining.length >= 25;
 
     if (hasComma) {
       // "Name, Area, District" — first short non-geo part = name, rest = address
