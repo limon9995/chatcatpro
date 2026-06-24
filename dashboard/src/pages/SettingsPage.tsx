@@ -3,6 +3,7 @@ import { Spinner, Toggle } from '../components/ui';
 import type { Theme } from '../components/ui';
 import { API_BASE, useApi } from '../hooks/useApi';
 import { useLanguage } from '../i18n';
+import { DHAKA_ZONES } from '../data/dhaka-areas';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface Settings {
@@ -1274,57 +1275,62 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
         </Section>
 
         {/* Dhaka Zone Management */}
-        <Section title={copy('ঢাকার ভেতরের এলাকা', 'Inside Dhaka Areas')} desc={copy('এই তালিকায় থাকলে ঢাকার ভেতরে ধরা হবে — বাকি সব বাইরে। নতুন এলাকা add করুন যদি আপনার এলাকা তালিকায় না থাকে।', 'Addresses matching this list = inside Dhaka. Everything else = outside. Add custom areas if yours is missing.')}>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
-            <input
-              style={{ ...inp, flex: 1 }}
-              placeholder={copy('নতুন এলাকার নাম লিখুন — বাংলা বা English', 'Type area name in Bengali or English')}
-              value={newArea}
-              onChange={e => setNewArea(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Enter' && newArea.trim()) {
-                  const updated = [...customAreas, newArea.trim()];
-                  setCustomAreas(updated);
-                  setNewArea('');
-                  saveCustomAreas(updated);
-                }
-              }}
+        <Section title={copy('ঢাকার ভেতরের এলাকা', 'Inside Dhaka Areas')} desc={copy('এই তালিকায় থাকা address গুলো "ঢাকার ভেতরে" ধরা হবে। বাকি সব outside Dhaka।', 'Addresses matching this list = inside Dhaka. Everything else = outside.')}>
+          {/* Custom areas added by client */}
+          {customAreas.length > 0 && (
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: th.accent, marginBottom: 6 }}>{copy('আপনার যোগ করা এলাকা', 'Your custom areas')}</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {customAreas.map((area, i) => (
+                  <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 5, background: th.accentSoft, border: `1px solid ${th.accent}`, borderRadius: 20, padding: '3px 10px 3px 12px', fontSize: 12.5, color: th.accent }}>
+                    {area}
+                    <button onClick={() => { const u = customAreas.filter((_, j) => j !== i); setCustomAreas(u); saveCustomAreas(u); }}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: th.accent, fontSize: 15, lineHeight: 1, padding: 0 }}>×</button>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Add new area */}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+            <input style={{ ...inp, flex: 1 }} placeholder={copy('নতুন এলাকার নাম লিখুন (বাংলা বা English)', 'Type area name (Bengali or English)')}
+              value={newArea} onChange={e => setNewArea(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && newArea.trim()) { const u = [...customAreas, newArea.trim()]; setCustomAreas(u); setNewArea(''); saveCustomAreas(u); } }}
             />
-            <button
-              style={{ ...th.btnPrimary, padding: '8px 16px', whiteSpace: 'nowrap' }}
-              onClick={() => {
-                if (!newArea.trim()) return;
-                const updated = [...customAreas, newArea.trim()];
-                setCustomAreas(updated);
-                setNewArea('');
-                saveCustomAreas(updated);
-              }}
-            >
+            <button style={{ ...th.btnPrimary, padding: '8px 16px', whiteSpace: 'nowrap', opacity: areaSaving ? 0.6 : 1 }}
+              onClick={() => { if (!newArea.trim()) return; const u = [...customAreas, newArea.trim()]; setCustomAreas(u); setNewArea(''); saveCustomAreas(u); }}>
               {areaSaving ? <Spinner size={13} /> : copy('+ যোগ করুন', '+ Add')}
             </button>
           </div>
-          {customAreas.length > 0 && (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-              {customAreas.map((area, i) => (
-                <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 5, background: th.accentSoft, border: `1px solid ${th.accent}`, borderRadius: 20, padding: '3px 10px 3px 12px', fontSize: 12.5, color: th.accent }}>
-                  {area}
-                  <button
-                    onClick={() => {
-                      const updated = customAreas.filter((_, j) => j !== i);
-                      setCustomAreas(updated);
-                      saveCustomAreas(updated);
-                    }}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: th.accent, fontSize: 14, lineHeight: 1, padding: 0, marginLeft: 2 }}
-                  >×</button>
-                </span>
+
+          {/* Default whitelist — collapsible by zone */}
+          <details>
+            <summary style={{ cursor: 'pointer', fontSize: 13, fontWeight: 600, color: th.muted, userSelect: 'none', marginBottom: 8 }}>
+              {copy('▶ Default Dhaka এলাকার তালিকা দেখুন (এখানে না থাকলে উপরে add করুন)', '▶ View default Dhaka area list (add missing ones above)')}
+            </summary>
+            <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {DHAKA_ZONES.map(zone => (
+                <div key={zone.zone}>
+                  <div style={{ fontSize: 11.5, fontWeight: 700, color: th.muted, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{zone.zone}</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                    {zone.areas.map(area => {
+                        return (
+                        <span key={area} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: th.surface, border: `1px solid ${th.border}`, borderRadius: 16, padding: '2px 10px', fontSize: 12, color: th.text, opacity: 0.85 }}>
+                          {area}
+                          {!customAreas.some(c => c.toLowerCase() === area.toLowerCase()) && (
+                            <button title={copy('Custom list-এ যোগ করুন', 'Add to custom list')}
+                              onClick={() => { const u = [...customAreas, area]; setCustomAreas(u); saveCustomAreas(u); }}
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', color: th.accent, fontSize: 13, lineHeight: 1, padding: 0 }}>+</button>
+                          )}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
               ))}
             </div>
-          )}
-          {customAreas.length === 0 && (
-            <div style={{ fontSize: 12, color: th.muted }}>
-              {copy('কোনো custom এলাকা নেই — system এর default Dhaka list ব্যবহার হচ্ছে', 'No custom areas — using system default Dhaka whitelist')}
-            </div>
-          )}
+          </details>
         </Section>
 
         {/* Payment Mode */}
