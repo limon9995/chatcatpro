@@ -1173,6 +1173,8 @@ export class DraftOrderHandler {
 
   private isInsideDhaka(address: string, page: any): boolean {
     const addr = address.toLowerCase();
+
+    // Custom area rules defined by page owner take priority
     if (page?._areaRules?.globalInsideDhaka?.length) {
       for (const area of page._areaRules.globalInsideDhaka) {
         for (const alias of [area.areaName, ...(area.aliases || [])]) {
@@ -1180,9 +1182,41 @@ export class DraftOrderHandler {
         }
       }
     }
-    return /mirpur|uttara|dhanmondi|mohammadpur|badda|gulshan|banani|niketon|dhaka|ঢাকা|মিরপুর|উত্তরা|গুলশান|keraniganj|demra|tongi|savar|ashulia|gazipur|narayanganj|matuail|jatrabari|rayer bazar|hazaribagh|lalbagh|wari|shyampur|kadamtali|shyamoli|adabor|kafrul|pallabi|shah ali|dakshinkhan|uttarkhan|turag|tejgaon|rampura|sabujbagh|motijheel|kotwali|chawkbazar|sutrapur|bangshal|hazaribag|kamrangirchar/i.test(
-      addr,
-    );
+
+    // Whitelist-only: ONLY known Dhaka thanas/areas are inside.
+    // Anything not in this list → outside Dhaka (avoids false positives like "ঢাকা রোড, চট্টগ্রাম")
+    const DHAKA_AREAS = [
+      // DNCC Thanas
+      'uttara','উত্তরা','uttarkhan','উত্তরখান','dakshinkhan','দক্ষিণখান',
+      'khilkhet','খিলক্ষেত','turag','তুরাগ','mirpur','মিরপুর',
+      'pallabi','পল্লবী','kafrul','কাফরুল','shah ali','শাহ আলী',
+      'cantonment','ক্যান্টনমেন্ট','gulshan','গুলশান','banani','বনানী',
+      'baridhara','বারিধারা','vatara','ভাটারা','badda','বাড্ডা',
+      'rampura','রামপুরা','khilgaon','খিলগাঁও','sabujbagh','সবুজবাগ',
+      'tejgaon','তেজগাঁও','hatirjheel','হাতিরঝিল',
+      // DSCC Thanas
+      'dhanmondi','ধানমন্ডি','mohammadpur','মোহাম্মদপুর',
+      'adabor','আদাবর','hazaribagh','হাজারিবাগ','hazaribag',
+      'kamrangirchar','কামরাঙ্গীরচর','lalbagh','লালবাগ',
+      'chawkbazar','চকবাজার','kotwali','কোতোয়ালি',
+      'sutrapur','সূত্রাপুর','wari','ওয়ারী','bangshal','বংশাল',
+      'motijheel','মতিঝিল','paltan','পল্টন','ramna','রমনা',
+      'shahbagh','শাহবাগ','new market','নিউমার্কেট',
+      'shyampur','শ্যামপুর','kadamtali','কদমতলী',
+      'demra','ডেমরা','jatrabari','যাত্রাবাড়ী',
+      'matuail','মাতুয়াইল','shyamoli','শ্যামলী',
+      'mohakhali','মহাখালী','niketon','নিকেতন',
+      'bashundhara','বসুন্ধরা','aftab nagar','আফতাব নগর',
+      'meradia','মেরাদিয়া','rayer bazar','রায়ের বাজার',
+      'beraid','বেড়াইদ','dakhin khan','দক্ষিণ খান',
+      'kalshi','কালশী','section','সেকশন',
+      // Greater Dhaka (courier-wise inside)
+      'keraniganj','কেরানীগঞ্জ','savar','সাভার',
+      'ashulia','আশুলিয়া','tongi','টঙ্গী',
+      'gazipur','গাজীপুর','narayanganj','নারায়ণগঞ্জ',
+    ];
+
+    return DHAKA_AREAS.some((area) => addr.includes(area));
   }
 
   private isAddressLike(text: string): boolean {
