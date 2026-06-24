@@ -253,6 +253,10 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
   const [tgToken, setTgToken] = useState('');
   const [tgSaving, setTgSaving] = useState(false);
   const [tgTesting, setTgTesting] = useState(false);
+  // Dhaka zone custom areas
+  const [customAreas, setCustomAreas] = useState<string[]>([]);
+  const [newArea, setNewArea] = useState('');
+  const [areaSaving, setAreaSaving] = useState(false);
   const banglaVoiceUploadRef = useRef<HTMLInputElement>(null);
   const englishVoiceUploadRef = useRef<HTMLInputElement>(null);
   const BASE = `${API_BASE}/client-dashboard/${pageId}`;
@@ -270,7 +274,7 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [biz, modes, tut, linked, payCr, smsTok, smsDevList] = await Promise.all([
+      const [biz, modes, tut, linked, payCr, smsTok, smsDevList, bkCfg] = await Promise.all([
         request<any>(`${BASE}/settings`),
         request<any>(`${BASE}/modes`),
         request<any>(`${BASE}/tutorials`).catch(() => null),
@@ -278,6 +282,7 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
         request<any>(`${API_BASE}/pages/${pageId}/payment-credentials`).catch(() => []),
         request<any>(`${API_BASE}/sms-gateway/token?pageId=${pageId}`).catch(() => null),
         request<any[]>(`${API_BASE}/sms-gateway/devices?pageId=${pageId}`).catch(() => []),
+        request<any>(`${BASE}/bot-knowledge/config`).catch(() => null),
       ]);
       setS(prev => ({
         ...prev, ...biz, ...modes,
@@ -288,6 +293,9 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
       if (tut?.facebookAccessToken) setFbTutorialUrl(tut.facebookAccessToken);
       setLinkedPages(Array.isArray(linked) ? linked : []);
       setPayCreds(Array.isArray(payCr) ? payCr : []);
+      if (bkCfg?.areaRules?.clientCustomAreas) {
+        setCustomAreas((bkCfg.areaRules.clientCustomAreas as any[]).map((a: any) => a.areaName || a));
+      }
       if (smsTok?.token) setSmsToken(smsTok.token);
       if (Array.isArray(smsDevList)) {
         setSmsDevices(smsDevList);
@@ -484,6 +492,18 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
       }
     } catch (e: any) { onToast(e.message, 'error'); }
     finally { setTgFetching(false); }
+  };
+
+  const saveCustomAreas = async (areas: string[]) => {
+    setAreaSaving(true);
+    try {
+      await request(`${BASE}/bot-knowledge/area-rules`, {
+        method: 'PATCH',
+        body: JSON.stringify({ clientCustomAreas: areas.map(a => ({ areaName: a, aliases: [] })) }),
+      });
+      onToast(copy('✅ এলাকার তালিকা সেভ হয়েছে', '✅ Area list saved'));
+    } catch (e: any) { onToast(e.message, 'error'); }
+    finally { setAreaSaving(false); }
   };
 
   const saveInstagram = async () => {
@@ -1251,6 +1271,60 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
                 onChange={e => setS(p => ({ ...p, deliveryTimeText: e.target.value }))}/>
             </div>
           </Grid>
+        </Section>
+
+        {/* Dhaka Zone Management */}
+        <Section title={copy('ঢাকার ভেতরের এলাকা', 'Inside Dhaka Areas')} desc={copy('এই তালিকায় থাকলে ঢাকার ভেতরে ধরা হবে — বাকি সব বাইরে। নতুন এলাকা add করুন যদি আপনার এলাকা তালিকায় না থাকে।', 'Addresses matching this list = inside Dhaka. Everything else = outside. Add custom areas if yours is missing.')}>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+            <input
+              style={{ ...inp, flex: 1 }}
+              placeholder={copy('নতুন এলাকার নাম লিখুন — বাংলা বা English', 'Type area name in Bengali or English')}
+              value={newArea}
+              onChange={e => setNewArea(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && newArea.trim()) {
+                  const updated = [...customAreas, newArea.trim()];
+                  setCustomAreas(updated);
+                  setNewArea('');
+                  saveCustomAreas(updated);
+                }
+              }}
+            />
+            <button
+              style={{ ...th.btnPrimary, padding: '8px 16px', whiteSpace: 'nowrap' }}
+              onClick={() => {
+                if (!newArea.trim()) return;
+                const updated = [...customAreas, newArea.trim()];
+                setCustomAreas(updated);
+                setNewArea('');
+                saveCustomAreas(updated);
+              }}
+            >
+              {areaSaving ? <Spinner size={13} /> : copy('+ যোগ করুন', '+ Add')}
+            </button>
+          </div>
+          {customAreas.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {customAreas.map((area, i) => (
+                <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 5, background: th.accentSoft, border: `1px solid ${th.accent}`, borderRadius: 20, padding: '3px 10px 3px 12px', fontSize: 12.5, color: th.accent }}>
+                  {area}
+                  <button
+                    onClick={() => {
+                      const updated = customAreas.filter((_, j) => j !== i);
+                      setCustomAreas(updated);
+                      saveCustomAreas(updated);
+                    }}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: th.accent, fontSize: 14, lineHeight: 1, padding: 0, marginLeft: 2 }}
+                  >×</button>
+                </span>
+              ))}
+            </div>
+          )}
+          {customAreas.length === 0 && (
+            <div style={{ fontSize: 12, color: th.muted }}>
+              {copy('কোনো custom এলাকা নেই — system এর default Dhaka list ব্যবহার হচ্ছে', 'No custom areas — using system default Dhaka whitelist')}
+            </div>
+          )}
         </Section>
 
         {/* Payment Mode */}
