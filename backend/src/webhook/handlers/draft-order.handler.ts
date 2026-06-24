@@ -378,25 +378,26 @@ export class DraftOrderHandler {
       let resolvedValue = workingText.trim();
       if (currentField?.choices?.length) {
         const choices = currentField.choices;
-        // Accept exact match (case-insensitive) or number (1, 2, 3…)
-        const numericMatch = resolvedValue.match(/^(\d+)$/);
-        if (numericMatch) {
-          const idx = parseInt(numericMatch[1], 10) - 1;
-          if (idx >= 0 && idx < choices.length) {
-            resolvedValue = choices[idx];
-          } else {
-            // Invalid number
-            const opts = choices.map((c, i) => `${i + 1}. ${c}`).join('\n');
-            return `❌ "${workingText}" সঠিক না। নিচের list থেকে বেছে নিন:\n${opts}`;
-          }
+
+        // 1. Exact match first (case-insensitive) — e.g. "34", "M", "নীল"
+        const exactMatch = choices.find(
+          (c) => c.toLowerCase() === resolvedValue.toLowerCase(),
+        );
+        if (exactMatch) {
+          resolvedValue = exactMatch;
         } else {
-          const exactMatch = choices.find(
-            (c) => c.toLowerCase() === resolvedValue.toLowerCase(),
-          );
-          if (exactMatch) {
-            resolvedValue = exactMatch;
+          // 2. Numeric index — e.g. "1" → first choice, "2" → second choice
+          const numericMatch = resolvedValue.match(/^(\d+)$/);
+          if (numericMatch) {
+            const idx = parseInt(numericMatch[1], 10) - 1;
+            if (idx >= 0 && idx < choices.length) {
+              resolvedValue = choices[idx];
+            } else {
+              const opts = choices.map((c, i) => `${i + 1}. ${c}`).join('\n');
+              return `❌ "${workingText}" সঠিক না। নিচের list থেকে বেছে নিন:\n${opts}`;
+            }
           } else {
-            // Not in choices
+            // Not in choices, not a valid index
             const opts = choices.map((c, i) => `${i + 1}. ${c}`).join('\n');
             return `❌ "${workingText}" list এ নেই। নিচের option থেকে বেছে নিন:\n${opts}`;
           }
