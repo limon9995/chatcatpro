@@ -463,6 +463,29 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
     finally { setTgTesting(false); }
   };
 
+  const [tgFetching, setTgFetching] = useState(false);
+  const fetchTelegramChatId = async () => {
+    const token = tgToken.trim();
+    if (!token) {
+      onToast(copy('আগে Bot Token দিন', 'Enter Bot Token first'), 'error');
+      return;
+    }
+    setTgFetching(true);
+    try {
+      const res = await request<{ ok: boolean; chatId?: string; error?: string }>(`${API_BASE}/telegram/fetch-chat-id`, {
+        method: 'POST',
+        body: JSON.stringify({ token }),
+      });
+      if (res.ok && res.chatId) {
+        setS(prev => ({ ...prev, telegramChatId: res.chatId! }));
+        onToast(copy(`✅ Chat ID পাওয়া গেছে: ${res.chatId}`, `✅ Chat ID found: ${res.chatId}`));
+      } else {
+        onToast(res.error || copy('Chat ID পাওয়া যায়নি। আপনার bot-কে একটি message পাঠান, তারপর আবার চেষ্টা করুন।', 'Chat ID not found. Send a message to your bot first, then try again.'), 'error');
+      }
+    } catch (e: any) { onToast(e.message, 'error'); }
+    finally { setTgFetching(false); }
+  };
+
   const saveInstagram = async () => {
     setIgSaving(true);
     try {
@@ -2812,14 +2835,23 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
               <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4 }}>
                 Chat ID
               </label>
-              <input
-                style={{ ...inp }}
-                placeholder="123456789"
-                value={s.telegramChatId}
-                onChange={e => setS(prev => ({ ...prev, telegramChatId: e.target.value }))}
-              />
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input
+                  style={{ ...inp, flex: 1 }}
+                  placeholder="123456789"
+                  value={s.telegramChatId}
+                  onChange={e => setS(prev => ({ ...prev, telegramChatId: e.target.value }))}
+                />
+                <button
+                  onClick={fetchTelegramChatId}
+                  disabled={tgFetching}
+                  style={{ ...th.btnPrimary, fontSize: 12, padding: '6px 12px', whiteSpace: 'nowrap', opacity: tgFetching ? 0.6 : 1 }}
+                >
+                  {tgFetching ? <Spinner size={13} /> : copy('Auto Fetch', 'Auto Fetch')}
+                </button>
+              </div>
               <div style={{ fontSize: 11, color: th.muted, marginTop: 3 }}>
-                getUpdates API থেকে পাওয়া আপনার chat id
+                {copy('⚠️ আগে Telegram-এ আপনার bot-কে যেকোনো একটি message পাঠান, তারপর "Auto Fetch" চাপুন', '⚠️ First send any message to your bot on Telegram, then click "Auto Fetch"')}
               </div>
             </div>
 

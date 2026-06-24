@@ -14,4 +14,35 @@ export class TelegramController {
     }
     return this.telegram.sendTest(body.token.trim(), body.chatId.trim());
   }
+
+  @Post('fetch-chat-id')
+  async fetchChatId(@Body() body: { token: string }) {
+    if (!body?.token) {
+      return { ok: false, error: 'token is required' };
+    }
+    try {
+      const res = await fetch(
+        `https://api.telegram.org/bot${body.token.trim()}/getUpdates?limit=10`,
+        { signal: AbortSignal.timeout(8_000) },
+      );
+      const data = await res.json();
+      if (!data.ok) {
+        return { ok: false, error: 'Invalid token or Telegram API error' };
+      }
+      const update = (data.result ?? []).find(
+        (u: any) => u.message?.chat?.id || u.channel_post?.chat?.id,
+      );
+      const chatId =
+        update?.message?.chat?.id ?? update?.channel_post?.chat?.id ?? null;
+      if (!chatId) {
+        return {
+          ok: false,
+          error: 'No messages found. Please send a message to your bot first.',
+        };
+      }
+      return { ok: true, chatId: String(chatId) };
+    } catch {
+      return { ok: false, error: 'Failed to reach Telegram API' };
+    }
+  }
 }
