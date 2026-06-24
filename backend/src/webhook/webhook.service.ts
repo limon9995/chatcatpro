@@ -62,6 +62,8 @@ export class WebhookService implements OnModuleDestroy {
   private readonly inFlightReply = new Map<string, string>();
   // Maps psid → active replyKey (pageId:psid) so safeSend can use the correct key
   private readonly activeReplyKey = new Map<string, string>();
+  // Debounce postback ORDER clicks — prevents double-click duplicate
+  private readonly recentPostbacks = new Map<string, number>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -204,6 +206,21 @@ export class WebhookService implements OnModuleDestroy {
           const payload: string = String(event.postback.payload);
           if (payload.startsWith('ORDER_')) {
             const productCode = payload.slice(6).toUpperCase();
+            // Debounce: ignore duplicate postback within 5 seconds (double-click)
+            const debounceKey = `${psid}:${payload}`;
+            const lastAt = this.recentPostbacks.get(debounceKey) ?? 0;
+            const now = Date.now();
+            if (now - lastAt < 5000) {
+              continue; // duplicate click, skip
+            }
+            this.recentPostbacks.set(debounceKey, now);
+            // Clean up old entries to prevent memory leak
+            if (this.recentPostbacks.size > 1000) {
+              const cutoff = now - 10000;
+              for (const [k, t] of this.recentPostbacks) {
+                if (t < cutoff) this.recentPostbacks.delete(k);
+              }
+            }
             this.handleCatalogReferral(resolvedPage, psid, productCode).catch(() => {});
           }
           continue;

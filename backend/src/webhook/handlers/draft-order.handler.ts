@@ -370,9 +370,42 @@ export class DraftOrderHandler {
     // ── CUSTOM FIELD (cf:FieldLabel) ──────────────────────────────────────────
     if (step.startsWith('cf:')) {
       const fieldLabel = step.slice(3);
+      const currentField = (draft.pendingCustomFields || []).find(
+        (f) => f.label === fieldLabel,
+      );
+
+      // Validate against choices if field has a predefined list
+      let resolvedValue = workingText.trim();
+      if (currentField?.choices?.length) {
+        const choices = currentField.choices;
+        // Accept exact match (case-insensitive) or number (1, 2, 3…)
+        const numericMatch = resolvedValue.match(/^(\d+)$/);
+        if (numericMatch) {
+          const idx = parseInt(numericMatch[1], 10) - 1;
+          if (idx >= 0 && idx < choices.length) {
+            resolvedValue = choices[idx];
+          } else {
+            // Invalid number
+            const opts = choices.map((c, i) => `${i + 1}. ${c}`).join('\n');
+            return `❌ "${workingText}" সঠিক না। নিচের list থেকে বেছে নিন:\n${opts}`;
+          }
+        } else {
+          const exactMatch = choices.find(
+            (c) => c.toLowerCase() === resolvedValue.toLowerCase(),
+          );
+          if (exactMatch) {
+            resolvedValue = exactMatch;
+          } else {
+            // Not in choices
+            const opts = choices.map((c, i) => `${i + 1}. ${c}`).join('\n');
+            return `❌ "${workingText}" list এ নেই। নিচের option থেকে বেছে নিন:\n${opts}`;
+          }
+        }
+      }
+
       draft.customFieldValues = {
         ...(draft.customFieldValues || {}),
-        [fieldLabel]: workingText.trim(),
+        [fieldLabel]: resolvedValue,
       };
       draft.pendingCustomFields = (draft.pendingCustomFields || []).filter(
         (f) => f.label !== fieldLabel,
