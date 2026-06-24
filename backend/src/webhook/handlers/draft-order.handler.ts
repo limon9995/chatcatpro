@@ -266,6 +266,12 @@ export class DraftOrderHandler {
 
     // ── ADVANCE PAYMENT PROOF ─────────────────────────────────────────────────
     if (step === 'advance_payment') {
+      // Customer explicitly refuses to pay advance → cancel the draft
+      if (this.isPaymentRefusal(workingText) || this.botIntent.detectIntent(workingText, false) === 'CANCEL') {
+        await this.ctx.clearDraft(pageId, psid);
+        return '😔 ঠিক আছে, order টি বাতিল করা হলো। পরে আবার order করতে পারবেন 💖';
+      }
+
       // Detect problem/complaint instead of payment proof → route to agent
       if (this.isPaymentProblem(workingText)) {
         draft.paymentIssueNote = workingText.trim().slice(0, 300);
@@ -872,9 +878,14 @@ export class DraftOrderHandler {
 
   // ── Payment problem detection ─────────────────────────────────────────────
 
+  private isPaymentRefusal(text: string): boolean {
+    const t = text.toLowerCase();
+    return /দেব না|দিব না|দিতে পারব না|দিতে পারবো না|দিতে চাই না|advance দেব না|advance নেব না|অগ্রিম দেব না|অগ্রিম দিব না|cancel করুন|বাতিল করুন|cancel দেন|বাতিল দেন|cancel kro|বাদ দেন|বাদ দিন|আর চাই না|অর্ডার বাতিল|order cancel/.test(t);
+  }
+
   private isPaymentProblem(text: string): boolean {
     const t = text.toLowerCase();
-    return /সমস্যা|সমস্যায়|সমস্যাতে|problem|issue|কাজ করছে না|কাজ হচ্ছে না|হচ্ছে না|পারছি না|পরে দেব|পরে করব|পরে পাঠাব|এখন না|এখন পারব না|টাকা নেই|ব্যালেন্স নেই|balance নেই|দিতে পারব না|বুঝতে পারছি না|error|fail|failed|block|blocked|সাহায্য|help|agent|cancel|বাতিল|ঝামেলা|trouble|ভুল|number নাই|নম্বর নেই|কাজ করতেছে না/.test(
+    return /সমস্যা|সমস্যায়|সমস্যাতে|problem|issue|কাজ করছে না|কাজ হচ্ছে না|হচ্ছে না|পারছি না|পরে দেব|পরে করব|পরে পাঠাব|এখন না|এখন পারব না|টাকা নেই|ব্যালেন্স নেই|balance নেই|বুঝতে পারছি না|error|fail|failed|block|blocked|সাহায্য|help|agent|ঝামেলা|trouble|ভুল|number নাই|নম্বর নেই|কাজ করতেছে না/.test(
       t,
     );
   }

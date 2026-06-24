@@ -1369,9 +1369,12 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
               ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(170px,1fr))', gap: 12 }}>
                   <div>
-                    <Label text="Advance Amount (৳)" hint={copy('0 দিলে শুধু delivery fee নেবে, >0 দিলে ওই fixed পরিমাণ সব order-এ নেবে', 'Use 0 to collect only the delivery fee; enter an amount to collect that fixed value for every order')}/>
+                    <Label text="Advance Amount (৳)" hint={copy('0 রাখলে delivery fee-ই advance হিসেবে নেবে। নির্দিষ্ট পরিমাণ দিলে সেটা নেবে। Customer advance দিতে অস্বীকার করলে order automatically cancel হবে।', 'Leave 0 to collect the delivery fee as advance. Enter a fixed amount to always collect that. If customer refuses to pay, order is automatically cancelled.')}/>
                     <input style={inp} type="number" min={0} value={s.advanceAmount || ''}
-                      onChange={e => setS(p => ({ ...p, advanceAmount: Number(e.target.value) }))} placeholder="0"/>
+                      onChange={e => setS(p => ({ ...p, advanceAmount: Number(e.target.value) }))} placeholder="0 = delivery fee"/>
+                    <div style={{ fontSize: 11, color: th.muted, marginTop: 3 }}>
+                      {copy(`0 = Delivery fee (${s.paymentMode === 'advance_outside' ? 'Outside Dhaka fee' : 'full delivery fee'}) নেবে`, `0 = collects the delivery fee as advance`)}
+                    </div>
                   </div>
                 </div>
               )}
