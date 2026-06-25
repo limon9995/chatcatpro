@@ -194,43 +194,148 @@ function ManualOrderModal({ th, onClose, onSave, saving }: {
 }
 
 // ── Memo Modal ────────────────────────────────────────────────────────────────
-function MemoModal({ th, orderId, pageId, onClose }: {
-  th: Theme; orderId: number; pageId: number; onClose: () => void;
+function MemoModal({ th, orderId, pageId, onClose, onSaved }: {
+  th: Theme; orderId: number; pageId: number; onClose: () => void; onSaved?: () => void;
 }) {
+  const { request } = useApi();
   const [html, setHtml] = useState('');
   const [loading, setLoading] = useState(true);
+  const [editMode, setEditMode] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [order, setOrder] = useState<any>(null);
+  const [form, setForm] = useState({ customerName: '', phone: '', address: '', orderNote: '' });
   const printUrl = `${API_BASE}/memo/html?ids=${orderId}&pageId=${pageId}`;
 
-  useEffect(() => {
+  const loadMemo = () => {
     const token = localStorage.getItem('dfbot_token') || '';
     fetch(printUrl, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.text())
       .then(h => { setHtml(h); setLoading(false); })
       .catch(() => setLoading(false));
-  }, [printUrl]);
+  };
+
+  useEffect(() => {
+    loadMemo();
+    // Also load order data for editing
+    request(`client-dashboard/${pageId}/orders/${orderId}`)
+      .then((o: any) => {
+        setOrder(o);
+        setForm({
+          customerName: o.customerName || '',
+          phone: o.phone || '',
+          address: o.address || '',
+          orderNote: o.orderNote || '',
+        });
+      }).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderId, pageId]);
 
   const openPrint = () => {
     const w = window.open('', '_blank');
     if (w) { w.document.write(html); w.document.close(); setTimeout(() => w.print(), 400); }
   };
 
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await request(`client-dashboard/${pageId}/orders/${orderId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(form),
+      });
+      setSaving(false);
+      setEditMode(false);
+      setLoading(true);
+      loadMemo();
+      onSaved?.();
+    } catch { setSaving(false); }
+  };
+
+  const inp: React.CSSProperties = { ...th.input, width: '100%', marginBottom: 8, boxSizing: 'border-box' };
+  const lbl: React.CSSProperties = { fontSize: 11, color: th.muted, marginBottom: 3, display: 'block' };
+
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', zIndex: 1000, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-      <div style={{ width: '100%', maxWidth: 820, height: '85vh', display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ width: '100%', maxWidth: editMode ? 1100 : 820, height: '90vh', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span style={{ color: '#fff', fontWeight: 700, fontSize: 15 }}>📋 Memo Preview — Order #{orderId}</span>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={openPrint} disabled={loading}
-              style={{ ...th.btnPrimary, fontSize: 13 }}>
+            <button onClick={() => setEditMode(e => !e)}
+              style={{ ...th.btnGhost, fontSize: 13, background: editMode ? '#3b82f6' : undefined, color: editMode ? '#fff' : undefined }}>
+              ✏️ {editMode ? 'Preview তে যান' : 'Edit করুন'}
+            </button>
+            <button onClick={openPrint} disabled={loading} style={{ ...th.btnPrimary, fontSize: 13 }}>
               🖨️ Print / Download
             </button>
             <button style={th.btnGhost} onClick={onClose}>✕ Close</button>
           </div>
         </div>
-        {loading
-          ? <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Spinner size={28} /></div>
-          : <iframe srcDoc={html} style={{ flex: 1, border: 'none', borderRadius: 12, background: '#fff' }} title="memo-preview" />
-        }
+
+        {/* Body */}
+        <div style={{ flex: 1, display: 'flex', gap: 12, overflow: 'hidden' }}>
+          {/* Edit panel */}
+          {editMode && (
+            <div style={{ width: 300, flexShrink: 0, background: th.card as string, borderRadius: 12, padding: 16, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 12, color: th.text }}>✏️ Order Edit</div>
+
+              <label style={lbl}>নাম</label>
+              <input style={inp} value={form.customerName}
+                onChange={e => setForm(f => ({ ...f, customerName: e.target.value }))} placeholder="Customer Name" />
+
+              <label style={lbl}>ফোন</label>
+              <input style={inp} value={form.phone}
+                onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="01XXXXXXXXX" />
+
+              <label style={lbl}>ঠিকানা</label>
+              <textarea style={{ ...inp, height: 70, resize: 'vertical' }} value={form.address}
+                onChange={e => setForm(f => ({ ...f, address: e.target.value }))} placeholder="বিস্তারিত ঠিকানা" />
+
+              <label style={lbl}>Order Note</label>
+              <textarea style={{ ...inp, height: 60, resize: 'vertical' }} value={form.orderNote}
+                onChange={e => setForm(f => ({ ...f, orderNote: e.target.value }))} placeholder="Size, Color, etc." />
+
+              {order?.items?.length > 0 && (
+                <div style={{ marginTop: 8 }}>
+                  <div style={{ fontSize: 11, color: th.muted, marginBottom: 6 }}>পণ্য (qty/price edit)</div>
+                  {order.items.map((item: any, i: number) => (
+                    <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}>
+                      <span style={{ fontSize: 11, color: th.text, flex: 1 }}>{item.productCode}</span>
+                      <input type="number" style={{ ...th.input, width: 48, fontSize: 12, padding: '4px 6px' }}
+                        value={item.qty} min={1}
+                        onChange={e => {
+                          const items = [...order.items];
+                          items[i] = { ...items[i], qty: Number(e.target.value) };
+                          setOrder((o: any) => ({ ...o, items }));
+                        }} />
+                      <span style={{ fontSize: 11, color: th.muted }}>×</span>
+                      <input type="number" style={{ ...th.input, width: 60, fontSize: 12, padding: '4px 6px' }}
+                        value={item.unitPrice}
+                        onChange={e => {
+                          const items = [...order.items];
+                          items[i] = { ...items[i], unitPrice: Number(e.target.value) };
+                          setOrder((o: any) => ({ ...o, items }));
+                        }} />
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <button onClick={handleSave} disabled={saving}
+                style={{ ...th.btnPrimary, marginTop: 12, width: '100%' }}>
+                {saving ? '⏳ Saving...' : '💾 Save Changes'}
+              </button>
+              <button onClick={() => setEditMode(false)} style={{ ...th.btnGhost, marginTop: 6, width: '100%' }}>
+                বাতিল
+              </button>
+            </div>
+          )}
+
+          {/* Memo iframe */}
+          {loading
+            ? <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Spinner size={28} /></div>
+            : <iframe srcDoc={html} style={{ flex: 1, border: 'none', borderRadius: 12, background: '#fff' }} title="memo-preview" />
+          }
+        </div>
       </div>
     </div>
   );
@@ -629,7 +734,7 @@ export function OrdersPage({ th, pageId, onToast, preset }: {
 
       {/* Modals */}
       {showCreate && <ManualOrderModal th={th} onClose={() => setShowCreate(false)} onSave={createManualOrder} saving={creating} />}
-      {memoOrderId && <MemoModal th={th} orderId={memoOrderId} pageId={pageId} onClose={() => setMemoOrderId(null)} />}
+      {memoOrderId && <MemoModal th={th} orderId={memoOrderId} pageId={pageId} onClose={() => setMemoOrderId(null)} onSaved={load} />}
 
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>

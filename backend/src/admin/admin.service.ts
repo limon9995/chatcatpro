@@ -13,6 +13,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { BotKnowledgeService } from '../bot-knowledge/bot-knowledge.service';
 import { EncryptionService } from '../common/encryption.service';
 import { FacebookService } from '../facebook/facebook.service';
+import { TelegramNotificationService } from '../telegram/telegram-notification.service';
 
 export interface CallServerConfig {
   id: string;
@@ -84,6 +85,7 @@ export class AdminService {
     private readonly botKnowledge: BotKnowledgeService,
     private readonly encryption: EncryptionService,
     private readonly facebook: FacebookService,
+    private readonly telegram: TelegramNotificationService,
   ) {}
 
   async overview() {
@@ -765,6 +767,29 @@ export class AdminService {
 
       await tx.order.update({ where: { id: orderId }, data: patch });
     });
+
+    // Telegram notification for call result
+    const callEmoji: Record<string, string> = {
+      CONFIRMED: '✅',
+      CANCELLED: '❌',
+      NOT_ANSWERED: '📵',
+      CALLBACK_LATER: '🔄',
+    };
+    const callLabel: Record<string, string> = {
+      CONFIRMED: 'Confirmed by call',
+      CANCELLED: 'Cancelled',
+      NOT_ANSWERED: 'Not Answered',
+      CALLBACK_LATER: 'Callback Later',
+    };
+    const emoji = callEmoji[body.result] ?? '📞';
+    const label = callLabel[body.result] ?? body.result;
+    const noteText = body.note ? `\n📝 ${body.note}` : '';
+    this.telegram
+      .notify(
+        order.pageIdRef,
+        `${emoji} <b>Call Result — Order #${orderId}</b>\n📞 ${order.phone || '-'} | ${label}${noteText}`,
+      )
+      .catch(() => {});
 
     return { success: true, result: body.result };
   }

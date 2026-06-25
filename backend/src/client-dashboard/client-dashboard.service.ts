@@ -22,6 +22,7 @@ import { CourierService } from '../courier/courier.service';
 import { CourierAccountingService } from '../courier/courier-accounting.service';
 import { OrderNotificationService } from '../orders/order-notification.service';
 import { TelegramService } from '../common/telegram.service';
+import { TelegramNotificationService } from '../telegram/telegram-notification.service';
 import { AdminService } from '../admin/admin.service';
 
 @Injectable()
@@ -57,6 +58,7 @@ export class ClientDashboardService {
     private readonly orderNotification: OrderNotificationService,
     private readonly telegram: TelegramService,
     private readonly adminService: AdminService,
+    private readonly telegramNotif: TelegramNotificationService,
   ) {}
 
   // ── Summary ────────────────────────────────────────────────────────────────
@@ -246,6 +248,13 @@ export class ClientDashboardService {
 
     return this.prisma.order.findUnique({
       where: { id: order.id },
+      include: { items: true },
+    });
+  }
+
+  async getOrder(pageId: number, orderId: number) {
+    return this.prisma.order.findFirst({
+      where: { id: orderId, pageIdRef: pageId },
       include: { items: true },
     });
   }
@@ -566,6 +575,20 @@ export class ClientDashboardService {
 
       await tx.order.update({ where: { id: orderId }, data: patch });
     });
+
+    // Telegram notification for call result
+    const callEmoji: Record<string, string> = {
+      CONFIRMED: '✅', CANCELLED: '❌', NOT_ANSWERED: '📵', CALLBACK_LATER: '🔄',
+    };
+    const callLabel: Record<string, string> = {
+      CONFIRMED: 'Confirmed by call', CANCELLED: 'Cancelled',
+      NOT_ANSWERED: 'Not Answered', CALLBACK_LATER: 'Callback Later',
+    };
+    const noteText = body.note ? `\n📝 ${body.note}` : '';
+    this.telegramNotif.notify(
+      pageId,
+      `${callEmoji[body.result] ?? '📞'} <b>Call Result — Order #${orderId}</b>\n${callLabel[body.result] ?? body.result}${noteText}`,
+    ).catch(() => {});
 
     return { success: true, result: body.result };
   }

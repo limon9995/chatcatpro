@@ -6,9 +6,10 @@ import { BotKnowledgeModule } from '../bot-knowledge/bot-knowledge.module';
 import { AuthModule } from '../auth/auth.module';
 import { CommonModule } from '../common/common.module';
 import { FacebookModule } from '../facebook/facebook.module';
+import { TelegramModule } from '../telegram/telegram.module';
 
 @Module({
-  imports: [PrismaModule, BotKnowledgeModule, AuthModule, CommonModule, FacebookModule],
+  imports: [PrismaModule, BotKnowledgeModule, AuthModule, CommonModule, FacebookModule, TelegramModule],
   controllers: [AdminController],
   providers: [AdminService],
   exports: [AdminService],

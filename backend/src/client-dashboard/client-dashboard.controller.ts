@@ -102,6 +102,13 @@ export class ClientDashboardController {
   ) {
     return this.svc.createManualOrder(this.pid(r, p), b || {});
   }
+  @Get(':pageId/orders/:orderId') getOrder(
+    @Param('pageId') p: string,
+    @Param('orderId') o: string,
+    @Req() r: any,
+  ) {
+    return this.svc.getOrder(this.pid(r, p), Number(o));
+  }
   @Patch(':pageId/orders/:orderId') updateOrder(
     @Param('pageId') p: string,
     @Param('orderId') o: string,

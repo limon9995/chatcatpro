@@ -18,6 +18,7 @@ import { VisionOpsModule } from '../vision-ops/vision-ops.module';
 import { OcrModule } from '../ocr/ocr.module';
 import { SpamCheckerModule } from '../spam-checker/spam-checker.module';
 import { AdminModule } from '../admin/admin.module';
+import { TelegramModule } from '../telegram/telegram.module';
 import { ClientDashboardService } from './client-dashboard.service';
 import { ClientDashboardController } from './client-dashboard.controller';
 
@@ -42,6 +43,7 @@ import { ClientDashboardController } from './client-dashboard.controller';
     FollowUpModule,
     BroadcastModule,
     AdminModule,
+    TelegramModule,
   ],
   providers: [ClientDashboardService],
   controllers: [ClientDashboardController],
