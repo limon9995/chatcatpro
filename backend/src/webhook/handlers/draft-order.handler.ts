@@ -791,13 +791,39 @@ export class DraftOrderHandler {
     // V9: upsert CRM customer record
     const subtotal = draft.items.reduce((s, i) => s + i.unitPrice * i.qty, 0);
 
-    // Telegram merchant alert — new order
-    this.telegram
-      .notify(
-        pageId,
-        `🛒 <b>New Order #${order.id}</b>\n👤 ${order.customerName}\n📞 ${order.phone || '-'}\n📍 ${order.address || '-'}\n💰 ৳${subtotal}`,
-      )
-      .catch(() => {});
+    // Telegram merchant alert — new order with inline buttons
+    {
+      const addr = (order.address || '').toLowerCase();
+      const insideDhaka = DHAKA_AREA_WHITELIST.some((a) => addr.includes(a.toLowerCase()));
+      const zoneLabel = order.address
+        ? (insideDhaka ? '🏙️ ঢাকার ভিতরে' : '🌍 ঢাকার বাইরে')
+        : '📍 ঠিকানা অজানা';
+      const riskEmoji = order.spamRisk === 'high' ? '🔴' : order.spamRisk === 'medium' ? '🟡' : order.spamRisk === 'low' ? '🟢' : '⚪';
+      const payLabel = paymentStatus === 'advance_paid' || paymentStatus === 'advance_paid_verified'
+        ? '✅ Advance paid'
+        : paymentStatus === 'not_required' ? '💵 COD' : '⏳ Payment pending';
+
+      const msg = [
+        `🛒 <b>New Order #${order.id}</b>`,
+        `👤 ${order.customerName}`,
+        `📞 ${order.phone || '-'}`,
+        `📍 ${order.address || '-'} — ${zoneLabel}`,
+        `💰 ৳${subtotal} | ${payLabel}`,
+        `${riskEmoji} Fraud: ${order.spamRisk ?? 'unknown'}`,
+      ].join('\n');
+
+      const buttons = [
+        [
+          { text: '✅ Confirm Order', callback_data: `confirm_${order.id}` },
+          { text: '🔍 Fraud Check', callback_data: `fraud_${order.id}` },
+        ],
+        [
+          { text: `📞 Call ${order.phone || ''}`, url: `tel:${order.phone || ''}` },
+        ],
+      ];
+
+      this.telegram.notifyWithButtons(pageId, msg, buttons).catch(() => {});
+    }
 
     // Auto courier booking — only when the order is already CONFIRMED and the
     // merchant has enabled autoBookOnConfirm with a non-manual default courier

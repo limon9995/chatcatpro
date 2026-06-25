@@ -41,7 +41,95 @@ export class TelegramNotificationService {
     }
   }
 
-  /** Send a raw test message — used by the "Test Connection" button before saving. */
+  /**
+   * Send a message with Telegram inline keyboard buttons.
+   * buttons: array of rows, each row is array of { text, callback_data } or { text, url }
+   */
+  async notifyWithButtons(
+    pageId: number,
+    message: string,
+    buttons: Array<Array<{ text: string; callback_data?: string; url?: string }>>,
+  ): Promise<void> {
+    try {
+      const page = await this.prisma.page.findUnique({
+        where: { id: pageId },
+        select: {
+          telegramNotifEnabled: true,
+          telegramBotToken: true,
+          telegramChatId: true,
+        },
+      });
+      if (!page?.telegramNotifEnabled || !page.telegramBotToken || !page.telegramChatId) return;
+      const token = this.encryption.decrypt(page.telegramBotToken);
+      const url = `https://api.telegram.org/bot${token}/sendMessage`;
+      const body = JSON.stringify({
+        chat_id: page.telegramChatId,
+        text: message,
+        parse_mode: 'HTML',
+        reply_markup: { inline_keyboard: buttons },
+      });
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (res.ok) this.logger.log(`[Telegram] Sent with buttons chat_id=${page.telegramChatId}`);
+      else this.logger.warn(`[Telegram] notifyWithButtons failed: ${res.status}`);
+    } catch (err: any) {
+      this.logger.error(`[Telegram] notifyWithButtons error pageId=${pageId}: ${err.message}`);
+    }
+  }
+
+  /** Answer a Telegram callback_query (removes loading spinner on button). */
+  async answerCallback(token: string, callbackQueryId: string, text?: string): Promise<void> {
+    await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ callback_query_id: callbackQueryId, text: text ?? '' }),
+      signal: AbortSignal.timeout(5_000),
+    }).catch(() => {});
+  }
+
+  /** Set Telegram webhook for a bot token pointing to our server. */
+  async setWebhook(token: string, webhookUrl: string): Promise<{ ok: boolean; error?: string }> {
+    try {
+      const res = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: webhookUrl }),
+        signal: AbortSignal.timeout(10_000),
+      });
+      const data = await res.json() as any;
+      return data.ok ? { ok: true } : { ok: false, error: data.description };
+    } catch (err: any) {
+      return { ok: false, error: err.message };
+    }
+  }
+
+  /** Get the decrypted bot token for a page (used by webhook handler). */
+  async getPageByBotToken(encryptedToken: string): Promise<{ id: number; telegramChatId: string; token: string } | null> {
+    try {
+      const pages = await this.prisma.page.findMany({
+        where: { telegramBotToken: encryptedToken },
+        select: { id: true, telegramChatId: true, telegramBotToken: true },
+        take: 1,
+      });
+      if (!pages.length) return null;
+      const page = pages[0];
+      const token = this.encryption.decrypt(page.telegramBotToken!);
+      return { id: page.id, telegramChatId: page.telegramChatId!, token };
+    } catch {
+      return null;
+    }
+  }
+
+  /** Raw send — public for reuse in webhook handler */
+  async sendRaw(token: string, chatId: string, text: string): Promise<void> {
+    await this.send(token, chatId, text);
+  }
+
+  /** Raw send — public for reuse in webhook handler */
   async sendTest(
     token: string,
     chatId: string,

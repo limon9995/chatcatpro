@@ -75,6 +75,29 @@ Webhook URL: https://api.chatcat.pro/ig-webhook
 - এই একটা App দিয়েই Facebook Messenger + WhatsApp + Instagram তিনটাই চলবে
 - Webhook HMAC verification customer-এর নিজের App Secret দিয়ে হয় — সম্পূর্ণ secure
 
+### SMS Gateway — Phone দিয়ে Payment Verify (Settings এর নিচে)
+bKash/Nagad/Rocket-এ payment এলে merchant API ছাড়াই auto-verify করা যায়:
+1. যে Android ফোনে payment SMS আসে, সেই ফোনে "ChatCat PaySync" app install করুন (Settings → SMS Gateway section থেকে APK download লিংক পাবেন — Play Store-এ নেই, তাই "Unknown Sources" allow করতে হবে)
+2. App-এ Settings থেকে পাওয়া connection token দিয়ে connect করুন
+3. Device connect হলে Settings-এ "SMS Gateway চালু করুন" toggle ON করুন
+4. কাজ করার ধাপ: Customer টাকা পাঠায় → ফোনে SMS আসে → app সেটা chatcat-এ পাঠায় → customer Messenger-এ TxID/ফোন নম্বর দেয় → bot SMS-এর সাথে match করে auto-confirm করে
+
+### Payment / Advance Payment Mode (Settings > ব্যবসার তথ্য বা Delivery settings)
+COD ছাড়াও bKash/Nagad/Rocket-এ advance payment নেওয়া যায়। Settings-এ paymentMode নির্বাচন করে advance amount ও bKash/Nagad/Rocket number বসাতে হয়। Customer payment করে TxID/screenshot দিলে bot সেটা proof হিসেবে রাখে, SMS Gateway/bKash-Nagad direct API enabled থাকলে automatic verify হয়, না হলে admin manually verify করে।
+
+### Telegram Bot — নিজের Notification (Settings, "🤖 Telegram Bot সেটআপ" section)
+নতুন order, order cancel, কম balance, subscription expire হওয়ার আগে — এসব নিজের Telegram-এ পেতে চাইলে:
+1. Telegram-এ "@BotFather" সার্চ করে /newbot দিয়ে একটা bot বানান, Token পাবেন
+2. সেই bot-কে একটা মেসেজ পাঠান, তারপর browser-এ https://api.telegram.org/bot<TOKEN>/getUpdates খুলে "chat":{"id": ...} থেকে Chat ID নিন
+3. Settings-এ Token ও Chat ID দিয়ে "Test Connection" চাপুন, তারপর Save করুন
+
+### Courier API Key কোথায় পাবেন (Settings > Courier বা Courier পেজ)
+- Pathao: Pathao Merchant Panel → API অপশন থেকে Client ID/Secret/Store ID নিতে হয়
+- Steadfast: Steadfast Courier Dashboard → API Settings থেকে API Key ও Secret Key
+- RedX: RedX Merchant Portal → API key
+- Paperfly: Paperfly থেকে API key ও password নিয়ে Settings-এ দিতে হয়
+"autoBookOnConfirm" ON করলে order confirm হওয়ার সাথে সাথেই courier-এ automatic booking হয়ে যায়, manual click লাগে না।
+
 ## সব পেজের বিবরণ:
 
 ### ওভারভিউ (OVERVIEW)
@@ -111,7 +134,7 @@ Bot training data — keywords, intents, greeting, FAQ। Bot কী বলব�
 Customer profiles, order history, tags (VIP/blocked), segment। Export করা যায়।
 
 ### ব্রডকাস্ট (BROADCAST)
-Bulk Messenger campaigns। Segmented targeting। Schedule করা যায়।
+Bulk Messenger campaigns — সব customer বা segment (VIP/tag/order history অনুযায়ী) target করে message পাঠানো। Schedule করা যায়, image/text দুটোই সাপোর্ট। Recurring Notification Mode ON থাকলে (Settings) order confirm/cancel-এর পর customer-কে subscribe বাটন পাঠানো হয়, সাবস্ক্রাইব করলে ভবিষ্যতে broadcast পাঠানো যায়।
 
 ### অটো পোস্ট (AUTO_POST)
 Facebook page-এ auto-posting। Schedule। Image সহ post।
@@ -203,7 +226,7 @@ export class SupportChatService {
   ): string {
     const pageName = PAGE_NAMES[pageContext] ?? '';
     const contextLine = pageName
-      ? `\n\n## বর্তমান পেজ:\nব্যবহারকারী এখন "${pageName}" পেজে আছেন। এই পেজ সংক্রান্ত প্রশ্নে বিশেষভাবে সাহায্য করুন।`
+      ? `\n\n## বর্তমান পেজ:\nব্যবহারকারী এখন "${pageName}" পেজে আছেন। তবে dashboard-এর যেকোনো পেজ সম্পর্কে প্রশ্ন করলে সেটারও উত্তর দাও।`
       : '';
 
     let liveDataLine = '';

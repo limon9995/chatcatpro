@@ -405,6 +405,24 @@ export class OrdersService {
     if (order.paymentStatus !== 'advance_paid') {
       throw new BadRequestException('Order has no advance payment proof');
     }
+
+    // When verified → also confirm the order and notify customer
+    if (status === 'verified') {
+      const updated = await this.prisma.order.update({
+        where: { id },
+        data: {
+          paymentVerifyStatus: 'verified',
+          status: 'CONFIRMED',
+          confirmedAt: new Date(),
+        },
+      });
+      void this.notification.notifyConfirmed(order.pageIdRef, id);
+      this.telegram
+        .notify(order.pageIdRef, `✅ Payment verified & Order #${id} confirmed!\n👤 ${order.customerName} | 📞 ${order.phone ?? '-'}`)
+        .catch(() => {});
+      return updated;
+    }
+
     return this.prisma.order.update({
       where: { id },
       data: { paymentVerifyStatus: status },

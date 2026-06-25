@@ -127,7 +127,7 @@ After any schema change in `backend/prisma/schema.prisma`:
 
 ## Production Deployment (VPS — all services)
 
-**Server:** `root@187.127.157.248` (Ubuntu)
+**Server:** `root@143.110.178.251` (Ubuntu)
 
 **Architecture (all on single VPS):**
 ```
@@ -138,7 +138,7 @@ api.chatcat.pro    →  Nginx reverse-proxies to PM2 (NestJS, port 3000)
 
 **Deploy backend:**
 ```bash
-ssh root@187.127.157.248
+ssh root@143.110.178.251
 cd /var/www/chatcatpro/backend
 git pull origin main
 bash scripts/deploy.sh     # npm ci → prisma generate → build → pm2 reload
@@ -146,7 +146,7 @@ bash scripts/deploy.sh     # npm ci → prisma generate → build → pm2 reload
 
 **Deploy dashboard:**
 ```bash
-ssh root@187.127.157.248
+ssh root@143.110.178.251
 cd /var/www/chatcatpro/dashboard
 git pull origin main
 npm install && npm run build   # output to dist/, Nginx serves it
@@ -154,7 +154,7 @@ npm install && npm run build   # output to dist/, Nginx serves it
 
 **Deploy landing page:**
 ```bash
-ssh root@187.127.157.248
+ssh root@143.110.178.251
 cd /var/www/chatcatpro/landing
 git pull origin main
 # No build step — static HTML, Nginx serves directly

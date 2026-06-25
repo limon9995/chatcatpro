@@ -16,16 +16,11 @@ class SmsNotificationListener : NotificationListenerService() {
     private val client = OkHttpClient()
     private val WEBHOOK_URL = "https://api.chatcat.pro/sms-gateway/incoming"
 
-    private val smsPackages = setOf(
-        "com.google.android.apps.messaging",
-        "com.samsung.android.messaging",
-        "com.android.mms",
-        "com.android.messaging",
-        "com.bsb.hike",
-        "com.coloros.message",
-        "com.miui.sms",
-        "com.huawei.message",
-        "com.vivo.message",
+    // System packages to skip — not SMS apps
+    private val skipPackages = setOf(
+        "android", "com.android.systemui", "com.android.settings",
+        "com.google.android.gms", "com.google.android.gsf",
+        "pro.chatcat.paysync",
     )
 
     private val paymentKeywords = listOf(
@@ -37,7 +32,7 @@ class SmsNotificationListener : NotificationListenerService() {
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         val pkg = sbn.packageName ?: return
-        if (pkg !in smsPackages) return
+        if (pkg in skipPackages) return
 
         val extras  = sbn.notification?.extras ?: return
         val title   = extras.getCharSequence("android.title")?.toString() ?: ""
