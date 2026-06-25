@@ -13,7 +13,7 @@ interface Settings {
   catalogSlug: string;
   currencySymbol: string; codLabel: string; productCodePrefix: string;
   deliveryFeeInsideDhaka: number; deliveryFeeOutsideDhaka: number;
-  deliveryTimeText: string;
+  deliveryTimeText: string; deliveryTimeInsideDhaka: string; deliveryTimeOutsideDhaka: string;
   paymentMode: string; advanceAmount: number; advanceBkash: string; advanceNagad: string; advanceRocket: string; advancePaymentMessage: string; webOrderEnabled: boolean;
   smsGatewayEnabled: boolean;
   automationOn: boolean; ocrOn: boolean;
@@ -57,7 +57,7 @@ const S0: Settings = {
   catalogMessengerUrl: '',
   catalogSlug: '',
   currencySymbol: '৳', codLabel: 'COD', productCodePrefix: 'DF',
-  deliveryFeeInsideDhaka: 80, deliveryFeeOutsideDhaka: 120, deliveryTimeText: '',
+  deliveryFeeInsideDhaka: 80, deliveryFeeOutsideDhaka: 120, deliveryTimeText: '', deliveryTimeInsideDhaka: '', deliveryTimeOutsideDhaka: '',
   paymentMode: 'cod', advanceAmount: 0, advanceBkash: '', advanceNagad: '', advanceRocket: '', advancePaymentMessage: '', webOrderEnabled: false, smsGatewayEnabled: false,
   knowledgeText: '',
   automationOn: false, ocrOn: false,
@@ -1267,9 +1267,14 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
                 onChange={e => setS(p => ({ ...p, deliveryFeeOutsideDhaka: Number(e.target.value) }))}/>
             </div>
             <div>
-              <Label text="Delivery Time" hint={copy('Unit সহ লিখুন — এটাই bot হুবহু বলবে। যেমন: ৩-৪ কার্যদিবস, 4 দিন', 'Write with unit — bot will say exactly this. e.g. 3-4 business days')}/>
-              <input style={inp} value={s.deliveryTimeText} placeholder="যেমন: ৩-৪ কার্যদিবস"
-                onChange={e => setS(p => ({ ...p, deliveryTimeText: e.target.value }))}/>
+              <Label text={copy('Delivery Time — ঢাকার ভেতরে', 'Delivery Time — Inside Dhaka')} hint={copy('ঢাকার ভেতরে কতদিনে পৌঁছাবে — bot এটা বলবে। যেমন: ১-২ দিন', 'e.g. 1-2 days')}/>
+              <input style={inp} value={s.deliveryTimeInsideDhaka} placeholder="যেমন: ১-২ কার্যদিবস"
+                onChange={e => setS(p => ({ ...p, deliveryTimeInsideDhaka: e.target.value }))}/>
+            </div>
+            <div>
+              <Label text={copy('Delivery Time — ঢাকার বাইরে', 'Delivery Time — Outside Dhaka')} hint={copy('ঢাকার বাইরে কতদিনে পৌঁছাবে — bot এটা বলবে। যেমন: ৩-৫ দিন', 'e.g. 3-5 days')}/>
+              <input style={inp} value={s.deliveryTimeOutsideDhaka} placeholder="যেমন: ৩-৫ কার্যদিবস"
+                onChange={e => setS(p => ({ ...p, deliveryTimeOutsideDhaka: e.target.value }))}/>
             </div>
           </Grid>
         </Section>
@@ -2041,6 +2046,8 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
           deliveryFeeInsideDhaka: s.deliveryFeeInsideDhaka,
           deliveryFeeOutsideDhaka: s.deliveryFeeOutsideDhaka,
           deliveryTimeText: s.deliveryTimeText,
+          deliveryTimeInsideDhaka: s.deliveryTimeInsideDhaka,
+          deliveryTimeOutsideDhaka: s.deliveryTimeOutsideDhaka,
           paymentMode: s.paymentMode, advanceAmount: s.advanceAmount,
           advanceBkash: s.advanceBkash, advanceNagad: s.advanceNagad, advanceRocket: s.advanceRocket,
           advancePaymentMessage: s.advancePaymentMessage,

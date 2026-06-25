@@ -287,9 +287,11 @@ export class SmartBotService {
 
     // Delivery & payment
     const deliveryCtx = `\n\n## Delivery & Payment
-- ঢাকার ভিতরে delivery: ৳${ctx.deliveryInsideFee}
-- ঢাকার বাইরে delivery: ৳${ctx.deliveryOutsideFee}
-- Delivery সময়: ${ctx.deliveryTime}`;
+- ঢাকার ভিতরে delivery fee: ৳${ctx.deliveryInsideFee}${ctx.deliveryTimeInside ? ` | সময়: ${ctx.deliveryTimeInside}` : ''}
+- ঢাকার বাইরে delivery fee: ৳${ctx.deliveryOutsideFee}${ctx.deliveryTimeOutside ? ` | সময়: ${ctx.deliveryTimeOutside}` : ''}
+- Delivery সময়: ${ctx.deliveryTime || (ctx.deliveryTimeInside || ctx.deliveryTimeOutside ? 'zone দেখো' : '(সেট করা নেই)')}
+
+⚠️ Customer-এর address দেখে zone বুঝো: ঢাকার ভেতরে হলে inside row, বাইরে হলে outside row এর সময় বলো।`;
 
     const paymentRules = ctx.paymentRules as any;
     let paymentCtx = '';
@@ -457,7 +459,7 @@ Customer-এর message দেখে **strictly valid JSON** return করো:
 - SHIPPED → "আপনার পণ্য কুরিয়ারে দেওয়া হয়েছে 🚚, রাস্তায় আছে"
 - DELIVERED → "আপনার পণ্য ডেলিভারি হয়ে গেছে ✅"
 - CANCELLED → "দুঃখিত, অর্ডারটি বাতিল হয়েছে ❌"
-status reply-এর পরে, যদি "Delivery সময়:" সেটিং ফাঁকা না হয়, তাহলে সেটা যোগ করো: "সাধারণত ${deliveryTime} এর মধ্যে পৌঁছে যায়।" — DB status না থাকলে বলো "এই moment এ আপনার কোনো active order পাচ্ছি না।"
+status reply-এর পরে, যদি "Delivery সময়:" সেটিং ফাঁকা না হয়, তাহলে সেটা যোগ করো: "সাধারণত [Delivery সময় value] এর মধ্যে পৌঁছে যায়।" — DB status না থাকলে বলো "এই moment এ আপনার কোনো active order পাচ্ছি না।"
 12. **Lead capture**: Customer "trial নিতে চাই / setup করতে চাই / দাম কত / কীভাবে শুরু করব / interested / example দাও / demo দেখাও / কীভাবে কাজ করে / ki ki korte paro / example daw / demo দাও / বুঝিয়ে দাও / শুরু করতে চাই" ইত্যাদি বললে CAPTURE_LEAD action দাও। শুধু নাম এবং WhatsApp নম্বর collect করো — address বা product code চাইবে না।
 13. **Lead confirm**: Lead draft এ নাম ও WhatsApp দুটোই ✅ হলে CONFIRM_LEAD action দাও এবং বলো "আমাদের প্রতিনিধি শীঘ্রই আপনার WhatsApp-এ যোগাযোগ করবেন। ধন্যবাদ! 🎉"
 14. **"কীভাবে যোগাযোগ করব?" / "Kmne jogajog korbo?"**: Customer ইতিমধ্যে এই page-এ message করেই যোগাযোগ করছে। বলো: "এই page-এ message করেই কথা বলতে পারেন, আমরা সবসময় reply দিচ্ছি 😊 কোনো প্রশ্ন থাকলে বলুন।"

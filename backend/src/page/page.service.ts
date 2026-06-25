@@ -36,6 +36,9 @@ export class PageService {
       primaryColor: page.primaryColor || '',
       deliveryFeeInsideDhaka: Number(page.deliveryFeeInsideDhaka ?? 0) || 0,
       deliveryFeeOutsideDhaka: Number(page.deliveryFeeOutsideDhaka ?? 0) || 0,
+      deliveryTimeText: page.deliveryTimeText || '',
+      deliveryTimeInsideDhaka: page.deliveryTimeInsideDhaka || '',
+      deliveryTimeOutsideDhaka: page.deliveryTimeOutsideDhaka || '',
       infoModeOn: Boolean(page.infoModeOn),
       orderModeOn: Boolean(page.orderModeOn),
       printModeOn: Boolean(page.printModeOn),
@@ -166,6 +169,10 @@ export class PageService {
       data.deliveryFeeInsideDhaka = Number(body.deliveryFeeInsideDhaka) || 0;
     if (body.deliveryFeeOutsideDhaka !== undefined)
       data.deliveryFeeOutsideDhaka = Number(body.deliveryFeeOutsideDhaka) || 0;
+    if (typeof body.deliveryTimeInsideDhaka === 'string')
+      data.deliveryTimeInsideDhaka = body.deliveryTimeInsideDhaka.trim();
+    if (typeof body.deliveryTimeOutsideDhaka === 'string')
+      data.deliveryTimeOutsideDhaka = body.deliveryTimeOutsideDhaka.trim();
 
     // Dual Photo Mode
     if (typeof body.dualPhotoMode === 'boolean')

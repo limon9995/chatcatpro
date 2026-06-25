@@ -24,6 +24,8 @@ export interface BusinessContext {
   deliveryInsideFee: number;
   deliveryOutsideFee: number;
   deliveryTime: string;
+  deliveryTimeInside: string;
+  deliveryTimeOutside: string;
   products: BusinessProduct[];
   paymentRules: Record<string, any>;
   pricingPolicy: Record<string, any>;
@@ -55,6 +57,8 @@ export class BotContextService {
           deliveryFeeInsideDhaka: true,
           deliveryFeeOutsideDhaka: true,
           deliveryTimeText: true,
+          deliveryTimeInsideDhaka: true,
+          deliveryTimeOutsideDhaka: true,
           knowledgeText: true,
           dualPhotoMode: true,
           dualWearingProductId: true,
@@ -119,7 +123,9 @@ export class BotContextService {
       businessName: page?.businessName ?? null,
       deliveryInsideFee: (page as any)?.deliveryFeeInsideDhaka ?? 80,
       deliveryOutsideFee: (page as any)?.deliveryFeeOutsideDhaka ?? 130,
-      deliveryTime: (page as any)?.deliveryTimeText ?? '২-৩ কার্যদিবস',
+      deliveryTime: (page as any)?.deliveryTimeText ?? '',
+      deliveryTimeInside: (page as any)?.deliveryTimeInsideDhaka ?? '',
+      deliveryTimeOutside: (page as any)?.deliveryTimeOutsideDhaka ?? '',
       products: products as BusinessProduct[],
       paymentRules: (knowledgeConfig as any)?.paymentRules ?? {},
       pricingPolicy: (knowledgeConfig as any)?.pricingPolicy ?? {},

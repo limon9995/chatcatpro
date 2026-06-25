@@ -2089,7 +2089,7 @@ export class WebhookService implements OnModuleDestroy {
       where: {
         pageIdRef: pageId,
         customerPsid: psid,
-        status: { in: ['RECEIVED', 'PENDING', 'CONFIRMED'] },
+        status: { in: ['RECEIVED', 'PENDING', 'CONFIRMED', 'PACKED', 'SHIPPED'] },
       },
       orderBy: { id: 'desc' },
       select: {

@@ -190,7 +190,7 @@ export class DraftOrderHandler {
 
         // If all three collected, move to next step
         if (draft.customerName && draft.phone && draft.address) {
-          draft.currentStep = this.requiresAdvancePayment(draft, page) ? 'advance_payment' : 'confirm';
+          draft.currentStep = this.isAdvanceNeeded(draft, page) ? 'advance_payment' : 'confirm';
           await this.ctx.saveDraft(pageId, psid, draft);
           if (draft.currentStep === 'advance_payment') {
             return this.buildAdvancePrompt(page, draft);

@@ -116,9 +116,11 @@ model Page {
   websiteUrl              String? // Optional external store/website URL; bot can send this instead of hosted catalog
   // V8: Custom product code prefix (e.g. "SK", "FZ", "BD"). Default "DF"
   productCodePrefix       String  @default("DF")
-  deliveryFeeInsideDhaka  Float   @default(80)
-  deliveryFeeOutsideDhaka Float   @default(120)
-  deliveryTimeText        String?
+  deliveryFeeInsideDhaka    Float   @default(80)
+  deliveryFeeOutsideDhaka   Float   @default(120)
+  deliveryTimeText          String?
+  deliveryTimeInsideDhaka   String?
+  deliveryTimeOutsideDhaka  String?
 
   // V17: Payment mode — controls how bot collects payment before confirming order
   // 'cod' = full cash on delivery (default)
