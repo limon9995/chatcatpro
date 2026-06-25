@@ -142,6 +142,32 @@ export class DraftOrderHandler {
     };
   }
 
+  /**
+   * Parse labeled form reply from customer.
+   * Matches patterns like:
+   *   নাম: Limon  /  name: Limon
+   *   ফোন: 01720450797  /  phone: 01720450797
+   *   ঠিকানা: Savar, Dhaka  /  address: Savar, Dhaka
+   */
+  parseLabeledForm(text: string): { name?: string; phone?: string; address?: string } | null {
+    const nameMatch = text.match(/(?:নাম|name)\s*[:\-]\s*([^\n]+)/i);
+    const phoneMatch = text.match(/(?:ফোন|phone|মোবাইল|mobile|নম্বর|number)\s*[:\-]\s*([^\n]+)/i);
+    const addressMatch = text.match(/(?:ঠিকানা|address|addr|লোকেশন|location)\s*[:\-]\s*([^\n]+)/i);
+
+    if (!nameMatch && !phoneMatch && !addressMatch) return null;
+
+    const result: { name?: string; phone?: string; address?: string } = {};
+    if (nameMatch) result.name = nameMatch[1].trim().slice(0, 80);
+    if (phoneMatch) {
+      const raw = phoneMatch[1].trim().replace(/[০-৯]/g, (d) => String('০১২৩৪৫৬৭৮৯'.indexOf(d)));
+      const ph = raw.match(/(?:\+?88)?01[3-9]\d{8}/);
+      if (ph) result.phone = ph[0];
+    }
+    if (addressMatch) result.address = addressMatch[1].trim().slice(0, 200);
+
+    return result;
+  }
+
   async captureField(
     pageId: number,
     psid: string,
@@ -151,6 +177,32 @@ export class DraftOrderHandler {
   ): Promise<string | null | false> {
     const step = draft.currentStep;
     let workingText = text;
+
+    // ── Labeled form fast-path: customer filled the template ───────────────
+    // Zero AI cost — pure regex extraction from "নাম: X\nফোন: Y\nঠিকানা: Z"
+    if (step === 'name' || step === 'phone' || step === 'address') {
+      const form = this.parseLabeledForm(text);
+      if (form && (form.name || form.phone || form.address)) {
+        if (form.name && !draft.customerName) draft.customerName = form.name;
+        if (form.phone && !draft.phone) draft.phone = form.phone;
+        if (form.address && !draft.address) draft.address = form.address;
+        await this.ctx.saveDraft(pageId, psid, draft);
+
+        // If all three collected, move to next step
+        if (draft.customerName && draft.phone && draft.address) {
+          draft.currentStep = this.requiresAdvancePayment(draft, page) ? 'advance_payment' : 'confirm';
+          await this.ctx.saveDraft(pageId, psid, draft);
+          if (draft.currentStep === 'advance_payment') {
+            return this.buildAdvancePrompt(page, draft);
+          }
+          return this.buildSummary(draft, page);
+        }
+        // Ask for what's still missing
+        if (!draft.customerName) return 'আপনার নামটা দিন 💖';
+        if (!draft.phone) return 'ফোন নম্বরটা দিন 💖 (01XXXXXXXXX)';
+        if (!draft.address) return 'পুরো ঠিকানাটা দিন 💖';
+      }
+    }
 
     // ── Regex-first gate: skip AI for clear-cut inputs ─────────────────────
     // For phone/name/address steps, if the input is unambiguous, skip the
@@ -429,7 +481,7 @@ export class DraftOrderHandler {
       // All custom fields done → now collect customer info
       draft.currentStep = 'name';
       await this.ctx.saveDraft(pageId, psid, draft);
-      return 'ধন্যবাদ 💖 এখন **নামটা** বলুন।';
+      return this.buildInfoFormPrompt();
     }
 
     // ── NAME / PHONE / ADDRESS — Smart multi-field parsing ───────────────────
@@ -517,7 +569,7 @@ export class DraftOrderHandler {
     if (!draft.customerName) {
       draft.currentStep = 'name';
       await this.ctx.saveDraft(pageId, psid, draft);
-      return 'আপনার নামটা দিন 💖';
+      return this.buildInfoFormPrompt();
     }
     if (!draft.phone) {
       draft.currentStep = 'phone';
@@ -581,6 +633,10 @@ export class DraftOrderHandler {
     draft.currentStep = 'confirm';
     await this.ctx.saveDraft(pageId, psid, draft);
     return this.buildSummary(draft, page);
+  }
+
+  buildInfoFormPrompt(): string {
+    return `📋 নিচের ফর্মটি **copy** করে পূরণ করুন:\n\nনাম: \nফোন: \nঠিকানা: \n\n💡 অথবা এক এক করে পাঠান — প্রথমে নামটা বলুন।`;
   }
 
   buildSummary(draft: DraftSession, page: any): string {
@@ -1129,21 +1185,11 @@ export class DraftOrderHandler {
     if (hasComma) {
       // "Name, Area, District" — first short non-geo part = name, rest = address
       const first = parts[0];
-      const firstWords = first.split(' ');
-      // If first part has multiple words, last word(s) might be a location
-      // e.g. "Limon Savar" — "Savar" is a location not in geo list
-      // Heuristic: if first part has >1 word and we have ≥2 parts total,
-      // take only the FIRST word as name and treat rest as address
-      const firstIsCompound = firstWords.length > 1;
       const firstIsName =
         first.length <= 35 &&
-        firstWords.length <= 4 &&
+        first.split(' ').length <= 4 &&
         !this.hasGeoKeyword(first);
-      if (firstIsName && firstIsCompound) {
-        // "Limon Savar, Dhaka" → name="Limon", address="Savar, Dhaka"
-        result.name = firstWords[0];
-        result.address = [...firstWords.slice(1), ...parts.slice(1)].join(', ');
-      } else if (firstIsName) {
+      if (firstIsName) {
         result.name = first;
         result.address = parts.slice(1).join(', ');
       } else {
@@ -1159,7 +1205,7 @@ export class DraftOrderHandler {
   }
 
   private hasGeoKeyword(text: string): boolean {
-    return /\b(road|rd|house|flat|village|gram|para|ward|thana|upazila|district|zila|জেলা|থানা|উপজেলা|বাসা|রোড|গ্রাম|পাড়া|মহল্লা|mirpur|uttara|dhaka|ঢাকা|chittagong|চট্টগ্রাম|sylhet|সিলেট|rajshahi|রাজশাহী|khulna|খুলনা|barisal|বরিশাল|rangpur|রংপুর|mymensingh|ময়মনসিংহ|tangail|টাঙ্গাইল|narayanganj|gazipur|comilla|cumilla|noakhali|brahmanbaria|feni|cox|faridpur|jessore|jashore|dinajpur|bogra|bogura|sirajganj|pabna|jamalpur|netrokona|kishoreganj|manikganj|munshiganj|narsingdi|sherpur|habiganj|moulvibazar|kalihati|ellenga)\b/i.test(
+    return /\b(road|rd|house|flat|village|gram|para|ward|thana|upazila|district|zila|জেলা|থানা|উপজেলা|বাসা|রোড|গ্রাম|পাড়া|মহল্লা|mirpur|uttara|dhaka|ঢাকা|chittagong|চট্টগ্রাম|sylhet|সিলেট|rajshahi|রাজশাহী|khulna|খুলনা|barisal|বরিশাল|rangpur|রংপুর|mymensingh|ময়মনসিংহ|tangail|টাঙ্গাইল|narayanganj|gazipur|comilla|cumilla|noakhali|brahmanbaria|feni|cox|faridpur|jessore|jashore|dinajpur|bogra|bogura|sirajganj|pabna|jamalpur|netrokona|kishoreganj|manikganj|munshiganj|narsingdi|sherpur|habiganj|moulvibazar|kalihati|ellenga|savar|সাভার|ashulia|আশুলিয়া|keraniganj|কেরানীগঞ্জ|dohar|নবাবগঞ্জ|nawabganj|tongi|টঙ্গী|gazipur|গাজীপুর|kaliakair|কালিয়াকৈর|kapasia|sreepur|মাওনা|maona|dhamrai|ধামরাই|manikganj|মানিকগঞ্জ|singair|শিবালয়|saturia|harirampur|ghior|munshiganj|মুন্সীগঞ্জ|sirajdikhan|louhajang|sreenagar|gazaria|laksam|chandpur|lakshmipur|noakhali|feni|comilla|cumilla|brahmanbaria|habiganj|moulvibazar|sylhet|sunamganj|netrokona|kishoreganj|mymensingh|sherpur|jamalpur|rangpur|dinajpur|thakurgaon|panchagarh|nilphamari|lalmonirhat|kurigram|gaibandha|joypurhat|naogaon|chapai|nawabganj|rajshahi|natore|sirajganj|pabna|kushtia|meherpur|chuadanga|jhenaidah|magura|narail|satkhira|khulna|bagerhat|pirojpur|jhalokathi|barguna|patuakhali|barisal|bhola|madaripur|shariatpur|gopalganj|faridpur|rajbari|jessore|jashore|narsingdi|gazipur|narayanganj|munshiganj|manikganj|dhaka|ঢাকা)\b/i.test(
       text,
     );
   }
