@@ -27,7 +27,7 @@ export interface OrdersPagePreset {
   label?: string;
 }
 
-const STATUS_OPTIONS = ['ALL','RECEIVED','CONFIRMED','PACKED','DELIVERED','CANCELLED','ISSUE'];
+const STATUS_OPTIONS = ['ALL','RECEIVED','CONFIRMED','PACKED','SHIPPED','DELIVERED','CANCELLED','ISSUE'];
 
 const PAYMENT_FILTERS: { key: string; label: string; color: string }[] = [
   { key: 'ALL',           label: 'সব Payment',      color: '#6366f1' },
@@ -703,7 +703,10 @@ export function OrdersPage({ th, pageId, onToast, preset }: {
 
   const filtered = orders.filter(o => {
     if (callFilter !== 'ALL' && (o.callStatus || 'NONE') !== callFilter) return false;
-    if (spamFilter !== 'ALL' && (o.spamRisk || 'unknown') !== spamFilter) return false;
+    if (spamFilter !== 'ALL') {
+      const risk = o.spamRisk && o.spamRisk !== 'unknown' ? o.spamRisk : 'new';
+      if (risk !== spamFilter) return false;
+    }
     if (!search) return true;
     const s = search.toLowerCase();
     return (o.customerName || '').toLowerCase().includes(s) ||
@@ -1211,7 +1214,10 @@ export function OrdersPage({ th, pageId, onToast, preset }: {
           { key: 'new', label: '🆕 New', color: '#6366f1' },
         ].map(f => {
           const isActive = spamFilter === f.key;
-          const count = f.key === 'ALL' ? undefined : orders.filter(o => (o.spamRisk || 'unknown') === f.key).length;
+          const count = f.key === 'ALL' ? undefined : orders.filter(o => {
+            const r = o.spamRisk && o.spamRisk !== 'unknown' ? o.spamRisk : 'new';
+            return r === f.key;
+          }).length;
           return (
             <button key={f.key} onClick={() => setSpamFilter(f.key)} style={{
               padding: '5px 10px', borderRadius: 20, border: `1.5px solid ${isActive ? f.color : th.border}`,
@@ -1375,6 +1381,18 @@ export function OrdersPage({ th, pageId, onToast, preset }: {
                                 <button style={{ display: 'block', width: '100%', padding: '8px 12px', textAlign: 'left', background: 'transparent', border: 'none', color: '#7c3aed', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
                                   onClick={(e) => { e.stopPropagation(); setOpenDropdown(null); action([o.id], 'pack'); }}>
                                   📦 Pack
+                                </button>
+                              )}
+                              {o.status === 'PACKED' && (
+                                <button style={{ display: 'block', width: '100%', padding: '8px 12px', textAlign: 'left', background: 'transparent', border: 'none', color: '#0891b2', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
+                                  onClick={(e) => { e.stopPropagation(); setOpenDropdown(null); action([o.id], 'ship'); }}>
+                                  🚚 Ship / Courier
+                                </button>
+                              )}
+                              {(o.status === 'PACKED' || o.status === 'SHIPPED') && (
+                                <button style={{ display: 'block', width: '100%', padding: '8px 12px', textAlign: 'left', background: 'transparent', border: 'none', color: '#16a34a', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
+                                  onClick={(e) => { e.stopPropagation(); setOpenDropdown(null); action([o.id], 'deliver'); }}>
+                                  ✅ Delivered
                                 </button>
                               )}
                               <button style={{ display: 'block', width: '100%', padding: '8px 12px', textAlign: 'left', background: 'transparent', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}

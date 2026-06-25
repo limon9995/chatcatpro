@@ -25,7 +25,25 @@ export class OrderNotificationService {
 
   /** Send order-confirmed message to customer. */
   async notifyConfirmed(pageId: number, orderId: number): Promise<void> {
-    await this.send(pageId, orderId, 'order_confirmed', {});
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: { items: true },
+    });
+    if (!order) return;
+    const itemLines = order.items
+      .map((i: any) => `• ${i.productCode} × ${i.qty} = ৳${i.unitPrice * i.qty}`)
+      .join('\n');
+    const subtotal = order.items.reduce((s: number, i: any) => s + i.unitPrice * i.qty, 0);
+    const advancePaid = order.paymentStatus === 'advance_paid' ? Number(order.advanceAmount || 0) : 0;
+    const due = subtotal - advancePaid;
+    await this.send(pageId, orderId, 'order_confirmed', {
+      items: itemLines || '—',
+      phone: order.phone || '—',
+      address: order.address || '—',
+      total: subtotal,
+      advancePaid,
+      dueAmount: due > 0 ? due : 0,
+    });
   }
 
   /** Send courier-booked message to customer. */

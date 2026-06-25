@@ -1172,6 +1172,11 @@ export class WebhookService implements OnModuleDestroy {
       return;
     }
 
+    if (recentOrder && this.isPostOrderCancel(text)) {
+      await this.handlePostOrderCancel(page, psid, recentOrder);
+      return;
+    }
+
     if (recentOrder && intent === 'CONFIRM') {
       // V20: Only trigger if order is very recent (last 2 hours) to avoid false "Ok" triggers on old orders
       const orderAgeHours =
@@ -2094,6 +2099,45 @@ export class WebhookService implements OnModuleDestroy {
         createdAt: true,
       },
     });
+  }
+
+  private isPostOrderCancel(text: string): boolean {
+    const t = text.toLowerCase().trim();
+    return /cancel|বাতিল|নিব না|লাগবে না|দরকার নাই|দরকার নেই|cancel\s*kro|cancel\s*করুন|cancel\s*করো|oder\s*cancel|order\s*cancel/.test(t);
+  }
+
+  private async handlePostOrderCancel(
+    page: any,
+    psid: string,
+    order: { id: number; status: string; orderNote: string | null; createdAt: Date },
+  ): Promise<void> {
+    const orderAgeHours = (Date.now() - new Date(order.createdAt).getTime()) / 3_600_000;
+    if (order.status === 'CANCELLED') {
+      await this.safeSend(page.pageToken, psid, '❌ আপনার অর্ডারটি আগেই বাতিল হয়েছে।');
+      return;
+    }
+    if (orderAgeHours > 24) {
+      await this.safeSend(page.pageToken, psid, '⚠️ এই অর্ডারটি ২৪ ঘণ্টার বেশি পুরনো। বাতিল করতে সরাসরি আমাদের সাথে যোগাযোগ করুন।');
+      return;
+    }
+    const existing = order.orderNote?.trim();
+    const cancelNote = '[Customer requested cancel via Messenger]';
+    await this.prisma.order.update({
+      where: { id: order.id },
+      data: { orderNote: existing ? `${existing} | ${cancelNote}` : cancelNote },
+    });
+    await this.ctx.setAgentHandling(page.id, psid, true);
+    await this.safeSend(
+      page.pageToken,
+      psid,
+      `⚠️ আপনার অর্ডার #${order.id} বাতিলের অনুরোধ পাওয়া গেছে। আমাদের টিম শীঘ্রই confirm করবে।`,
+    );
+    this.telegram
+      .notify(
+        page.id,
+        `❌ <b>Cancel Request — Order #${order.id}</b>\nCustomer নিজে Messenger এ cancel চেয়েছে।`,
+      )
+      .catch(() => {});
   }
 
   private isPostOrderAck(text: string): boolean {

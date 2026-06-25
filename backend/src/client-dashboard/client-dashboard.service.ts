@@ -276,6 +276,11 @@ export class ClientDashboardService {
         where: { id: orderId },
         data: { status: 'PACKED', updatedAt: new Date() },
       });
+    if (a === 'ship')
+      return this.prisma.order.update({
+        where: { id: orderId },
+        data: { status: 'SHIPPED', updatedAt: new Date() },
+      });
     if (a === 'deliver') {
       await this.ordersService.markDelivered(orderId, pageId);
       void this.orderNotification.notifyDelivered(pageId, orderId);
