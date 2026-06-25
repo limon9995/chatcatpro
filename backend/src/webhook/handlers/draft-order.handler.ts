@@ -451,16 +451,30 @@ export class DraftOrderHandler {
       }
     }
 
-    // For phone/address steps, name is already collected — skip multi-field parsing
-    // to prevent unrelated text being mis-classified as a name and bypassing validation.
-    const parsed =
-      step === 'phone' || step === 'address'
-        ? {
-            name: undefined,
-            phone: this.parseCustomerInfo(workingText).phone,
-            address: this.parseCustomerInfo(workingText).address,
-          }
-        : this.parseCustomerInfo(workingText);
+    // For phone/address steps, name is already collected — skip multi-field parsing.
+    // At address step: extract phone if present, then treat ALL remaining text as address
+    // to avoid mis-classifying "Savar,Dhaka" → name="Savar", address="Dhaka".
+    let parsed: { name?: string; phone?: string; address?: string };
+    if (step === 'address') {
+      const phoneOnly = this.parseCustomerInfo(workingText).phone;
+      let addrText = workingText;
+      if (phoneOnly) {
+        // strip phone from text, rest is address
+        addrText = workingText
+          .replace(/(?:\+?88)?01[3-9]\d{8}/, '')
+          .trim()
+          .replace(/\s{2,}/g, ' ');
+      }
+      parsed = { phone: phoneOnly, address: addrText || undefined };
+    } else if (step === 'phone') {
+      parsed = {
+        name: undefined,
+        phone: this.parseCustomerInfo(workingText).phone,
+        address: this.parseCustomerInfo(workingText).address,
+      };
+    } else {
+      parsed = this.parseCustomerInfo(workingText);
+    }
 
     if (!draft.customerName && parsed.name) draft.customerName = parsed.name;
     if (!draft.phone && parsed.phone) draft.phone = parsed.phone;
@@ -1115,11 +1129,21 @@ export class DraftOrderHandler {
     if (hasComma) {
       // "Name, Area, District" — first short non-geo part = name, rest = address
       const first = parts[0];
+      const firstWords = first.split(' ');
+      // If first part has multiple words, last word(s) might be a location
+      // e.g. "Limon Savar" — "Savar" is a location not in geo list
+      // Heuristic: if first part has >1 word and we have ≥2 parts total,
+      // take only the FIRST word as name and treat rest as address
+      const firstIsCompound = firstWords.length > 1;
       const firstIsName =
         first.length <= 35 &&
-        first.split(' ').length <= 4 &&
+        firstWords.length <= 4 &&
         !this.hasGeoKeyword(first);
-      if (firstIsName) {
+      if (firstIsName && firstIsCompound) {
+        // "Limon Savar, Dhaka" → name="Limon", address="Savar, Dhaka"
+        result.name = firstWords[0];
+        result.address = [...firstWords.slice(1), ...parts.slice(1)].join(', ');
+      } else if (firstIsName) {
         result.name = first;
         result.address = parts.slice(1).join(', ');
       } else {
