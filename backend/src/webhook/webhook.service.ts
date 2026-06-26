@@ -1112,7 +1112,18 @@ export class WebhookService implements OnModuleDestroy {
       draft = null;
     }
 
-    // ── ACTIVE DRAFT: capture next field ──────────────────────────────────
+    // ── PENDING POST-ORDER EDIT: customer is providing the new value ─────────
+    if (draft?.pendingEditField && !draft.currentStep) {
+      const recentEditOrder = page.orderModeOn
+        ? await this.findRecentCustomerOrder(pageId, psid)
+        : null;
+      if (recentEditOrder) {
+        await this.handlePostOrderEdit(page, psid, text, recentEditOrder, draft);
+        return;
+      }
+    }
+
+        // ── ACTIVE DRAFT: capture next field ──────────────────────────────────
     if (draft && page.orderModeOn) {
       const result = await this.draftHandler.captureField(
         pageId,
@@ -1168,7 +1179,7 @@ export class WebhookService implements OnModuleDestroy {
 
     // ── POST-ORDER FOLLOW-UP (after draft already finalized) ──────────────
     if (recentOrder && intent === 'EDIT_ORDER') {
-      await this.handlePostOrderEdit(page, psid, text, recentOrder);
+      await this.handlePostOrderEdit(page, psid, text, recentOrder, null);
       return;
     }
 
@@ -2180,74 +2191,85 @@ export class WebhookService implements OnModuleDestroy {
     return null;
   }
 
+  private async applyOrderFieldUpdate(
+    pageId: number,
+    orderId: number,
+    field: 'name' | 'phone' | 'address',
+    value: string,
+    fieldLabel: string,
+    pageToken: string,
+    psid: string,
+  ): Promise<void> {
+    const patch: Record<string, string> = {};
+    patch[field] = value;
+    await this.prisma.order.update({ where: { id: orderId }, data: patch });
+    await this.safeSend(pageToken, psid, `✅ আপনার ${fieldLabel} আপডেট হয়েছে: "${value}" 💖`);
+    this.telegram
+      .notify(pageId, `✏️ Order #${orderId} — Customer ${fieldLabel} পরিবর্তন করেছে:\n"${value}"`)
+      .catch(() => {});
+  }
+
   private async handlePostOrderEdit(
     page: any,
     psid: string,
     text: string,
     order: { id: number; orderNote: string | null; status: string },
+    draft: DraftSession | null,
   ): Promise<void> {
     if (['SHIPPED', 'DELIVERED', 'CANCELLED'].includes(order.status)) {
-      await this.safeSend(
-        page.pageToken,
-        psid,
-        '\u09A6\u09C1\u0983\u0996\u09BF\u09A4 \uD83D\uDE14 \u098F\u0987 \u09AA\u09B0\u09CD\u09AF\u09BE\u09AF\u09BC\u09C7 \u0985\u09B0\u09CD\u09A1\u09BE\u09B0 \u09AA\u09B0\u09BF\u09AC\u09B0\u09CD\u09A4\u09A8 \u0995\u09B0\u09BE \u09B8\u09AE\u09CD\u09AD\u09AC \u09A8\u09AF\u09BC\u0964',
-      );
+      await this.safeSend(page.pageToken, psid, 'দুঃখিত 😔 এই পর্যায়ে অর্ডার পরিবর্তন করা সম্ভব নয়।');
       return;
     }
 
+    // ── If we were waiting for a value from previous message ──────────────────
+    if (draft?.pendingEditField && ['name', 'phone', 'address'].includes(draft.pendingEditField)) {
+      const field = draft.pendingEditField as 'name' | 'phone' | 'address';
+      const labels: Record<string, string> = { name: 'নাম', phone: 'ফোন', address: 'ঠিকানা' };
+      const value = text.trim();
+      if (value.length > 0) {
+        draft.pendingEditField = undefined;
+        await this.ctx.saveDraft(page.id, psid, draft);
+        await this.applyOrderFieldUpdate(page.id, order.id, field, value, labels[field], page.pageToken, psid);
+        return;
+      }
+    }
+
+    // ── Detect which field customer wants to change ───────────────────────────
     const detected = this.detectPostOrderEditField(text);
     if (!detected) {
-      await this.safeSend(
-        page.pageToken,
-        psid,
-        '\u0995\u09CB\u09A8\u099F\u09BE \u09AC\u09A6\u09B2\u09BE\u09A4\u09C7 \u099A\u09BE\u09A8 \u09B2\u09BF\u0996\u09C1\u09A8 \uD83D\uDC96\n\uD83D\uDC64 \u09A8\u09BE\u09AE: [\u09A8\u09A4\u09C1\u09A8 \u09A8\u09BE\u09AE]\n\uD83D\uDCDE \u09AB\u09CB\u09A8: [\u09A8\u09A4\u09C1\u09A8 \u09A8\u09AE\u09CD\u09AC\u09B0]\n\uD83D\uDCCD \u09A0\u09BF\u0995\u09BE\u09A8\u09BE: [\u09A8\u09A4\u09C1\u09A8 \u09A0\u09BF\u0995\u09BE\u09A8\u09BE]',
-      );
+      await this.safeSend(page.pageToken, psid, 'কোনটা বদলাতে চান? নাম, ফোন নম্বর, নাকি ঠিকানা?');
       return;
     }
 
+    // ── Try to extract new value from same message ────────────────────────────
     const extracted = this.extractPostOrderEditValue(text);
-
     if (
       extracted &&
       (extracted.field === 'name' || extracted.field === 'phone' || extracted.field === 'address') &&
       (extracted.field as string) === detected.field
     ) {
-      const patch: Record<string, string> = {};
-      patch[extracted.field] = extracted.value;
-      await this.prisma.order.update({ where: { id: order.id }, data: patch });
-      await this.safeSend(
-        page.pageToken,
-        psid,
-        `\u2705 \u0986\u09AA\u09A8\u09BE\u09B0 ${detected.label} \u0986\u09AA\u09A1\u09C7\u099F \u09B9\u09AF\u09BC\u09C7\u099B\u09C7: "${extracted.value}" \uD83D\uDC96`,
-      );
-      this.telegram
-        .notify(
-          page.id,
-          `\u270F\uFE0F Order #${order.id} \u2014 Customer \u09A8\u09BF\u099C\u09C7\u0987 ${detected.label} \u09AA\u09B0\u09BF\u09AC\u09B0\u09CD\u09A4\u09A8 \u0995\u09B0\u09C7\u099B\u09C7:\n"${extracted.value}"`,
-        )
-        .catch(() => {});
-    } else {
-      const prompts: Record<string, string> = {
-        name: '\uD83D\uDC64 \u09A8\u09A4\u09C1\u09A8 \u09A8\u09BE\u09AE \u09B2\u09BF\u0996\u09C1\u09A8:',
-        phone: '\uD83D\uDCDE \u09A8\u09A4\u09C1\u09A8 \u09AB\u09CB\u09A8 \u09A8\u09AE\u09CD\u09AC\u09B0 \u09B2\u09BF\u0996\u09C1\u09A8:',
-        address: '\uD83D\uDCCD \u09A8\u09A4\u09C1\u09A8 \u09A0\u09BF\u0995\u09BE\u09A8\u09BE \u09B2\u09BF\u0996\u09C1\u09A8 (\u099C\u09C7\u09B2\u09BE \u09B8\u09B9):',
-        size: '\uD83D\uDCCC \u09A8\u09A4\u09C1\u09A8 \u09B8\u09BE\u0987\u099C \u09B2\u09BF\u0996\u09C1\u09A8 (S/M/L/XL):',
-        color: '\uD83C\uDFA8 \u09A8\u09A4\u09C1\u09A8 \u0995\u09BE\u09B2\u09BE\u09B0 \u09B2\u09BF\u0996\u09C1\u09A8:',
-      };
-      await this.ctx.setAgentHandling(page.id, psid, true);
-      await this.safeSend(
-        page.pageToken,
-        psid,
-        prompts[detected.field] || '\u09A8\u09A4\u09C1\u09A8 \u09A4\u09A5\u09CD\u09AF \u09B2\u09BF\u0996\u09C1\u09A8, \u0986\u09AE\u09B0\u09BE \u0986\u09AA\u09A1\u09C7\u099F \u0995\u09B0\u09C7 \u09A6\u09C7\u09AC\u09CB \uD83D\uDC96',
-      );
-      this.telegram
-        .notify(
-          page.id,
-          `\u270F\uFE0F Order #${order.id}: Customer <b>${detected.label}</b> \u09AA\u09B0\u09BF\u09AC\u09B0\u09CD\u09A4\u09A8 \u099A\u09C7\u09AF\u09BC\u09C7\u099B\u09C7\u0964 Bot agent-\u098F hand off \u0995\u09B0\u09C7\u099B\u09C7\u0964`,
-        )
-        .catch(() => {});
+      await this.applyOrderFieldUpdate(page.id, order.id, extracted.field, extracted.value, detected.label, page.pageToken, psid);
+      return;
     }
+
+    // ── Value not in message — ask and save pending state ─────────────────────
+    const prompts: Record<string, string> = {
+      name: '👤 নতুন নাম লিখুন:',
+      phone: '📞 নতুন ফোন নম্বর লিখুন:',
+      address: '📍 নতুন ঠিকানা লিখুন (জেলা সহ):',
+      size: '📌 নতুন সাইজ লিখুন (S/M/L/XL):',
+      color: '🎨 নতুন কালার লিখুন:',
+    };
+
+    if (['name', 'phone', 'address'].includes(detected.field)) {
+      // Save pending state so next message is treated as the new value
+      const currentDraft = draft ?? { items: [], customerName: null, phone: null, address: null, currentStep: 'idle' };
+      currentDraft.pendingEditField = detected.field as any;
+      await this.ctx.saveDraft(page.id, psid, currentDraft);
+    }
+    await this.safeSend(page.pageToken, psid, prompts[detected.field] || 'নতুন তথ্য লিখুন 💖');
   }
+
   private async handlePaymentScreenshot(
     page: any,
     psid: string,

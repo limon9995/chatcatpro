@@ -46,6 +46,8 @@ export interface DraftSession {
   // Dual photo clarification — image URL stored while waiting for customer to pick wearing/holding
   pendingDualImageUrl?: string;
   pendingDualAllImageUrls?: string[];
+  // Post-order edit — waiting for customer to provide new value for this field
+  pendingEditField?: 'name' | 'phone' | 'address' | 'size' | 'color';
 }
 
 @Injectable()
