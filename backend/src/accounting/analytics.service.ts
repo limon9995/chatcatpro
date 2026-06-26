@@ -172,7 +172,7 @@ export class AnalyticsService {
       this.prisma.order.findMany({
         where: {
           pageIdRef: pageId,
-          status: 'CONFIRMED',
+          status: { in: ['CONFIRMED', 'PACKED', 'SHIPPED', 'DELIVERED'] },
           confirmedAt: { gte: since },
         },
         include: { items: true },
@@ -287,7 +287,7 @@ export class AnalyticsService {
     const orders = await this.prisma.order.findMany({
       where: {
         pageIdRef: pageId,
-        status: 'CONFIRMED',
+        status: { in: ['CONFIRMED', 'PACKED', 'SHIPPED', 'DELIVERED'] },
         confirmedAt: { gte: from, lte: to },
       },
       include: { items: true },
@@ -624,7 +624,7 @@ export class AnalyticsService {
       by: ['customerPsid'],
       where: {
         pageIdRef: pageId,
-        status: 'CONFIRMED',
+        status: { in: ['CONFIRMED', 'PACKED', 'SHIPPED', 'DELIVERED'] },
         confirmedAt: { gte: startOfMonth },
       },
       _count: { id: true },
@@ -657,7 +657,7 @@ export class AnalyticsService {
     const orders = await this.prisma.order.findMany({
       where: {
         pageIdRef: pageId,
-        status: 'CONFIRMED',
+        status: { in: ['CONFIRMED', 'PACKED', 'SHIPPED', 'DELIVERED'] },
         confirmedAt: { gte: days[days.length - 1] },
       },
       select: { confirmedAt: true },

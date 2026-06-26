@@ -691,7 +691,7 @@ export function AccountingPage({ th, pageId, onToast, preset }: {
 
         {/* KPI grid */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(170px,1fr))', gap: 12 }}>
-          <KPICard icon="📈" label="Est. Revenue" value={fmt(overview.estimatedRevenue)} color={th.accent} sub={`${overview.confirmedOrders} confirmed orders`} />
+          <KPICard icon="📈" label="Est. Revenue" value={fmt(overview.estimatedRevenue)} color={th.accent} sub={`${overview.confirmedOrders} active orders`} />
           <KPICard icon="💰" label="Collected" value={fmt(overview.totalCollection)} color="#10b981" />
           <KPICard icon="⏳" label="Due" value={fmt(overview.totalDue)} color={overview.totalDue > 0 ? '#f59e0b' : '#10b981'} />
           <KPICard icon="🧾" label="Expenses" value={fmt(overview.totalExpenses)} color="#f97316" />

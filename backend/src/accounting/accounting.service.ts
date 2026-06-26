@@ -62,7 +62,7 @@ export class AccountingService {
       deliveredCourierShipments,
     ] = await Promise.all([
       this.prisma.order.findMany({
-        where: { pageIdRef: pageId, status: 'CONFIRMED' },
+        where: { pageIdRef: pageId, status: { in: ['CONFIRMED', 'PACKED', 'SHIPPED', 'DELIVERED'] } },
         include: { items: true },
       }),
       this.prisma.collection.findMany({ where: { pageId } }),
@@ -123,7 +123,7 @@ export class AccountingService {
       this.prisma.order.findMany({
         where: {
           pageIdRef: pageId,
-          status: 'CONFIRMED',
+          status: { in: ['CONFIRMED', 'PACKED', 'SHIPPED', 'DELIVERED'] },
           confirmedAt: { gte: from, lte: to },
         },
         include: { items: true },
@@ -185,7 +185,7 @@ export class AccountingService {
       this.prisma.order.findMany({
         where: {
           pageIdRef: pageId,
-          status: 'CONFIRMED',
+          status: { in: ['CONFIRMED', 'PACKED', 'SHIPPED', 'DELIVERED'] },
           confirmedAt: { gte: since },
         },
         include: { items: true },
@@ -707,7 +707,7 @@ export class AccountingService {
   }
 
   async getTopProducts(pageId: number, from?: Date, to?: Date, limit = 5) {
-    const where: any = { pageIdRef: pageId, status: 'CONFIRMED' };
+    const where: any = { pageIdRef: pageId, status: { in: ['CONFIRMED', 'PACKED', 'SHIPPED', 'DELIVERED'] } };
     if (from || to) {
       where.confirmedAt = {};
       if (from) where.confirmedAt.gte = from;
