@@ -296,7 +296,7 @@ export class AiIntentService {
       awaitingConfirm: boolean;
       context?: BusinessContext;
     },
-  ): Promise<{ raw: string } | null> {
+  ): Promise<{ raw: string; usedProvider: string } | null> {
     const { localAiMode } = await this.globalSettings.get();
 
     // Try Ollama for bot only when mode is 'all' (generate_only skips bot)
@@ -309,7 +309,7 @@ export class AiIntentService {
       );
       if (ollamaRaw) {
         this.logger.log(`[AiIntent] ${label} — Ollama OK`);
-        return { raw: ollamaRaw };
+        return { raw: ollamaRaw, usedProvider: 'local' };
       }
     }
 
@@ -320,7 +320,7 @@ export class AiIntentService {
       }
       this.logger.log(`[AiIntent] ${label} — Gemini rotation (${this.model})`);
       const geminiRaw = await this.attemptGemini(messages, maxTokens, temperature);
-      if (geminiRaw) return { raw: geminiRaw };
+      if (geminiRaw) return { raw: geminiRaw, usedProvider: 'gemini' };
       // All Gemini keys exhausted — fall through to OpenAI
       this.logger.warn(`[AiIntent] All Gemini keys exhausted — trying OpenAI fallback`);
     }
@@ -332,7 +332,7 @@ export class AiIntentService {
     this.logger.log(`[AiIntent] ${label} — OpenAI (${this.model})`);
     const raw = await this.attemptOpenAI(messages, maxTokens, temperature);
     if (!raw) return null;
-    return { raw };
+    return { raw, usedProvider: 'openai' };
   }
 
   async detectIntent(
@@ -420,7 +420,7 @@ export class AiIntentService {
         }
       }
 
-      await this.walletService.deductUsage(pageId, 'TEXT');
+      await this.walletService.deductUsage(pageId, 'TEXT', { provider: resolved.usedProvider });
       this.logger.log(
         `[AiIntent] intent=${intent} reply="${reply?.slice(0, 60) ?? 'none'}"`,
       );
@@ -494,7 +494,7 @@ export class AiIntentService {
       }
 
       this.failCount = 0;
-      await this.walletService.deductUsage(pageId, 'TEXT');
+      await this.walletService.deductUsage(pageId, 'TEXT', { provider: resolved.usedProvider });
       this.logger.log(`[AiIntent] draft action=${action}`);
       return {
         action: action as DraftStepReviewResult['action'],

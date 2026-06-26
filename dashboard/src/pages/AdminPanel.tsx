@@ -3,7 +3,7 @@ import { CardHeader, EmptyState, FieldWithInfo, InfoButton, Spinner } from '../c
 import type { Theme } from '../components/ui';
 import { API_BASE, useApi } from '../hooks/useApi';
 
-type AdminTab = 'overview' | 'clients' | 'global-questions' | 'global-replies' | 'learning-log' | 'courier-tutorials' | 'billing' | 'call-servers' | 'wallet' | 'pricing' | 'subscriptions' | 'page-requests' | 'customers' | 'domain-setup' | 'api-keys';
+type AdminTab = 'overview' | 'clients' | 'global-questions' | 'global-replies' | 'learning-log' | 'courier-tutorials' | 'billing' | 'call-servers' | 'wallet' | 'pricing' | 'subscriptions' | 'page-requests' | 'customers' | 'domain-setup' | 'api-keys' | 'reports';
 
 interface TutorialsConfig {
   courier?: { pathao?: string; steadfast?: string; redx?: string; paperfly?: string };
@@ -68,6 +68,7 @@ const ADMIN_TABS: { key: AdminTab; label: string; icon: string; help: string }[]
   { key: 'billing',           label: 'Billing',           icon: '💳', help: 'Subscriptions, payments, plan management।' },
   { key: 'wallet',            label: 'Wallet',            icon: '💰', help: 'সব client এর wallet balance দেখুন, recharge approve করুন।' },
   { key: 'pricing',           label: 'Pricing',           icon: '🏷️', help: 'Global usage cost rates edit করুন এবং সব client এ একসাথে apply করুন।' },
+  { key: 'reports',           label: 'Reports',           icon: '📊', help: 'Revenue, API cost, profit — সব কিছুর full financial report।' },
   { key: 'subscriptions',     label: 'Subscriptions',     icon: '📅', help: 'প্রতিটি page এর server subscription expiry set করুন। Expired হলে bot বন্ধ হয়ে যায়।' },
   { key: 'domain-setup',      label: 'Custom Domains',    icon: '🌐', help: 'Customer-দের নিজের domain set করুন — Nginx config + SSL সব automatic হবে।' },
   { key: 'api-keys',          label: 'API Keys',          icon: '🔑', help: 'সব third-party API key গুলো এখান থেকে manage করুন। .env ফাইল edit না করেও চলবে।' },
@@ -97,7 +98,7 @@ export function AdminPanel({ th, onToast, onLogout }: {
   const { request } = useApi();
   const [tab, setTab] = useState<AdminTab>(() => {
     const saved = localStorage.getItem('admin_tab') as AdminTab | null;
-    const valid: AdminTab[] = ['overview','clients','customers','global-questions','global-replies','learning-log','courier-tutorials','billing','call-servers','wallet','pricing','subscriptions','page-requests','domain-setup','api-keys'];
+    const valid: AdminTab[] = ['overview','clients','customers','global-questions','global-replies','learning-log','courier-tutorials','billing','call-servers','wallet','pricing','subscriptions','page-requests','domain-setup','api-keys','reports'];
     return saved && valid.includes(saved) ? saved : 'overview';
   });
   const [pageRequests, setPageRequests] = useState<any[]>([]);
@@ -204,6 +205,11 @@ export function AdminPanel({ th, onToast, onLogout }: {
   const [customerSearch, setCustomerSearch] = useState('');
   const [customerOffset, setCustomerOffset] = useState(0);
   const CUSTOMER_LIMIT = 50;
+
+  // Reports tab state
+  const [reportData, setReportData] = useState<any>(null);
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportMonth, setReportMonth] = useState('');
 
   // API Keys tab state
   const [apiKeys, setApiKeys] = useState<Record<string, string>>({});
@@ -589,6 +595,7 @@ export function AdminPanel({ th, onToast, onLogout }: {
     if (tab === 'customers') loadCustomers('', 0);
     if (tab === 'domain-setup') loadDomainTab();
     if (tab === 'api-keys' && !apiKeysLoaded) loadApiKeys();
+    if (tab === 'reports') loadReport();
   }, [tab]);
 
   useEffect(() => {
@@ -622,6 +629,16 @@ export function AdminPanel({ th, onToast, onLogout }: {
   useEffect(() => {
     if (tab === 'pricing') loadPricing();
   }, [tab]);
+
+  const loadReport = async (month?: string) => {
+    setReportLoading(true);
+    try {
+      const qs = (month ?? reportMonth) ? `?month=${month ?? reportMonth}` : '';
+      const data = await request<any>(`${BASE}/reports/revenue${qs}`);
+      if (data) setReportData(data);
+    } catch { /* silent */ }
+    finally { setReportLoading(false); }
+  };
 
   const loadApiKeys = async () => {
     try {
@@ -929,26 +946,6 @@ export function AdminPanel({ th, onToast, onLogout }: {
               <div style={{ fontSize: 11, color: th.muted, marginTop: 4, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{k.label}</div>
             </div>
           ))}
-        </div>
-
-        {/* Orders */}
-        <div style={th.card}>
-          <div style={{ fontSize: 11.5, fontWeight: 800, color: th.muted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 12 }}>
-            📦 Orders <InfoButton text="সব client এর combined order statistics" th={th} />
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
-            {[
-              { label: 'Total',     val: overview.totalOrders,     color: th.accent },
-              { label: 'Today',     val: overview.todayOrders,     color: '#0891b2' },
-              { label: 'Pending',   val: overview.pendingOrders,   color: '#f59e0b' },
-              { label: 'Confirmed', val: overview.confirmedOrders, color: '#16a34a' },
-            ].map(k => (
-              <div key={k.label} style={{ ...th.card2, padding: '12px 14px' }}>
-                <div style={{ fontSize: 22, fontWeight: 900, color: k.color }}>{k.val}</div>
-                <div style={{ fontSize: 11, color: th.muted, marginTop: 3, fontWeight: 700, textTransform: 'uppercase' }}>{k.label}</div>
-              </div>
-            ))}
-          </div>
         </div>
 
         {/* Bot Knowledge Health */}
@@ -2555,6 +2552,182 @@ export function AdminPanel({ th, onToast, onLogout }: {
           </div>
         )}
 
+        {tab === 'reports' && (
+          <div style={{ maxWidth: 960, margin: '0 auto' }}>
+            {/* Filter bar */}
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 20, flexWrap: 'wrap' }}>
+              <input
+                type="month"
+                value={reportMonth}
+                onChange={e => setReportMonth(e.target.value)}
+                style={{ ...th.input, fontSize: 13, width: 'auto' }}
+              />
+              <button style={th.btn} onClick={() => loadReport(reportMonth || undefined)} disabled={reportLoading}>
+                {reportLoading ? 'Loading...' : '🔍 Load'}
+              </button>
+              {reportMonth && (
+                <button style={th.btnGhost} onClick={() => { setReportMonth(''); loadReport(''); }}>✕ All Time</button>
+              )}
+              {reportData && (
+                <span style={{ fontSize: 12, color: th.muted, marginLeft: 8 }}>at $1 = ৳{reportData.usdToBdt}</span>
+              )}
+            </div>
+
+            {reportLoading && <div style={{ textAlign: 'center', padding: 40 }}><Spinner size={22}/></div>}
+
+            {reportData && !reportLoading && (() => {
+              const s = reportData.summary;
+              const fmt = (n: number) => '৳' + n.toFixed(2);
+              const fmtUsd = (n: number) => '$' + n.toFixed(4);
+
+              const cardStyle: React.CSSProperties = {
+                ...th.card,
+                borderRadius: 14,
+                padding: '16px 20px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 4,
+              };
+
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+
+                  {/* Summary Cards */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: 14 }}>
+                    <div style={cardStyle}>
+                      <div style={{ fontSize: 11, color: th.muted }}>💰 মোট Revenue</div>
+                      <div style={{ fontSize: 22, fontWeight: 900, color: '#16a34a' }}>{fmt(s.totalRevenueBdt)}</div>
+                    </div>
+                    <div style={cardStyle}>
+                      <div style={{ fontSize: 11, color: th.muted }}>📤 Client কে Charge</div>
+                      <div style={{ fontSize: 22, fontWeight: 900, color: th.accent }}>{fmt(s.totalBilledBdt)}</div>
+                    </div>
+                    <div style={cardStyle}>
+                      <div style={{ fontSize: 11, color: th.muted }}>🔧 আমার API Cost</div>
+                      <div style={{ fontSize: 20, fontWeight: 900, color: '#f59e0b' }}>{fmt(s.totalApiCostBdt)}</div>
+                      <div style={{ fontSize: 11, color: th.muted }}>{fmtUsd(s.totalApiCostUsd)}</div>
+                    </div>
+                    <div style={cardStyle}>
+                      <div style={{ fontSize: 11, color: th.muted }}>📈 Net Profit</div>
+                      <div style={{ fontSize: 22, fontWeight: 900, color: s.netProfitBdt >= 0 ? '#16a34a' : '#ef4444' }}>{fmt(s.netProfitBdt)}</div>
+                    </div>
+                    <div style={cardStyle}>
+                      <div style={{ fontSize: 11, color: th.muted }}>💹 Profit Margin</div>
+                      <div style={{ fontSize: 22, fontWeight: 900, color: th.accent }}>{s.profitMarginPct.toFixed(1)}%</div>
+                    </div>
+                  </div>
+
+                  {/* Per-Page Revenue Table */}
+                  <div style={{ ...th.card, borderRadius: 14, padding: 20 }}>
+                    <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 14 }}>👤 Per-Page Revenue</div>
+                    <div style={{ overflowX: 'auto' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+                        <thead>
+                          <tr style={{ borderBottom: `2px solid ${th.border}` }}>
+                            {['Page', 'Owner', 'Recharged', 'Billed', 'API Cost', 'Profit', 'Balance', 'Status', 'Next Billing'].map(h => (
+                              <th key={h} style={{ padding: '6px 10px', textAlign: 'left', color: th.muted, fontWeight: 700, whiteSpace: 'nowrap' }}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {reportData.perPage.map((p: any) => (
+                            <tr key={p.pageId} style={{ borderBottom: `1px solid ${th.border}` }}>
+                              <td style={{ padding: '7px 10px', fontWeight: 600, maxWidth: 130, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.pageName}</td>
+                              <td style={{ padding: '7px 10px', color: th.muted }}>{p.ownerName}</td>
+                              <td style={{ padding: '7px 10px', color: '#16a34a', fontWeight: 700 }}>{fmt(p.rechargedBdt)}</td>
+                              <td style={{ padding: '7px 10px', color: th.accent }}>{fmt(p.billedBdt)}</td>
+                              <td style={{ padding: '7px 10px', color: '#f59e0b' }}>{fmt(p.apiCostBdt)}</td>
+                              <td style={{ padding: '7px 10px', color: p.netProfitBdt >= 0 ? '#16a34a' : '#ef4444', fontWeight: 700 }}>{fmt(p.netProfitBdt)}</td>
+                              <td style={{ padding: '7px 10px', color: p.currentBalanceBdt < 50 ? '#ef4444' : th.text }}>{fmt(p.currentBalanceBdt)}</td>
+                              <td style={{ padding: '7px 10px' }}>
+                                <span style={{ fontSize: 10, fontWeight: 800, color: p.subscriptionStatus === 'ACTIVE' ? '#16a34a' : '#ef4444', background: p.subscriptionStatus === 'ACTIVE' ? '#dcfce7' : '#fee2e2', padding: '2px 7px', borderRadius: 6 }}>
+                                  {p.subscriptionStatus}
+                                </span>
+                              </td>
+                              <td style={{ padding: '7px 10px', color: th.muted, fontSize: 11 }}>
+                                {p.nextBillingDate ? new Date(p.nextBillingDate).toLocaleDateString('bn-BD') : '—'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* API Usage Breakdown */}
+                  <div style={{ ...th.card, borderRadius: 14, padding: 20 }}>
+                    <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 14 }}>⚙️ API Usage Breakdown (কখন কোন API)</div>
+                    <div style={{ overflowX: 'auto' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+                        <thead>
+                          <tr style={{ borderBottom: `2px solid ${th.border}` }}>
+                            {['Type', 'Provider', 'Count', 'Billed (৳)', 'Real Cost (৳)', 'Real Cost ($)', 'Profit (৳)'].map(h => (
+                              <th key={h} style={{ padding: '6px 10px', textAlign: 'left', color: th.muted, fontWeight: 700, whiteSpace: 'nowrap' }}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {reportData.usageBreakdown.map((u: any) => (
+                            <tr key={`${u.type}|${u.provider}`} style={{ borderBottom: `1px solid ${th.border}` }}>
+                              <td style={{ padding: '7px 10px', fontWeight: 600 }}>{u.type}</td>
+                              <td style={{ padding: '7px 10px' }}>
+                                <span style={{ fontSize: 10, fontWeight: 800, padding: '2px 7px', borderRadius: 6,
+                                  color: u.provider === 'gemini' ? '#7c3aed' : u.provider === 'openai' ? '#2563eb' : '#6b7280',
+                                  background: u.provider === 'gemini' ? '#ede9fe' : u.provider === 'openai' ? '#dbeafe' : '#f3f4f6',
+                                }}>
+                                  {u.provider === 'gemini' ? '✨ Gemini' : u.provider === 'openai' ? '🧠 OpenAI' : '💻 Local'}
+                                </span>
+                              </td>
+                              <td style={{ padding: '7px 10px', color: th.muted }}>{u.count.toLocaleString()}</td>
+                              <td style={{ padding: '7px 10px', color: th.accent }}>{u.billedBdt.toFixed(2)}</td>
+                              <td style={{ padding: '7px 10px', color: '#f59e0b' }}>{u.costBdt.toFixed(4)}</td>
+                              <td style={{ padding: '7px 10px', color: th.muted, fontSize: 11 }}>{u.costUsd.toFixed(5)}</td>
+                              <td style={{ padding: '7px 10px', color: u.profitBdt >= 0 ? '#16a34a' : '#ef4444', fontWeight: 700 }}>{u.profitBdt.toFixed(2)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Monthly Trend */}
+                  {reportData.monthlyTrend.length > 0 && (
+                    <div style={{ ...th.card, borderRadius: 14, padding: 20 }}>
+                      <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 14 }}>📅 Monthly Trend</div>
+                      <div style={{ overflowX: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+                          <thead>
+                            <tr style={{ borderBottom: `2px solid ${th.border}` }}>
+                              {['Month', 'Revenue (৳)', 'API Cost (৳)', 'Profit (৳)'].map(h => (
+                                <th key={h} style={{ padding: '6px 10px', textAlign: 'left', color: th.muted, fontWeight: 700 }}>{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {reportData.monthlyTrend.map((m: any) => (
+                              <tr key={m.month} style={{ borderBottom: `1px solid ${th.border}` }}>
+                                <td style={{ padding: '7px 10px', fontWeight: 700 }}>{m.month}</td>
+                                <td style={{ padding: '7px 10px', color: '#16a34a', fontWeight: 700 }}>{fmt(m.revenueBdt)}</td>
+                                <td style={{ padding: '7px 10px', color: '#f59e0b' }}>{fmt(m.apiCostBdt)}</td>
+                                <td style={{ padding: '7px 10px', color: m.profitBdt >= 0 ? '#16a34a' : '#ef4444', fontWeight: 700 }}>{fmt(m.profitBdt)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                </div>
+              );
+            })()}
+
+            {!reportData && !reportLoading && (
+              <div style={{ textAlign: 'center', padding: 40, color: th.muted }}>📊 Load বাটন চাপুন report দেখতে</div>
+            )}
+          </div>
+        )}
+
       </div>
     </div>
   );
@@ -3425,6 +3598,14 @@ function AdminWalletTab({ th, loading, pages, requests, reqFilter, setReqFilter,
     p.owner?.username?.toLowerCase().includes(pageSearch.toLowerCase())
   );
 
+  // Group pages by owner
+  const groupedByUser = filteredPages.reduce((acc: any, p: any) => {
+    const key = p.owner?.id || 'unknown';
+    if (!acc[key]) acc[key] = { owner: p.owner, pages: [] };
+    acc[key].pages.push(p);
+    return acc;
+  }, {});
+
   if (loading) return <div style={{ padding: 40, textAlign: 'center' }}><Spinner /></div>;
 
   return (
@@ -3575,42 +3756,46 @@ function AdminWalletTab({ th, loading, pages, requests, reqFilter, setReqFilter,
       {/* ── All pages wallet summary ─────────────────────────────────── */}
       <div style={card}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
-          <div style={{ fontWeight: 700 }}>📊 সব Client এর Wallet ({pages.length})</div>
+          <div style={{ fontWeight: 700 }}>📊 সব Client এর Wallet ({Object.keys(groupedByUser).length} জন)</div>
           <input style={{ ...th.input, width: 200, fontSize: 12, padding: '6px 10px' }}
             placeholder="Search page / username..."
             value={pageSearch} onChange={e => setPageSearch(e.target.value)} />
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {filteredPages.map((p: any) => (
-            <div key={p.id} style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: '10px 12px', borderRadius: 10, border: `1px solid ${th.border}`,
-              background: p.walletBalanceBdt <= 0
-                ? 'rgba(239,68,68,0.07)' : p.walletBalanceBdt < 100
-                  ? 'rgba(245,158,11,0.07)' : (th.card as any).background,
-            }}>
-              <div>
-                <div style={{ fontWeight: 600, fontSize: 13 }}>{p.pageName || p.pageId}</div>
-                {p.owner && <div style={{ fontSize: 11, color: th.muted }}>@{p.owner.username}</div>}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {Object.values(groupedByUser).map((group: any) => {
+            const totalBalance = group.pages.reduce((s: number, p: any) => s + p.walletBalanceBdt, 0);
+            return (
+              <div key={group.owner?.id || 'unknown'} style={{ border: `1px solid ${th.border}`, borderRadius: 12, overflow: 'hidden' }}>
+                {/* User header */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: th.surface as string }}>
+                  <div>
+                    <span style={{ fontWeight: 700, fontSize: 13 }}>{group.owner?.name || group.owner?.username || 'Unknown'}</span>
+                    <span style={{ fontSize: 11, color: th.muted, marginLeft: 6 }}>@{group.owner?.username}</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 11, color: th.muted }}>{group.pages.length}টি page</span>
+                    <span style={{ fontWeight: 800, fontSize: 14, color: totalBalance <= 0 ? '#ef4444' : totalBalance < 100 ? '#f59e0b' : '#22c55e' }}>
+                      মোট ৳ {totalBalance.toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+                {/* Pages */}
+                {group.pages.map((p: any) => (
+                  <div key={p.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 14px 8px 24px', borderTop: `1px solid ${th.border}` }}>
+                    <div style={{ fontSize: 12, color: th.text }}>{p.pageName || p.pageId}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontWeight: 700, fontSize: 13, color: p.walletBalanceBdt <= 0 ? '#ef4444' : p.walletBalanceBdt < 100 ? '#f59e0b' : '#22c55e' }}>
+                        ৳ {p.walletBalanceBdt.toFixed(2)}
+                      </span>
+                      <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 99, fontWeight: 700, background: p.subscriptionStatus === 'ACTIVE' ? '#22c55e22' : '#ef444422', color: p.subscriptionStatus === 'ACTIVE' ? '#16a34a' : '#dc2626' }}>
+                        {p.subscriptionStatus}
+                      </span>
+                    </div>
+                  </div>
+                ))}
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{
-                  fontWeight: 800, fontSize: 14,
-                  color: p.walletBalanceBdt <= 0 ? '#ef4444'
-                    : p.walletBalanceBdt < 100 ? '#f59e0b' : '#22c55e',
-                }}>
-                  ৳ {p.walletBalanceBdt.toFixed(2)}
-                </span>
-                <span style={{
-                  fontSize: 10, padding: '2px 8px', borderRadius: 99, fontWeight: 700,
-                  background: p.subscriptionStatus === 'ACTIVE' ? '#22c55e22' : '#ef444422',
-                  color: p.subscriptionStatus === 'ACTIVE' ? '#16a34a' : '#dc2626',
-                }}>
-                  {p.subscriptionStatus}
-                </span>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>

@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import * as QRCode from 'qrcode';
 import {
   BusinessInfo,
   MemoLayout,
@@ -13,7 +14,7 @@ import { MemoThemeService } from './memo-theme.service';
 export class MemoTemplateService {
   constructor(private readonly themeService: MemoThemeService) {}
 
-  buildA4PageHtml(
+  async buildA4PageHtml(
     orders: MemoOrderData[],
     business: BusinessInfo,
     theme: MemoTheme = 'classic',
@@ -118,12 +119,11 @@ td.code-cell{word-break:break-word}
 </head>
 <body>
 <div class="print-actions no-print"><button onclick="window.print()">🖨️ Print</button></div>
-${pages
-  .map((pageOrders) => {
+${(await Promise.all(pages.map(async (pageOrders) => {
     const cardHtml: string[] = [];
     for (let i = 0; i < count; i += 1) {
       cardHtml.push(
-        this.buildSingleMemoHtml(
+        await this.buildSingleMemoHtml(
           pageOrders[i] ?? null,
           business,
           theme,
@@ -133,18 +133,17 @@ ${pages
       );
     }
     return `<div class="a4-page">${cardHtml.join('\n')}</div>`;
-  })
-  .join('\n')}
+  }))).join('\n')}
 </body>
 </html>`;
   }
 
-  buildTemplatePreviewHtml(
+  async buildTemplatePreviewHtml(
     template: UploadedMemoTemplate,
     business: BusinessInfo,
     sampleData: MemoPreviewData,
   ) {
-    const previewFrameHtml = this.buildA4PageHtml(
+    const previewFrameHtml = await this.buildA4PageHtml(
       [
         {
           id: 1001,
@@ -223,7 +222,7 @@ ${pages
     </script></body></html>`;
   }
 
-  buildSingleMemoHtml(
+  async buildSingleMemoHtml(
     order: MemoOrderData | null,
     business: BusinessInfo,
     theme: MemoTheme = 'classic',
@@ -274,9 +273,13 @@ ${pages
           )
           .join('')
       : `<tr class="empty-row"><td colspan="4">No item added</td></tr>`;
-    const qrHtml = business.catalogUrl
-      ? `<div class="memo-qr"><img src="${this.escapeAttr(`https://api.qrserver.com/v1/create-qr-code/?size=96x96&data=${encodeURIComponent(business.catalogUrl)}&color=000000&bgcolor=FFFFFF&margin=2`)}" alt="scan" /></div>`
-      : '';
+    let qrHtml = '';
+    if (business.catalogUrl) {
+      try {
+        const qrDataUrl = await QRCode.toDataURL(business.catalogUrl, { width: 96, margin: 1, color: { dark: '#000000', light: '#FFFFFF' } });
+        qrHtml = `<div class="memo-qr"><img src="${qrDataUrl}" alt="scan" /></div>`;
+      } catch { qrHtml = ''; }
+    }
     const headerRight = `<div class="header-right"><div class="memo-badge">${badge}</div>${qrHtml}</div>`;
     return `<div class="memo-slot"><div class="memo-card"><div class="memo-header">${logoHtml}<div class="company-block"><h1>${this.escape(companyName)}</h1><div class="company-meta">${this.escape(businessPhone)}</div></div>${headerRight}</div><div class="memo-body"><div class="meta-row"><div><span class="section-title">Order ID</span><br/>#${order.id || '-'}</div><div style="text-align:right"><span class="section-title">Date</span><br/>${this.escape(this.formatDate(order.createdAt))}</div></div><div class="info-grid"><div><div class="section-title">Customer</div><div class="field-value">${this.escape(customerName)}</div></div><div><div class="section-title">Phone</div><div class="field-value">${this.escape(customerPhone)}</div></div><div><div class="section-title">Address</div><div class="field-value field-address">${this.escape(customerAddress)}</div></div></div><table><thead><tr><th>Code</th><th class="number">Qty</th><th class="number">Price</th><th class="number">Total</th></tr></thead><tbody>${rows}</tbody></table><div class="totals-box"><div class="totals-row"><span>Subtotal</span><span>${this.money(subtotal, currency)}</span></div><div class="totals-row"><span>Delivery Fee</span><span>${this.money(delivery, currency)}</span></div><div class="totals-row cod"><span>${this.escape(business.codLabel || 'COD')}</span><span>${this.money(total, currency)}</span></div><div class="totals-row total"><span>Total</span><span>${this.money(total, currency)}</span></div></div></div><div class="memo-footer">${this.escape(business.footerText || 'Thank you for your order')}</div></div></div>`;
   }

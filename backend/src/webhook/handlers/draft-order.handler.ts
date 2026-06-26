@@ -1279,7 +1279,7 @@ export class DraftOrderHandler {
     return `${field.label} জানান 💖`;
   }
 
-  private isInsideDhaka(address: string, page: any): boolean {
+  isInsideDhaka(address: string, page: any): boolean {
     const addr = address.toLowerCase();
 
     // Custom area rules defined by page owner take priority

@@ -1635,7 +1635,7 @@ export class BotKnowledgeService {
       },
       order_confirmed: {
         template:
-          '✅ আপনার অর্ডার #{{orderId}} কনফার্ম হয়েছে!\n\n👤 নাম: {{customerName}}\n📞 ফোন: {{phone}}\n📍 ঠিকানা: {{address}}\n\n🛍️ পণ্য:\n{{items}}\n\n💰 মোট: {{currencySymbol}}{{total}}\n✅ অগ্রিম দিয়েছেন: {{currencySymbol}}{{advancePaid}}\n💵 বাকি: {{currencySymbol}}{{dueAmount}}\n\n🚚 আমরা শীঘ্রই পাঠিয়ে দেবো। কোনো পরিবর্তন বা বাতিল করতে চাইলে জানান।',
+          '✅ আপনার অর্ডার #{{orderId}} কনফার্ম হয়েছে!\n\n👤 নাম: {{customerName}}\n📞 ফোন: {{phone}}\n📍 ঠিকানা: {{address}}\n\n🛍️ পণ্য:\n{{items}}\n\n💰 মোট: {{currencySymbol}}{{total}}\n✅ অগ্রিম দিয়েছেন: {{currencySymbol}}{{advancePaid}}\n💵 বাকি: {{currencySymbol}}{{dueAmount}}\n\n✏️ তথ্য ভুল থাকলে এখানে নিজেই ঠিক করুন:\n{{editLink}}\n\n🚚 আমরা শীঘ্রই পাঠিয়ে দেবো।',
         fallback: '✅ আপনার অর্ডার কনফার্ম হয়েছে।',
       },
       order_courier_sent: {

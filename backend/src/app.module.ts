@@ -46,6 +46,7 @@ import { PaymentVerifyModule } from './payment-verify/payment-verify.module';
 import { SmsGatewayModule } from './sms-gateway/sms-gateway.module';
 import { UniversityModule } from './university/university.module';
 import { TelegramModule } from './telegram/telegram.module';
+import { PublicOrderModule } from './public-order/public-order.module';
 
 @Module({
   imports: [
@@ -113,6 +114,7 @@ import { TelegramModule } from './telegram/telegram.module';
     SmsGatewayModule,
     UniversityModule,
     TelegramModule,
+    PublicOrderModule,
   ],
   controllers: [AppController],
   providers: [

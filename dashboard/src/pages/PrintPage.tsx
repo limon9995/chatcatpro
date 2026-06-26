@@ -72,7 +72,8 @@ export function PrintPage({ th, pageId, onToast, preset }: {
     }
   }, [preset?.autoSelectAll, preset?.label, orders]);
 
-  const visibleOrders = useMemo(() => orders.filter((o) => !o.printedAt), [orders]);
+  const [showPrinted, setShowPrinted] = useState(false);
+  const visibleOrders = useMemo(() => showPrinted ? orders : orders.filter((o) => !o.printedAt), [orders, showPrinted]);
 
   useEffect(() => {
     if (preset?.autoSelectAll && visibleOrders.length) {
@@ -178,6 +179,9 @@ export function PrintPage({ th, pageId, onToast, preset }: {
         <CardHeader th={th} title={copy('📦 Orders Select করুন', '📦 Select Orders')}
           action={
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <button onClick={() => setShowPrinted(p => !p)} style={{ ...th.btnSmGhost, fontSize: 12, background: showPrinted ? '#3b82f622' : undefined, color: showPrinted ? '#3b82f6' : th.muted }}>
+                {showPrinted ? '✅ Printed সহ' : '⬜ শুধু নতুন'}
+              </button>
               <select style={{ ...th.input, width: 'auto', padding: '6px 10px', fontSize: 12 }} value={filter} onChange={e => setFilter(e.target.value)}>
                 {['ALL','RECEIVED','CONFIRMED','CANCELLED'].map(f => <option key={f}>{f}</option>)}
               </select>

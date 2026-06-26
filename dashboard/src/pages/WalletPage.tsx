@@ -29,12 +29,23 @@ const METHODS = [
 ] as const;
 
 const TYPE_LABELS: Record<string, string> = {
-  RECHARGE: '+ Recharge',
-  DEDUCT_TEXT: '− Text AI',
-  DEDUCT_VOICE: '− Voice AI',
-  DEDUCT_IMAGE: '− Image AI',
-  DEDUCT_ADMIN_VISION: '− Product Analyze',
-  DEDUCT_BASE_FEE: '− Monthly Fee',
+  RECHARGE: '+ রিচার্জ',
+  DEDUCT_TEXT: '− বট রিপ্লাই',
+  DEDUCT_VOICE: '− ভয়েস প্রসেস',
+  DEDUCT_IMAGE: '− ছবি শনাক্ত',
+  DEDUCT_IMAGE_LOCAL: '− ছবি শনাক্ত',
+  DEDUCT_IMAGE_OCR: '− OCR স্ক্যান',
+  DEDUCT_ADMIN_VISION: '− পণ্য বিশ্লেষণ',
+  DEDUCT_IMAGE_UNIQUENESS: '− পণ্য যাচাই',
+  DEDUCT_AI_GENERATE: '− AI কন্টেন্ট',
+  DEDUCT_DUAL_PHOTO_AI: '− ডুয়েল ফটো AI',
+  DEDUCT_SMART_BOT: '− স্মার্ট বট',
+  DEDUCT_MEMO_PRINT: '− মেমো প্রিন্ট',
+  DEDUCT_KEYWORD_REPLY: '− কীওয়ার্ড বট',
+  DEDUCT_COMMENT_REPLY: '− কমেন্ট রিপ্লাই',
+  DEDUCT_BROADCAST: '− ব্রডকাস্ট',
+  DEDUCT_BASE_FEE: '− মাসিক ফি',
+  DEDUCT_FIXED: '− চার্জ',
 };
 
 const STATUS_COLORS: Record<string, string> = {

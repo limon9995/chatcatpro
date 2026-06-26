@@ -86,6 +86,12 @@ export class CourierService {
       trackingId = result.trackingId;
       trackingUrl = result.trackingUrl;
       rawResponse = result.raw;
+    } else {
+      // Auto-generate unique tracking ID for manual courier
+      const date = new Date();
+      const ymd = `${date.getFullYear()}${String(date.getMonth()+1).padStart(2,'0')}${String(date.getDate()).padStart(2,'0')}`;
+      const rand = Math.floor(1000 + Math.random() * 9000);
+      trackingId = `MCR-${ymd}-${input.orderId}-${rand}`;
     }
 
     const existing = await this.prisma.courierShipment.findUnique({

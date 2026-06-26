@@ -107,6 +107,29 @@ export class TelegramNotificationService {
     }
   }
 
+  /** Send a message to the system admin Telegram bot (uses env vars). */
+  async sendMessage(text: string): Promise<void> {
+    const token = process.env.TELEGRAM_BOT_TOKEN;
+    const chatId = process.env.TELEGRAM_CHAT_ID;
+    if (!token || !chatId) return;
+    try {
+      await this.send(token, chatId, text);
+    } catch { /* non-fatal */ }
+  }
+
+  /** Auto-register Telegram webhook for a page by pageId. */
+  async setWebhookForPage(pageId: number, apiBase: string): Promise<void> {
+    const page = await this.prisma.page.findUnique({
+      where: { id: pageId },
+      select: { telegramBotToken: true },
+    });
+    if (!page?.telegramBotToken) return;
+    const token = this.encryption.decrypt(page.telegramBotToken);
+    const encryptedToken = this.encryption.encrypt(token);
+    const webhookUrl = `${apiBase}/telegram/callback/${encodeURIComponent(encryptedToken)}`;
+    await this.setWebhook(token, webhookUrl);
+  }
+
   /** Get the decrypted bot token for a page (used by webhook handler). */
   async getPageByBotToken(encryptedToken: string): Promise<{ id: number; telegramChatId: string; token: string } | null> {
     try {

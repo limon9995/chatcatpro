@@ -143,7 +143,7 @@ export class SmartBotService {
     if (!parsed) return false;
 
     this.failCount = 0;
-    await this.walletService.deductUsage(pageId, 'SMART_BOT');
+    await this.walletService.deductUsage(pageId, 'SMART_BOT', { provider: 'openai' });
 
     this.logger.log(
       `[SmartBot] action=${parsed.action} reply="${parsed.reply.slice(0, 60)}"`,

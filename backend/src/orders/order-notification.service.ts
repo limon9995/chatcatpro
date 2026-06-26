@@ -36,6 +36,9 @@ export class OrderNotificationService {
     const subtotal = order.items.reduce((s: number, i: any) => s + i.unitPrice * i.qty, 0);
     const advance = (order as any).advanceAmount ?? 0;
     const dueAmount = Math.max(0, subtotal - advance);
+    const editLink = (order as any).editToken
+      ? `https://chatcat.pro/order?token=${(order as any).editToken}`
+      : null;
     await this.send(pageId, orderId, 'order_confirmed', {
       items: itemLines || '—',
       phone: order.phone || '—',
@@ -43,6 +46,7 @@ export class OrderNotificationService {
       total: subtotal,
       advancePaid: advance,
       dueAmount,
+      editLink: editLink || '—',
     });
   }
 

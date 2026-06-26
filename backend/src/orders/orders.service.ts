@@ -3,6 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { OrderNotificationService } from './order-notification.service';
 import { ConversationContextService } from '../conversation-context/conversation-context.service';
@@ -88,6 +89,7 @@ export class OrdersService {
         phone: data.phone || null,
         address: data.address || null,
         status: 'RECEIVED',
+        editToken: randomUUID(),
         negotiationRequested: data.negotiationRequested || false,
         customerOfferedPrice: data.customerOfferedPrice ?? null,
         orderNote: data.orderNote ?? null,
@@ -456,6 +458,7 @@ export class OrdersService {
         phone: data.phone,
         address: data.address,
         status: 'RECEIVED',
+        editToken: randomUUID(),
         source: 'WEBSITE',
         orderNote: data.orderNote ?? null,
         paymentStatus,

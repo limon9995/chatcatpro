@@ -191,7 +191,16 @@ export class ClientDashboardService {
       orderBy: { id: 'desc' },
       take: 300,
     });
-    return orders;
+    // Attach botMuted flag from conversation context
+    const psids = orders.map(o => o.customerPsid).filter(Boolean) as string[];
+    const sessions = psids.length > 0
+      ? await this.prisma.conversationSession.findMany({
+          where: { pageIdRef: pageId, customerPsid: { in: psids }, agentHandling: true },
+          select: { customerPsid: true },
+        })
+      : [];
+    const mutedSet = new Set(sessions.map(s => s.customerPsid));
+    return orders.map(o => ({ ...o, botMuted: o.customerPsid ? mutedSet.has(o.customerPsid) : false }));
   }
 
   async markOrdersPrinted(pageId: number, ids: number[]) {
@@ -1249,6 +1258,8 @@ Return ONLY valid JSON (no markdown):
       deliveryFeeInsideDhaka: page.deliveryFeeInsideDhaka ?? 80,
       deliveryFeeOutsideDhaka: page.deliveryFeeOutsideDhaka ?? 120,
       deliveryTimeText: page.deliveryTimeText ?? '',
+      deliveryTimeInsideDhaka: page.deliveryTimeInsideDhaka ?? '',
+      deliveryTimeOutsideDhaka: page.deliveryTimeOutsideDhaka ?? '',
       // V17: Payment mode
       paymentMode: page.paymentMode ?? 'cod',
       advanceAmount: page.advanceAmount ?? 0,
@@ -1366,6 +1377,8 @@ Return ONLY valid JSON (no markdown):
       'deliveryFeeInsideDhaka',
       'deliveryFeeOutsideDhaka',
       'deliveryTimeText',
+      'deliveryTimeInsideDhaka',
+      'deliveryTimeOutsideDhaka',
       'infoModeOn',
       'orderModeOn',
       'printModeOn',
@@ -1469,6 +1482,11 @@ Return ONLY valid JSON (no markdown):
       await this.pageService.updateById(pageId, {
         telegramBotToken: pageFields.telegramBotToken.trim(),
       });
+      // Auto-register Telegram webhook so inline buttons & callbacks work immediately
+      try {
+        const apiBase = process.env.API_BASE_URL || 'https://api.chatcat.pro';
+        await this.telegramNotif.setWebhookForPage(pageId, apiBase);
+      } catch { /* non-fatal */ }
     }
 
     // Pricing policy

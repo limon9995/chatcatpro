@@ -1558,4 +1558,138 @@ server {
   async clearAdminSmsDevices(): Promise<void> {
     await (this.prisma as any).smsDevice.deleteMany({ where: { pageId: null } });
   }
+
+  async getRevenueReport(month?: string) {
+    const USD_TO_BDT = 130;
+
+    // Per-type real API cost in USD (per call)
+    const PROVIDER_COST_USD: Record<string, Record<string, number>> = {
+      // gemini-2.0-flash-lite: TEXT ~$0.000075/1K tokens (avg ~100 token call)
+      // gemini-2.0-flash: IMAGE/OCR ~$0.000265/image (265 tokens image input @ $0.001/1K)
+      gemini:  { TEXT: 0.0000075, SMART_BOT: 0.000015, IMAGE: 0.000265, IMAGE_OCR: 0.000265, ADMIN_VISION: 0.000265, DUAL_PHOTO_AI: 0.0008, AI_GENERATE: 0.0000075, VOICE: 0, MEMO_PRINT: 0, KEYWORD_REPLY: 0, COMMENT_REPLY: 0, BROADCAST: 0, IMAGE_LOCAL: 0, IMAGE_UNIQUENESS: 0 },
+      // gpt-4o: TEXT $0.0025/1K input (avg ~200 token = $0.0005), IMAGE ~$0.00255/image, SMART_BOT uses gpt-4o-mini $0.00015/1K
+      openai:  { TEXT: 0.0005,   SMART_BOT: 0.00003,   IMAGE: 0.00255, IMAGE_OCR: 0.00255,  ADMIN_VISION: 0.00255, DUAL_PHOTO_AI: 0.00765, AI_GENERATE: 0.0005,   VOICE: 0, MEMO_PRINT: 0, KEYWORD_REPLY: 0, COMMENT_REPLY: 0, BROADCAST: 0, IMAGE_LOCAL: 0, IMAGE_UNIQUENESS: 0 },
+      local:   { TEXT: 0, SMART_BOT: 0, IMAGE: 0, IMAGE_OCR: 0, ADMIN_VISION: 0, DUAL_PHOTO_AI: 0, AI_GENERATE: 0, VOICE: 0, MEMO_PRINT: 0, KEYWORD_REPLY: 0, COMMENT_REPLY: 0, BROADCAST: 0, IMAGE_LOCAL: 0, IMAGE_UNIQUENESS: 0 },
+    };
+
+    // Build date filter
+    let dateFilter: any = {};
+    if (month) {
+      const [y, m] = month.split('-').map(Number);
+      const start = new Date(y, m - 1, 1);
+      const end = new Date(y, m, 1);
+      dateFilter = { createdAt: { gte: start, lt: end } };
+    }
+
+    const [transactions, pages] = await Promise.all([
+      this.prisma.walletTransaction.findMany({
+        where: dateFilter,
+        select: { pageId: true, type: true, amountBdt: true, provider: true, createdAt: true },
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.page.findMany({
+        select: {
+          id: true,
+          pageName: true,
+          walletBalanceBdt: true,
+          subscriptionStatus: true,
+          nextBillingDate: true,
+          owner: { select: { username: true } },
+        },
+      }),
+    ]);
+
+    // ── Global aggregates ──────────────────────────────────────────────────
+    let totalRevenueBdt = 0;
+    let totalBilledBdt = 0;
+    let totalApiCostBdt = 0;
+
+    // Usage breakdown by (type, provider)
+    const usageMap: Record<string, { count: number; billedBdt: number; costBdt: number; costUsd: number }> = {};
+
+    // Per-page aggregates
+    const pageMap: Record<number, { rechargedBdt: number; billedBdt: number; apiCostBdt: number; apiCallCount: number }> = {};
+
+    // Monthly trend
+    const monthMap: Record<string, { revenueBdt: number; apiCostBdt: number }> = {};
+
+    for (const tx of transactions) {
+      const monthKey = tx.createdAt.toISOString().slice(0, 7);
+      if (!monthMap[monthKey]) monthMap[monthKey] = { revenueBdt: 0, apiCostBdt: 0 };
+      if (!pageMap[tx.pageId]) pageMap[tx.pageId] = { rechargedBdt: 0, billedBdt: 0, apiCostBdt: 0, apiCallCount: 0 };
+
+      if (tx.type === 'RECHARGE') {
+        totalRevenueBdt += tx.amountBdt;
+        pageMap[tx.pageId].rechargedBdt += tx.amountBdt;
+        monthMap[monthKey].revenueBdt += tx.amountBdt;
+      } else if (tx.amountBdt < 0) {
+        const billed = Math.abs(tx.amountBdt);
+        totalBilledBdt += billed;
+        pageMap[tx.pageId].billedBdt += billed;
+        pageMap[tx.pageId].apiCallCount += 1;
+
+        // Resolve usage type (strip DEDUCT_ prefix)
+        const rawType = tx.type.replace(/^DEDUCT_/, '');
+        const provider = tx.provider ?? 'local';
+        const mapKey = `${rawType}|${provider}`;
+        if (!usageMap[mapKey]) usageMap[mapKey] = { count: 0, billedBdt: 0, costBdt: 0, costUsd: 0 };
+        usageMap[mapKey].count += 1;
+        usageMap[mapKey].billedBdt += billed;
+
+        const rateUsd = (PROVIDER_COST_USD[provider] ?? PROVIDER_COST_USD.local)[rawType] ?? 0;
+        const costBdt = rateUsd * USD_TO_BDT;
+        usageMap[mapKey].costBdt += costBdt;
+        usageMap[mapKey].costUsd += rateUsd;
+
+        totalApiCostBdt += costBdt;
+        pageMap[tx.pageId].apiCostBdt += costBdt;
+        monthMap[monthKey].apiCostBdt += costBdt;
+      }
+    }
+
+    // Build per-page table
+    const pageIndex = Object.fromEntries(pages.map(p => [p.id, p]));
+    const perPage = Object.entries(pageMap)
+      .map(([pageIdStr, agg]) => {
+        const p = pageIndex[Number(pageIdStr)];
+        return {
+          pageId: Number(pageIdStr),
+          pageName: p?.pageName ?? '?',
+          ownerName: p?.owner?.username ?? '?',
+          currentBalanceBdt: p?.walletBalanceBdt ?? 0,
+          subscriptionStatus: p?.subscriptionStatus ?? '?',
+          nextBillingDate: p?.nextBillingDate ?? null,
+          ...agg,
+          netProfitBdt: agg.rechargedBdt - agg.apiCostBdt,
+        };
+      })
+      .sort((a, b) => b.rechargedBdt - a.rechargedBdt);
+
+    // Build usage breakdown table
+    const usageBreakdown = Object.entries(usageMap).map(([key, v]) => {
+      const [type, provider] = key.split('|');
+      return { type, provider, ...v, profitBdt: v.billedBdt - v.costBdt };
+    }).sort((a, b) => b.billedBdt - a.billedBdt);
+
+    // Monthly trend (last 6 months, sorted desc)
+    const monthlyTrend = Object.entries(monthMap)
+      .map(([m, v]) => ({ month: m, ...v, profitBdt: v.revenueBdt - v.apiCostBdt }))
+      .sort((a, b) => b.month.localeCompare(a.month))
+      .slice(0, 12);
+
+    return {
+      usdToBdt: USD_TO_BDT,
+      summary: {
+        totalRevenueBdt,
+        totalBilledBdt,
+        totalApiCostBdt,
+        totalApiCostUsd: totalApiCostBdt / USD_TO_BDT,
+        netProfitBdt: totalRevenueBdt - totalApiCostBdt,
+        profitMarginPct: totalRevenueBdt > 0 ? ((totalRevenueBdt - totalApiCostBdt) / totalRevenueBdt) * 100 : 0,
+      },
+      usageBreakdown,
+      perPage,
+      monthlyTrend,
+    };
+  }
 }

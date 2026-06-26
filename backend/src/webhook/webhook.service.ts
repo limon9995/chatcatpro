@@ -2147,55 +2147,36 @@ export class WebhookService implements OnModuleDestroy {
     );
   }
 
+  private extractPostOrderEditValue(
+    text: string,
+  ): { field: 'name' | 'phone' | 'address'; value: string } | null {
+    const colonMatch = text.match(
+      /(?:name|naam|phone|number|mobile|address|thikana)[^:]*[:]\s*(.+)/i,
+    );
+    if (colonMatch) {
+      const value = colonMatch[1].trim();
+      const lower = text.toLowerCase();
+      if (/name|naam/.test(lower)) return { field: 'name', value };
+      if (/phone|number|mobile/.test(lower)) return { field: 'phone', value };
+      if (/address|thikana/.test(lower)) return { field: 'address', value };
+    }
+    const phoneMatch = text.match(/\b01[3-9]\d{8}\b/);
+    if (phoneMatch && /phone|number|mobile|change|badla/i.test(text)) {
+      return { field: 'phone', value: phoneMatch[0] };
+    }
+    return null;
+  }
+
   private detectPostOrderEditField(text: string): {
     label: string;
-    prompt: string;
+    field: 'name' | 'phone' | 'address' | 'size' | 'color';
   } | null {
     const t = text.toLowerCase();
-    if (
-      /name|naam|নাম/.test(t) &&
-      /change|badla|ভুল|bhul|bul|wrong|thik\s*na|নতুন/i.test(t)
-    ) {
-      return {
-        label: 'name',
-        prompt:
-          'ঠিক আছে 💖 নাম change request note করা হয়েছে। আমাদের agent updated নাম confirm করবে।',
-      };
-    }
-    if (
-      /phone|number|mobile|নম্বর|ফোন/.test(t) &&
-      /change|badla|ভুল|bhul|bul|wrong|thik\s*na|নতুন/i.test(t)
-    ) {
-      return {
-        label: 'phone',
-        prompt:
-          'ঠিক আছে 💖 phone change request note করা হয়েছে। আমাদের agent updated নাম্বার confirm করবে।',
-      };
-    }
-    if (
-      /address|thikana|location|ঠিকানা/.test(t) &&
-      /change|badla|ভুল|bhul|bul|wrong|thik\s*na|নতুন/i.test(t)
-    ) {
-      return {
-        label: 'address',
-        prompt:
-          'ঠিক আছে 💖 address change request note করা হয়েছে। আমাদের agent updated ঠিকানা confirm করবে।',
-      };
-    }
-    if (/size|সাইজ/.test(t)) {
-      return {
-        label: 'size',
-        prompt:
-          'ঠিক আছে 💖 size change request note করা হয়েছে। আমাদের agent updated size confirm করবে।',
-      };
-    }
-    if (/color|colour|rong|কালার|রং/.test(t)) {
-      return {
-        label: 'color',
-        prompt:
-          'ঠিক আছে 💖 color change request note করা হয়েছে। আমাদের agent updated option confirm করবে।',
-      };
-    }
+    if (/name|naam/.test(t) || /\u09A8\u09BE\u09AE/.test(text)) return { label: '\u09A8\u09BE\u09AE', field: 'name' };
+    if (/phone|number|mobile/.test(t) || /\u09AB\u09CB\u09A8/.test(text)) return { label: '\u09AB\u09CB\u09A8', field: 'phone' };
+    if (/address|thikana|location/.test(t) || /\u09A0\u09BF\u0995\u09BE\u09A8\u09BE/.test(text)) return { label: '\u09A0\u09BF\u0995\u09BE\u09A8\u09BE', field: 'address' };
+    if (/size/.test(t) || /\u09B8\u09BE\u0987\u099C/.test(text)) return { label: '\u09B8\u09BE\u0987\u099C', field: 'size' };
+    if (/color|colour|rong/.test(t)) return { label: '\u0995\u09BE\u09B2\u09BE\u09B0', field: 'color' };
     return null;
   }
 
@@ -2203,36 +2184,70 @@ export class WebhookService implements OnModuleDestroy {
     page: any,
     psid: string,
     text: string,
-    order: { id: number; orderNote: string | null },
+    order: { id: number; orderNote: string | null; status: string },
   ): Promise<void> {
-    const parsed = this.detectPostOrderEditField(text);
-    if (!parsed) {
+    if (['SHIPPED', 'DELIVERED', 'CANCELLED'].includes(order.status)) {
       await this.safeSend(
         page.pageToken,
         psid,
-        'কোনটা বদলাতে চান লিখুন 💖\n👤 name change\n📞 phone change\n📍 address change\n📌 size change',
+        '\u09A6\u09C1\u0983\u0996\u09BF\u09A4 \uD83D\uDE14 \u098F\u0987 \u09AA\u09B0\u09CD\u09AF\u09BE\u09AF\u09BC\u09C7 \u0985\u09B0\u09CD\u09A1\u09BE\u09B0 \u09AA\u09B0\u09BF\u09AC\u09B0\u09CD\u09A4\u09A8 \u0995\u09B0\u09BE \u09B8\u09AE\u09CD\u09AD\u09AC \u09A8\u09AF\u09BC\u0964',
       );
       return;
     }
 
-    const existing = order.orderNote?.trim();
-    const appended = `[Customer requested ${parsed.label} change after order]`;
-    const nextNote = existing ? `${existing} | ${appended}` : appended;
-    await this.prisma.order.update({
-      where: { id: order.id },
-      data: { orderNote: nextNote },
-    });
-    await this.ctx.setAgentHandling(page.id, psid, true);
-    await this.safeSend(page.pageToken, psid, parsed.prompt);
-    this.telegram
-      .notify(
-        page.id,
-        `✏️ Order #${order.id}: customer requested a <b>${parsed.label}</b> change. Bot has handed off to agent.`,
-      )
-      .catch(() => {});
-  }
+    const detected = this.detectPostOrderEditField(text);
+    if (!detected) {
+      await this.safeSend(
+        page.pageToken,
+        psid,
+        '\u0995\u09CB\u09A8\u099F\u09BE \u09AC\u09A6\u09B2\u09BE\u09A4\u09C7 \u099A\u09BE\u09A8 \u09B2\u09BF\u0996\u09C1\u09A8 \uD83D\uDC96\n\uD83D\uDC64 \u09A8\u09BE\u09AE: [\u09A8\u09A4\u09C1\u09A8 \u09A8\u09BE\u09AE]\n\uD83D\uDCDE \u09AB\u09CB\u09A8: [\u09A8\u09A4\u09C1\u09A8 \u09A8\u09AE\u09CD\u09AC\u09B0]\n\uD83D\uDCCD \u09A0\u09BF\u0995\u09BE\u09A8\u09BE: [\u09A8\u09A4\u09C1\u09A8 \u09A0\u09BF\u0995\u09BE\u09A8\u09BE]',
+      );
+      return;
+    }
 
-  /** V17: Payment screenshot OCR — called when draft.currentStep === 'advance_payment' */
+    const extracted = this.extractPostOrderEditValue(text);
+
+    if (
+      extracted &&
+      (extracted.field === 'name' || extracted.field === 'phone' || extracted.field === 'address') &&
+      (extracted.field as string) === detected.field
+    ) {
+      const patch: Record<string, string> = {};
+      patch[extracted.field] = extracted.value;
+      await this.prisma.order.update({ where: { id: order.id }, data: patch });
+      await this.safeSend(
+        page.pageToken,
+        psid,
+        `\u2705 \u0986\u09AA\u09A8\u09BE\u09B0 ${detected.label} \u0986\u09AA\u09A1\u09C7\u099F \u09B9\u09AF\u09BC\u09C7\u099B\u09C7: "${extracted.value}" \uD83D\uDC96`,
+      );
+      this.telegram
+        .notify(
+          page.id,
+          `\u270F\uFE0F Order #${order.id} \u2014 Customer \u09A8\u09BF\u099C\u09C7\u0987 ${detected.label} \u09AA\u09B0\u09BF\u09AC\u09B0\u09CD\u09A4\u09A8 \u0995\u09B0\u09C7\u099B\u09C7:\n"${extracted.value}"`,
+        )
+        .catch(() => {});
+    } else {
+      const prompts: Record<string, string> = {
+        name: '\uD83D\uDC64 \u09A8\u09A4\u09C1\u09A8 \u09A8\u09BE\u09AE \u09B2\u09BF\u0996\u09C1\u09A8:',
+        phone: '\uD83D\uDCDE \u09A8\u09A4\u09C1\u09A8 \u09AB\u09CB\u09A8 \u09A8\u09AE\u09CD\u09AC\u09B0 \u09B2\u09BF\u0996\u09C1\u09A8:',
+        address: '\uD83D\uDCCD \u09A8\u09A4\u09C1\u09A8 \u09A0\u09BF\u0995\u09BE\u09A8\u09BE \u09B2\u09BF\u0996\u09C1\u09A8 (\u099C\u09C7\u09B2\u09BE \u09B8\u09B9):',
+        size: '\uD83D\uDCCC \u09A8\u09A4\u09C1\u09A8 \u09B8\u09BE\u0987\u099C \u09B2\u09BF\u0996\u09C1\u09A8 (S/M/L/XL):',
+        color: '\uD83C\uDFA8 \u09A8\u09A4\u09C1\u09A8 \u0995\u09BE\u09B2\u09BE\u09B0 \u09B2\u09BF\u0996\u09C1\u09A8:',
+      };
+      await this.ctx.setAgentHandling(page.id, psid, true);
+      await this.safeSend(
+        page.pageToken,
+        psid,
+        prompts[detected.field] || '\u09A8\u09A4\u09C1\u09A8 \u09A4\u09A5\u09CD\u09AF \u09B2\u09BF\u0996\u09C1\u09A8, \u0986\u09AE\u09B0\u09BE \u0986\u09AA\u09A1\u09C7\u099F \u0995\u09B0\u09C7 \u09A6\u09C7\u09AC\u09CB \uD83D\uDC96',
+      );
+      this.telegram
+        .notify(
+          page.id,
+          `\u270F\uFE0F Order #${order.id}: Customer <b>${detected.label}</b> \u09AA\u09B0\u09BF\u09AC\u09B0\u09CD\u09A4\u09A8 \u099A\u09C7\u09AF\u09BC\u09C7\u099B\u09C7\u0964 Bot agent-\u098F hand off \u0995\u09B0\u09C7\u099B\u09C7\u0964`,
+        )
+        .catch(() => {});
+    }
+  }
   private async handlePaymentScreenshot(
     page: any,
     psid: string,

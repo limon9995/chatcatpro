@@ -376,6 +376,8 @@ model Order {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
+  editToken   String?   @unique
+
   // Spam/Fraud check result
   spamRisk        String   @default("unknown")
   spamScore       Float?
@@ -778,6 +780,7 @@ model WalletTransaction {
   type        String // RECHARGE, DEDUCT_TEXT, DEDUCT_VOICE, DEDUCT_IMAGE, DEDUCT_ADMIN_VISION, DEDUCT_BASE_FEE
   amountBdt   Float // Positive for recharge, Negative for deduction
   description String? // e.g. "Voice message processed", "New product Vision analyzed"
+  provider    String? // gemini | openai | local | null
   createdAt   DateTime @default(now())
 
   @@index([pageId])

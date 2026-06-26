@@ -471,4 +471,9 @@ export class AdminController {
   ) {
     return this.svc.getRegistryEntries({ search, limit: +limit, offset: +offset });
   }
+
+  @Get('reports/revenue')
+  getRevenueReport(@Query('month') month?: string) {
+    return this.svc.getRevenueReport(month);
+  }
 }

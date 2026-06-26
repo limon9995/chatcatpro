@@ -395,7 +395,7 @@ export class VisionOpsService {
         `[VisionOps] Cache hit — skipping wallet deduction for pageId=${pageId}`,
       );
     } else {
-      await this.walletService.deductUsage(pageId, 'ADMIN_VISION');
+      await this.walletService.deductUsage(pageId, 'ADMIN_VISION', { provider: 'gemini' });
     }
 
     const uniqueness = await this.productMatch.checkUniqueness(
@@ -447,7 +447,7 @@ export class VisionOpsService {
         `[VisionOps] Batch cache hit — skipping wallet deduction for pageId=${pageId}`,
       );
     } else {
-      await this.walletService.deductUsage(pageId, 'ADMIN_VISION');
+      await this.walletService.deductUsage(pageId, 'ADMIN_VISION', { provider: 'gemini' });
     }
 
     const uniqueness = await this.productMatch.checkUniqueness(

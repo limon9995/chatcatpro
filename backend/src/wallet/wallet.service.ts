@@ -98,7 +98,7 @@ export class WalletService {
       | 'KEYWORD_REPLY'
       | 'COMMENT_REPLY'
       | 'BROADCAST',
-    options?: { photoCount?: number; memoCount?: number; msgCount?: number },
+    options?: { photoCount?: number; memoCount?: number; msgCount?: number; provider?: string },
   ): Promise<boolean> {
     try {
       const page = await this.prisma.page.findUnique({ where: { id: pageId } });
@@ -110,67 +110,65 @@ export class WalletService {
       switch (type) {
         case 'TEXT':
           amountToDeduct = page.costPerTextMsgBdt;
-          description = 'AI Text Message deduction';
+          description = 'বট টেক্সট রিপ্লাই';
           break;
         case 'VOICE':
           amountToDeduct = page.costPerVoiceMsgBdt;
-          description = 'AI Voice Message STT Processed';
+          description = 'ভয়েস মেসেজ প্রসেস';
           break;
         case 'IMAGE':
           amountToDeduct = page.costPerImageBdt;
-          description = 'AI Customer Image (Vision API) Processed';
+          description = 'ছবি থেকে পণ্য শনাক্ত (AI)';
           break;
         case 'IMAGE_LOCAL':
           amountToDeduct = (page as any).costPerImageLocalBdt ?? 0.1;
-          description = 'AI Customer Image (Local CLIP) Processed';
+          description = 'ছবি থেকে পণ্য শনাক্ত';
           break;
         case 'IMAGE_OCR':
-          // OCR mode — 50% of full image cost, no Vision API call
           amountToDeduct = page.costPerImageBdt * 0.5;
-          description = 'Customer Image (OCR mode) Processed';
+          description = 'ছবি থেকে অর্ডার কোড পড়া (OCR)';
           break;
         case 'ADMIN_VISION':
           amountToDeduct = page.costPerAnalyzeBdt;
-          description = 'Admin Product Vision Analyze';
+          description = 'পণ্য ছবি বিশ্লেষণ';
           break;
         case 'IMAGE_UNIQUENESS':
           amountToDeduct = 0.02;
-          description = 'Product Uniqueness Check';
+          description = 'পণ্য যাচাই';
           break;
         case 'AI_GENERATE':
           amountToDeduct = (page as any).costPerAiGenerateBdt ?? 0.1;
-          description = 'AI Text Generation';
+          description = 'AI কন্টেন্ট তৈরি';
           break;
         case 'DUAL_PHOTO_AI': {
           const photoCount = options?.photoCount ?? 3;
           amountToDeduct = (page.costPerAnalyzeBdt ?? 0.2) * photoCount;
-          description = `Dual Photo AI Identification (${photoCount} images × GPT-4o)`;
+          description = `ডুয়েল ফটো পণ্য শনাক্ত (${photoCount}টি ছবি)`;
           break;
         }
         case 'SMART_BOT':
-          // SmartBot sends large context (history + catalog) — charge 2× TEXT rate
           amountToDeduct = (page.costPerTextMsgBdt ?? 0.05) * 2;
-          description = 'SmartBot AI Response';
+          description = 'স্মার্ট বট রিপ্লাই';
           break;
         case 'MEMO_PRINT': {
           const memoCount = options?.memoCount ?? 1;
           amountToDeduct =
             ((page as any).costPerMemoPrintBdt ?? 0.1) * memoCount;
-          description = `Memo PDF Download (${memoCount} memos)`;
+          description = `মেমো প্রিন্ট / ডাউনলোড (${memoCount}টি)`;
           break;
         }
         case 'KEYWORD_REPLY':
           amountToDeduct = (page as any).costPerKeywordReplyBdt ?? 0.02;
-          description = 'Keyword/Template Bot Reply';
+          description = 'কীওয়ার্ড বট রিপ্লাই';
           break;
         case 'COMMENT_REPLY':
           amountToDeduct = (page as any).costPerCommentReplyBdt ?? 0.05;
-          description = 'Comment Auto-Reply';
+          description = 'কমেন্ট অটো-রিপ্লাই';
           break;
         case 'BROADCAST': {
           const msgCount = options?.msgCount ?? 1;
           amountToDeduct = ((page as any).costPerBroadcastMsgBdt ?? 0.05) * msgCount;
-          description = `Broadcast (${msgCount} messages)`;
+          description = `ব্রডকাস্ট মেসেজ (${msgCount}টি)`;
           break;
         }
       }
@@ -181,7 +179,7 @@ export class WalletService {
       const pageForTrial = await this.prisma.page.findUnique({ where: { id: pageId }, select: { ownerId: true } });
       if (pageForTrial?.ownerId && await this.isTrialPage(pageForTrial.ownerId)) {
         await this.prisma.walletTransaction.create({
-          data: { pageId, type: `DEDUCT_${type}`, amountBdt: 0, description: `[Trial] ${description}` },
+          data: { pageId, type: `DEDUCT_${type}`, amountBdt: 0, description: `[Trial] ${description}`, provider: options?.provider ?? null },
         });
         return true;
       }
@@ -213,6 +211,7 @@ export class WalletService {
             type: `DEDUCT_${type}`,
             amountBdt: -amountToDeduct,
             description: isGrace ? `[Grace] ${description}` : description,
+            provider: options?.provider ?? null,
           },
         });
       });

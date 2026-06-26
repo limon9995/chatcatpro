@@ -121,6 +121,25 @@ export function CourierPage({ th, pageId, onToast }: {
     } catch (e: any) { onToast(e.message, 'error'); }
   };
 
+  const bulkDeliver = async () => {
+    const pendingShipments = shipments.filter(s => PENDING_STATUSES.has(s.status));
+    if (!pendingShipments.length) return onToast('কোনো pending shipment নেই', 'error');
+    if (!window.confirm(`${pendingShipments.length} টি shipment Delivered মার্ক করবেন?`)) return;
+    setSaving(true);
+    let done = 0, failed = 0;
+    for (const s of pendingShipments) {
+      try {
+        await request(`${BASE}/courier/status/${s.order?.id || s.orderId}`, {
+          method: 'PATCH', body: JSON.stringify({ status: 'delivered' }),
+        });
+        done++;
+      } catch { failed++; }
+    }
+    setSaving(false);
+    onToast(`✅ ${done} টি Delivered, ${failed} টি failed`);
+    await loadShipments();
+  };
+
   const bulkBook = async () => {
     if (!selected.size) return onToast(copy('Select at least one order', 'কোনো order select করুন'), 'error');
     setSaving(true);
@@ -463,6 +482,11 @@ export function CourierPage({ th, pageId, onToast }: {
                 ))}
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
+                {courierStatusTab === 'pending' && shipments.filter(s => PENDING_STATUSES.has(s.status)).length > 0 && (
+                  <button style={{ ...th.btnPrimary, background: '#16a34a', fontSize: 12 }} onClick={bulkDeliver} disabled={saving}>
+                    {saving ? <Spinner size={13}/> : `✅ সব Delivered (${shipments.filter(s => PENDING_STATUSES.has(s.status)).length})`}
+                  </button>
+                )}
                 <select style={{ ...th.input, width: 130, padding: '6px 10px', fontSize: 12 }}
                   value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
                   <option value="">{copy('All Status', 'All Status')}</option>

@@ -98,7 +98,7 @@ export class AiGenerateService {
     systemPrompt: string,
     userPrompt: string,
     maxTokens = 250,
-  ): Promise<string | null> {
+  ): Promise<{ text: string; provider: string } | null> {
     const { localAiMode } = await this.globalSettings.get();
 
     // Ollama for AI Generate if mode is 'all' or 'generate_only'
@@ -107,11 +107,12 @@ export class AiGenerateService {
       this.ollamaBaseUrl
     ) {
       const result = await this.callOllama(systemPrompt, userPrompt);
-      if (result) return result;
+      if (result) return { text: result, provider: 'local' };
       this.logger.warn('[AiGenerate] Ollama failed — falling back to OpenAI');
     }
 
-    return this.callOpenAI(systemPrompt, userPrompt, maxTokens);
+    const text = await this.callOpenAI(systemPrompt, userPrompt, maxTokens);
+    return text ? { text, provider: 'openai' } : null;
   }
 
   async generateProductDescription(
@@ -135,8 +136,8 @@ export class AiGenerateService {
     const result = await this.generate(systemPrompt, parts.join('\n'));
     if (!result) return null;
 
-    await this.walletService.deductUsage(pageId, 'AI_GENERATE');
-    return result;
+    await this.walletService.deductUsage(pageId, 'AI_GENERATE', { provider: result.provider });
+    return result.text;
   }
 
   async generateBroadcastMessage(
@@ -163,7 +164,7 @@ Emoji ব্যবহার করো। ২-৪ লাইন। Friendly এব
     const result = await this.generate(systemPrompt, userPrompt, 200);
     if (!result) return null;
 
-    await this.walletService.deductUsage(pageId, 'AI_GENERATE');
-    return result;
+    await this.walletService.deductUsage(pageId, 'AI_GENERATE', { provider: result.provider });
+    return result.text;
   }
 }
