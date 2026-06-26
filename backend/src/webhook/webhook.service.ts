@@ -993,6 +993,27 @@ export class WebhookService implements OnModuleDestroy {
       return;
     }
 
+    // ── CANCELLED ORDER GUARD: if customer has a cancelled order and no active order,
+    // intercept any order-related query before knowledge base handles it ──────
+    if (!draft && page.orderModeOn) {
+      const activeOrder = await this.findRecentCustomerOrder(pageId, psid);
+      if (!activeOrder) {
+        const cancelledOrder = await this.findCancelledOrder(pageId, psid);
+        if (cancelledOrder) {
+          const businessPhone = (await this.prisma.page.findUnique({
+            where: { id: pageId },
+            select: { businessPhone: true },
+          }))?.businessPhone || null;
+          const note = cancelledOrder.cancelNote?.trim();
+          const reply = note
+            ? `❌ আপনার অর্ডার #${cancelledOrder.id} বাতিল করা হয়েছে।\n\nকারণ: ${note}`
+            : `❌ আপনার অর্ডার #${cancelledOrder.id} বাতিল করা হয়েছে।${businessPhone ? `\n\nআরও জানতে যোগাযোগ করুন: ${businessPhone}` : ''}`;
+          await this.safeSend(token, psid, reply);
+          return;
+        }
+      }
+    }
+
     // ── IN-DRAFT EDITS ─────────────────────────────────────────────────────
     if (draft && intent === 'EDIT_ORDER') {
       const handled = await this.handleDraftEdit(page, psid, text, draft);
