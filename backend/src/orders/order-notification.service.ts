@@ -34,12 +34,14 @@ export class OrderNotificationService {
       .map((i: any) => `• ${i.productCode} × ${i.qty} = ৳${i.unitPrice * i.qty}`)
       .join('\n');
     const subtotal = order.items.reduce((s: number, i: any) => s + i.unitPrice * i.qty, 0);
-    const dueAmount = order.paymentStatus === 'advance_paid' ? 0 : subtotal;
+    const advance = (order as any).advanceAmount ?? 0;
+    const dueAmount = Math.max(0, subtotal - advance);
     await this.send(pageId, orderId, 'order_confirmed', {
       items: itemLines || '—',
       phone: order.phone || '—',
       address: order.address || '—',
       total: subtotal,
+      advancePaid: advance,
       dueAmount,
     });
   }
