@@ -180,16 +180,16 @@ export class OrdersService {
     });
   }
 
-  async cancelOrder(id: number, pageId?: number) {
+  async cancelOrder(id: number, pageId?: number, cancelNote?: string) {
     const order = await this.findOrFail(id, pageId);
     const result = await this.prisma.order.update({
       where: { id },
-      data: { status: 'CANCELLED' },
+      data: { status: 'CANCELLED', ...(cancelNote !== undefined ? { cancelNote } : {}) },
     });
-    // Fire-and-forget: send subscribe prompt even on cancel (customer is still engaged)
     void this.tryRecurringSubscribePrompt(order.pageIdRef, order.customerPsid);
+    const noteStr = cancelNote ? ` কারণ: ${cancelNote}` : '';
     this.telegram
-      .notify(order.pageIdRef, `❌ Order #${order.id} was cancelled.`)
+      .notify(order.pageIdRef, `❌ Order #${order.id} cancelled.${noteStr}`)
       .catch(() => {});
     return result;
   }

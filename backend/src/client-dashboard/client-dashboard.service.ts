@@ -273,12 +273,12 @@ export class ClientDashboardService {
     return this.ordersService.updateOrderInfo(orderId, body || {});
   }
 
-  async applyOrderAction(pageId: number, orderId: number, action: string) {
+  async applyOrderAction(pageId: number, orderId: number, action: string, cancelNote?: string) {
     await this.ensureOrder(pageId, orderId);
     const a = String(action || '').toLowerCase();
     if (a === 'confirm')
       return this.ordersService.confirmByAgent(orderId, pageId);
-    if (a === 'cancel') return this.ordersService.cancelOrder(orderId, pageId);
+    if (a === 'cancel') return this.ordersService.cancelOrder(orderId, pageId, cancelNote);
     if (a === 'issue') return this.ordersService.markIssue(orderId, pageId);
     if (a === 'pack')
       return this.prisma.order.update({
@@ -335,6 +335,7 @@ export class ClientDashboardService {
     pageId: number,
     ids: number[],
     action: string,
+    cancelNote?: string,
   ): Promise<{
     success: number;
     failed: number;
@@ -361,7 +362,7 @@ export class ClientDashboardService {
         if (!order || order.pageIdRef !== pageId) throw new Error('Not found');
         if (a === 'confirm')
           await this.ordersService.confirmByAgent(id, pageId);
-        if (a === 'cancel') await this.ordersService.cancelOrder(id, pageId);
+        if (a === 'cancel') await this.ordersService.cancelOrder(id, pageId, cancelNote);
         if (a === 'issue') await this.ordersService.markIssue(id, pageId);
         if (a === 'pack')
           await this.prisma.order.update({

@@ -375,6 +375,8 @@ export function OrdersPage({ th, pageId, onToast, preset }: {
   const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating]     = useState(false);
   const [memoOrderId, setMemoOrderId] = useState<number | null>(null);
+  const [cancelModal, setCancelModal] = useState<{ ids: number[] } | null>(null);
+  const [cancelNoteInput, setCancelNoteInput] = useState('');
   const [agentIssues, setAgentIssues] = useState<(Order & { botMuted: boolean; issueType?: string; customerPsid?: string })[]>([]);
   const [issuesLoading, setIssuesLoading] = useState(false);
   const [togglingBot, setTogglingBot] = useState<number | null>(null);
@@ -641,13 +643,18 @@ export function OrdersPage({ th, pageId, onToast, preset }: {
     preset?.label,
   ]);
 
-  const action = async (ids: number[], act: string) => {
+  const action = async (ids: number[], act: string, cancelNote?: string) => {
+    if (act === 'cancel' && cancelNote === undefined) {
+      setCancelNoteInput('');
+      setCancelModal({ ids });
+      return;
+    }
     setBusy(true);
     try {
       if (ids.length === 1) {
-        await request(`${BASE}/orders/${ids[0]}/action`, { method: 'POST', body: JSON.stringify({ action: act }) });
+        await request(`${BASE}/orders/${ids[0]}/action`, { method: 'POST', body: JSON.stringify({ action: act, cancelNote }) });
       } else {
-        await request(`${BASE}/orders/bulk-action`, { method: 'POST', body: JSON.stringify({ ids, action: act }) });
+        await request(`${BASE}/orders/bulk-action`, { method: 'POST', body: JSON.stringify({ ids, action: act, cancelNote }) });
       }
       onToast(copy(`✓ ${act} — ${ids.length} order`, `✓ ${act} - ${ids.length} order(s)`)); setSelected(new Set()); load();
     } catch (e: any) { onToast(e.message, 'error'); }
@@ -745,6 +752,28 @@ export function OrdersPage({ th, pageId, onToast, preset }: {
       {/* Modals */}
       {showCreate && <ManualOrderModal th={th} onClose={() => setShowCreate(false)} onSave={createManualOrder} saving={creating} />}
       {memoOrderId && <MemoModal th={th} orderId={memoOrderId} pageId={pageId} onClose={() => setMemoOrderId(null)} onSaved={load} />}
+      {cancelModal && (
+        <div style={{ position: 'fixed', inset: 0, background: '#0008', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: th.surface, borderRadius: 14, padding: 24, width: 360, boxShadow: '0 8px 32px #0004' }}>
+            <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 6, color: th.text }}>❌ {copy('অর্ডার বাতিল', 'Cancel Order')}</div>
+            <div style={{ fontSize: 13, color: th.muted, marginBottom: 14 }}>{copy('বাতিলের কারণ লিখুন (ঐচ্ছিক) — customer জিজ্ঞেস করলে bot এটা জানাবে।', 'Optional reason — bot will share this with the customer if they ask.')} </div>
+            <textarea
+              value={cancelNoteInput}
+              onChange={e => setCancelNoteInput(e.target.value)}
+              placeholder={copy('যেমন: পণ্য স্টকে নেই, ভুল অর্ডার, duplicate ইত্যাদি', 'e.g. Out of stock, wrong order, duplicate...')}
+              style={{ width: '100%', borderRadius: 8, border: `1.5px solid ${th.border}`, padding: '9px 12px', fontSize: 13, background: th.bg, color: th.text, resize: 'vertical', minHeight: 72, outline: 'none' }}
+            />
+            <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+              <button style={th.btnSmGhost} onClick={() => setCancelModal(null)}>{copy('বাদ দাও', 'Cancel')}</button>
+              <button style={th.btnSmDanger} disabled={busy} onClick={async () => {
+                const ids = cancelModal.ids;
+                setCancelModal(null);
+                await action(ids, 'cancel', cancelNoteInput.trim() || undefined);
+              }}>{copy('বাতিল করুন', 'Confirm Cancel')}</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>

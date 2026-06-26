@@ -121,12 +121,14 @@ export class ClientDashboardController {
     @Param('pageId') p: string,
     @Param('orderId') o: string,
     @Body('action') action: string,
+    @Body('cancelNote') cancelNote: string,
     @Req() r: any,
   ) {
     return this.svc.applyOrderAction(
       this.pid(r, p),
       Number(o),
       String(action || ''),
+      cancelNote,
     );
   }
   @Get(':pageId/orders/delivery-zone')
@@ -227,6 +229,7 @@ export class ClientDashboardController {
       this.pid(r, p),
       b?.ids || [],
       b?.action || '',
+      b?.cancelNote,
     );
   }
 

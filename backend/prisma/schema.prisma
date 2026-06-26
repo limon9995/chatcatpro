@@ -377,6 +377,7 @@ model Order {
   updatedAt   DateTime  @updatedAt
 
   editToken   String?   @unique
+  cancelNote  String?
 
   // Spam/Fraud check result
   spamRisk        String   @default("unknown")

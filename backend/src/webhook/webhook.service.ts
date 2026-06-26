@@ -1177,6 +1177,23 @@ export class WebhookService implements OnModuleDestroy {
         ? await this.findRecentCustomerOrder(pageId, psid)
         : null;
 
+    // ── CANCELLED ORDER: customer asking about product ───────────────────────
+    if (!recentOrder && page.orderModeOn) {
+      const cancelledOrder = await this.findCancelledOrder(pageId, psid);
+      if (cancelledOrder) {
+        const businessPhone = (await this.prisma.page.findUnique({
+          where: { id: pageId },
+          select: { businessPhone: true },
+        }))?.businessPhone || null;
+        const note = cancelledOrder.cancelNote?.trim();
+        const reply = note
+          ? `❌ আপনার অর্ডার #${cancelledOrder.id} বাতিল করা হয়েছে।\n\nকারণ: ${note}`
+          : `❌ আপনার অর্ডার #${cancelledOrder.id} বাতিল করা হয়েছে।${businessPhone ? `\n\nআরও জানতে যোগাযোগ করুন: ${businessPhone}` : ''}`;
+        await this.safeSend(token, psid, reply);
+        return;
+      }
+    }
+
     // ── POST-ORDER FOLLOW-UP (after draft already finalized) ──────────────
     if (recentOrder && intent === 'EDIT_ORDER') {
       await this.handlePostOrderEdit(page, psid, text, recentOrder, null);
@@ -2106,9 +2123,18 @@ export class WebhookService implements OnModuleDestroy {
       select: {
         id: true,
         orderNote: true,
+        cancelNote: true,
         status: true,
         createdAt: true,
       },
+    });
+  }
+
+  private async findCancelledOrder(pageId: number, psid: string) {
+    return this.prisma.order.findFirst({
+      where: { pageIdRef: pageId, customerPsid: psid, status: 'CANCELLED' },
+      orderBy: { id: 'desc' },
+      select: { id: true, cancelNote: true, status: true },
     });
   }
 
