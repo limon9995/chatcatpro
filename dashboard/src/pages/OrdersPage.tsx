@@ -16,6 +16,7 @@ interface Order {
   spamRisk?: string | null; spamScore?: number | null;
   spamTotalOrders?: number | null; spamDelivered?: number | null;
   spamCancelled?: number | null; spamSource?: string | null;
+  botMuted?: boolean; customerPsid?: string | null;
 }
 
 export interface OrdersPagePreset {
@@ -199,6 +200,7 @@ function MemoModal({ th, orderId, pageId, onClose, onSaved }: {
 }) {
   const { request } = useApi();
   const [html, setHtml] = useState('');
+  const [memoKey, setMemoKey] = useState(0);
   const [loading, setLoading] = useState(true);
   const [editMode, setEditMode] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -217,7 +219,7 @@ function MemoModal({ th, orderId, pageId, onClose, onSaved }: {
   useEffect(() => {
     loadMemo();
     // Also load order data for editing
-    request(`client-dashboard/${pageId}/orders/${orderId}`)
+    request(`${API_BASE}/client-dashboard/${pageId}/orders/${orderId}`)
       .then((o: any) => {
         setOrder(o);
         setForm({
@@ -238,14 +240,19 @@ function MemoModal({ th, orderId, pageId, onClose, onSaved }: {
   const handleSave = async () => {
     setSaving(true);
     try {
-      await request(`client-dashboard/${pageId}/orders/${orderId}`, {
+      await request(`${API_BASE}/client-dashboard/${pageId}/orders/${orderId}`, {
         method: 'PATCH',
         body: JSON.stringify(form),
       });
       setSaving(false);
-      setEditMode(false);
-      setLoading(true);
-      loadMemo();
+      // Wait briefly for DB to commit, then reload memo preview
+      const token = localStorage.getItem('dfbot_token') || '';
+      setTimeout(() => {
+        fetch(`${printUrl}&_t=${Date.now()}`, { cache: 'no-store', headers: { Authorization: `Bearer ${token}` } })
+          .then(r => r.text())
+          .then(h => { setHtml(h); setMemoKey(k => k + 1); })
+          .catch(() => {});
+      }, 400);
       onSaved?.();
     } catch { setSaving(false); }
   };
@@ -333,7 +340,7 @@ function MemoModal({ th, orderId, pageId, onClose, onSaved }: {
           {/* Memo iframe */}
           {loading
             ? <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Spinner size={28} /></div>
-            : <iframe srcDoc={html} style={{ flex: 1, border: 'none', borderRadius: 12, background: '#fff' }} title="memo-preview" />
+            : <iframe key={memoKey} srcDoc={html} style={{ flex: 1, border: 'none', borderRadius: 12, background: '#fff' }} title="memo-preview" />
           }
         </div>
       </div>
@@ -442,7 +449,7 @@ export function OrdersPage({ th, pageId, onToast, preset }: {
     setIssuesLoading(true);
     try {
       const data = await request<(Order & { botMuted: boolean })[]>(`${BASE}/orders/agent-issues`);
-      setAgentIssues(data);
+      setAgentIssues(data as any);
     } catch { /* silent */ }
     finally { setIssuesLoading(false); }
   }, [pageId]);
@@ -1283,15 +1290,20 @@ export function OrdersPage({ th, pageId, onToast, preset }: {
             value={search} onChange={e => setSearch(e.target.value)} />
         </div>
 
-        {!isPresetView && selected.size > 0 && (
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '6px 12px', background: th.accentSoft, borderRadius: 8, border: `1px solid ${th.accent}33` }}>
-            <span style={{ fontSize: 12.5, fontWeight: 700, color: th.accentText }}>{selected.size} selected</span>
-            <button style={th.btnSmSuccess} onClick={() => action([...selected], 'confirm')} disabled={busy}>✓ Confirm</button>
-            <button style={{ ...th.btnSmGhost, border: '1.5px solid #7c3aed', color: '#7c3aed', fontSize: 10 }} onClick={() => action([...selected], 'pack')} disabled={busy}>📦 Pack</button>
-            <button style={th.btnSmDanger} onClick={() => action([...selected], 'cancel')} disabled={busy}>✕ Cancel</button>
-            <button style={th.btnSmGhost} onClick={() => setSelected(new Set())}>Clear</button>
-          </div>
-        )}
+        {!isPresetView && selected.size > 0 && (() => {
+          const selectedOrders = filtered.filter(o => selected.has(o.id));
+          const canConfirm = selectedOrders.some(o => o.status === 'RECEIVED');
+          const canPack = selectedOrders.some(o => o.status === 'CONFIRMED');
+          return (
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '6px 12px', background: th.accentSoft, borderRadius: 8, border: `1px solid ${th.accent}33` }}>
+              <span style={{ fontSize: 12.5, fontWeight: 700, color: th.accentText }}>{selected.size} selected</span>
+              {canConfirm && <button style={th.btnSmSuccess} onClick={() => action([...selected], 'confirm')} disabled={busy}>✓ Confirm</button>}
+              {canPack && <button style={{ ...th.btnSmGhost, border: '1.5px solid #7c3aed', color: '#7c3aed', fontSize: 10 }} onClick={() => action([...selected], 'pack')} disabled={busy}>📦 Pack</button>}
+              <button style={th.btnSmDanger} onClick={() => action([...selected], 'cancel')} disabled={busy}>✕ Cancel</button>
+              <button style={th.btnSmGhost} onClick={() => setSelected(new Set())}>Clear</button>
+            </div>
+          );
+        })()}
       </div>
 
       {preset?.label && (
@@ -1395,6 +1407,10 @@ export function OrdersPage({ th, pageId, onToast, preset }: {
                                   ✅ Delivered
                                 </button>
                               )}
+                              <button style={{ display: 'block', width: '100%', padding: '8px 12px', textAlign: 'left', background: 'transparent', border: 'none', color: o.botMuted ? '#16a34a' : '#b45309', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
+                                onClick={(e) => { e.stopPropagation(); setOpenDropdown(null); toggleBot({ id: o.id, customerPsid: o.customerPsid ?? undefined, botMuted: o.botMuted ?? false }); }}>
+                                {o.botMuted ? '🤖 Bot চালু করুন' : '🤫 Bot বন্ধ করুন'}
+                              </button>
                               <button style={{ display: 'block', width: '100%', padding: '8px 12px', textAlign: 'left', background: 'transparent', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
                                 onClick={(e) => { e.stopPropagation(); setOpenDropdown(null); action([o.id], 'cancel'); }}>
                                 ✕ Cancel
