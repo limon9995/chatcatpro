@@ -773,6 +773,27 @@ export class WebhookService implements OnModuleDestroy {
       }
     }
 
+    // ── CANCELLED ORDER GUARD ─────────────────────────────────────────────────
+    // If customer has no active order but has a cancelled one, intercept everything
+    if (!draft && page.orderModeOn) {
+      const activeOrder = await this.findRecentCustomerOrder(pageId, psid);
+      if (!activeOrder) {
+        const cancelledOrder = await this.findCancelledOrder(pageId, psid);
+        if (cancelledOrder) {
+          const businessPhone = (await this.prisma.page.findUnique({
+            where: { id: pageId },
+            select: { businessPhone: true },
+          }))?.businessPhone || null;
+          const note = cancelledOrder.cancelNote?.trim();
+          const reply = note
+            ? `❌ আপনার অর্ডার #${cancelledOrder.id} বাতিল করা হয়েছে।\n\nকারণ: ${note}`
+            : `❌ আপনার অর্ডার #${cancelledOrder.id} বাতিল করা হয়েছে।${businessPhone ? `\n\nআরও জানতে যোগাযোগ করুন: ${businessPhone}` : ''}`;
+          await this.safeSend(token, psid, reply);
+          return;
+        }
+      }
+    }
+
     // ── CATALOG REQUEST (pre-SmartBot) — always send card view ──────────
     const preSmartBotIntent = this.botIntent.detectIntent(text, awaitingConfirm);
     if (preSmartBotIntent === 'CATALOG_REQUEST') {
@@ -991,27 +1012,6 @@ export class WebhookService implements OnModuleDestroy {
     if (intent === 'ORDER_REMOVE_ITEM' && draft) {
       await this.handleRemoveItem(page, psid, text, draft);
       return;
-    }
-
-    // ── CANCELLED ORDER GUARD: if customer has a cancelled order and no active order,
-    // intercept any order-related query before knowledge base handles it ──────
-    if (!draft && page.orderModeOn) {
-      const activeOrder = await this.findRecentCustomerOrder(pageId, psid);
-      if (!activeOrder) {
-        const cancelledOrder = await this.findCancelledOrder(pageId, psid);
-        if (cancelledOrder) {
-          const businessPhone = (await this.prisma.page.findUnique({
-            where: { id: pageId },
-            select: { businessPhone: true },
-          }))?.businessPhone || null;
-          const note = cancelledOrder.cancelNote?.trim();
-          const reply = note
-            ? `❌ আপনার অর্ডার #${cancelledOrder.id} বাতিল করা হয়েছে।\n\nকারণ: ${note}`
-            : `❌ আপনার অর্ডার #${cancelledOrder.id} বাতিল করা হয়েছে।${businessPhone ? `\n\nআরও জানতে যোগাযোগ করুন: ${businessPhone}` : ''}`;
-          await this.safeSend(token, psid, reply);
-          return;
-        }
-      }
     }
 
     // ── IN-DRAFT EDITS ─────────────────────────────────────────────────────
@@ -2182,7 +2182,8 @@ export class WebhookService implements OnModuleDestroy {
 
   private isOrderStatusQuery(text: string): boolean {
     const t = text.toLowerCase();
-    return /order.*kothay|order.*status|oder.*ki holo|oder.*update|\u0985\u09B0\u09CD\u09A1\u09BE\u09B0.*\u0995\u09CB\u09A5\u09BE\u09AF\u09BC|\u0985\u09B0\u09CD\u09A1\u09BE\u09B0.*\u0986\u09AA\u09A1\u09C7\u099F|\u0985\u09B0\u09CD\u09A1\u09BE\u09B0.*\u0995\u09BF|\u0995\u09CB\u09A5\u09BE\u09AF\u09BC.*order|status.*order|my order|আমার order|আমার অর্ডার/.test(t);
+    return /order|oder|অর্ডার/.test(t) &&
+      /kothay|status|ki holo|ki khbr|khobor|update|কোথায়|আপডেট|কী হলো|খবর|কি হইলো|delivered|deliver|pack|ship|paini|pai ni|পাইনি|পেলাম না|কবে পাবো|kobe pabo|কখন|kakhn/.test(t);
   }
 
   private buildOrderStatusReply(orders: any[]): string {
