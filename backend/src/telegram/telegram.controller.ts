@@ -3,6 +3,7 @@ import { AuthGuard } from '../auth/auth.guard';
 import { TelegramNotificationService } from './telegram-notification.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { EncryptionService } from '../common/encryption.service';
+import { MessengerService } from '../messenger/messenger.service';
 
 @Controller('telegram')
 export class TelegramController {
@@ -10,6 +11,7 @@ export class TelegramController {
     private readonly telegram: TelegramNotificationService,
     private readonly prisma: PrismaService,
     private readonly encryption: EncryptionService,
+    private readonly messenger: MessengerService,
   ) {}
 
   @Post('test')
@@ -96,11 +98,15 @@ export class TelegramController {
 
     const token = this.encryption.decrypt(page.telegramBotToken);
 
-    // Parse action: confirm_{orderId} | fraud_{orderId}
-    const [action, orderIdStr] = data.split('_');
-    const orderId = parseInt(orderIdStr ?? '0', 10);
+    // Parse action: confirm_{orderId} | fraud_{orderId} | advrefund_confirm_{returnId} | advrefund_skip_{returnId}
+    const parts = data.split('_');
+    const action = parts[0];
+    const orderId = parseInt(parts[parts.length - 1] ?? '0', 10);
 
-    if (action === 'confirm' && orderId) {
+    if (action === 'advrefund' && orderId) {
+      const subAction = parts[1]; // 'confirm' or 'skip'
+      await this.handleAdvanceRefund(page.id, orderId, subAction, token, callbackQueryId, page.telegramChatId ?? '');
+    } else if (action === 'confirm' && orderId) {
       await this.handleConfirm(page.id, orderId, token, callbackQueryId, page.telegramChatId ?? '');
     } else if (action === 'fraud' && orderId) {
       await this.handleFraud(page.id, orderId, token, callbackQueryId, page.telegramChatId ?? '');
@@ -145,6 +151,76 @@ export class TelegramController {
       token,
       chatId,
       `✅ <b>Order #${orderId} Confirmed!</b>\n👤 ${order.customerName}\n📞 ${order.phone ?? '-'}`,
+    );
+  }
+
+  private async handleAdvanceRefund(
+    pageId: number,
+    returnId: number,
+    subAction: string,
+    token: string,
+    callbackQueryId: string,
+    chatId: string,
+  ) {
+    const returnEntry = await this.prisma.returnEntry.findFirst({
+      where: { id: returnId, pageId },
+      include: {
+        order: {
+          select: { id: true, customerPsid: true, customerName: true, phone: true, pageIdRef: true, page: { select: { accessToken: true, currencySymbol: true } } },
+        },
+      },
+    });
+
+    if (!returnEntry) {
+      await this.telegram.answerCallback(token, callbackQueryId, '❌ Return entry not found');
+      return;
+    }
+    if (returnEntry.refundStatus === 'given') {
+      await this.telegram.answerCallback(token, callbackQueryId, '✅ Already refunded');
+      return;
+    }
+    if (returnEntry.refundStatus === 'not_applicable') {
+      await this.telegram.answerCallback(token, callbackQueryId, '⏭️ Already skipped');
+      return;
+    }
+
+    const sym = returnEntry.order.page?.currencySymbol || '৳';
+    const amount = returnEntry.refundAmount;
+
+    if (subAction === 'skip') {
+      await this.prisma.returnEntry.update({
+        where: { id: returnId },
+        data: { refundStatus: 'not_applicable' },
+      });
+      await this.telegram.answerCallback(token, callbackQueryId, '⏭️ Skipped');
+      await this.telegram.sendRaw(token, chatId, `⏭️ Advance refund for Order #${returnEntry.orderId} marked as N/A`);
+      return;
+    }
+
+    // subAction === 'confirm'
+    await this.prisma.returnEntry.update({
+      where: { id: returnId },
+      data: {
+        refundStatus: 'given',
+        refundGivenAt: new Date(),
+        refundGivenAmount: amount,
+        refundMethod: 'bkash_manual',
+      },
+    });
+
+    // Send customer Messenger message
+    const psid = returnEntry.order.customerPsid;
+    const pageToken = returnEntry.order.page?.accessToken;
+    if (psid && pageToken) {
+      const msg = `✅ আপনার অর্ডার #${returnEntry.orderId} এর অগ্রিম ${sym}${amount} ফেরত পাঠানো হয়েছে। ধন্যবাদ! 💖`;
+      await this.messenger.sendText(pageToken, psid, msg, 'ACCOUNT_UPDATE');
+    }
+
+    await this.telegram.answerCallback(token, callbackQueryId, `✅ Refund confirmed! ${sym}${amount}`);
+    await this.telegram.sendRaw(
+      token,
+      chatId,
+      `✅ <b>Refund Confirmed</b>\nOrder #${returnEntry.orderId} — ${returnEntry.order.customerName || 'Customer'}\n💰 ${sym}${amount} refunded`,
     );
   }
 

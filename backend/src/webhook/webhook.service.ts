@@ -780,10 +780,80 @@ export class WebhookService implements OnModuleDestroy {
       if (!activeOrder) {
         const cancelledOrder = await this.findCancelledOrder(pageId, psid);
         if (cancelledOrder) {
-          const businessPhone = (await this.prisma.page.findUnique({
+          const pageInfo = await this.prisma.page.findUnique({
             where: { id: pageId },
-            select: { businessPhone: true },
-          }))?.businessPhone || null;
+            select: { businessPhone: true, telegramBotToken: true, telegramChatId: true, currencySymbol: true },
+          });
+          const businessPhone = pageInfo?.businessPhone || null;
+
+          // ── ADVANCE REFUND REQUEST ──────────────────────────────────────────
+          if (this.isAdvanceRefundRequest(text)) {
+            const advanceCollections = cancelledOrder.collections ?? [];
+            const totalAdvance = advanceCollections.reduce((s: number, c: { amount: number }) => s + c.amount, 0);
+            const hasAdvance = totalAdvance > 0 || cancelledOrder.paymentStatus === 'advance_paid';
+
+            if (!hasAdvance) {
+              await this.safeSend(token, psid, `❌ আপনার অর্ডার #${cancelledOrder.id} এ কোনো অগ্রিম পেমেন্ট পাওয়া যায়নি।`);
+              return;
+            }
+
+            // Check if already refunded
+            const existingReturn = (cancelledOrder.returnEntries ?? []).find(
+              (r: { id: number; refundStatus: string }) => r.refundStatus === 'given'
+            );
+            if (existingReturn) {
+              const sym = pageInfo?.currencySymbol || '৳';
+              await this.safeSend(token, psid, `✅ আপনার অগ্রিম ${sym}${totalAdvance} আগেই ফেরত দেওয়া হয়েছে। আর কোনো রিফান্ড সম্ভব নয়।`);
+              return;
+            }
+
+            // Check if refund already requested (pending)
+            const pendingReturn = (cancelledOrder.returnEntries ?? []).find(
+              (r: { id: number; refundStatus: string }) => r.refundStatus === 'pending'
+            );
+            if (pendingReturn) {
+              await this.safeSend(token, psid, `⏳ আপনার অগ্রিম ফেরতের অনুরোধ ইতিমধ্যে পাঠানো হয়েছে। শীঘ্রই যোগাযোগ করা হবে।`);
+              return;
+            }
+
+            // Create ReturnEntry (pending)
+            const returnEntry = await this.prisma.returnEntry.create({
+              data: {
+                pageId,
+                orderId: cancelledOrder.id,
+                returnType: 'full',
+                refundAmount: totalAdvance,
+                returnCost: 0,
+                note: 'Customer requested via Messenger',
+                refundStatus: 'pending',
+                refundPhoneNumber: cancelledOrder.phone || null,
+              },
+            });
+
+            // Send Telegram notification with confirm button
+            if (pageInfo?.telegramBotToken && pageInfo?.telegramChatId) {
+              const sym = pageInfo.currencySymbol || '৳';
+              await this.telegram.notifyWithButtons(
+                pageId,
+                [
+                  `💸 <b>Advance Refund Request</b>`,
+                  `📦 Order #${cancelledOrder.id} — ${cancelledOrder.customerName || 'Customer'}`,
+                  `📞 ${cancelledOrder.phone || '—'}`,
+                  `💰 Advance Paid: ${sym}${totalAdvance}`,
+                  `\n✅ Click below after sending refund:`,
+                ].join('\n'),
+                [[
+                  { text: `✅ Refund দিয়েছি (${sym}${totalAdvance})`, callback_data: `advrefund_confirm_${returnEntry.id}` },
+                  { text: `❌ Skip`, callback_data: `advrefund_skip_${returnEntry.id}` },
+                ]],
+              );
+            }
+
+            await this.safeSend(token, psid, `✅ আপনার অগ্রিম ফেরতের অনুরোধ পাঠানো হয়েছে। শীঘ্রই আপনার সাথে যোগাযোগ করা হবে।`);
+            return;
+          }
+          // ── END ADVANCE REFUND REQUEST ──────────────────────────────────────
+
           const note = cancelledOrder.cancelNote?.trim();
           const reply = note
             ? `❌ আপনার অর্ডার #${cancelledOrder.id} বাতিল করা হয়েছে।\n\nকারণ: ${note}`
@@ -2164,8 +2234,26 @@ export class WebhookService implements OnModuleDestroy {
     return this.prisma.order.findFirst({
       where: { pageIdRef: pageId, customerPsid: psid, status: 'CANCELLED' },
       orderBy: { id: 'desc' },
-      select: { id: true, cancelNote: true, status: true },
+      select: {
+        id: true,
+        cancelNote: true,
+        status: true,
+        paymentStatus: true,
+        phone: true,
+        customerName: true,
+        collections: { where: { type: 'advance' }, select: { amount: true } },
+        returnEntries: { select: { id: true, refundStatus: true } },
+      },
     });
+  }
+
+  private isAdvanceRefundRequest(text: string): boolean {
+    const t = text.toLowerCase();
+    return (
+      /(tk|taka|টাকা|tk|bdt|payment|pay)/.test(t) &&
+      /(back|ফেরত|ferot|ferat|ফিরত|return|refund|daw|dao|den|দাও|দেন|পাঠান|pathan)/.test(t)
+    ) || /(advance|অগ্রিম|agrim|deposit).*?(back|ফেরত|ferot|return|refund)/.test(t)
+      || /(ফেরত|ferot|refund|back).*?(tk|taka|টাকা|advance|অগ্রিম)/.test(t);
   }
 
   private async findAllCustomerOrders(pageId: number, psid: string) {
