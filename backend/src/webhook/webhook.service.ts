@@ -1194,6 +1194,15 @@ export class WebhookService implements OnModuleDestroy {
       }
     }
 
+    // ── ORDER STATUS QUERY: show all active orders ───────────────────────────
+    if (page.orderModeOn && this.isOrderStatusQuery(text)) {
+      const allOrders = await this.findAllCustomerOrders(pageId, psid);
+      if (allOrders.length > 0) {
+        await this.safeSend(token, psid, this.buildOrderStatusReply(allOrders));
+        return;
+      }
+    }
+
     // ── POST-ORDER FOLLOW-UP (after draft already finalized) ──────────────
     if (recentOrder && intent === 'EDIT_ORDER') {
       await this.handlePostOrderEdit(page, psid, text, recentOrder, null);
@@ -2136,6 +2145,39 @@ export class WebhookService implements OnModuleDestroy {
       orderBy: { id: 'desc' },
       select: { id: true, cancelNote: true, status: true },
     });
+  }
+
+  private async findAllCustomerOrders(pageId: number, psid: string) {
+    return this.prisma.order.findMany({
+      where: {
+        pageIdRef: pageId,
+        customerPsid: psid,
+        status: { in: ['RECEIVED', 'CONFIRMED', 'PACKED', 'SHIPPED', 'DELIVERED'] },
+      },
+      orderBy: { id: 'desc' },
+      select: { id: true, status: true, createdAt: true, items: { select: { productCode: true, qty: true } } },
+    });
+  }
+
+  private isOrderStatusQuery(text: string): boolean {
+    const t = text.toLowerCase();
+    return /order.*kothay|order.*status|oder.*ki holo|oder.*update|\u0985\u09B0\u09CD\u09A1\u09BE\u09B0.*\u0995\u09CB\u09A5\u09BE\u09AF\u09BC|\u0985\u09B0\u09CD\u09A1\u09BE\u09B0.*\u0986\u09AA\u09A1\u09C7\u099F|\u0985\u09B0\u09CD\u09A1\u09BE\u09B0.*\u0995\u09BF|\u0995\u09CB\u09A5\u09BE\u09AF\u09BC.*order|status.*order|my order|আমার order|আমার অর্ডার/.test(t);
+  }
+
+  private buildOrderStatusReply(orders: any[]): string {
+    if (orders.length === 0) return 'আপনার কোনো active order নেই।';
+    const statusLabel: Record<string, string> = {
+      RECEIVED: '📥 প্রাপ্ত (প্রসেসিং)',
+      CONFIRMED: '✅ কনফার্ম হয়েছে',
+      PACKED: '📦 প্যাক হয়েছে',
+      SHIPPED: '🚚 পাঠানো হয়েছে',
+      DELIVERED: '🎉 ডেলিভারি হয়েছে',
+    };
+    const lines = orders.map(o => {
+      const items = o.items.map((i: any) => `${i.productCode}×${i.qty}`).join(', ');
+      return `#${o.id} — ${items || '—'}\n   ${statusLabel[o.status] || o.status}`;
+    });
+    return `আপনার অর্ডারের আপডেট:\n\n${lines.join('\n\n')}`;
   }
 
   private isPostOrderCancel(text: string): boolean {
