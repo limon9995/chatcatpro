@@ -195,7 +195,11 @@ export function AppContent() {
           const settings = await fetch(`${API_BASE}/client-dashboard/${nextPage.id}/settings`, {
             headers: { Authorization: `Bearer ${localStorage.getItem('dfbot_token')}` },
           }).then((r) => r.json());
-          const alreadyConfigured = settings?.universityModeOn === true || settings?.automationOn === true || settings?.infoModeOn === true || settings?.orderModeOn === true;
+          // NOTE: infoModeOn/orderModeOn default to `true` in the DB for every
+          // brand-new page (unrelated feature toggles, not an onboarding
+          // signal), so they must NOT be used here — including them made this
+          // check true for every fresh signup, skipping onboarding entirely.
+          const alreadyConfigured = settings?.universityModeOn === true || settings?.automationOn === true;
           if (alreadyConfigured) {
             localStorage.setItem(`chatcat_onboarding_${nextPage.id}`, 'done');
             setScreen('dashboard');
