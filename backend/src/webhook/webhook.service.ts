@@ -668,6 +668,8 @@ export class WebhookService implements OnModuleDestroy {
         const processingMsg = await this.botKnowledge.resolveSystemReply(
           pageId,
           'ocr_processing',
+          undefined,
+          page.agentType,
         );
         await this.messenger
           .sendText(token, psid, processingMsg)
@@ -895,7 +897,7 @@ export class WebhookService implements OnModuleDestroy {
             draft!.currentStep === 'confirm' &&
             this.botIntent.detectIntent(text, true) === 'CONFIRM';
           const key = wasConfirm ? 'order_received' : 'order_cancelled';
-          const msg = await this.botKnowledge.resolveSystemReply(pageId, key);
+          const msg = await this.botKnowledge.resolveSystemReply(pageId, key, undefined, page.agentType);
           await this.safeSend(token, psid, msg);
         }
         return;
@@ -1231,7 +1233,7 @@ export class WebhookService implements OnModuleDestroy {
             draft.currentStep === 'confirm' &&
             this.botIntent.detectIntent(text, true) === 'CONFIRM';
           const key = wasConfirm ? 'order_received' : 'order_cancelled';
-          const msg = await this.botKnowledge.resolveSystemReply(pageId, key);
+          const msg = await this.botKnowledge.resolveSystemReply(pageId, key, undefined, page.agentType);
           await this.safeSend(token, psid, msg);
         }
         return;
@@ -1632,7 +1634,7 @@ export class WebhookService implements OnModuleDestroy {
     // Use AI-generated cancel reply if available, else knowledge base
     const reply =
       aiReply ??
-      (await this.botKnowledge.resolveSystemReply(page.id, 'order_cancelled'));
+      (await this.botKnowledge.resolveSystemReply(page.id, 'order_cancelled', undefined, page.agentType));
     await this.safeSend(page.pageToken, psid, reply);
   }
 
@@ -2546,7 +2548,7 @@ export class WebhookService implements OnModuleDestroy {
           const tok = entry.page.pageToken as string;
           const pid = entry.page.id as number;
           void this.botKnowledge
-            .resolveSystemReply(pid, 'ocr_fail')
+            .resolveSystemReply(pid, 'ocr_fail', undefined, entry.page.agentType)
             .then((r) => this.safeSend(tok, psid, r))
             .then(() => this.sendCatalogFallback(tok, psid, entry.page))
             .catch(() => {});
@@ -2699,6 +2701,8 @@ export class WebhookService implements OnModuleDestroy {
         const reply = await this.botKnowledge.resolveSystemReply(
           pageId,
           'ocr_fail',
+          undefined,
+          page.agentType,
         );
         await this.safeSend(token, psid, reply);
         await this.sendCatalogFallback(token, psid, page);
@@ -2714,7 +2718,7 @@ export class WebhookService implements OnModuleDestroy {
         `[BatchImages] Uncaught error page=${page.pageId} psid=${psid}: ${err?.message ?? err}`,
       );
       const reply = await this.botKnowledge
-        .resolveSystemReply(pageId, 'ocr_fail')
+        .resolveSystemReply(pageId, 'ocr_fail', undefined, page.agentType)
         .catch(() => 'Sorry, something went wrong.');
       await this.safeSend(token, psid, reply);
       await this.sendCatalogFallback(token, psid, page).catch(() => {});
@@ -2899,7 +2903,7 @@ export class WebhookService implements OnModuleDestroy {
         const isLowConf =
           ocrResult.confidence < 30 && ocrResult.ocrConfidence === 'NONE';
         const key = isLowConf ? 'ocr_low_confidence' : 'ocr_fail';
-        const reply = await this.botKnowledge.resolveSystemReply(pageId, key);
+        const reply = await this.botKnowledge.resolveSystemReply(pageId, key, undefined, page.agentType);
         await this.safeSend(token, psid, reply);
         await this.sendCatalogFallback(token, psid, page);
         return;
@@ -2929,7 +2933,7 @@ export class WebhookService implements OnModuleDestroy {
         `[OCR] Uncaught error page=${page.pageId} psid=${psid}: ${err}`,
       );
       const reply = await this.botKnowledge
-        .resolveSystemReply(pageId, 'ocr_fail')
+        .resolveSystemReply(pageId, 'ocr_fail', undefined, page.agentType)
         .catch(() => 'Sorry, something went wrong.');
       await this.safeSend(token, psid, reply);
       await this.sendCatalogFallback(token, psid, page).catch(() => {});
@@ -3028,6 +3032,8 @@ export class WebhookService implements OnModuleDestroy {
         const reply = await this.botKnowledge.resolveSystemReply(
           pageId,
           'ocr_fail',
+          undefined,
+          page.agentType,
         );
         await this.safeSend(token, psid, reply);
         return;
@@ -3293,6 +3299,8 @@ export class WebhookService implements OnModuleDestroy {
       const reply = await this.botKnowledge.resolveSystemReply(
         pageId,
         'ocr_fail',
+        undefined,
+        page.agentType,
       );
       await this.safeSend(token, psid, reply);
       await this.sendCatalogFallback(token, psid, page);
@@ -3316,6 +3324,8 @@ export class WebhookService implements OnModuleDestroy {
       const reply = await this.botKnowledge.resolveSystemReply(
         pageId,
         'ocr_fail',
+        undefined,
+        page.agentType,
       );
       await this.safeSend(token, psid, reply);
       await this.sendCatalogFallback(token, psid, page);
@@ -3489,7 +3499,7 @@ export class WebhookService implements OnModuleDestroy {
 
     // Acknowledge the voice message while transcribing
     const processingMsg = await this.botKnowledge
-      .resolveSystemReply(pageId, 'voice_processing')
+      .resolveSystemReply(pageId, 'voice_processing', undefined, page.agentType)
       .catch(() => 'আপনার voice message শুনছি... ⏳');
     await this.safeSend(token, psid, processingMsg);
 
@@ -3498,7 +3508,7 @@ export class WebhookService implements OnModuleDestroy {
     if (!transcribed) {
       this.logger.warn(`[Whisper] Transcription failed for psid=${psid}`);
       const failMsg = await this.botKnowledge
-        .resolveSystemReply(pageId, 'voice_fail')
+        .resolveSystemReply(pageId, 'voice_fail', undefined, page.agentType)
         .catch(
           () => 'দুঃখিত, আপনার voice message বুঝতে পারিনি। Text-এ লিখে জানান।',
         );
