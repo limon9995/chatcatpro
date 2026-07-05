@@ -2939,6 +2939,9 @@ function BotAgentsTab({ th, agents, busy, onCreate, onToggle }: {
           fontSize: 12.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
         }}>{showForm ? 'বাতিল' : '+ নতুন Agent'}</button>
       </div>
+      <div style={{ fontSize: 11.5, color: th.muted, marginTop: -8 }}>
+        "লিস্ট থেকে লুকান" শুধু নতুন signup-এর agent-picker লিস্ট থেকে বাদ দেয় — যেসব page আগে থেকে এই agent ব্যবহার করছে তাদের বট আগের মতোই স্বাভাবিকভাবে কাজ করতে থাকবে।
+      </div>
 
       {showForm && (
         <div style={{ ...th.card, display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -2968,7 +2971,7 @@ function BotAgentsTab({ th, agents, busy, onCreate, onToggle }: {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
               <span style={{ fontWeight: 800, fontSize: 13.5, color: th.text }}>{a.name}</span>
               <span style={{ fontSize: 11, color: th.muted, background: `${th.accent}18`, padding: '2px 8px', borderRadius: 6 }}>{a.agentKey}</span>
-              {!a.active && <span style={{ fontSize: 11, color: '#ef4444' }}>নিষ্ক্রিয়</span>}
+              {!a.active && <span style={{ fontSize: 11, color: '#ef4444' }}>লিস্টে লুকানো — বট চলছে</span>}
             </div>
             {a.description && <div style={{ fontSize: 12.5, color: th.muted, marginBottom: 4 }}>{a.description}</div>}
             {a.suitableFor && (
@@ -2989,7 +2992,7 @@ function BotAgentsTab({ th, agents, busy, onCreate, onToggle }: {
               fontWeight: 700, fontSize: 12, cursor: busy === a.id ? 'default' : 'pointer', fontFamily: 'inherit',
             }}
           >
-            {busy === a.id ? <Spinner size={12} /> : a.active ? 'নিষ্ক্রিয় করুন' : 'সক্রিয় করুন'}
+            {busy === a.id ? <Spinner size={12} /> : a.active ? 'লিস্ট থেকে লুকান' : 'লিস্টে দেখান'}
           </button>
         </div>
       ))}
