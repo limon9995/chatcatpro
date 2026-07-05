@@ -1385,6 +1385,21 @@ export function AdminPanel({ th, onToast, onLogout }: {
                     </div>
                   </div>
 
+                  {/* Bot Personality / System Prompt */}
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 800, color: th.muted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Bot Personality (System Prompt)</div>
+                    <textarea
+                      style={{ ...th.input, minHeight: 100, resize: 'vertical', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' }}
+                      value={pageSettings.customPersonaPrompt ?? ''}
+                      maxLength={2000}
+                      placeholder="এই client-এর bot কীভাবে কথা বলবে তার custom instructions — খালি রাখলে default agent persona ব্যবহার হবে"
+                      onChange={e => setPageSettings((p: any) => ({ ...p, customPersonaPrompt: e.target.value }))}
+                    />
+                    <div style={{ fontSize: 11, color: th.muted, marginTop: 4 }}>
+                      Client নিজেও এটা তাদের Settings থেকে edit করতে পারে — এটা সেই একই field।
+                    </div>
+                  </div>
+
                   {/* Product Code Prefix */}
                   <div>
                     <div style={{ fontSize: 11, fontWeight: 800, color: th.muted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Product Code</div>

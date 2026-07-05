@@ -1334,6 +1334,8 @@ Return ONLY valid JSON (no markdown):
       universityModeOn: Boolean(page.universityModeOn),
       // AI Knowledge
       knowledgeText: page.knowledgeText ?? '',
+      // Bot personality — per-page override of the shared agent-type persona
+      customPersonaPrompt: page.customPersonaPrompt ?? '',
       // Pricing (from bot-knowledge config)
       pricingPolicy: cfg?.pricingPolicy || {},
       // Call — all fields explicit
@@ -1419,6 +1421,7 @@ Return ONLY valid JSON (no markdown):
       'telegramChatId',
       // AI / Bot
       'knowledgeText',
+      'customPersonaPrompt',
       'textFallbackAiOn',
       'businessBotOn',
       'businessInfo',

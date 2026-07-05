@@ -627,9 +627,12 @@ Rules:
       dualCtx += `\nCustomer গায়ে পরা/wearing dress জিজ্ঞেস করলে → intent: "DUAL_WEARING"\nCustomer হাতে ধরা/holding dress জিজ্ঞেস করলে → intent: "DUAL_HOLDING"\nreply-তে product name ও price উল্লেখ করো।\n`;
     }
 
-    const opener = agentBehavior.personaPrompt
-      ? agentBehavior.personaPrompt.replace(/\{\{\s*shop\s*\}\}/g, shop)
-      : defaultPersonaOpener(shop);
+    const customPersona = String(context.customPersonaPrompt || '').trim();
+    const opener = customPersona
+      ? customPersona.replace(/\{\{\s*shop\s*\}\}/g, shop)
+      : agentBehavior.personaPrompt
+        ? agentBehavior.personaPrompt.replace(/\{\{\s*shop\s*\}\}/g, shop)
+        : defaultPersonaOpener(shop);
 
     return `${opener}${stepCtx}${deliveryCtx}${paymentCtx}${productCtx}${knowledgeCtx}${dualCtx}
 

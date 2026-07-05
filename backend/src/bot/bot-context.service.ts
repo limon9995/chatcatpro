@@ -39,6 +39,8 @@ export interface BusinessContext {
   lastPresentedProducts?: { code: string; name?: string; price?: number }[];
   // Page's bot agent type — used to resolve per-agent-type persona/tone overrides
   agentType?: string;
+  // Per-page persona override — takes priority over the agentType-level persona
+  customPersonaPrompt?: string;
 }
 
 @Injectable()
@@ -62,6 +64,7 @@ export class BotContextService {
           deliveryTimeInsideDhaka: true,
           deliveryTimeOutsideDhaka: true,
           knowledgeText: true,
+          customPersonaPrompt: true,
           dualPhotoMode: true,
           dualWearingProductId: true,
           dualHoldingProductId: true,
@@ -134,6 +137,7 @@ export class BotContextService {
       knowledgeText: (page as any)?.knowledgeText ?? '',
       pricingInfo: (knowledgeConfig as any)?.pricingInfo ?? '',
       agentType: (knowledgeConfig as any)?.agentType ?? 'commerce',
+      customPersonaPrompt: (page as any)?.customPersonaPrompt ?? '',
       dualPhotoMode: Boolean((page as any)?.dualPhotoMode),
       dualWearingProduct,
       dualHoldingProduct,

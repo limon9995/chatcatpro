@@ -49,6 +49,7 @@ interface Settings {
   };
   modeAccess?: Record<string, boolean>;
   knowledgeText: string;
+  customPersonaPrompt: string;
 }
 
 const S0: Settings = {
@@ -60,6 +61,7 @@ const S0: Settings = {
   deliveryFeeInsideDhaka: 80, deliveryFeeOutsideDhaka: 120, deliveryTimeText: '', deliveryTimeInsideDhaka: '', deliveryTimeOutsideDhaka: '',
   paymentMode: 'cod', advanceAmount: 0, advanceBkash: '', advanceNagad: '', advanceRocket: '', advancePaymentMessage: '', webOrderEnabled: false, smsGatewayEnabled: false,
   knowledgeText: '',
+  customPersonaPrompt: '',
   automationOn: false, ocrOn: false,
   waEnabled: false, waPhoneNumberId: '', waVerifyToken: '', waTokenSet: false, waFallbackTemplateName: '',
   igEnabled: false, igBusinessAccountId: '', igVerifyToken: '', igTokenSet: false, igCommentToDmEnabled: true,
@@ -228,6 +230,7 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
   const [scraping, setScraping] = useState(false);
   const [scrapePreview, setScrapePreview] = useState<string | null>(null);
   const [knowledgeSaving, setKnowledgeSaving] = useState(false);
+  const [personaSaving, setPersonaSaving] = useState(false);
   const [unlinkingId, setUnlinkingId] = useState<number | null>(null);
   // Payment credentials state
   const [payCreds, setPayCreds] = useState<{ method: string; type: string; isActive: boolean }[]>([]);
@@ -383,6 +386,15 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
       onToast('✓ AI Knowledge saved');
     } catch (e: any) { onToast(e.message, 'error'); }
     finally { setKnowledgeSaving(false); }
+  };
+
+  const savePersona = async () => {
+    setPersonaSaving(true);
+    try {
+      await request(`${BASE}/settings`, { method: 'PATCH', body: JSON.stringify({ customPersonaPrompt: s.customPersonaPrompt }) });
+      onToast('✓ Bot Personality saved');
+    } catch (e: any) { onToast(e.message, 'error'); }
+    finally { setPersonaSaving(false); }
   };
 
   const reconnectPage = async () => {
@@ -2383,6 +2395,25 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
 
         <SaveRow onClick={saveKnowledge} saving={knowledgeSaving} label="Save Knowledge"/>
       </div>
+
+      <div style={{ ...th.card, marginTop: 16 }}>
+        {/* Bot Personality / System Prompt */}
+        <Section title="🎭 Bot Personality" desc={copy('Bot কীভাবে কথা বলবে তার নিজস্ব style লিখুন — খালি রাখলে default tone ব্যবহার হবে', "Write your bot's own tone/personality — leave empty to use the default tone")}>
+          <div>
+            <Label text={copy('System Prompt / Tone Instructions', 'System Prompt / Tone Instructions')} hint={copy('উদাহরণ: "তুমি বন্ধুত্বপূর্ণ কিন্তু professional। সবসময় আপনি করে সম্বোধন করবে। বেশি ইমোজি ব্যবহার করবে না।"', 'Example: "Be friendly but professional. Always use polite pronouns. Do not overuse emojis."')}/>
+            <textarea
+              style={{ ...inp, minHeight: 120, resize: 'vertical', fontFamily: 'inherit', fontSize: 13 }}
+              value={s.customPersonaPrompt}
+              maxLength={2000}
+              onChange={e => setS(p => ({ ...p, customPersonaPrompt: e.target.value }))}
+              placeholder={copy('খালি থাকলে bot এর default personality ব্যবহার হবে...', 'Leave empty to use the bot\'s default personality...')}
+            />
+            <div style={{ fontSize: 11, color: th.muted, marginTop: 4 }}>{s.customPersonaPrompt.length}/2000</div>
+          </div>
+        </Section>
+        <SaveRow onClick={savePersona} saving={personaSaving} label="Save Personality"/>
+      </div>
+
       <div style={{ ...th.card, marginTop: 16 }}>
         <Section title="Pricing Policy" desc="How the bot handles customer price requests">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>

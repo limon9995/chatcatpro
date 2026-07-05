@@ -213,6 +213,11 @@ model Page {
   // BotAgentDefinition.agentKey with no dedicated class yet (falls back to "commerce").
   agentType String @default("commerce")
 
+  // Per-page override of the shared BotAgentDefinition.behaviorConfig.personaPrompt —
+  // lets an individual business set its own bot tone/personality. Takes priority
+  // over the agentType-level persona when set; falls back to it when empty.
+  customPersonaPrompt String?
+
   // -- BUSINESS KNOWLEDGE --
   knowledgeText String @default("") // Client FAQ, policies, product info — fed to AI system prompt
 

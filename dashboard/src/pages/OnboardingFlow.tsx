@@ -292,7 +292,7 @@ export function OnboardingFlow({ dark, user, activePage, onComplete, onSkip }: P
               <StepAgentRequestDone
                 text={text} muted={muted}
                 contact={agentContact}
-                onFinish={handleFinish}
+                onFinish={() => advanceStep(0)}
               />
             )}
             {step === 'uni_setup' && (
@@ -1639,8 +1639,9 @@ function StepAgentRequestDone({ text, muted, contact, onFinish }: {
         অনুরোধ পাঠানো হয়েছে!
       </div>
       <div style={{ fontSize: 13.5, color: muted, lineHeight: 1.7, marginBottom: 20 }}>
-        আমরা শীঘ্রই আপনার সাথে যোগাযোগ করবো।<br />
-        দ্রুত কথা বলতে চাইলে WhatsApp-এ সরাসরি মেসেজ দিন:
+        আমরা আপনার জন্য custom bot agent তৈরি করছি — শীঘ্রই যোগাযোগ করবো।<br />
+        দ্রুত কথা বলতে চাইলে WhatsApp-এ সরাসরি মেসেজ দিন:<br />
+        <span style={{ opacity: 0.85 }}>Agent তৈরি হয়ে গেলে পরের বার login করলে এখান থেকেই সেটা select করতে পারবেন। এখনই শুরু করতে চাইলে নিচের বাটনে existing agent থেকেও বেছে নিতে পারেন।</span>
       </div>
       {contact && (
         <a
@@ -1666,7 +1667,7 @@ function StepAgentRequestDone({ text, muted, contact, onFinish }: {
             border: 'none', borderRadius: 14, color: '#fff', cursor: 'pointer',
           }}
         >
-          Dashboard-এ যান →
+          ← Agent বেছে নিন
         </button>
       </div>
     </div>

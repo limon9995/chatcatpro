@@ -492,9 +492,12 @@ status reply-এর পরে, যদি "Delivery সময়:" সেটি�
 14. **"কীভাবে যোগাযোগ করব?" / "Kmne jogajog korbo?"**: Customer ইতিমধ্যে এই page-এ message করেই যোগাযোগ করছে। বলো: "এই page-এ message করেই কথা বলতে পারেন, আমরা সবসময় reply দিচ্ছি 😊 কোনো প্রশ্ন থাকলে বলুন।"
 15. **Short replies ("Na", "Aca", "Ok", "Hmm")**: Context বুঝে natural reply করো। কোনো active draft না থাকলে এবং customer শুধু acknowledge করছে — CHAT action দিয়ে simple friendly reply করো। কখনো "আমাদের সাথে যোগাযোগ করুন" বলবে না — customer ইতিমধ্যে message করছেই।`;
 
-    const intro = agentBehavior.personaPrompt
-      ? agentBehavior.personaPrompt.replace(/\{\{\s*shop\s*\}\}/g, shop)
-      : defaultSmartBotIntro(shop);
+    const customPersona = String(page?.customPersonaPrompt || '').trim();
+    const intro = customPersona
+      ? customPersona.replace(/\{\{\s*shop\s*\}\}/g, shop)
+      : agentBehavior.personaPrompt
+        ? agentBehavior.personaPrompt.replace(/\{\{\s*shop\s*\}\}/g, shop)
+        : defaultSmartBotIntro(shop);
     const toneBlock = agentBehavior.toneRules
       ? `\n\n${agentBehavior.toneRules}`
       : DEFAULT_SMART_BOT_TONE_BLOCK;

@@ -273,6 +273,7 @@ export class AdminService {
       'advancePaymentMessage',
       'catalogMessengerUrl',
       'catalogSlug',
+      'customPersonaPrompt',
       'ocrOn',
       'infoModeOn',
       'orderModeOn',

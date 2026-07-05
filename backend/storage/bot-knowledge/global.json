@@ -246,7 +246,7 @@
         "fitting",
         "fit hobe"
       ],
-      "replyTemplate": "Available size client customize করবে।",
+      "replyTemplate": "নির্দিষ্ট size জানতে product code দিন, checking করে জানাচ্ছি 💖",
       "enabled": true,
       "replyType": "product",
       "priority": 3
@@ -322,7 +322,7 @@
         "white ache",
         "red ache"
       ],
-      "replyTemplate": "Available color client customize করবে।",
+      "replyTemplate": "নির্দিষ্ট color জানতে product code দিন, checking করে জানাচ্ছি 💖",
       "enabled": true,
       "replyType": "product",
       "priority": 4
@@ -650,7 +650,7 @@
         "eta ki diye",
         "ki material"
       ],
-      "replyTemplate": "Fabric type client customize করবে।",
+      "replyTemplate": "Fabric details জানতে product code দিন, checking করে জানাচ্ছি 💖",
       "enabled": true,
       "replyType": "product",
       "priority": 9
