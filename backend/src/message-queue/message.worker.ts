@@ -1,31 +1,15 @@
-import {
-  Injectable,
-  Logger,
-  OnModuleDestroy,
-  OnModuleInit,
-  Inject,
-  forwardRef,
-} from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { Worker, Job } from 'bullmq';
+import { BotAgentRegistry } from '../agents/bot-agent.registry';
 
 const REDIS_URL = process.env.REDIS_URL || 'redis://127.0.0.1:6379';
-
-// Avoid circular import: reference WebhookService by type only
-type WebhookServiceLike = {
-  processMessage(page: any, psid: string, message: any): Promise<void>;
-};
-
-export const WEBHOOK_SERVICE_TOKEN = 'WEBHOOK_SERVICE_FOR_WORKER';
 
 @Injectable()
 export class MessageWorker implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(MessageWorker.name);
   private worker: Worker;
 
-  constructor(
-    @Inject(WEBHOOK_SERVICE_TOKEN)
-    private readonly webhookService: WebhookServiceLike,
-  ) {}
+  constructor(private readonly botAgentRegistry: BotAgentRegistry) {}
 
   onModuleInit() {
     this.worker = new Worker(
@@ -35,7 +19,8 @@ export class MessageWorker implements OnModuleInit, OnModuleDestroy {
         this.logger.debug(
           `[MessageWorker] job=${job.id} page=${page?.pageId} psid=${psid}`,
         );
-        await this.webhookService.processMessage(page, psid, message);
+        const agent = this.botAgentRegistry.resolveForPage(page);
+        await agent.handle(page, psid, message);
       },
       {
         connection: { url: REDIS_URL },

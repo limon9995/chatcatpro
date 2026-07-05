@@ -27,6 +27,7 @@ model User {
   sessions      Session[]
   subscriptions Subscription[]
   pageRequests  PageRequest[]
+  agentRequests AgentRequest[]
 
   @@index([username])
   @@index([email])
@@ -206,6 +207,11 @@ model Page {
   universityModeOn      Boolean @default(false) // When ON: routes all Messenger messages to university bot, bypasses commerce pipeline
   universityModeAllowed Boolean @default(true)
   universityConfig      UniversityConfig?
+
+  // -- BOT AGENT SELECTION --
+  // Matches a registered BotAgent key ("commerce", "university", ...) or a
+  // BotAgentDefinition.agentKey with no dedicated class yet (falls back to "commerce").
+  agentType String @default("commerce")
 
   // -- BUSINESS KNOWLEDGE --
   knowledgeText String @default("") // Client FAQ, policies, product info — fed to AI system prompt
@@ -839,6 +845,45 @@ model PageRequest {
   note        String?  // Optional note from client
   status      String   @default("pending") // pending | approved | rejected
   adminNote   String?  // Admin's response note
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+}
+
+// ── BOT AGENT CATALOG ────────────────────────────────────────────────────────
+// Metadata shown in onboarding's agent picker. agentKey should match a
+// registered BotAgent (see backend/src/agents/); if no dedicated class exists
+// yet for a key, BotAgentRegistry falls back to the "commerce" agent so the
+// page still works while a developer writes the dedicated agent class.
+
+model BotAgentDefinition {
+  id          Int      @id @default(autoincrement())
+  agentKey    String   @unique
+  name        String
+  description String   @default("")
+  suitableFor String   @default("") // comma-separated tags, e.g. "fashion,electronics"
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([active])
+}
+
+// ── CUSTOM AGENT REQUESTS ────────────────────────────────────────────────────
+// Submitted when a client's business type doesn't match any agent in the
+// catalog. Admin gets a Telegram ping and follows up over WhatsApp.
+
+model AgentRequest {
+  id          Int      @id @default(autoincrement())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pageUrl     String
+  description String
+  contactInfo String   @default("")
+  status      String   @default("pending") // pending | contacted | fulfilled
+  adminNote   String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

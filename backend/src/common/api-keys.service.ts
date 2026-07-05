@@ -57,7 +57,12 @@ export interface ApiKeysConfig {
   catalogBaseUrl?: string;
   storagePublicUrl?: string;
   apiBaseUrl?: string;
+  // Shown to clients whose page type has no matching bot agent yet, so they
+  // can reach admin over WhatsApp to get a custom bot configured.
+  adminWhatsappNumber?: string;
 }
+
+const DEFAULT_ADMIN_WHATSAPP_NUMBER = '01720450797';
 
 const FILE = join(process.cwd(), 'storage', 'settings', 'api-keys.json');
 
@@ -106,6 +111,7 @@ const ENV_MAP: Record<keyof ApiKeysConfig, string> = {
   catalogBaseUrl: 'CATALOG_BASE_URL',
   storagePublicUrl: 'STORAGE_PUBLIC_URL',
   apiBaseUrl: 'API_BASE_URL',
+  adminWhatsappNumber: 'ADMIN_WHATSAPP_NUMBER',
 };
 
 /** Fields that should be masked (***) when returned to the frontend */
@@ -148,7 +154,10 @@ export class ApiKeysService {
   getSync(field: keyof ApiKeysConfig): string {
     const fileVal = this.cache[field] as string | undefined;
     if (fileVal && fileVal.trim()) return fileVal.trim();
-    return process.env[ENV_MAP[field]] ?? '';
+    const envVal = process.env[ENV_MAP[field]];
+    if (envVal) return envVal;
+    if (field === 'adminWhatsappNumber') return DEFAULT_ADMIN_WHATSAPP_NUMBER;
+    return '';
   }
 
   /** Async alias for consistency */

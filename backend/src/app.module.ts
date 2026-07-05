@@ -11,6 +11,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { ProductsModule } from './products/products.module';
 import { OrdersModule } from './orders/orders.module';
 import { WebhookModule } from './webhook/webhook.module';
+import { AgentsModule } from './agents/agents.module';
 import { MessengerModule } from './messenger/messenger.module';
 import { OcrQueueModule } from './ocr-queue/ocr-queue.module';
 import { OcrModule } from './ocr/ocr.module';
@@ -79,6 +80,7 @@ import { PublicOrderModule } from './public-order/public-order.module';
     ProductsModule,
     OrdersModule,
     WebhookModule,
+    AgentsModule,
     MessengerModule,
     OcrQueueModule,
     OcrModule,

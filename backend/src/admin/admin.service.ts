@@ -1176,6 +1176,67 @@ export class AdminService {
     return { success: true };
   }
 
+  // ── Bot Agent Catalog ───────────────────────────────────────────────────
+
+  async getBotAgents() {
+    return this.prisma.botAgentDefinition.findMany({
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async createBotAgent(data: {
+    agentKey: string;
+    name: string;
+    description?: string;
+    suitableFor?: string;
+  }) {
+    const agentKey = data.agentKey?.trim();
+    const name = data.name?.trim();
+    if (!agentKey) throw new BadRequestException('agentKey is required');
+    if (!name) throw new BadRequestException('name is required');
+    return this.prisma.botAgentDefinition.create({
+      data: {
+        agentKey,
+        name,
+        description: data.description?.trim() || '',
+        suitableFor: data.suitableFor?.trim() || '',
+      },
+    });
+  }
+
+  async updateBotAgent(
+    id: number,
+    data: Partial<{ name: string; description: string; suitableFor: string; active: boolean }>,
+  ) {
+    const existing = await this.prisma.botAgentDefinition.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException('Agent definition not found');
+    return this.prisma.botAgentDefinition.update({ where: { id }, data });
+  }
+
+  // ── Custom Agent Requests ───────────────────────────────────────────────
+
+  async getAgentRequests(status?: string) {
+    return this.prisma.agentRequest.findMany({
+      where: status ? { status } : undefined,
+      include: {
+        user: { select: { id: true, username: true, name: true, email: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async updateAgentRequestStatus(id: number, status: string, adminNote?: string) {
+    const req = await this.prisma.agentRequest.findUnique({ where: { id } });
+    if (!req) throw new NotFoundException('Request not found');
+    if (!['pending', 'contacted', 'fulfilled'].includes(status)) {
+      throw new BadRequestException('Invalid status');
+    }
+    return this.prisma.agentRequest.update({
+      where: { id },
+      data: { status, adminNote: adminNote?.trim() || null },
+    });
+  }
+
   async getRegistryEntries(opts: { search?: string; limit: number; offset: number }) {
     const where: any = opts.search
       ? {

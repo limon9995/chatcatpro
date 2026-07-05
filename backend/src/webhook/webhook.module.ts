@@ -30,10 +30,6 @@ import { SmartBotService } from '../bot/smart-bot.service';
 import { DraftOrderHandler } from './handlers/draft-order.handler';
 import { ProductInfoHandler } from './handlers/product-info.handler';
 import { NegotiationHandler } from './handlers/negotiation.handler';
-import {
-  MessageWorker,
-  WEBHOOK_SERVICE_TOKEN,
-} from '../message-queue/message.worker';
 
 @Module({
   imports: [
@@ -70,13 +66,7 @@ import {
     DraftOrderHandler,
     ProductInfoHandler,
     NegotiationHandler,
-    // Provide WebhookService under the worker token to break circular import
-    {
-      provide: WEBHOOK_SERVICE_TOKEN,
-      useExisting: WebhookService,
-    },
-    MessageWorker,
   ],
-  exports: [DraftOrderHandler],
+  exports: [DraftOrderHandler, WebhookService],
 })
 export class WebhookModule {}

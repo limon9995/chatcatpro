@@ -437,6 +437,40 @@ export class AdminController {
     return this.svc.rejectPageRequest(id, b?.adminNote);
   }
 
+  // ── Bot Agent Catalog ────────────────────────────────────────────────────
+
+  @Get('bot-agents')
+  getBotAgents() {
+    return this.svc.getBotAgents();
+  }
+
+  @Post('bot-agents')
+  createBotAgent(@Body() b: any) {
+    return this.svc.createBotAgent({
+      agentKey: b?.agentKey,
+      name: b?.name,
+      description: b?.description,
+      suitableFor: b?.suitableFor,
+    });
+  }
+
+  @Patch('bot-agents/:id')
+  updateBotAgent(@Param('id', ParseIntPipe) id: number, @Body() b: any) {
+    return this.svc.updateBotAgent(id, b || {});
+  }
+
+  // ── Custom Agent Requests ────────────────────────────────────────────────
+
+  @Get('agent-requests')
+  getAgentRequests(@Query('status') status?: string) {
+    return this.svc.getAgentRequests(status);
+  }
+
+  @Patch('agent-requests/:id')
+  updateAgentRequestStatus(@Param('id', ParseIntPipe) id: number, @Body() b: any) {
+    return this.svc.updateAgentRequestStatus(id, b?.status, b?.adminNote);
+  }
+
   // ── Custom Domain Management ─────────────────────────────────────────────
   @Get('custom-domains')
   listCustomDomains() {

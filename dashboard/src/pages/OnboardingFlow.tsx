@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { API_BASE, useApi } from '../hooks/useApi';
 
 interface Props {
@@ -9,7 +9,7 @@ interface Props {
   onSkip: () => void;
 }
 
-type OBStep = 0 | 1 | 2 | 3 | 4 | 5 | 'uni_setup' | 'uni_done';
+type OBStep = 0 | 1 | 2 | 3 | 4 | 5 | 'uni_setup' | 'uni_done' | 'agent_request' | 'agent_request_done';
 
 const CONFETTI_COLORS = ['#6366f1', '#8b5cf6', '#f59e0b', '#10b981', '#ef4444', '#3b82f6', '#ec4899', '#f97316'];
 const CONFETTI = Array.from({ length: 36 }, (_, i) => ({
@@ -42,6 +42,7 @@ export function OnboardingFlow({ dark, user, activePage, onComplete, onSkip }: P
   const [botSaved, setBotSaved] = useState(false);
   const [justCompleted, setJustCompleted] = useState<OBStep | null>(null);
   const [showSkipConfirm, setShowSkipConfirm] = useState(false);
+  const [agentContact, setAgentContact] = useState<{ whatsappNumber: string; whatsappLink: string } | null>(null);
   const { request } = useApi();
 
   const bg     = dark ? '#0b0c1a' : '#f0f2ff';
@@ -200,7 +201,7 @@ export function OnboardingFlow({ dark, user, activePage, onComplete, onSkip }: P
         </div>
 
         {/* Progress stepper — only show for business flow steps 1-5 */}
-        <div style={{ paddingBottom: 32, flexShrink: 0, display: (step === 0 || step === 'uni_setup' || step === 'uni_done') ? 'none' : undefined }}>
+        <div style={{ paddingBottom: 32, flexShrink: 0, display: (step === 0 || step === 'uni_setup' || step === 'uni_done' || step === 'agent_request' || step === 'agent_request_done') ? 'none' : undefined }}>
           {/* Line bar */}
           <div style={{ position: 'relative', height: 4, borderRadius: 4, background: dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)', marginBottom: 20 }}>
             <div style={{
@@ -276,6 +277,22 @@ export function OnboardingFlow({ dark, user, activePage, onComplete, onSkip }: P
                 activePage={activePage} request={request}
                 onSelectBusiness={() => advanceStep(1)}
                 onSelectUniversity={() => advanceStep('uni_setup')}
+                onNoneMatch={() => advanceStep('agent_request')}
+              />
+            )}
+            {step === 'agent_request' && (
+              <StepAgentRequest
+                dark={dark} border={border} text={text} muted={muted} accent={accent}
+                request={request}
+                onDone={(contact) => { setAgentContact(contact); advanceStep('agent_request_done'); }}
+                onBack={() => advanceStep(0)}
+              />
+            )}
+            {step === 'agent_request_done' && (
+              <StepAgentRequestDone
+                text={text} muted={muted}
+                contact={agentContact}
+                onFinish={handleFinish}
               />
             )}
             {step === 'uni_setup' && (
@@ -1385,37 +1402,63 @@ function Step5Complete({ dark, text, muted, accent, accentSoft, pageConnected, p
 }
 
 // ─── Step 0: Mode Selector ────────────────────────────────────────────────────
-function StepModeSelector({ dark, text, muted, activePage, request, onSelectBusiness, onSelectUniversity }: {
+interface AgentDefinition {
+  id: number;
+  agentKey: string;
+  name: string;
+  description: string;
+  suitableFor: string;
+}
+
+const AGENT_ICON: Record<string, string> = {
+  commerce: '🛍️',
+  university: '🎓',
+};
+const AGENT_COLOR: Record<string, string> = {
+  commerce: '#6366f1',
+  university: '#10b981',
+};
+const FALLBACK_AGENT_ICON = '🤖';
+const FALLBACK_AGENT_COLOR = '#8b5cf6';
+
+function StepModeSelector({ dark, text, muted, activePage, request, onSelectBusiness, onSelectUniversity, onNoneMatch }: {
   dark: boolean; text: string; muted: string;
   activePage: { id: number };
   request: any;
   onSelectBusiness: () => void;
   onSelectUniversity: () => void;
+  onNoneMatch: () => void;
 }) {
   const [saving, setSaving] = useState(false);
+  const [agents, setAgents] = useState<AgentDefinition[] | null>(null);
 
-  const choose = async (mode: 'business' | 'university') => {
+  useEffect(() => {
+    request(`${API_BASE}/agents`).then(setAgents).catch(() => setAgents([]));
+  }, [request]);
+
+  const choose = async (agentKey: string) => {
     setSaving(true);
     try {
       const modesUrl = `${API_BASE}/client-dashboard/${activePage.id}/modes`;
-      await request(modesUrl, { method: 'PATCH', body: JSON.stringify({ automationOn: true }) });
-      if (mode === 'university') {
-        await request(modesUrl, { method: 'PATCH', body: JSON.stringify({ universityModeOn: true }) });
-      }
+      await request(modesUrl, {
+        method: 'PATCH',
+        body: JSON.stringify({ automationOn: true, agentType: agentKey, universityModeOn: agentKey === 'university' }),
+      });
     } catch {}
     setSaving(false);
-    mode === 'university' ? onSelectUniversity() : onSelectBusiness();
+    agentKey === 'university' ? onSelectUniversity() : onSelectBusiness();
   };
 
   const card = (
-    emoji: string, title: string, desc: string, bullets: string[],
-    color: string, onClick: () => void
+    emoji: string, title: string, desc: string, tags: string[],
+    color: string, onClick: () => void, key: string,
   ) => (
     <button
+      key={key}
       onClick={onClick}
       disabled={saving}
       style={{
-        flex: 1, background: dark ? 'rgba(255,255,255,0.04)' : '#fff',
+        flex: '1 1 260px', background: dark ? 'rgba(255,255,255,0.04)' : '#fff',
         border: `2px solid ${dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)'}`,
         borderRadius: 18, padding: '28px 22px', cursor: 'pointer', textAlign: 'left',
         transition: 'all 0.2s', outline: 'none',
@@ -1426,11 +1469,16 @@ function StepModeSelector({ dark, text, muted, activePage, request, onSelectBusi
       <div style={{ fontSize: 48, marginBottom: 14 }}>{emoji}</div>
       <div style={{ fontSize: 18, fontWeight: 800, color: text, marginBottom: 6 }}>{title}</div>
       <div style={{ fontSize: 13, color: muted, marginBottom: 16, lineHeight: 1.5 }}>{desc}</div>
-      <ul style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {bullets.map((b, i) => (
-          <li key={i} style={{ fontSize: 12.5, color: muted }}>{b}</li>
-        ))}
-      </ul>
+      {tags.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {tags.map((t, i) => (
+            <span key={i} style={{
+              fontSize: 11.5, color: muted, padding: '3px 10px', borderRadius: 999,
+              background: dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)',
+            }}>{t}</span>
+          ))}
+        </div>
+      )}
       <div style={{
         marginTop: 22, display: 'inline-block', padding: '9px 20px',
         background: color, borderRadius: 10, color: '#fff',
@@ -1445,27 +1493,181 @@ function StepModeSelector({ dark, text, muted, activePage, request, onSelectBusi
     <div style={{ animation: 'ob-fade-up 400ms ease both' }}>
       <div style={{ textAlign: 'center', marginBottom: 28 }}>
         <div style={{ fontSize: 15, fontWeight: 700, color: text, marginBottom: 6 }}>
-          আপনার automation-এর ধরন বেছে নিন
+          আপনার ব্যবসার ধরন অনুযায়ী বট বেছে নিন
         </div>
         <div style={{ fontSize: 13, color: muted }}>
           পরে Settings থেকে যেকোনো সময় পরিবর্তন করা যাবে
         </div>
       </div>
-      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-        {card(
-          '🛍️', 'E-Commerce / Business',
-          'পণ্য বিক্রি, অর্ডার ম্যানেজমেন্ট ও কুরিয়ার automation',
-          ['OCR দিয়ে product detect', 'Auto order management', 'Courier integration', 'Payment verification', 'Broadcast & follow-up'],
-          '#6366f1',
-          () => choose('business')
-        )}
-        {card(
-          '🎓', 'University Automation',
-          'বিশ্ববিদ্যালয়ের website crawl, notice auto-post ও student Q&A bot',
-          ['Website থেকে auto info collect', 'নতুন notice Facebook-এ auto-post', 'Messenger-এ 24/7 student Q&A', 'Group link smart suggestion', 'FAQ ও manual knowledge base'],
-          '#10b981',
-          () => choose('university')
-        )}
+      {agents === null ? (
+        <div style={{ textAlign: 'center', padding: 40, color: muted, fontSize: 13 }}>লোড হচ্ছে...</div>
+      ) : (
+        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+          {agents.map(a => card(
+            AGENT_ICON[a.agentKey] || FALLBACK_AGENT_ICON,
+            a.name,
+            a.description,
+            a.suitableFor ? a.suitableFor.split(',').map(s => s.trim()).filter(Boolean) : [],
+            AGENT_COLOR[a.agentKey] || FALLBACK_AGENT_COLOR,
+            () => choose(a.agentKey),
+            a.agentKey,
+          ))}
+          {card(
+            '❓', 'কোনোটাই মিলছে না',
+            'আপনার ব্যবসার ধরনের জন্য উপযুক্ত bot এখনো নেই — আমাদের জানান, আমরা বানিয়ে দেব।',
+            [],
+            dark ? '#4b5563' : '#9ca3af',
+            onNoneMatch,
+            'none-match',
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Custom Agent Request Step ─────────────────────────────────────────────────
+function StepAgentRequest({ dark, border, text, muted, accent, request, onDone, onBack }: {
+  dark: boolean; border: string; text: string; muted: string; accent: string;
+  request: any;
+  onDone: (contact: { whatsappNumber: string; whatsappLink: string }) => void;
+  onBack: () => void;
+}) {
+  const [pageUrl, setPageUrl] = useState('');
+  const [description, setDescription] = useState('');
+  const [contactInfo, setContactInfo] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const inp = {
+    width: '100%', boxSizing: 'border-box' as const,
+    padding: '10px 13px', borderRadius: 10, fontSize: 14,
+    background: dark ? 'rgba(255,255,255,0.05)' : '#f8f9ff',
+    border: `1px solid ${border}`, color: text, outline: 'none',
+    fontFamily: 'inherit',
+  };
+
+  const handleSubmit = async () => {
+    if (!pageUrl.trim() || !description.trim()) {
+      setError('Page link এবং business-এর বিবরণ দুটোই দিতে হবে');
+      return;
+    }
+    setError('');
+    setSaving(true);
+    try {
+      const res = await request(`${API_BASE}/agent-requests`, {
+        method: 'POST',
+        body: JSON.stringify({ pageUrl: pageUrl.trim(), description: description.trim(), contactInfo: contactInfo.trim() }),
+      });
+      onDone({ whatsappNumber: res.whatsappNumber, whatsappLink: res.whatsappLink });
+    } catch {
+      setError('পাঠাতে সমস্যা হয়েছে, আবার চেষ্টা করুন');
+    }
+    setSaving(false);
+  };
+
+  return (
+    <div style={{ animation: 'ob-fade-up 400ms ease both' }}>
+      <div style={{ fontSize: 28, marginBottom: 8 }}>🤖</div>
+      <div style={{ fontSize: 17, fontWeight: 800, color: text, marginBottom: 6 }}>
+        আপনার জন্য কাস্টম বট দরকার
+      </div>
+      <div style={{ fontSize: 13, color: muted, marginBottom: 22, lineHeight: 1.6 }}>
+        আপনার Facebook page link ও ব্যবসার বিবরণ দিন — আমরা আপনার জন্য উপযুক্ত bot বানিয়ে দেব।
+      </div>
+      <div style={{ marginBottom: 16 }}>
+        <label style={{ fontSize: 12, fontWeight: 600, color: muted, display: 'block', marginBottom: 6 }}>
+          Facebook Page Link
+        </label>
+        <input style={inp} placeholder="https://facebook.com/yourpage" value={pageUrl} onChange={e => setPageUrl(e.target.value)} />
+      </div>
+      <div style={{ marginBottom: 16 }}>
+        <label style={{ fontSize: 12, fontWeight: 600, color: muted, display: 'block', marginBottom: 6 }}>
+          আপনার ব্যবসা সম্পর্কে বলুন
+        </label>
+        <textarea
+          style={{ ...inp, minHeight: 90, resize: 'vertical' as const }}
+          placeholder="যেমন: আমরা রেস্টুরেন্ট, অনলাইনে খাবার অর্ডার নিই..."
+          value={description}
+          onChange={e => setDescription(e.target.value)}
+        />
+      </div>
+      <div style={{ marginBottom: 20 }}>
+        <label style={{ fontSize: 12, fontWeight: 600, color: muted, display: 'block', marginBottom: 6 }}>
+          যোগাযোগের নম্বর (ঐচ্ছিক)
+        </label>
+        <input style={inp} placeholder="01XXXXXXXXX" value={contactInfo} onChange={e => setContactInfo(e.target.value)} />
+      </div>
+      {error && <div style={{ color: '#ef4444', fontSize: 12.5, marginBottom: 14 }}>{error}</div>}
+      <div style={{ display: 'flex', gap: 10 }}>
+        <button
+          onClick={handleSubmit}
+          disabled={saving}
+          style={{
+            flex: 1, padding: '12px', background: `linear-gradient(135deg,${accent},#8b5cf6)`,
+            border: 'none', borderRadius: 12, color: '#fff', fontSize: 14,
+            fontWeight: 700, cursor: 'pointer',
+          }}
+        >
+          {saving ? 'পাঠানো হচ্ছে...' : 'পাঠান →'}
+        </button>
+        <button
+          onClick={onBack}
+          style={{
+            padding: '12px 18px', background: 'transparent',
+            border: `1px solid ${border}`, borderRadius: 12, color: muted,
+            fontSize: 13, cursor: 'pointer',
+          }}
+        >
+          ফিরে যান
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Custom Agent Request Done Step ────────────────────────────────────────────
+function StepAgentRequestDone({ text, muted, contact, onFinish }: {
+  text: string; muted: string;
+  contact: { whatsappNumber: string; whatsappLink: string } | null;
+  onFinish: () => void;
+}) {
+  return (
+    <div style={{ textAlign: 'center', animation: 'ob-fade-up 400ms ease both' }}>
+      <div style={{ fontSize: 56, marginBottom: 16, animation: 'ob-dot-pop 600ms cubic-bezier(0.34,1.56,0.64,1) both' }}>✅</div>
+      <div style={{ fontSize: 20, fontWeight: 800, color: text, marginBottom: 10 }}>
+        অনুরোধ পাঠানো হয়েছে!
+      </div>
+      <div style={{ fontSize: 13.5, color: muted, lineHeight: 1.7, marginBottom: 20 }}>
+        আমরা শীঘ্রই আপনার সাথে যোগাযোগ করবো।<br />
+        দ্রুত কথা বলতে চাইলে WhatsApp-এ সরাসরি মেসেজ দিন:
+      </div>
+      {contact && (
+        <a
+          href={contact.whatsappLink}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 8,
+            padding: '12px 22px', marginBottom: 28, borderRadius: 12,
+            background: 'rgba(37,211,102,0.12)', border: '1px solid rgba(37,211,102,0.35)',
+            color: '#25d366', fontWeight: 700, fontSize: 14, textDecoration: 'none',
+          }}
+        >
+          💬 WhatsApp-এ চ্যাট করুন ({contact.whatsappNumber})
+        </a>
+      )}
+      <div>
+        <button
+          onClick={onFinish}
+          style={{
+            padding: '14px 36px', fontSize: 15, fontWeight: 800,
+            background: 'linear-gradient(135deg,#10b981,#059669)',
+            border: 'none', borderRadius: 14, color: '#fff', cursor: 'pointer',
+          }}
+        >
+          Dashboard-এ যান →
+        </button>
       </div>
     </div>
   );
