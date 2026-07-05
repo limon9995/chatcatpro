@@ -22,6 +22,10 @@ import { WalletService } from '../wallet/wallet.service';
 import { WhisperService } from '../whisper/whisper.service';
 import { BotContextService } from '../bot/bot-context.service';
 import { SmartBotService } from '../bot/smart-bot.service';
+import { EmbeddingService } from '../embedding/embedding.service';
+import { ProductNameMatchService } from '../product-name-match/product-name-match.service';
+import { UniversityBotService } from '../university/university-bot.service';
+import { TelegramNotificationService } from '../telegram/telegram-notification.service';
 
 describe('WebhookService', () => {
   let service: WebhookService;
@@ -52,6 +56,10 @@ describe('WebhookService', () => {
         { provide: WhisperService, useValue: {} },
         { provide: BotContextService, useValue: {} },
         { provide: SmartBotService, useValue: {} },
+        { provide: EmbeddingService, useValue: {} },
+        { provide: ProductNameMatchService, useValue: {} },
+        { provide: UniversityBotService, useValue: {} },
+        { provide: TelegramNotificationService, useValue: {} },
       ],
     }).compile();
 
