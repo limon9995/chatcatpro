@@ -11,7 +11,7 @@ import { Worker, Job } from 'bullmq';
 const REDIS_URL = process.env.REDIS_URL || 'redis://127.0.0.1:6379';
 
 // Avoid circular import: reference WebhookService by type only
-export type WebhookServiceLike = {
+type WebhookServiceLike = {
   processMessage(page: any, psid: string, message: any): Promise<void>;
 };
 

@@ -26,13 +26,7 @@ describe('FacebookService', () => {
     billing = {
       getOrCreateSubscription: jest.fn().mockResolvedValue({ plan: null }),
     };
-    service = new FacebookService(
-      prisma,
-      authService,
-      encryption,
-      billing,
-      {} as any,
-    );
+    service = new FacebookService(prisma, authService, encryption, billing);
     process.env.STORAGE_PUBLIC_URL = 'https://api.chatcat.pro/storage';
   });
 

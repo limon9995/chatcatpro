@@ -3,8 +3,6 @@ import { OrdersService } from './orders.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { OrderNotificationService } from './order-notification.service';
 import { ConversationContextService } from '../conversation-context/conversation-context.service';
-import { BroadcastService } from '../broadcast/broadcast.service';
-import { TelegramNotificationService } from '../telegram/telegram-notification.service';
 
 describe('OrdersService', () => {
   let service: OrdersService;
@@ -19,8 +17,6 @@ describe('OrdersService', () => {
           useValue: { notifyConfirmed: jest.fn() },
         },
         { provide: ConversationContextService, useValue: {} },
-        { provide: BroadcastService, useValue: {} },
-        { provide: TelegramNotificationService, useValue: {} },
       ],
     }).compile();
 

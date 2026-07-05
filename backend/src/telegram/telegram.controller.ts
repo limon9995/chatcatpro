@@ -166,7 +166,7 @@ export class TelegramController {
       where: { id: returnId, pageId },
       include: {
         order: {
-          select: { id: true, customerPsid: true, customerName: true, phone: true, pageIdRef: true, page: { select: { pageToken: true, currencySymbol: true } } },
+          select: { id: true, customerPsid: true, customerName: true, phone: true, pageIdRef: true, page: { select: { accessToken: true, currencySymbol: true } } },
         },
       },
     });
@@ -210,7 +210,7 @@ export class TelegramController {
 
     // Send customer Messenger message
     const psid = returnEntry.order.customerPsid;
-    const pageToken = returnEntry.order.page?.pageToken;
+    const pageToken = returnEntry.order.page?.accessToken;
     if (psid && pageToken) {
       const msg = `✅ আপনার অর্ডার #${returnEntry.orderId} এর অগ্রিম ${sym}${amount} ফেরত পাঠানো হয়েছে। ধন্যবাদ! 💖`;
       await this.messenger.sendText(pageToken, psid, msg, 'ACCOUNT_UPDATE');

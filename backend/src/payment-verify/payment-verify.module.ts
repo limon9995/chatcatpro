@@ -6,7 +6,7 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { CommonModule } from '../common/common.module';
 import { AuthModule } from '../auth/auth.module';
 import { MessengerModule } from '../messenger/messenger.module';
-import { AgentsModule } from '../agents/agents.module';
+import { WebhookModule } from '../webhook/webhook.module';
 
 @Module({
   imports: [
@@ -14,7 +14,7 @@ import { AgentsModule } from '../agents/agents.module';
     CommonModule,
     AuthModule,
     MessengerModule,
-    forwardRef(() => AgentsModule),
+    forwardRef(() => WebhookModule),
   ],
   controllers: [PaymentCredentialsController, PaymentVerifyController],
   providers: [PaymentVerifyService],

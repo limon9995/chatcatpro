@@ -1,7 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AppController } from './app.controller';
 import { PrismaService } from './prisma/prisma.service';
-import { AdminService } from './admin/admin.service';
 
 describe('AppController', () => {
   let appController: AppController;
@@ -14,7 +13,6 @@ describe('AppController', () => {
           provide: PrismaService,
           useValue: { $queryRaw: jest.fn().mockResolvedValue([{ '1': 1 }]) },
         },
-        { provide: AdminService, useValue: {} },
       ],
     }).compile();
 
