@@ -60,6 +60,11 @@ model Session {
   @@index([expiresAt])
 }
 
+enum AgentType {
+  DEFAULT
+  UNIVERSITY
+}
+
 model Page {
   id          Int    @id @default(autoincrement())
   pageId      String @unique
@@ -203,9 +208,13 @@ model Page {
   dualHoldingProduct   Product? @relation("DualHolding", fields: [dualHoldingProductId], references: [id])
 
   // -- UNIVERSITY MODE --
+  // DEPRECATED: superseded by agentType == UNIVERSITY; kept for now for admin UI/back-compat
   universityModeOn      Boolean @default(false) // When ON: routes all Messenger messages to university bot, bypasses commerce pipeline
   universityModeAllowed Boolean @default(true)
   universityConfig      UniversityConfig?
+
+  // -- BOT AGENT SELECTION --
+  agentType AgentType @default(DEFAULT)
 
   // -- BUSINESS KNOWLEDGE --
   knowledgeText String @default("") // Client FAQ, policies, product info — fed to AI system prompt

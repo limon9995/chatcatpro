@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { WebhookController } from './webhook.controller';
 import { WebhookService } from './webhook.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { EncryptionService } from '../common/encryption.service';
 
 describe('WebhookController', () => {
   let controller: WebhookController;
@@ -15,6 +16,7 @@ describe('WebhookController', () => {
           provide: PrismaService,
           useValue: { page: { findFirst: jest.fn() } },
         },
+        { provide: EncryptionService, useValue: { decrypt: jest.fn() } },
       ],
     }).compile();
 
