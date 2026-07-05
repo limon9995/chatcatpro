@@ -1639,7 +1639,7 @@ export class BotKnowledgeService {
       outsideDhakaAdvancePercent: 0,
       highValueThreshold: 3000,
       highValueAdvancePercent: 50,
-      note: 'Business type অনুযায়ী advance payment rule set করুন।',
+      note: '',
     };
   }
 
