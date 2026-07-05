@@ -14,6 +14,7 @@ import { BotKnowledgeService } from '../bot-knowledge/bot-knowledge.service';
 import { EncryptionService } from '../common/encryption.service';
 import { FacebookService } from '../facebook/facebook.service';
 import { TelegramNotificationService } from '../telegram/telegram-notification.service';
+import { AgentBehaviorConfig } from '../agents/agent-behavior-config.interface';
 
 export interface CallServerConfig {
   id: string;
@@ -1206,11 +1207,20 @@ export class AdminService {
 
   async updateBotAgent(
     id: number,
-    data: Partial<{ name: string; description: string; suitableFor: string; active: boolean }>,
+    data: Partial<{
+      name: string;
+      description: string;
+      suitableFor: string;
+      active: boolean;
+      behaviorConfig: AgentBehaviorConfig | null;
+    }>,
   ) {
     const existing = await this.prisma.botAgentDefinition.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('Agent definition not found');
-    return this.prisma.botAgentDefinition.update({ where: { id }, data });
+    return this.prisma.botAgentDefinition.update({
+      where: { id },
+      data: data as any,
+    });
   }
 
   // ── Custom Agent Requests ───────────────────────────────────────────────
