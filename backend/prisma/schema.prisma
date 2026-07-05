@@ -865,6 +865,10 @@ model BotAgentDefinition {
   description String   @default("")
   suitableFor String   @default("") // comma-separated tags, e.g. "fashion,electronics"
   active      Boolean  @default(true)
+  // AgentBehaviorConfig JSON (see backend/src/agents/agent-behavior-config.interface.ts):
+  // personaPrompt / toneRules / coreFields / systemReplies overrides for this agent type.
+  // null = pure fallback to the hardcoded commerce defaults (zero behavior change).
+  behaviorConfig Json?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

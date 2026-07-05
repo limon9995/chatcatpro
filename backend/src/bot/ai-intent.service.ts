@@ -4,6 +4,8 @@ import { ApiKeysService } from '../common/api-keys.service';
 import { WalletService } from '../wallet/wallet.service';
 import { BusinessContext } from './bot-context.service';
 import { GeminiKeyRotatorService } from '../common/gemini-key-rotator.service';
+import { BotKnowledgeService } from '../bot-knowledge/bot-knowledge.service';
+import { AgentBehaviorConfig } from '../agents/agent-behavior-config.interface';
 
 export interface AiIntentResult {
   intent: string | null; // null = use keyword fallback
@@ -62,6 +64,14 @@ const STEP_LABELS: Record<string, string> = {
   advance_payment: 'advance payment-এর transaction ID বা screenshot',
 };
 
+// Verbatim default persona/tone opener — used whenever an agent type has no
+// AgentBehaviorConfig.personaPrompt override, so agentType='commerce' pages
+// (the vast majority today) see byte-identical prompts to before this config
+// layer existed.
+function defaultPersonaOpener(shop: string): string {
+  return `তুমি ${shop}-এর Facebook Messenger chatbot। Tone: warm, conversational Bangla/Banglish — template-এর মতো না, স্বাভাবিকভাবে কথা বলো। 💖 emoji মাঝে মাঝে।`;
+}
+
 @Injectable()
 export class AiIntentService {
   private readonly logger = new Logger(AiIntentService.name);
@@ -82,6 +92,7 @@ export class AiIntentService {
     private readonly globalSettings: GlobalSettingsService,
     private readonly apiKeysService: ApiKeysService,
     private readonly geminiRotator: GeminiKeyRotatorService,
+    private readonly botKnowledge: BotKnowledgeService,
   ) {
     this.apiKey = apiKeysService.getSync('openaiApiKey');
     this.geminiApiKey = apiKeysService.getSync('geminiApiKey');
@@ -357,8 +368,15 @@ export class AiIntentService {
       content: m.content,
     }));
 
+    const agentBehavior = await this.botKnowledge
+      .getAgentBehavior(context.agentType || 'commerce')
+      .catch(() => ({}) as AgentBehaviorConfig);
+
     const messages = [
-      { role: 'system', content: this.buildSystemPrompt(context, draftStep) },
+      {
+        role: 'system',
+        content: this.buildSystemPrompt(context, draftStep, agentBehavior),
+      },
       ...historyMessages,
       {
         role: 'user',
@@ -551,13 +569,18 @@ Rules:
   private buildSystemPrompt(
     context: BusinessContext,
     draftStep: string | null,
+    agentBehavior: AgentBehaviorConfig = {},
   ): string {
     const shop = context.businessName
       ? `"${context.businessName}" নামের Bangladeshi e-commerce shop`
       : 'একটি Bangladeshi fashion e-commerce shop';
 
+    const stepLabels = agentBehavior.coreFields?.length
+      ? { ...STEP_LABELS, ...Object.fromEntries(agentBehavior.coreFields.map((f) => [f.key, f.label])) }
+      : STEP_LABELS;
+
     const stepCtx = draftStep
-      ? `\nএখন bot customer-এর কাছ থেকে "${STEP_LABELS[draftStep] ?? draftStep}" চাইছে।`
+      ? `\nএখন bot customer-এর কাছ থেকে "${stepLabels[draftStep] ?? draftStep}" চাইছে।`
       : '';
 
     // Build product catalog context (max 25 products)
@@ -604,7 +627,11 @@ Rules:
       dualCtx += `\nCustomer গায়ে পরা/wearing dress জিজ্ঞেস করলে → intent: "DUAL_WEARING"\nCustomer হাতে ধরা/holding dress জিজ্ঞেস করলে → intent: "DUAL_HOLDING"\nreply-তে product name ও price উল্লেখ করো।\n`;
     }
 
-    return `তুমি ${shop}-এর Facebook Messenger chatbot। Tone: warm, conversational Bangla/Banglish — template-এর মতো না, স্বাভাবিকভাবে কথা বলো। 💖 emoji মাঝে মাঝে।${stepCtx}${deliveryCtx}${paymentCtx}${productCtx}${knowledgeCtx}${dualCtx}
+    const opener = agentBehavior.personaPrompt
+      ? agentBehavior.personaPrompt.replace(/\{\{\s*shop\s*\}\}/g, shop)
+      : defaultPersonaOpener(shop);
+
+    return `${opener}${stepCtx}${deliveryCtx}${paymentCtx}${productCtx}${knowledgeCtx}${dualCtx}
 
 Customer-এর message দেখে JSON return করো:
 { "intent": "<INTENT>", "reply": "<natural reply>" }

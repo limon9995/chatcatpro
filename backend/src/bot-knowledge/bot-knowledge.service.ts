@@ -4,6 +4,7 @@ import * as path from 'path';
 import { PageService } from '../page/page.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConversationContextService } from '../conversation-context/conversation-context.service';
+import { AgentBehaviorConfig } from '../agents/agent-behavior-config.interface';
 
 @Injectable()
 export class BotKnowledgeService {
@@ -17,6 +18,15 @@ export class BotKnowledgeService {
     this.storageRoot,
     'learning-log.json',
   );
+
+  // In-memory cache for per-agent-type behavior config — read on every inbound
+  // message, so avoid a DB round-trip each time. Short TTL keeps admin edits
+  // visible within a minute without needing an explicit cache-bust hook.
+  private readonly agentConfigCache = new Map<
+    string,
+    { value: AgentBehaviorConfig; at: number }
+  >();
+  private readonly AGENT_CONFIG_CACHE_MS = 60_000;
 
   constructor(
     private readonly pageService: PageService,
@@ -44,7 +54,7 @@ export class BotKnowledgeService {
   }
 
   async getConfig(pageId: number) {
-    await this.pageService.getById(pageId);
+    const pageRow: any = await this.pageService.getById(pageId);
     const eid = await this.effectiveId(pageId);
 
     const globalCfg = this.readGlobal();
@@ -52,6 +62,7 @@ export class BotKnowledgeService {
 
     return {
       pageId,
+      agentType: pageRow.agentType || 'commerce',
       questions: this.mergeQuestions(
         globalCfg.questions || [],
         pageCfg.questions || [],
@@ -447,15 +458,48 @@ export class BotKnowledgeService {
     };
   }
 
+  /**
+   * Per-agent-type behavior overrides (persona/tone/coreFields/systemReplies),
+   * read from BotAgentDefinition.behaviorConfig. Cached briefly since this is
+   * read on every inbound message but only changes when an admin edits it.
+   */
+  private async getAgentTypeConfig(
+    agentType: string,
+  ): Promise<AgentBehaviorConfig> {
+    const cached = this.agentConfigCache.get(agentType);
+    if (cached && Date.now() - cached.at < this.AGENT_CONFIG_CACHE_MS) {
+      return cached.value;
+    }
+    const row = await this.prisma.botAgentDefinition
+      .findUnique({ where: { agentKey: agentType } })
+      .catch(() => null);
+    const value = (row?.behaviorConfig as AgentBehaviorConfig | null) || {};
+    this.agentConfigCache.set(agentType, { value, at: Date.now() });
+    return value;
+  }
+
+  /** Public accessor for prompt-building call sites (persona/tone/coreFields). */
+  async getAgentBehavior(agentType: string): Promise<AgentBehaviorConfig> {
+    return this.getAgentTypeConfig(agentType || 'commerce');
+  }
+
   async resolveSystemReply(
     pageId: number,
     key: string,
     variables?: Record<string, any>,
+    agentType?: string,
   ) {
     const cfg = await this.getConfig(pageId);
     const settings: any = await this.pageService.getBusinessSettings(pageId);
     const paymentRules = cfg.paymentRules || this.defaultPaymentRules();
+    const agentCfg = agentType
+      ? await this.getAgentTypeConfig(agentType)
+      : null;
+    const agentReplies = agentCfg?.systemReplies
+      ? this.normalizeSystemReplies(agentCfg.systemReplies)
+      : {};
     const entry = cfg.systemReplies?.[String(key)] ||
+      agentReplies[String(key)] ||
       this.defaultSystemReplies()[String(key)] || { template: '' };
 
     const merged = {
@@ -482,6 +526,7 @@ export class BotKnowledgeService {
       rendered ||
       String(
         entry?.fallback ||
+          agentReplies[String(key)]?.fallback ||
           this.defaultSystemReplies()[String(key)]?.fallback ||
           '',
       ).trim()

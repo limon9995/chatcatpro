@@ -37,6 +37,8 @@ export interface BusinessContext {
   // Conversation state — injected by webhook before calling AI
   lastBotReply?: string | null;
   lastPresentedProducts?: { code: string; name?: string; price?: number }[];
+  // Page's bot agent type — used to resolve per-agent-type persona/tone overrides
+  agentType?: string;
 }
 
 @Injectable()
@@ -131,6 +133,7 @@ export class BotContextService {
       pricingPolicy: (knowledgeConfig as any)?.pricingPolicy ?? {},
       knowledgeText: (page as any)?.knowledgeText ?? '',
       pricingInfo: (knowledgeConfig as any)?.pricingInfo ?? '',
+      agentType: (knowledgeConfig as any)?.agentType ?? 'commerce',
       dualPhotoMode: Boolean((page as any)?.dualPhotoMode),
       dualWearingProduct,
       dualHoldingProduct,

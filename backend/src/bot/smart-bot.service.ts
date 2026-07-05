@@ -8,6 +8,27 @@ import { BotKnowledgeService } from '../bot-knowledge/bot-knowledge.service';
 import { WalletService } from '../wallet/wallet.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { GeminiKeyRotatorService } from '../common/gemini-key-rotator.service';
+import { AgentBehaviorConfig } from '../agents/agent-behavior-config.interface';
+
+// Verbatim defaults — used whenever an agent type has no AgentBehaviorConfig
+// personaPrompt/toneRules override, so agentType='commerce' pages (the vast
+// majority today) see byte-identical prompts to before this config layer
+// existed.
+function defaultSmartBotIntro(shop: string): string {
+  return `তুমি ${shop}-এর Facebook Messenger sales assistant — একজন real মানুষের মতো কথা বলো, robot-এর মতো না।`;
+}
+const DEFAULT_SMART_BOT_TONE_BLOCK = `
+
+## কথা বলার ধরন (CRITICAL)
+- ছোট, সহজ বাক্য। একটা কাজ একবারে।
+- Emoji পরিমিত (প্রতি reply-এ ১-২টা যথেষ্ট, সব লাইনে না)।
+- "ধন্যবাদ আপনার আগ্রহের জন্য! আমরা আপনার অর্ডার..." — এই ধরনের corporate ভাষা একদম বন্ধ।
+- বাংলা/Banglish — customer যেভাবে লেখে সেভাবে reply করো।
+- নাম জানলে নাম ধরে ডাকো।
+- "আপনার ফোন নম্বরটি উল্লেখ করলে আমরা আপনার জন্য অর্ডার প্রসেস করতে পারব" — এই ধরনের লম্বা বাক্য নয়। সরাসরি বলো: "ফোন নম্বরটা দিন 😊"
+
+⛔ HARD BAN: "আমাদের সাথে যোগাযোগ করুন" / "আরও জানতে যোগাযোগ করুন" — কখনো না।
+⛔ HARD BAN: একই কথা দুইবার বলা, unnecessary ব্যাখ্যা, filler বাক্য।`;
 
 export interface IDraftOrderHandler {
   finalizeDraftOrder(
@@ -122,6 +143,10 @@ export class SmartBotService {
       });
     }
 
+    const agentBehavior = await this.botKnowledge
+      .getAgentBehavior(page.agentType || 'commerce')
+      .catch(() => ({}) as AgentBehaviorConfig);
+
     const systemPrompt = this.buildSystemPrompt(
       businessContext,
       draft,
@@ -129,6 +154,7 @@ export class SmartBotService {
       lastOrder,
       orderById,
       orderIdMatch ? parseInt(orderIdMatch[1]) : null,
+      agentBehavior,
     );
     const messages: { role: string; content: string }[] = [
       { role: 'system', content: systemPrompt },
@@ -255,6 +281,7 @@ export class SmartBotService {
     lastOrder?: any,
     orderById?: any,
     queriedOrderId?: number | null,
+    agentBehavior: AgentBehaviorConfig = {},
   ): string {
     const shop = ctx.businessName
       ? `"${ctx.businessName}" নামের Bangladeshi e-commerce shop`
@@ -465,18 +492,14 @@ status reply-এর পরে, যদি "Delivery সময়:" সেটি�
 14. **"কীভাবে যোগাযোগ করব?" / "Kmne jogajog korbo?"**: Customer ইতিমধ্যে এই page-এ message করেই যোগাযোগ করছে। বলো: "এই page-এ message করেই কথা বলতে পারেন, আমরা সবসময় reply দিচ্ছি 😊 কোনো প্রশ্ন থাকলে বলুন।"
 15. **Short replies ("Na", "Aca", "Ok", "Hmm")**: Context বুঝে natural reply করো। কোনো active draft না থাকলে এবং customer শুধু acknowledge করছে — CHAT action দিয়ে simple friendly reply করো। কখনো "আমাদের সাথে যোগাযোগ করুন" বলবে না — customer ইতিমধ্যে message করছেই।`;
 
-    return `তুমি ${shop}-এর Facebook Messenger sales assistant — একজন real মানুষের মতো কথা বলো, robot-এর মতো না।
+    const intro = agentBehavior.personaPrompt
+      ? agentBehavior.personaPrompt.replace(/\{\{\s*shop\s*\}\}/g, shop)
+      : defaultSmartBotIntro(shop);
+    const toneBlock = agentBehavior.toneRules
+      ? `\n\n${agentBehavior.toneRules}`
+      : DEFAULT_SMART_BOT_TONE_BLOCK;
 
-## কথা বলার ধরন (CRITICAL)
-- ছোট, সহজ বাক্য। একটা কাজ একবারে।
-- Emoji পরিমিত (প্রতি reply-এ ১-২টা যথেষ্ট, সব লাইনে না)।
-- "ধন্যবাদ আপনার আগ্রহের জন্য! আমরা আপনার অর্ডার..." — এই ধরনের corporate ভাষা একদম বন্ধ।
-- বাংলা/Banglish — customer যেভাবে লেখে সেভাবে reply করো।
-- নাম জানলে নাম ধরে ডাকো।
-- "আপনার ফোন নম্বরটি উল্লেখ করলে আমরা আপনার জন্য অর্ডার প্রসেস করতে পারব" — এই ধরনের লম্বা বাক্য নয়। সরাসরি বলো: "ফোন নম্বরটা দিন 😊"
-
-⛔ HARD BAN: "আমাদের সাথে যোগাযোগ করুন" / "আরও জানতে যোগাযোগ করুন" — কখনো না।
-⛔ HARD BAN: একই কথা দুইবার বলা, unnecessary ব্যাখ্যা, filler বাক্য।
+    return `${intro}${toneBlock}
 ${deliveryCtx}${paymentCtx}${productCtx}${knowledgeCtx}${pricingCtx}${catalogCtx}${draftCtx}${orderTrackCtx}${orderByIdCtx}${taskRules}`;
   }
 
