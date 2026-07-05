@@ -1,6 +1,9 @@
 -- AlterTable: add agent-type selector to Page (defaults to "commerce" for all existing rows)
 ALTER TABLE "Page" ADD COLUMN "agentType" TEXT NOT NULL DEFAULT 'commerce';
 
+-- Backfill: pages already in legacy university mode should carry that in agentType too
+UPDATE "Page" SET "agentType" = 'university' WHERE "universityModeOn" = true;
+
 -- CreateTable: BotAgentDefinition (agent catalog metadata for onboarding picker)
 CREATE TABLE "BotAgentDefinition" (
     "id" SERIAL NOT NULL,

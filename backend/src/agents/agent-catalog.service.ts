@@ -25,7 +25,7 @@ export class AgentCatalogService {
     const number = await this.apiKeys.get('adminWhatsappNumber');
     return {
       whatsappNumber: number,
-      whatsappLink: `https://wa.me/${number.replace(/^0/, '88')}`,
+      whatsappLink: `https://wa.me/${number.replace(/^0/, '880')}`,
     };
   }
 }
