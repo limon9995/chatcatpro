@@ -772,15 +772,15 @@ export class BotKnowledgeService {
       return `Price ${product.price ?? 0} taka.`;
     }
     if (question.key === 'size') {
-      return 'Size info client customize করতে পারবে।';
+      return 'নির্দিষ্ট size জানতে product code দিন, checking করে জানাচ্ছি 💖';
     }
     if (question.key === 'color') {
-      return 'Color info client customize করতে পারবে।';
+      return 'নির্দিষ্ট color জানতে product code দিন, checking করে জানাচ্ছি 💖';
     }
     if (question.key === 'fabric_type') {
       return product
-        ? `Product code ${product.code} এর detail client customize করতে পারবে।`
-        : 'Fabric type client customize করতে পারবে।';
+        ? `Product code ${product.code}-এর fabric details জানতে আমাদের agent শীঘ্রই জানাবে 💖`
+        : 'Fabric details জানতে product code দিন, checking করে জানাচ্ছি 💖';
     }
     if (question.key === 'advance_payment') {
       return this.buildAdvanceReply(paymentRules, {
@@ -965,7 +965,7 @@ export class BotKnowledgeService {
             'koto number',
             'number size',
           ],
-          replyTemplate: 'Available size client customize করবে।',
+          replyTemplate: 'নির্দিষ্ট size জানতে product code দিন, checking করে জানাচ্ছি 💖',
           enabled: true,
           replyType: 'text',
           priority: 2,
@@ -1041,7 +1041,7 @@ export class BotKnowledgeService {
             'mixed',
             'printed',
           ],
-          replyTemplate: 'Available color client customize করবে।',
+          replyTemplate: 'নির্দিষ্ট color জানতে product code দিন, checking করে জানাচ্ছি 💖',
           enabled: true,
           replyType: 'text',
           priority: 3,
@@ -1249,7 +1249,7 @@ export class BotKnowledgeService {
             'guarantee',
             'replacement',
           ],
-          replyTemplate: 'Exchange policy client dashboard theke set korun।',
+          replyTemplate: 'Exchange/return নিয়ে বিস্তারিত জানতে আমাদের agent শীঘ্রই জানাবে 💖',
           enabled: true,
           replyType: 'text',
           priority: 6,
@@ -1366,7 +1366,7 @@ export class BotKnowledgeService {
             'full silk',
             'viscose',
           ],
-          replyTemplate: 'Fabric type client customize করবে।',
+          replyTemplate: 'Fabric details জানতে product code দিন, checking করে জানাচ্ছি 💖',
           enabled: true,
           replyType: 'text',
           priority: 8,
