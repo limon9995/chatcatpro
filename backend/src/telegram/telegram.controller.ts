@@ -4,6 +4,7 @@ import { TelegramNotificationService } from './telegram-notification.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { EncryptionService } from '../common/encryption.service';
 import { MessengerService } from '../messenger/messenger.service';
+import { TelegramService as AdminTelegramService } from '../common/telegram.service';
 
 @Controller('telegram')
 export class TelegramController {
@@ -12,6 +13,7 @@ export class TelegramController {
     private readonly prisma: PrismaService,
     private readonly encryption: EncryptionService,
     private readonly messenger: MessengerService,
+    private readonly adminTelegram: AdminTelegramService,
   ) {}
 
   @Post('test')
@@ -72,6 +74,22 @@ export class TelegramController {
   }
 
   /**
+   * Registers the webhook for the single global admin bot (the one that
+   * sends PageRequest/AgentRequest notifications), so its Approve/Reject
+   * inline buttons start working. Admin-only, run once after configuring
+   * the admin bot token in Admin > API Keys (or again if it's ever changed).
+   */
+  @Post('setup-admin-webhook')
+  @UseGuards(AuthGuard)
+  async setupAdminWebhook(@Body() body: { baseUrl?: string }) {
+    const token = this.adminTelegram.getAdminBotToken();
+    if (!token) return { ok: false, error: 'No admin telegramBotToken configured' };
+    const baseUrl = (body?.baseUrl ?? 'https://api.chatcat.pro').replace(/\/$/, '');
+    const webhookUrl = `${baseUrl}/telegram/admin-callback/${encodeURIComponent(token)}`;
+    return this.adminTelegram.setAdminWebhook(webhookUrl);
+  }
+
+  /**
    * Telegram sends callback_query events here when inline buttons are pressed.
    * URL: POST /telegram/callback/:encryptedToken
    * No auth guard — Telegram calls this directly.
@@ -115,6 +133,68 @@ export class TelegramController {
     }
 
     return { ok: true };
+  }
+
+  /**
+   * Callback endpoint for the single global ADMIN bot (PageRequest/AgentRequest
+   * Approve/Reject buttons) — not tied to any Page. Secured by requiring the
+   * URL's :token segment to match the currently configured admin bot token
+   * (same secret-in-URL pattern as the per-page /telegram/callback/:encryptedToken
+   * route above), since Telegram has nowhere else to authenticate this webhook.
+   * No auth guard — Telegram calls this directly.
+   */
+  @Post('admin-callback/:token')
+  async handleAdminCallback(
+    @Param('token') token: string,
+    @Body() update: any,
+  ) {
+    const expected = this.adminTelegram.getAdminBotToken();
+    if (!expected || token !== expected) return { ok: true };
+
+    const cbq = update?.callback_query;
+    if (!cbq) return { ok: true };
+    const callbackQueryId = cbq.id as string;
+    const data = cbq.data as string | undefined;
+    if (!data) return { ok: true };
+
+    // Format: pagereq_approve_<id> | pagereq_reject_<id>
+    const parts = data.split('_');
+    const domain = parts[0];
+    const action = parts[1];
+    const id = parseInt(parts[parts.length - 1] ?? '0', 10);
+
+    if (domain === 'pagereq' && id && (action === 'approve' || action === 'reject')) {
+      await this.handleAdminPageRequestAction(id, action, callbackQueryId);
+    } else {
+      await this.adminTelegram.answerCallback(callbackQueryId, '❓ Unknown action');
+    }
+
+    return { ok: true };
+  }
+
+  private async handleAdminPageRequestAction(
+    id: number,
+    action: 'approve' | 'reject',
+    callbackQueryId: string,
+  ) {
+    const req = await this.prisma.pageRequest.findUnique({ where: { id } });
+    if (!req) {
+      await this.adminTelegram.answerCallback(callbackQueryId, '❌ Request not found');
+      return;
+    }
+    if (req.status !== 'pending') {
+      await this.adminTelegram.answerCallback(callbackQueryId, `⏭️ Already ${req.status}`);
+      return;
+    }
+    const status = action === 'approve' ? 'approved' : 'rejected';
+    await this.prisma.pageRequest.update({ where: { id }, data: { status } });
+    await this.adminTelegram.answerCallback(
+      callbackQueryId,
+      action === 'approve' ? '✅ Approved!' : '❌ Rejected!',
+    );
+    await this.adminTelegram.sendMessage(
+      `${action === 'approve' ? '✅' : '❌'} Page Request #${id} — ${status} (via Telegram button)`,
+    );
   }
 
   private async handleConfirm(

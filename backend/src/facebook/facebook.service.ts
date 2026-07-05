@@ -631,13 +631,17 @@ export class FacebookService {
     this.logger.log(`[PageRequest] New request #${req.id} from user ${userId}: ${url}`);
 
     const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { name: true, email: true } });
-    void this.telegram.sendMessage(
-      `📄 <b>নতুন Page Request!</b>\n` +
+    void this.telegram.sendMessageWithButtons(
+      `📄 <b>নতুন Page Request!</b> #${req.id}\n` +
       `👤 User: ${user?.name || userId} (${user?.email || ''})\n` +
       `🔗 Page URL: ${url}\n` +
       `👤 FB Profile: ${profile}\n` +
       (note ? `📝 Note: ${note}\n` : '') +
       `🕐 সময়: ${new Date().toLocaleString('bn-BD', { timeZone: 'Asia/Dhaka' })}`,
+      [[
+        { text: '✅ Approve', callback_data: `pagereq_approve_${req.id}` },
+        { text: '❌ Reject', callback_data: `pagereq_reject_${req.id}` },
+      ]],
     );
 
     return { success: true, request: req };
