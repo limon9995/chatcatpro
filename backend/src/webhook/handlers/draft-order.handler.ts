@@ -19,6 +19,41 @@ import { PaymentVerifyService } from '../../payment-verify/payment-verify.servic
 import { SmsGatewayService } from '../../sms-gateway/sms-gateway.service';
 import { CourierService } from '../../courier/courier.service';
 import { TelegramNotificationService } from '../../telegram/telegram-notification.service';
+import { AgentCoreFieldDef } from '../../agents/agent-behavior-config.interface';
+
+// Verbatim defaults — reproduces today's exact name/phone/address prompts.
+// Used whenever an agent type has no AgentBehaviorConfig.coreFields override
+// (or an incomplete one — all 3 keys are required), so agentType='commerce'
+// pages see byte-identical prompts to before this config layer existed.
+//
+// Known scoping limit: only label/prompt wording is configurable here — the
+// 3rd field's captured value still physically lands in DraftSession.address /
+// Order.address regardless of its label (e.g. a restaurant's "Table Time"
+// answer is stored in the address column). Full field remapping (separate
+// storage per vertical) is out of scope for this layer.
+const DEFAULT_CORE_FIELDS: AgentCoreFieldDef[] = [
+  {
+    key: 'name',
+    label: 'নাম',
+    askPrompt: 'আপনার নামটা দিন 💖',
+    retryPrompt: 'আপনার নামটা দিন 💖 (যেমন: রাহেলা বেগম)',
+    statusPrompt: 'চলমান order — আপনার নাম দিন 💖',
+  },
+  {
+    key: 'phone',
+    label: 'ফোন নম্বর',
+    askPrompt: 'ফোন নম্বরটা দিন 💖 (01XXXXXXXXX)',
+    retryPrompt: 'ফোন নাম্বারটা আবার দিন 💖 (01XXXXXXXXX)',
+    statusPrompt: 'চলমান order — ফোন নাম্বার দিন 💖',
+  },
+  {
+    key: 'address',
+    label: 'পুরো ঠিকানা',
+    askPrompt: 'পুরো ঠিকানাটা দিন 💖',
+    retryPrompt: 'পুরো ঠিকানাটা দিন 💖 (বাসা/রোড/এলাকা/জেলা)',
+    statusPrompt: 'চলমান order — পুরো ঠিকানা দিন 💖',
+  },
+];
 
 @Injectable()
 export class DraftOrderHandler {
@@ -44,6 +79,16 @@ export class DraftOrderHandler {
 
   // Duplicate-confirm guard: pageId:psid -> last finalize timestamp
   private readonly recentConfirms = new Map<string, number>();
+
+  /** Resolves per-agent-type core field labels/prompts, falling back to the commerce defaults. */
+  private async resolveCoreFields(page: any): Promise<Record<string, AgentCoreFieldDef>> {
+    const behavior = await this.botKnowledge
+      .getAgentBehavior(page?.agentType || 'commerce')
+      .catch(() => null);
+    const fields =
+      behavior?.coreFields?.length === 3 ? behavior.coreFields : DEFAULT_CORE_FIELDS;
+    return Object.fromEntries(fields.map((f) => [f.key, f])) as Record<string, AgentCoreFieldDef>;
+  }
 
   normalizeVariantOptions(raw: any): CustomFieldDef[] {
     if (!Array.isArray(raw) || raw.length === 0) return [];
@@ -177,6 +222,7 @@ export class DraftOrderHandler {
   ): Promise<string | null | false> {
     const step = draft.currentStep;
     let workingText = text;
+    const fields = await this.resolveCoreFields(page);
 
     // ── Labeled form fast-path: customer filled the template ───────────────
     // Zero AI cost — pure regex extraction from "নাম: X\nফোন: Y\nঠিকানা: Z"
@@ -198,9 +244,9 @@ export class DraftOrderHandler {
           return this.buildSummary(draft, page);
         }
         // Ask for what's still missing
-        if (!draft.customerName) return 'আপনার নামটা দিন 💖';
-        if (!draft.phone) return 'ফোন নম্বরটা দিন 💖 (01XXXXXXXXX)';
-        if (!draft.address) return 'পুরো ঠিকানাটা দিন 💖';
+        if (!draft.customerName) return fields.name.askPrompt;
+        if (!draft.phone) return fields.phone.askPrompt;
+        if (!draft.address) return fields.address.askPrompt;
       }
     }
 
@@ -481,7 +527,7 @@ export class DraftOrderHandler {
       // All custom fields done → now collect customer info
       draft.currentStep = 'name';
       await this.ctx.saveDraft(pageId, psid, draft);
-      return this.buildInfoFormPrompt();
+      return this.buildInfoFormPrompt(fields);
     }
 
     // ── NAME / PHONE / ADDRESS — Smart multi-field parsing ───────────────────
@@ -536,7 +582,7 @@ export class DraftOrderHandler {
     // due to length heuristic), treat the raw input as the name directly.
     if (step === 'name' && !parsed.name && !parsed.phone) {
       if (this.botIntent.detectIntent(workingText, false) === 'CANCEL') {
-        return 'আপনার নামটা দিন 💖 (যেমন: রাহেলা বেগম)';
+        return fields.name.retryPrompt;
       }
       draft.customerName = workingText.trim().slice(0, 80);
     }
@@ -549,7 +595,7 @@ export class DraftOrderHandler {
           return null;
         }
         const ph = this.extractPhone(workingText);
-        if (!ph) return 'ফোন নাম্বারটা আবার দিন 💖 (01XXXXXXXXX)';
+        if (!ph) return fields.phone.retryPrompt;
         draft.phone = ph;
         // Async spam check — runs while customer continues to address step
         this.spamChecker
@@ -560,7 +606,7 @@ export class DraftOrderHandler {
           .catch(() => {});
       } else if (step === 'address') {
         if (!this.isAddressLike(workingText))
-          return 'পুরো ঠিকানাটা দিন 💖 (বাসা/রোড/এলাকা/জেলা)';
+          return fields.address.retryPrompt;
         draft.address = workingText.trim();
       }
     }
@@ -569,17 +615,17 @@ export class DraftOrderHandler {
     if (!draft.customerName) {
       draft.currentStep = 'name';
       await this.ctx.saveDraft(pageId, psid, draft);
-      return this.buildInfoFormPrompt();
+      return this.buildInfoFormPrompt(fields);
     }
     if (!draft.phone) {
       draft.currentStep = 'phone';
       await this.ctx.saveDraft(pageId, psid, draft);
-      return `ধন্যবাদ ${draft.customerName} 💖 এখন ফোন নম্বর দিন।`;
+      return `ধন্যবাদ ${draft.customerName} 💖 এখন ${fields.phone.label} দিন।`;
     }
     if (!draft.address) {
       draft.currentStep = 'address';
       await this.ctx.saveDraft(pageId, psid, draft);
-      return 'ঠিক আছে 💖 এখন পুরো ঠিকানা দিন।';
+      return `ঠিক আছে 💖 এখন ${fields.address.label} দিন।`;
     }
 
     // All collected → check if advance payment required
@@ -635,8 +681,20 @@ export class DraftOrderHandler {
     return this.buildSummary(draft, page);
   }
 
-  buildInfoFormPrompt(): string {
-    return `📋 নিচের ফর্মটি **copy** করে পূরণ করুন:\n\nনাম: \nফোন: \nঠিকানা: \n\n💡 অথবা এক এক করে পাঠান — প্রথমে নামটা বলুন।`;
+  buildInfoFormPrompt(fields?: Record<string, AgentCoreFieldDef>): string {
+    // Uses this compact form-field vocabulary by default (নাম/ফোন/ঠিকানা), which
+    // is intentionally shorter than each field's general `label` (e.g. "ফোন নম্বর")
+    // used elsewhere — only substituted when an agent-type override is active,
+    // so the default (no override) output stays byte-identical to before.
+    const isOverride = !!fields && fields !== undefined && Object.values(fields).some(
+      (f, i) => f.label !== DEFAULT_CORE_FIELDS[i]?.label,
+    );
+    if (!isOverride) {
+      return `📋 নিচের ফর্মটি **copy** করে পূরণ করুন:\n\nনাম: \nফোন: \nঠিকানা: \n\n💡 অথবা এক এক করে পাঠান — প্রথমে নামটা বলুন।`;
+    }
+    const f = Object.values(fields!);
+    const formLines = f.map((field) => `${field.label}: `).join('\n');
+    return `📋 নিচের ফর্মটি **copy** করে পূরণ করুন:\n\n${formLines}\n\n💡 অথবা এক এক করে পাঠান — প্রথমে ${f[0]?.label ?? 'নাম'} বলুন।`;
   }
 
   buildSummary(draft: DraftSession, page: any): string {
