@@ -470,7 +470,7 @@ Customer-এর message দেখে **strictly valid JSON** return করো:
 
 ### calculatePricing (optional — only if Business Knowledge instructs a pricing/volume calculation):
 - Leave null unless the Business Knowledge section explicitly tells you to ask for message volume and calculate cost.
-- Once you have all three numbers from the customer, set: { "customersPerDay": number, "msgsPerCustomer": number, "imagesPerCustomer": number }. The exact ৳ estimate is computed by our system, not by you — don't invent numbers in "reply" yourself.
+- Once you have all three numbers from the customer, set: { "customersPerDay": number, "msgsPerCustomer": number, "imagesPerCustomer": number }. When you set this field, keep "reply" to a short one-line lead-in only (e.g. "ধন্যবাদ! আপনার হিসাব রেডি —") — don't write your own numbers or assumptions, the exact ৳ estimate is computed by our system and appended separately.
 
 ### Action:
 - CHAT — FAQ, product info, greetings
