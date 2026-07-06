@@ -3,7 +3,7 @@ import { CardHeader, EmptyState, FieldWithInfo, InfoButton, Spinner } from '../c
 import type { Theme } from '../components/ui';
 import { API_BASE, useApi } from '../hooks/useApi';
 
-type AdminTab = 'overview' | 'clients' | 'global-questions' | 'global-replies' | 'learning-log' | 'courier-tutorials' | 'billing' | 'call-servers' | 'wallet' | 'pricing' | 'subscriptions' | 'page-requests' | 'bot-agents' | 'agent-requests' | 'customers' | 'domain-setup' | 'api-keys' | 'reports';
+type AdminTab = 'overview' | 'clients' | 'global-questions' | 'global-replies' | 'learning-log' | 'courier-tutorials' | 'billing' | 'call-servers' | 'wallet' | 'pricing' | 'subscriptions' | 'page-requests' | 'customers' | 'domain-setup' | 'api-keys' | 'reports';
 
 interface TutorialsConfig {
   courier?: { pathao?: string; steadfast?: string; redx?: string; paperfly?: string };
@@ -59,8 +59,6 @@ interface ClientPage {
 const ADMIN_TABS: { key: AdminTab; label: string; icon: string; help: string }[] = [
   { key: 'overview',          label: 'Overview',          icon: '📊', help: 'System এর সার্বিক অবস্থা দেখুন' },
   { key: 'page-requests',     label: 'Page Requests',     icon: '📋', help: 'Client দের page access request গুলো দেখুন এবং approve/reject করুন।' },
-  { key: 'bot-agents',        label: 'Bot Agents',        icon: '🤖', help: 'Onboarding-এ client রা যে bot agent list থেকে বেছে নেয়, সেটা এখান থেকে manage করুন।' },
-  { key: 'agent-requests',    label: 'Agent Requests',    icon: '🆕', help: 'যেসব client-এর জন্য উপযুক্ত bot agent এখনো নেই, তাদের custom request এখানে দেখুন।' },
   { key: 'clients',           label: 'Clients',           icon: '👥', help: 'সব client এর list এবং তাদের bot knowledge পরিচালনা করুন' },
   { key: 'global-questions',  label: 'Global Questions',  icon: '🌐', help: 'সব client এর জন্য default question bank।' },
   { key: 'global-replies',    label: 'System Replies',    icon: '💬', help: 'সব page এর জন্য default bot reply template।' },
@@ -100,17 +98,12 @@ export function AdminPanel({ th, onToast, onLogout }: {
   const { request } = useApi();
   const [tab, setTab] = useState<AdminTab>(() => {
     const saved = localStorage.getItem('admin_tab') as AdminTab | null;
-    const valid: AdminTab[] = ['overview','clients','customers','global-questions','global-replies','learning-log','courier-tutorials','billing','call-servers','wallet','pricing','subscriptions','page-requests','bot-agents','agent-requests','domain-setup','api-keys','reports'];
+    const valid: AdminTab[] = ['overview','clients','customers','global-questions','global-replies','learning-log','courier-tutorials','billing','call-servers','wallet','pricing','subscriptions','page-requests','domain-setup','api-keys','reports'];
     return saved && valid.includes(saved) ? saved : 'overview';
   });
   const [pageRequests, setPageRequests] = useState<any[]>([]);
   const [pageReqFilter, setPageReqFilter] = useState<'all' | 'pending'>('pending');
   const [pageReqBusy, setPageReqBusy] = useState<number | null>(null);
-  const [botAgents, setBotAgents] = useState<any[]>([]);
-  const [botAgentBusy, setBotAgentBusy] = useState<number | 'new' | null>(null);
-  const [agentRequests, setAgentRequests] = useState<any[]>([]);
-  const [agentReqFilter, setAgentReqFilter] = useState<'all' | 'pending'>('pending');
-  const [agentReqBusy, setAgentReqBusy] = useState<number | null>(null);
   const [overview, setOverview] = useState<any>(null);
   const [pages, setPages]       = useState<ClientPage[]>([]);
   const [globalCfg, setGlobalCfg]       = useState<any>(null);
@@ -599,8 +592,6 @@ export function AdminPanel({ th, onToast, onLogout }: {
     if (tab === 'wallet')                                          loadWallet();
     if (tab === 'subscriptions') loadSubscriptions();
     if (tab === 'page-requests' || tab === 'overview') loadPageRequests();
-    if (tab === 'bot-agents') loadBotAgents();
-    if (tab === 'agent-requests') loadAgentRequests();
     if (tab === 'customers') loadCustomers('', 0);
     if (tab === 'domain-setup') loadDomainTab();
     if (tab === 'api-keys' && !apiKeysLoaded) loadApiKeys();
@@ -750,50 +741,6 @@ export function AdminPanel({ th, onToast, onLogout }: {
       await loadPageRequests();
     } catch (e: any) { onToast(e.message, 'error'); }
     finally { setPageReqBusy(null); }
-  };
-
-  const loadBotAgents = async () => {
-    try {
-      const data = await request<any[]>(`${BASE}/bot-agents`);
-      setBotAgents(data || []);
-    } catch { /* silent */ }
-  };
-
-  const handleCreateBotAgent = async (data: { agentKey: string; name: string; description: string; suitableFor: string }) => {
-    setBotAgentBusy('new');
-    try {
-      await request(`${BASE}/bot-agents`, { method: 'POST', body: JSON.stringify(data) });
-      onToast('Agent যোগ হয়েছে!', 'success');
-      await loadBotAgents();
-    } catch (e: any) { onToast(e.message, 'error'); }
-    finally { setBotAgentBusy(null); }
-  };
-
-  const handleToggleBotAgent = async (id: number, active: boolean) => {
-    setBotAgentBusy(id);
-    try {
-      await request(`${BASE}/bot-agents/${id}`, { method: 'PATCH', body: JSON.stringify({ active }) });
-      await loadBotAgents();
-    } catch (e: any) { onToast(e.message, 'error'); }
-    finally { setBotAgentBusy(null); }
-  };
-
-  const loadAgentRequests = async (filter?: 'all' | 'pending') => {
-    const f = filter ?? agentReqFilter;
-    try {
-      const data = await request<any[]>(`${BASE}/agent-requests${f === 'pending' ? '?status=pending' : ''}`);
-      setAgentRequests(data || []);
-    } catch { /* silent */ }
-  };
-
-  const handleAgentReqAction = async (id: number, status: 'contacted' | 'fulfilled', note?: string) => {
-    setAgentReqBusy(id);
-    try {
-      await request(`${BASE}/agent-requests/${id}`, { method: 'PATCH', body: JSON.stringify({ status, adminNote: note || undefined }) });
-      onToast('Update হয়েছে!', 'success');
-      await loadAgentRequests();
-    } catch (e: any) { onToast(e.message, 'error'); }
-    finally { setAgentReqBusy(null); }
   };
 
   const loadPageCfg = async (page: ClientPage) => {
@@ -2061,32 +2008,6 @@ export function AdminPanel({ th, onToast, onLogout }: {
             }}
           />
         )}
-        {tab === 'bot-agents' && (
-          <BotAgentsTab
-            th={th}
-            agents={botAgents}
-            busy={botAgentBusy}
-            onCreate={handleCreateBotAgent}
-            onToggle={handleToggleBotAgent}
-          />
-        )}
-        {tab === 'agent-requests' && (
-          <AgentRequestsTab
-            th={th}
-            requests={agentRequests}
-            filter={agentReqFilter}
-            busy={agentReqBusy}
-            onFilterChange={(f) => { setAgentReqFilter(f); loadAgentRequests(f); }}
-            onContacted={(id) => {
-              const note = window.prompt('Note (optional):') ?? '';
-              handleAgentReqAction(id, 'contacted', note);
-            }}
-            onFulfilled={(id) => {
-              const note = window.prompt('Note (optional):') ?? '';
-              handleAgentReqAction(id, 'fulfilled', note);
-            }}
-          />
-        )}
         {tab === 'customers' && (
           <AdminCustomersTab
             th={th}
@@ -2926,183 +2847,6 @@ function PageRequestsTab({ th, requests, filter, busy, onFilterChange, onApprove
               ✅ Approved — এখন Facebook Developer Console এ গিয়ে <strong>{r.fbProfile}</strong> কে Tester হিসেবে add করুন। তারপর client FB Login দিয়ে page connect করতে পারবে।
             </div>
           )}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ── Bot Agents Tab ─────────────────────────────────────────────────────────────
-function BotAgentsTab({ th, agents, busy, onCreate, onToggle }: {
-  th: Theme;
-  agents: any[];
-  busy: number | 'new' | null;
-  onCreate: (data: { agentKey: string; name: string; description: string; suitableFor: string }) => void;
-  onToggle: (id: number, active: boolean) => void;
-}) {
-  const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ agentKey: '', name: '', description: '', suitableFor: '' });
-
-  const inp = {
-    width: '100%', boxSizing: 'border-box' as const,
-    padding: '9px 12px', borderRadius: 8, fontSize: 13,
-    border: `1px solid ${th.border}`, background: th.surface, color: th.text,
-    fontFamily: 'inherit', outline: 'none',
-  };
-
-  const submit = () => {
-    if (!form.agentKey.trim() || !form.name.trim()) return;
-    onCreate(form);
-    setForm({ agentKey: '', name: '', description: '', suitableFor: '' });
-    setShowForm(false);
-  };
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-        <div style={{ fontWeight: 800, fontSize: 15, color: th.text }}>🤖 Bot Agent Catalog</div>
-        <button onClick={() => setShowForm(s => !s)} style={{
-          padding: '7px 16px', borderRadius: 8, border: 'none', background: th.accent, color: '#fff',
-          fontSize: 12.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-        }}>{showForm ? 'বাতিল' : '+ নতুন Agent'}</button>
-      </div>
-      <div style={{ fontSize: 11.5, color: th.muted, marginTop: -8 }}>
-        "লিস্ট থেকে লুকান" শুধু নতুন signup-এর agent-picker লিস্ট থেকে বাদ দেয় — যেসব page আগে থেকে এই agent ব্যবহার করছে তাদের বট আগের মতোই স্বাভাবিকভাবে কাজ করতে থাকবে।
-      </div>
-
-      {showForm && (
-        <div style={{ ...th.card, display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <div style={{ fontSize: 12, color: th.muted }}>
-            agentKey অবশ্যই developer-এর লেখা BotAgent ক্লাসের key-এর সাথে মিলতে হবে। এখনো dedicated agent code লেখা না থাকলেও চিন্তা নেই — client এই agentType বেছে নিলে আপাতত default commerce bot চলবে, ততক্ষণে developer আলাদাভাবে ঐ agent-এর কোড লিখে দেবে।
-          </div>
-          <input style={inp} placeholder="agentKey (যেমন: restaurant)" value={form.agentKey} onChange={e => setForm(f => ({ ...f, agentKey: e.target.value }))} />
-          <input style={inp} placeholder="নাম (যেমন: রেস্টুরেন্ট বট)" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
-          <textarea style={{ ...inp, minHeight: 70, resize: 'vertical' as const }} placeholder="বিবরণ" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
-          <input style={inp} placeholder="Tags, comma দিয়ে আলাদা (যেমন: restaurant,food)" value={form.suitableFor} onChange={e => setForm(f => ({ ...f, suitableFor: e.target.value }))} />
-          <button onClick={submit} disabled={busy === 'new'} style={{
-            padding: '9px', borderRadius: 8, border: 'none', background: '#16a34a', color: '#fff',
-            fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit',
-          }}>
-            {busy === 'new' ? <Spinner size={12} /> : 'যোগ করুন'}
-          </button>
-        </div>
-      )}
-
-      {agents.length === 0 ? (
-        <div style={{ ...th.card, textAlign: 'center', padding: '32px', color: th.muted, fontSize: 13 }}>
-          কোনো agent নেই
-        </div>
-      ) : agents.map((a) => (
-        <div key={a.id} style={{ ...th.card, display: 'flex', alignItems: 'center', gap: 14 }}>
-          <div style={{ flex: 1 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-              <span style={{ fontWeight: 800, fontSize: 13.5, color: th.text }}>{a.name}</span>
-              <span style={{ fontSize: 11, color: th.muted, background: `${th.accent}18`, padding: '2px 8px', borderRadius: 6 }}>{a.agentKey}</span>
-              {!a.active && <span style={{ fontSize: 11, color: '#ef4444' }}>লিস্টে লুকানো — বট চলছে</span>}
-            </div>
-            {a.description && <div style={{ fontSize: 12.5, color: th.muted, marginBottom: 4 }}>{a.description}</div>}
-            {a.suitableFor && (
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                {String(a.suitableFor).split(',').map((t: string, i: number) => t.trim() && (
-                  <span key={i} style={{ fontSize: 10.5, color: th.muted, background: th.surface, padding: '2px 8px', borderRadius: 999 }}>{t.trim()}</span>
-                ))}
-              </div>
-            )}
-          </div>
-          <button
-            disabled={busy === a.id}
-            onClick={() => onToggle(a.id, !a.active)}
-            style={{
-              padding: '7px 14px', borderRadius: 8, border: 'none',
-              background: a.active ? 'rgba(239,68,68,0.12)' : 'rgba(34,197,94,0.12)',
-              color: a.active ? '#ef4444' : '#16a34a',
-              fontWeight: 700, fontSize: 12, cursor: busy === a.id ? 'default' : 'pointer', fontFamily: 'inherit',
-            }}
-          >
-            {busy === a.id ? <Spinner size={12} /> : a.active ? 'লিস্ট থেকে লুকান' : 'লিস্টে দেখান'}
-          </button>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ── Agent Requests Tab ──────────────────────────────────────────────────────────
-function AgentRequestsTab({ th, requests, filter, busy, onFilterChange, onContacted, onFulfilled }: {
-  th: Theme;
-  requests: any[];
-  filter: 'all' | 'pending';
-  busy: number | null;
-  onFilterChange: (f: 'all' | 'pending') => void;
-  onContacted: (id: number) => void;
-  onFulfilled: (id: number) => void;
-}) {
-  const statusColor = (s: string) => s === 'fulfilled' ? '#16a34a' : s === 'contacted' ? '#3b82f6' : '#f59e0b';
-  const statusLabel = (s: string) => s === 'fulfilled' ? '✅ Fulfilled' : s === 'contacted' ? '📞 Contacted' : '⏳ Pending';
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-        <div style={{ fontWeight: 800, fontSize: 15, color: th.text }}>🆕 Custom Agent Requests</div>
-        <div style={{ display: 'flex', gap: 6 }}>
-          {(['pending', 'all'] as const).map(f => (
-            <button key={f} onClick={() => onFilterChange(f)} style={{
-              padding: '6px 14px', borderRadius: 8, border: `1px solid ${filter === f ? th.accent : th.border}`,
-              background: filter === f ? th.accent : 'transparent', color: filter === f ? '#fff' : th.muted,
-              fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-            }}>{f === 'pending' ? '⏳ Pending' : '📋 All'}</button>
-          ))}
-        </div>
-      </div>
-
-      {requests.length === 0 ? (
-        <div style={{ ...th.card, textAlign: 'center', padding: '32px', color: th.muted, fontSize: 13 }}>
-          কোনো request নেই
-        </div>
-      ) : requests.map((r) => (
-        <div key={r.id} style={{ ...th.card, display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
-            <div style={{ flex: 1 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                <span style={{ fontSize: 11, fontWeight: 900, color: statusColor(r.status), background: `${statusColor(r.status)}18`, padding: '2px 8px', borderRadius: 6 }}>
-                  {statusLabel(r.status)}
-                </span>
-                <span style={{ fontSize: 11, color: th.muted }}>#{r.id} · {new Date(r.createdAt).toLocaleDateString('bn-BD')}</span>
-              </div>
-              <div style={{ fontWeight: 800, fontSize: 13.5, color: th.text, marginBottom: 4 }}>
-                👤 {r.user?.name || r.user?.username} ({r.user?.email || r.user?.username})
-              </div>
-              <div style={{ fontSize: 12.5, color: th.muted, marginBottom: 3 }}>
-                📄 Page: <a href={r.pageUrl} target="_blank" rel="noreferrer" style={{ color: th.accent }}>{r.pageUrl}</a>
-              </div>
-              <div style={{ fontSize: 12.5, color: th.muted, marginBottom: 3 }}>📝 {r.description}</div>
-              {r.contactInfo && <div style={{ fontSize: 12.5, color: th.muted, marginBottom: 3 }}>📞 {r.contactInfo}</div>}
-              {r.adminNote && (
-                <div style={{ fontSize: 12, color: statusColor(r.status), marginTop: 4, fontWeight: 600 }}>
-                  Admin note: {r.adminNote}
-                </div>
-              )}
-            </div>
-
-            {r.status !== 'fulfilled' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 120 }}>
-                {r.status === 'pending' && (
-                  <button disabled={busy === r.id} onClick={() => onContacted(r.id)} style={{
-                    padding: '8px 12px', borderRadius: 8, border: 'none', background: '#3b82f6', color: '#fff',
-                    fontWeight: 800, fontSize: 12, cursor: busy === r.id ? 'default' : 'pointer', fontFamily: 'inherit',
-                  }}>
-                    {busy === r.id ? <Spinner size={12} /> : '📞 Contacted'}
-                  </button>
-                )}
-                <button disabled={busy === r.id} onClick={() => onFulfilled(r.id)} style={{
-                  padding: '8px 12px', borderRadius: 8, border: 'none', background: '#16a34a', color: '#fff',
-                  fontWeight: 800, fontSize: 12, cursor: busy === r.id ? 'default' : 'pointer', fontFamily: 'inherit',
-                }}>
-                  {busy === r.id ? <Spinner size={12} /> : '✅ Fulfilled'}
-                </button>
-              </div>
-            )}
-          </div>
         </div>
       ))}
     </div>

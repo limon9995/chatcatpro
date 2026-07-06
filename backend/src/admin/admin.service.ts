@@ -1193,17 +1193,28 @@ export class AdminService {
     name: string;
     description?: string;
     suitableFor?: string;
+    personaPrompt?: string;
+    toneRules?: string;
   }) {
     const agentKey = data.agentKey?.trim();
     const name = data.name?.trim();
     if (!agentKey) throw new BadRequestException('agentKey is required');
     if (!name) throw new BadRequestException('name is required');
+
+    const personaPrompt = data.personaPrompt?.trim();
+    const toneRules = data.toneRules?.trim();
+    const behaviorConfig =
+      personaPrompt || toneRules
+        ? { ...(personaPrompt ? { personaPrompt } : {}), ...(toneRules ? { toneRules } : {}) }
+        : undefined;
+
     return this.prisma.botAgentDefinition.create({
       data: {
         agentKey,
         name,
         description: data.description?.trim() || '',
         suitableFor: data.suitableFor?.trim() || '',
+        ...(behaviorConfig ? { behaviorConfig } : {}),
       },
     });
   }
