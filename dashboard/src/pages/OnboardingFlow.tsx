@@ -1044,6 +1044,22 @@ const PAYMENT_OPTIONS = [
       { key: 'store_passwd', label: 'Store Password', ph: 'SSLCommerz Store Password', where: 'merchant.sslcommerz.com → Stores → Integration', secret: true },
     ],
   },
+  {
+    key: 'sms_gateway',
+    icon: '📲',
+    title: 'SMS Gateway (Phone App)',
+    badge: 'কোনো API লাগে না',
+    badgeColor: '#8b5cf6',
+    description: 'Merchant account বা API credential কিছুই লাগবে না — আপনার ফোনে bKash/Nagad/Rocket-এর payment SMS আসলে সেটা bot নিজে পড়ে verify করে দেবে।',
+    flow: 'Phone-এ payment SMS আসে → SMS Forwarder app bot-কে পাঠায় → Customer TxID দিলে match করে → Order auto-confirm ✅',
+    steps: [
+      { num: '১', title: 'একটা Android ফোন বেছে নিন', detail: 'যে ফোনে আপনার bKash/Nagad/Rocket-এর payment SMS আসে, সেই ফোনে setup করতে হবে।' },
+      { num: '২', title: '"ChatCat PaySync" app install করুন', detail: 'Onboarding শেষ হওয়ার পর Settings → SMS Gateway section থেকে APK download link পাবেন (Play Store-এ নেই, সরাসরি APK)।' },
+      { num: '৩', title: 'Pairing token দিয়ে connect করুন', detail: 'App খুলে Settings page-এ দেখানো token বসিয়ে ফোনটা আপনার account-এর সাথে connect করুন, SMS read permission দিন।' },
+      { num: '৪', title: 'SMS Gateway চালু করুন', detail: 'Settings page-এ গিয়ে "SMS Gateway চালু করুন" toggle ON করলেই payment verify শুরু হয়ে যাবে।' },
+    ],
+    fields: [],
+  },
 ];
 
 function Step4PaymentSetup({ dark, border, text, muted, accent, activePage, request, onSaved, onSkip }: any) {
@@ -1224,7 +1240,28 @@ function Step4PaymentSetup({ dark, border, text, muted, accent, activePage, requ
             )}
           </div>
 
+          {/* SMS Gateway has no API credentials — device pairing happens later in Settings */}
+          {opt.fields.length === 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{
+                borderRadius: 12, padding: '14px 16px',
+                background: dark ? 'rgba(139,92,246,0.1)' : 'rgba(139,92,246,0.06)',
+                border: `1px solid ${dark ? 'rgba(139,92,246,0.3)' : 'rgba(139,92,246,0.2)'}`,
+              }}>
+                <div style={{ fontWeight: 700, color: text, fontSize: 13, marginBottom: 4 }}>📲 Phone App দিয়ে Setup হয়</div>
+                <div style={{ color: muted, fontSize: 12.5, lineHeight: 1.6 }}>
+                  এটার জন্য এখানে কোনো তথ্য দেওয়ার দরকার নেই — onboarding শেষ হওয়ার পর Dashboard → Settings → SMS Gateway section থেকে app download করে phone connect করলেই হয়ে যাবে।
+                </div>
+              </div>
+              <PrimaryBtn onClick={onSaved}>
+                বুঝেছি, পরে Settings থেকে করব →
+              </PrimaryBtn>
+              <SkipBtn onClick={onSkip} muted={muted} />
+            </div>
+          )}
+
           {/* Credential fields */}
+          {opt.fields.length > 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {opt.fields.map((f, i) => (
               <div key={f.key} style={{ animation: `ob-field-in 300ms ease ${i * 60}ms both` }}>
@@ -1315,8 +1352,9 @@ function Step4PaymentSetup({ dark, border, text, muted, accent, activePage, requ
               </PrimaryBtn>
             </div>
           </div>
+          )}
 
-          <SkipBtn onClick={onSkip} muted={muted} />
+          {opt.fields.length > 0 && <SkipBtn onClick={onSkip} muted={muted} />}
         </div>
       )}
     </div>
