@@ -1,7 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as crypto from 'crypto';
-import * as fs from 'fs';
-import * as path from 'path';
 import { PrismaService } from '../prisma/prisma.service';
 import { ApiKeysService } from '../common/api-keys.service';
 
@@ -37,10 +35,12 @@ export class OtpService {
 
   /** Generate and send a 6-digit OTP to the given email. */
   async sendOtp(email: string, purpose: 'signup' | 'reset'): Promise<void> {
-    const logoPath = path.join(process.cwd(), 'storage', 'logo.png');
-    const logoBase64 = fs.existsSync(logoPath)
-      ? `data:image/png;base64,${fs.readFileSync(logoPath).toString('base64')}`
-      : '';
+    // Link to the hosted logo instead of embedding it as base64 — inlining the
+    // ~420KB logo pushed the email past Gmail's ~102KB clipping threshold,
+    // causing Gmail to hide the body behind "View entire message".
+    const storageBase = (this.apiKeysService.getSync('storagePublicUrl') || 'https://api.chatcat.pro/storage').replace(/\/+$/, '');
+    const logoUrl = `${storageBase}/logo.png`;
+
     const code = String(crypto.randomInt(100000, 1000000));
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
@@ -56,29 +56,51 @@ export class OtpService {
     const subject = isSignup
       ? 'ChatCat Pro — Email Verification OTP'
       : 'ChatCat Pro — Password Reset OTP';
+    const codeDigits = code.split('').join('&nbsp;');
     const html = `
-        <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:24px">
-          <div style="text-align:center;margin-bottom:20px">
-            ${logoBase64 ? `<img src="${logoBase64}" style="width:90px;height:90px;object-fit:cover;border-radius:50%;display:block;margin:0 auto 10px" />` : ''}
-            <h2 style="margin:4px 0 4px;color:#1e293b;font-size:20px">ChatCat Pro</h2>
+    <div style="background:#f1f0fb;padding:32px 16px;font-family:'Segoe UI',Arial,sans-serif">
+      <div style="max-width:460px;margin:0 auto;background:#ffffff;border-radius:20px;overflow:hidden;box-shadow:0 8px 32px rgba(79,70,229,0.12)">
+
+        <!-- Top accent bar -->
+        <div style="height:6px;background:linear-gradient(90deg,#4f46e5,#7c3aed,#ec4899)"></div>
+
+        <div style="padding:36px 32px 32px">
+          <div style="text-align:center;margin-bottom:24px">
+            <img src="${logoUrl}" width="64" height="64" alt="ChatCat" style="width:64px;height:64px;object-fit:cover;border-radius:16px;box-shadow:0 4px 14px rgba(79,70,229,0.25)" />
+            <div style="margin-top:12px;font-size:19px;font-weight:800;color:#1e1b2e;letter-spacing:-0.02em">ChatCat Pro</div>
           </div>
-          <p style="color:#334155;font-size:15px;margin-bottom:20px">
+
+          <div style="text-align:center;margin-bottom:8px;font-size:15px;font-weight:700;color:#1e1b2e">
+            ${isSignup ? 'আপনার Email Verify করুন' : 'Password Reset করুন'}
+          </div>
+          <p style="text-align:center;color:#6b6478;font-size:13.5px;line-height:1.7;margin:0 0 26px">
             ${
               isSignup
-                ? 'আপনার ChatCat Pro account <strong>verify</strong> করতে নিচের OTP কোডটি ব্যবহার করুন:'
-                : 'আপনার ChatCat Pro account-এর <strong>password reset</strong> করতে নিচের OTP কোডটি ব্যবহার করুন:'
+                ? 'ChatCat Pro account verify করতে নিচের কোডটি ব্যবহার করুন।'
+                : 'আপনার account-এর password reset করতে নিচের কোডটি ব্যবহার করুন।'
             }
           </p>
-          <div style="background:#f0f0ff;border:2px solid #c7d2fe;border-radius:12px;padding:24px;text-align:center;margin-bottom:20px">
-            <div style="font-size:42px;font-weight:900;letter-spacing:12px;color:#4f46e5;font-family:monospace">${code}</div>
+
+          <div style="background:linear-gradient(135deg,#f5f3ff,#fdf2f8);border:1.5px solid #ddd6fe;border-radius:16px;padding:26px 16px;text-align:center;margin-bottom:22px">
+            <div style="font-size:11px;font-weight:700;letter-spacing:0.12em;color:#8b7ba8;text-transform:uppercase;margin-bottom:10px">Verification Code</div>
+            <div style="font-size:36px;font-weight:900;letter-spacing:4px;color:#4f46e5;font-family:'Courier New',monospace">${codeDigits}</div>
           </div>
-          <p style="color:#64748b;font-size:13px;text-align:center">
-            এই OTP <strong>১০ মিনিটের</strong> জন্য valid।<br>
-            কখনও এই কোড কাউকে শেয়ার করবেন না।
+
+          <div style="text-align:center;margin-bottom:24px">
+            <span style="display:inline-block;background:#fff7ed;color:#c2410c;font-size:12px;font-weight:700;padding:6px 14px;border-radius:100px;border:1px solid #fed7aa">⏱ ১০ মিনিটের জন্য valid</span>
+          </div>
+
+          <p style="color:#9691a8;font-size:12px;line-height:1.7;text-align:center;margin:0">
+            এই কোড কাউকে শেয়ার করবেন না — ChatCat কখনো email/message-এ কোড চাইবে না।<br>
+            আপনি যদি এই request না করে থাকেন, এই email ignore করুন।
           </p>
-          <hr style="border:none;border-top:1px solid #e2e8f0;margin:20px 0">
-          <p style="color:#94a3b8;font-size:11px;text-align:center">ChatCat Pro Commerce Automation</p>
         </div>
+
+        <div style="background:#faf9fd;padding:18px 32px;text-align:center;border-top:1px solid #f0edf7">
+          <div style="font-size:11px;color:#b3aec4">ChatCat Pro — Commerce Automation for Facebook Sellers</div>
+        </div>
+      </div>
+    </div>
       `;
     await this.sendViaResend(email, subject, html);
 
