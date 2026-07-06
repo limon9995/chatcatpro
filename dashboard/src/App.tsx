@@ -133,10 +133,13 @@ export function AppContent() {
     if (screen === 'dashboard') return;
     const params = new URLSearchParams();
     if (screen !== 'landing') params.set('mode', screen);
-    // preserve oauthResult so ConnectPageScreen can consume it
+    // preserve oauthResult/googleAuth so ConnectPageScreen / the Google-login
+    // effect below can still consume them after this effect rewrites the URL
     const existing = new URLSearchParams(window.location.search);
     const oauthResult = existing.get('oauthResult');
     if (oauthResult) params.set('oauthResult', oauthResult);
+    const googleAuth = existing.get('googleAuth');
+    if (googleAuth) params.set('googleAuth', googleAuth);
     replaceUrl(params);
   }, [screen]);
 
