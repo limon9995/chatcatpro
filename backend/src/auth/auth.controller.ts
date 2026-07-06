@@ -6,10 +6,13 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   Req,
+  Res,
   UseGuards,
 } from '@nestjs/common';
 import { SkipThrottle, Throttle } from '@nestjs/throttler';
+import type { Response } from 'express';
 import { AuthService } from './auth.service';
 import { AuthGuard } from './auth.guard';
 import { Roles } from './roles.decorator';
@@ -79,6 +82,36 @@ export class AuthController {
       code: body.code,
       newPassword: body.newPassword,
     });
+  }
+
+  // ── Google OAuth login ──────────────────────────────────────────────────────
+  @Get('google/url')
+  getGoogleOAuthUrl() {
+    return { url: this.authService.getGoogleOAuthUrl() };
+  }
+
+  // Called by Google after consent — public, no session exists yet
+  @Get('google/callback')
+  async googleCallback(
+    @Query('code') code: string,
+    @Query('state') state: string,
+    @Res() res: Response,
+  ) {
+    const { resultId } = await this.authService.handleGoogleCallback(
+      code,
+      state,
+    );
+    const redirectBase = this.authService.getFrontendBaseUrl();
+    return res.redirect(
+      `${redirectBase}/?mode=login&googleAuth=${encodeURIComponent(resultId)}`,
+    );
+  }
+
+  // Frontend exchanges the opaque result id for the real session token — one-time use
+  @Throttle({ auth: { ttl: 60_000, limit: 10 } })
+  @Get('google/result/:id')
+  googleResult(@Param('id') id: string) {
+    return this.authService.consumeGoogleLoginResult(id);
   }
 
   // Authenticated routes — skip the auth throttler (only login/signup need it)

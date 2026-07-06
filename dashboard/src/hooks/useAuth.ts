@@ -21,6 +21,18 @@ export function useAuth() {
     return data as { token: string; user: AuthUser; mustChangePassword: boolean };
   }, [request]);
 
+  const loginWithGoogle = useCallback(async () => {
+    const data: any = await request(`${API_BASE}/auth/google/url`, { skipAuth: true });
+    window.location.href = data.url;
+  }, [request]);
+
+  const completeGoogleLogin = useCallback(async (resultId: string) => {
+    const data: any = await request(`${API_BASE}/auth/google/result/${resultId}`, { skipAuth: true });
+    try { localStorage.setItem('dfbot_token', data.token); } catch {}
+    setUser(data.user);
+    return data as { token: string; user: AuthUser };
+  }, [request]);
+
   const logout = useCallback(async () => {
     try { await request(`${API_BASE}/auth/logout`, { method: 'POST' }); } catch {}
     try { localStorage.removeItem('dfbot_token'); } catch {}
@@ -44,5 +56,5 @@ export function useAuth() {
       .finally(() => { setLoading(false); setReady(true); });
   }, []);
 
-  return { user, loading, ready, login, logout, changePassword };
+  return { user, loading, ready, login, logout, changePassword, loginWithGoogle, completeGoogleLogin };
 }

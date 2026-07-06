@@ -23,6 +23,9 @@ model User {
   forcePasswordChange Boolean @default(false)
   pageIds             String  @default("[]") // JSON array of page DB ids
 
+  // Google OAuth login — nullable, existing username/password users unaffected
+  googleId String? @unique
+
   pages         Page[]
   sessions      Session[]
   subscriptions Subscription[]

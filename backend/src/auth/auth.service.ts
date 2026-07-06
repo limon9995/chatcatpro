@@ -140,6 +140,18 @@ export class AuthService {
     if (!this.verifyPassword(password, user.salt, user.passwordHash))
       throw new UnauthorizedException('Invalid username or password');
 
+    const { token, expires } = await this.createSession(user);
+
+    return {
+      token,
+      user: this.publicUser(user),
+      expiresAt: expires.toISOString(),
+      mustChangePassword: user.forcePasswordChange,
+    };
+  }
+
+  // ── Session minting — shared by password login and Google login ───────────
+  private async createSession(user: { id: string; role: string }) {
     // Clean expired sessions for this user
     await this.prisma.session.deleteMany({
       where: { userId: user.id, expiresAt: { lt: new Date() } },
@@ -169,12 +181,7 @@ export class AuthService {
       },
     });
 
-    return {
-      token,
-      user: this.publicUser(user),
-      expiresAt: expires.toISOString(),
-      mustChangePassword: user.forcePasswordChange,
-    };
+    return { token, expires };
   }
 
   // ── Me ────────────────────────────────────────────────────────────────────
@@ -454,6 +461,166 @@ export class AuthService {
     // Invalidate all existing sessions
     await this.prisma.session.deleteMany({ where: { userId: user.id } });
     return { message: 'Password reset সফল হয়েছে' };
+  }
+
+  // ── Google OAuth login ──────────────────────────────────────────────────────
+  private readonly googleClientId = process.env.GOOGLE_CLIENT_ID || '';
+  private readonly googleClientSecret = process.env.GOOGLE_CLIENT_SECRET || '';
+  private readonly googleRedirectUri =
+    process.env.GOOGLE_REDIRECT_URI ||
+    'http://localhost:3000/auth/google/callback';
+  private readonly googleStateSecret =
+    process.env.GOOGLE_OAUTH_STATE_SECRET ||
+    this.googleClientSecret ||
+    'dfbot_google_state_secret';
+  private readonly pendingGoogleLogins = new Map<
+    string,
+    { token: string; user: PublicUser; createdAt: number }
+  >();
+
+  getGoogleOAuthUrl(): string {
+    if (!this.googleClientId)
+      throw new ForbiddenException('GOOGLE_CLIENT_ID not configured');
+    const payload = Buffer.from(JSON.stringify({ ts: Date.now() })).toString(
+      'base64url',
+    );
+    const sig = crypto
+      .createHmac('sha256', this.googleStateSecret)
+      .update(payload)
+      .digest('hex');
+    const state = `${payload}.${sig}`;
+    const scope = encodeURIComponent('openid email profile');
+    return `https://accounts.google.com/o/oauth2/v2/auth?client_id=${this.googleClientId}&redirect_uri=${encodeURIComponent(this.googleRedirectUri)}&response_type=code&scope=${scope}&state=${encodeURIComponent(state)}&prompt=select_account`;
+  }
+
+  private verifyGoogleState(state: string) {
+    const [payload, sig] = String(state || '').split('.');
+    if (!payload || !sig) throw new ForbiddenException('Invalid OAuth state');
+    const expectedSig = crypto
+      .createHmac('sha256', this.googleStateSecret)
+      .update(payload)
+      .digest('hex');
+    if (
+      sig.length !== expectedSig.length ||
+      !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expectedSig))
+    ) {
+      throw new ForbiddenException('Invalid OAuth state signature');
+    }
+    const { ts } = JSON.parse(Buffer.from(payload, 'base64url').toString());
+    if (Date.now() - ts > 15 * 60 * 1000) {
+      throw new ForbiddenException('OAuth state expired, please try again');
+    }
+  }
+
+  async handleGoogleCallback(
+    code: string,
+    state: string,
+  ): Promise<{ resultId: string }> {
+    if (!code) throw new ForbiddenException('Missing OAuth code');
+    this.verifyGoogleState(state);
+
+    const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        code,
+        client_id: this.googleClientId,
+        client_secret: this.googleClientSecret,
+        redirect_uri: this.googleRedirectUri,
+        grant_type: 'authorization_code',
+      }),
+    });
+    if (!tokenRes.ok) {
+      this.logger.error(`[GoogleAuth] Token exchange failed: ${await tokenRes.text()}`);
+      throw new ForbiddenException('Google authentication failed');
+    }
+    const tokenData: any = await tokenRes.json();
+
+    const profileRes = await fetch(
+      'https://www.googleapis.com/oauth2/v3/userinfo',
+      { headers: { Authorization: `Bearer ${tokenData.access_token}` } },
+    );
+    if (!profileRes.ok)
+      throw new ForbiddenException('Could not fetch Google profile');
+    const profile: any = await profileRes.json();
+
+    const user = await this.findOrCreateGoogleUser({
+      googleId: profile.sub,
+      email: String(profile.email || '').toLowerCase(),
+      name: profile.name || profile.email,
+    });
+
+    const { token } = await this.createSession(user);
+    const resultId = crypto.randomUUID();
+    this.pendingGoogleLogins.set(resultId, {
+      token,
+      user: this.publicUser(user),
+      createdAt: Date.now(),
+    });
+    this.cleanupPendingGoogleLogins();
+    return { resultId };
+  }
+
+  getFrontendBaseUrl() {
+    const landingUrl = String(process.env.LANDING_PAGE_URL || '').trim();
+    if (landingUrl) return landingUrl.replace(/\/+$/, '');
+    const storageUrl = String(process.env.STORAGE_PUBLIC_URL || '').trim();
+    if (storageUrl)
+      return storageUrl.replace(/\/storage\/?$/, '').replace(/\/+$/, '');
+    return 'http://localhost:5173';
+  }
+
+  consumeGoogleLoginResult(id: string) {
+    const item = this.pendingGoogleLogins.get(id);
+    if (!item)
+      throw new NotFoundException('Login result not found or expired');
+    this.pendingGoogleLogins.delete(id);
+    return { token: item.token, user: item.user };
+  }
+
+  private cleanupPendingGoogleLogins() {
+    const cutoff = Date.now() - 10 * 60 * 1000;
+    for (const [id, item] of this.pendingGoogleLogins) {
+      if (item.createdAt < cutoff) this.pendingGoogleLogins.delete(id);
+    }
+  }
+
+  private async findOrCreateGoogleUser(profile: {
+    googleId: string;
+    email: string;
+    name: string;
+  }) {
+    const byGoogleId = await this.prisma.user.findUnique({
+      where: { googleId: profile.googleId },
+    });
+    if (byGoogleId) return byGoogleId;
+
+    if (profile.email) {
+      const byEmail = await this.prisma.user.findFirst({
+        where: { email: profile.email },
+      });
+      if (byEmail) {
+        return this.prisma.user.update({
+          where: { id: byEmail.id },
+          data: { googleId: profile.googleId },
+        });
+      }
+    }
+
+    // New account — random unusable password, user always signs in via Google
+    const randomPassword = crypto.randomBytes(24).toString('hex');
+    const created = await this.register({
+      username: profile.email || `google_${profile.googleId}`,
+      email: profile.email || undefined,
+      password: randomPassword,
+      name: profile.name,
+      role: 'client',
+      isActive: true,
+    });
+    return this.prisma.user.update({
+      where: { id: created.id },
+      data: { googleId: profile.googleId },
+    });
   }
 
   // ── Private helpers ───────────────────────────────────────────────────────

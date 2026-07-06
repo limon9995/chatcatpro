@@ -97,7 +97,7 @@ export function AppContent() {
     catch { return true; }
   });
   const th = getTheme(dark);
-  const { user, ready, login, logout, changePassword } = useAuth();
+  const { user, ready, login, logout, changePassword, loginWithGoogle, completeGoogleLogin } = useAuth();
   const { request } = useApi();
   const { show: showToast, ToastNode } = useToast();
 
@@ -235,6 +235,28 @@ export function AppContent() {
     await loadMyPages();
   };
 
+  // Consume ?googleAuth=<id> left by the backend's OAuth callback redirect
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const googleAuth = params.get('googleAuth');
+    if (!googleAuth) return;
+    params.delete('googleAuth');
+    replaceUrl(params);
+    (async () => {
+      try {
+        const result = await completeGoogleLogin(googleAuth);
+        if (result.user?.role === 'admin') {
+          setScreen('admin');
+        } else {
+          await loadMyPages();
+        }
+      } catch (e: any) {
+        showToast(e?.message || copy('Google login করা যায়নি', 'Google login failed'), 'error');
+        setScreen('login');
+      }
+    })();
+  }, []);
+
   const handleSignup = async (data: { identifier: string; password: string; name: string }) => {
     const raw = data.identifier.trim();
     const cleaned = raw.replace(/[\s-]/g, '');
@@ -284,7 +306,7 @@ export function AppContent() {
   }
 
   if (screen === 'login') {
-    return <LoginPage dark={dark} setDark={setDark} onLogin={handleLogin} onSignup={() => setScreen('signup')} onForgotPassword={() => setScreen('forgot-password')} />;
+    return <LoginPage dark={dark} setDark={setDark} onLogin={handleLogin} onSignup={() => setScreen('signup')} onForgotPassword={() => setScreen('forgot-password')} onGoogleLogin={loginWithGoogle} />;
   }
 
   if (screen === 'forgot-password') {
