@@ -1007,7 +1007,7 @@ export function AdminPanel({ th, onToast, onLogout }: {
             🧠 Bot Knowledge Health
             <InfoButton text="Unmatched messages বেশি হলে Learning Log এ গিয়ে নতুন question যোগ করুন।" th={th} />
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 10 }}>
             <div style={{ ...th.card2, padding: '14px 16px' }}>
               <div style={{ fontSize: 24, fontWeight: 900, color: overview.unmatchedMessages > 10 ? '#ef4444' : '#16a34a' }}>
                 {overview.unmatchedMessages}
@@ -1020,10 +1020,6 @@ export function AdminPanel({ th, onToast, onLogout }: {
                   ⚠️ Learning Log এ গিয়ে নতুন question যোগ করুন
                 </div>
               )}
-            </div>
-            <div style={{ ...th.card2, padding: '14px 16px' }}>
-              <div style={{ fontSize: 24, fontWeight: 900, color: th.accent }}>{overview.totalProducts}</div>
-              <div style={{ fontSize: 11, color: th.muted, fontWeight: 700, textTransform: 'uppercase', marginTop: 3 }}>Total Products</div>
             </div>
           </div>
           <div style={{ fontSize: 11, color: th.muted, marginTop: 10 }}>
