@@ -56,7 +56,6 @@ export class OtpService {
     const subject = isSignup
       ? 'ChatCat Pro — Email Verification OTP'
       : 'ChatCat Pro — Password Reset OTP';
-    const codeDigits = code.split('').join('&nbsp;');
     const html = `
     <div style="background:#f1f0fb;padding:32px 16px;font-family:'Segoe UI',Arial,sans-serif">
       <div style="max-width:460px;margin:0 auto;background:#ffffff;border-radius:20px;overflow:hidden;box-shadow:0 8px 32px rgba(79,70,229,0.12)">
@@ -83,7 +82,7 @@ export class OtpService {
 
           <div style="background:linear-gradient(135deg,#f5f3ff,#fdf2f8);border:1.5px solid #ddd6fe;border-radius:16px;padding:26px 16px;text-align:center;margin-bottom:22px">
             <div style="font-size:11px;font-weight:700;letter-spacing:0.12em;color:#8b7ba8;text-transform:uppercase;margin-bottom:10px">Verification Code</div>
-            <div style="font-size:36px;font-weight:900;letter-spacing:4px;color:#4f46e5;font-family:'Courier New',monospace">${codeDigits}</div>
+            <div style="font-size:32px;font-weight:900;letter-spacing:6px;color:#4f46e5;font-family:'Courier New',monospace;white-space:nowrap">${code}</div>
           </div>
 
           <div style="text-align:center;margin-bottom:24px">
