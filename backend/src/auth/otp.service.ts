@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import * as nodemailer from 'nodemailer';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -15,17 +14,25 @@ export class OtpService {
     private readonly apiKeysService: ApiKeysService,
   ) {}
 
-  private getTransporter() {
-    return nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 465,
-      secure: true,
-      family: 4,
-      auth: {
-        user: this.apiKeysService.getSync('gmailUser'),
-        pass: this.apiKeysService.getSync('gmailAppPassword'),
+  // Resend sends over HTTPS (port 443) — unlike SMTP, this works even when
+  // the VPS provider blocks outbound SMTP ports (a common default block).
+  private async sendViaResend(to: string, subject: string, html: string) {
+    const apiKey = this.apiKeysService.getSync('resendApiKey');
+    const from = this.apiKeysService.getSync('resendFromEmail') || 'ChatCat Pro <onboarding@resend.dev>';
+    if (!apiKey) throw new Error('RESEND_API_KEY not configured');
+
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
       },
-    } as any);
+      body: JSON.stringify({ from, to, subject, html }),
+    });
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Resend API ${res.status}: ${errText.slice(0, 200)}`);
+    }
   }
 
   /** Generate and send a 6-digit OTP to the given email. */
@@ -46,13 +53,10 @@ export class OtpService {
     ]);
 
     const isSignup = purpose === 'signup';
-    await this.getTransporter().sendMail({
-      from: `"ChatCat Pro" <${this.apiKeysService.getSync('gmailUser')}>`,
-      to: email,
-      subject: isSignup
-        ? 'ChatCat Pro — Email Verification OTP'
-        : 'ChatCat Pro — Password Reset OTP',
-      html: `
+    const subject = isSignup
+      ? 'ChatCat Pro — Email Verification OTP'
+      : 'ChatCat Pro — Password Reset OTP';
+    const html = `
         <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:24px">
           <div style="text-align:center;margin-bottom:20px">
             ${logoBase64 ? `<img src="${logoBase64}" style="width:90px;height:90px;object-fit:cover;border-radius:50%;display:block;margin:0 auto 10px" />` : ''}
@@ -75,8 +79,8 @@ export class OtpService {
           <hr style="border:none;border-top:1px solid #e2e8f0;margin:20px 0">
           <p style="color:#94a3b8;font-size:11px;text-align:center">ChatCat Pro Commerce Automation</p>
         </div>
-      `,
-    });
+      `;
+    await this.sendViaResend(email, subject, html);
 
     this.logger.log(`[OTP] Sent ${purpose} OTP to ${email}`);
   }

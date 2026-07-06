@@ -22,9 +22,12 @@ export interface ApiKeysConfig {
   fallbackAiModel?: string;
   // OpenAI text model
   openaiModel?: string;
-  // Gmail
+  // Gmail (legacy — SMTP is blocked on most VPS providers, prefer Resend)
   gmailUser?: string;
   gmailAppPassword?: string;
+  // Resend (OTP/email — HTTP API, works even when SMTP ports are blocked)
+  resendApiKey?: string;
+  resendFromEmail?: string;
   // Facebook OAuth (global app)
   fbAppId?: string;
   fbAppSecret?: string;
@@ -85,6 +88,8 @@ const ENV_MAP: Record<keyof ApiKeysConfig, string> = {
   openaiModel: 'OPENAI_MODEL',
   gmailUser: 'GMAIL_USER',
   gmailAppPassword: 'GMAIL_APP_PASSWORD',
+  resendApiKey: 'RESEND_API_KEY',
+  resendFromEmail: 'RESEND_FROM_EMAIL',
   fbAppId: 'FB_APP_ID',
   fbAppSecret: 'FB_APP_SECRET',
   fbOauthStateSecret: 'FB_OAUTH_STATE_SECRET',
@@ -120,6 +125,7 @@ export const SECRET_FIELDS = new Set<keyof ApiKeysConfig>([
   'geminiApiKey',
   'geminiApiKeys',
   'gmailAppPassword',
+  'resendApiKey',
   'fbAppSecret',
   'fbOauthStateSecret',
   'falApiKey',

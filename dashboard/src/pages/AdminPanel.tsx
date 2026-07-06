@@ -2583,7 +2583,11 @@ export function AdminPanel({ th, onToast, onLogout }: {
                     { key: 'telegramBotToken', label: 'Telegram Bot Token', secret: true, placeholder: '1234567890:AAG...' },
                     { key: 'telegramChatId', label: 'Admin Chat ID', placeholder: '8183240678' },
                   ]},
-                  { group: '📧 Gmail (OTP/Email)', fields: [
+                  { group: '📧 Resend (OTP/Email)', fields: [
+                    { key: 'resendApiKey', label: 'Resend API Key', secret: true, placeholder: 're_...' },
+                    { key: 'resendFromEmail', label: 'From Address', placeholder: 'ChatCat Pro <noreply@chatcat.pro>' },
+                  ]},
+                  { group: '📧 Gmail (legacy, unused)', fields: [
                     { key: 'gmailUser', label: 'Gmail Address' },
                     { key: 'gmailAppPassword', label: 'Gmail App Password', secret: true },
                   ]},
