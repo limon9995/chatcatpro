@@ -283,6 +283,7 @@ export class AdminService {
       'memoTemplateModeOn',
       'autoMemoDesignModeOn',
       'automationOn',
+      'smartBotOn',
     ];
     const patch: any = {};
     for (const k of ALLOWED) {
@@ -305,11 +306,12 @@ export class AdminService {
           'memoTemplateModeOn',
           'autoMemoDesignModeOn',
           'automationOn',
+          'smartBotOn',
         ].includes(k)
       ) {
         patch[k] = Boolean(v);
         // Only lock the Allowed flag when admin disables — never force-enable it
-        if (!Boolean(v)) patch[MODE_ACCESS_MAP[k]] = false;
+        if (!Boolean(v) && MODE_ACCESS_MAP[k]) patch[MODE_ACCESS_MAP[k]] = false;
       } else if (k === 'productCodePrefix') {
         const p = String(v || 'DF')
           .toUpperCase()

@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { estimateMonthlyCost, PricingCalcInput } from '../common/pricing-estimator';
 
 interface ChatMessage {
   role: 'user' | 'assistant';
@@ -14,7 +15,18 @@ const SYSTEM_PROMPT = `তুমি Chatcat-এর customer service assistant।
 - Features: bot automation, OCR (ছবি থেকে product code), AI image recognition, CRM, broadcast, courier integration
 - শুরু করতে: chatcat.pro তে গিয়ে "শুরু করুন" বাটনে ক্লিক করুন অথবা WhatsApp করুন: 01720450797
 
-উত্তর দেবে Bengali বা Banglish-এ — যে ভাষায় customer লিখবে সেই ভাষায়। Concise ও friendly থাকো। না জানলে support-এ যোগাযোগ করতে বলো (info@chatcat.pro)।`;
+উত্তর দেবে Bengali বা Banglish-এ — যে ভাষায় customer লিখবে সেই ভাষায়। Concise ও friendly থাকো। না জানলে support-এ যোগাযোগ করতে বলো (info@chatcat.pro)।
+
+## Pricing প্রশ্নের জন্য বিশেষ নিয়ম
+Customer যদি "koto customer/message hole koto cost hobe" ধরনের নির্দিষ্ট cost জানতে চায় (শুধু general platform fee না, বরং তাদের নিজের volume অনুযায়ী হিসাব):
+1. না জানা থাকলে জিজ্ঞেস করো: প্রতিদিন কতজন customer message পাঠায়, প্রতি customer গড়ে কয়টা message পাঠায়, আর কয়টা ছবি পাঠায়।
+2. তিনটা সংখ্যাই পেয়ে গেলে "calculatePricing" field-এ সেই সংখ্যাগুলো বসাও — exact টাকার হিসাব তুমি নিজে করবে না, আমাদের system সেটা করে দেবে।
+
+**সবসময় শুধু এই strict JSON ফরম্যাটে reply দেবে, অন্য কিছু না:**
+{"reply": "<Bangla/Banglish reply text>", "calculatePricing": null}
+
+অথবা volume জানা থাকলে:
+{"reply": "<short reply>", "calculatePricing": {"customersPerDay": number, "msgsPerCustomer": number, "imagesPerCustomer": number}}`;
 
 const FALLBACK_REPLY =
   'দুঃখিত, এই মুহূর্তে উত্তর দিতে পারছি না। একটু পরে আবার চেষ্টা করুন 🙏';
@@ -53,8 +65,9 @@ export class ChatService {
       },
       body: JSON.stringify({
         model: 'gpt-4o-mini',
-        max_tokens: 250,
+        max_tokens: 300,
         temperature: 0.7,
+        response_format: { type: 'json_object' },
         messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...messages],
       }),
       signal: AbortSignal.timeout(10_000),
@@ -62,8 +75,37 @@ export class ChatService {
 
     if (!res.ok) throw new Error(`OpenAI ${res.status}`);
     const data = await res.json();
-    return (
-      (data?.choices?.[0]?.message?.content ?? '').trim() || FALLBACK_REPLY
-    );
+    const raw = (data?.choices?.[0]?.message?.content ?? '').trim();
+    if (!raw) return FALLBACK_REPLY;
+
+    return this.finalizeReply(raw);
+  }
+
+  private finalizeReply(raw: string): string {
+    try {
+      const parsed = JSON.parse(raw);
+      const reply = String(parsed?.reply ?? '').trim() || FALLBACK_REPLY;
+      const cp = parsed?.calculatePricing;
+      const calculatePricing: PricingCalcInput | null =
+        cp &&
+        typeof cp === 'object' &&
+        Number(cp.customersPerDay) > 0 &&
+        Number(cp.msgsPerCustomer) > 0 &&
+        Number(cp.imagesPerCustomer) >= 0
+          ? {
+              customersPerDay: Number(cp.customersPerDay),
+              msgsPerCustomer: Number(cp.msgsPerCustomer),
+              imagesPerCustomer: Number(cp.imagesPerCustomer),
+            }
+          : null;
+
+      return calculatePricing
+        ? `${reply}\n\n${estimateMonthlyCost(calculatePricing)}`
+        : reply;
+    } catch {
+      // Model didn't return valid JSON — fall back to the raw text so the
+      // widget still gets something useful instead of an error.
+      return raw;
+    }
   }
 }

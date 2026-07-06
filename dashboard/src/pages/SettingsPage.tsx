@@ -2170,12 +2170,22 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             <Toggle th={th}
               label="SmartBot চালু করুন"
-              sub="Keyword matching বন্ধ — AI সরাসরি customer-এর সব message বুঝে reply দেবে এবং order নেবে।"
+              sub="Keyword matching বন্ধ — AI সরাসরি customer-এর সব message বুঝে reply দেবে এবং order নেবে। খরচ তুলনামূলক বেশি হবে, কিন্তু Bot Personality/tone পুরো conversation-এ consistently কাজ করবে।"
               checked={s.smartBotOn}
               onChange={v => saveMode('smartBotOn', v)} />
+            {!s.smartBotOn && (
+              <div style={{ fontSize: 12, color: th.muted, padding: '10px 14px', borderRadius: 8, background: th.surface, border: `1px solid ${th.border}`, lineHeight: 1.7 }}>
+                Common question (size/color/দাম/delivery) আগের মতোই দ্রুত ও কম খরচে fixed reply দেবে। Custom Bot Personality শুধু open/flexible কথাবার্তায় কাজ করবে।
+              </div>
+            )}
             {s.smartBotOn && (
               <div style={{ fontSize: 12, color: th.muted, padding: '10px 14px', borderRadius: 8, background: th.surface, border: `1px solid ${th.border}`, lineHeight: 1.7 }}>
                 <strong style={{ color: th.text }}>SmartBot চালু আছে।</strong> উপরের "AI Business Knowledge" box-এ আপনার business-এর সব তথ্য লিখুন — size chart, return policy, payment info, FAQ — AI এই তথ্য দিয়ে customer-দের reply করবে।
+              </div>
+            )}
+            {isAdmin && (
+              <div style={{ fontSize: 11, color: th.muted, padding: '8px 12px', borderRadius: 8, background: 'rgba(79,110,247,0.07)', border: '1px solid rgba(79,110,247,0.2)' }}>
+                Admin only — rates: Keyword ৳0.02/msg · AI text ৳0.05/msg · SmartBot ৳0.10/msg · Customer image ৳0.20
               </div>
             )}
           </div>

@@ -1385,6 +1385,18 @@ export function AdminPanel({ th, onToast, onLogout }: {
                     </div>
                   </div>
 
+                  {/* SmartBot Mode */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', ...th.card2, borderRadius: 10 }}>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 13 }}>SmartBot Mode</div>
+                      <div style={{ fontSize: 11.5, color: th.muted, marginTop: 2 }}>ON = সব reply AI দিয়ে (persona পুরোটায় কাজ করে, খরচ বেশি) · OFF = keyword+AI hybrid (সস্তা)</div>
+                    </div>
+                    <button onClick={() => setPageSettings((p: any) => ({ ...p, smartBotOn: !p.smartBotOn }))}
+                      style={{ ...th.btnPrimary, background: pageSettings.smartBotOn ? '#16a34a' : '#ef4444', fontSize: 12, padding: '6px 16px' }}>
+                      {pageSettings.smartBotOn ? '🟢 ON' : '🔴 OFF'}
+                    </button>
+                  </div>
+
                   {/* Bot Personality / System Prompt */}
                   <div>
                     <div style={{ fontSize: 11, fontWeight: 800, color: th.muted, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Bot Personality (System Prompt)</div>

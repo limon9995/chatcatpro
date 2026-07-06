@@ -9,6 +9,7 @@ import { WalletService } from '../wallet/wallet.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { GeminiKeyRotatorService } from '../common/gemini-key-rotator.service';
 import { AgentBehaviorConfig } from '../agents/agent-behavior-config.interface';
+import { estimateMonthlyCost, PricingCalcInput } from '../common/pricing-estimator';
 
 // Verbatim defaults — used whenever an agent type has no AgentBehaviorConfig
 // personaPrompt/toneRules override, so agentType='commerce' pages (the vast
@@ -52,6 +53,7 @@ export interface SmartBotResponse {
   reply: string;
   action: 'CHAT' | 'COLLECT' | 'CONFIRM_ORDER' | 'CANCEL_ORDER' | 'AGENT' | 'CAPTURE_LEAD' | 'CONFIRM_LEAD';
   collected: SmartBotCollected;
+  calculatePricing: PricingCalcInput | null;
 }
 
 const VALID_ACTIONS = new Set([
@@ -170,6 +172,12 @@ export class SmartBotService {
 
     this.failCount = 0;
     await this.walletService.deductUsage(pageId, 'SMART_BOT', { provider: 'openai' });
+
+    // Real arithmetic, not LLM-guessed — model only signals it has gathered
+    // enough volume info; the actual numbers always come from our own code.
+    if (parsed.calculatePricing) {
+      parsed.reply = `${parsed.reply}\n\n${estimateMonthlyCost(parsed.calculatePricing)}`;
+    }
 
     this.logger.log(
       `[SmartBot] action=${parsed.action} reply="${parsed.reply.slice(0, 60)}"`,
@@ -456,8 +464,13 @@ Customer-এর message দেখে **strictly valid JSON** return করো:
     "phone": null,
     "address": null,
     "paymentProof": null
-  }
+  },
+  "calculatePricing": null
 }
+
+### calculatePricing (optional — only if Business Knowledge instructs a pricing/volume calculation):
+- Leave null unless the Business Knowledge section explicitly tells you to ask for message volume and calculate cost.
+- Once you have all three numbers from the customer, set: { "customersPerDay": number, "msgsPerCustomer": number, "imagesPerCustomer": number }. The exact ৳ estimate is computed by our system, not by you — don't invent numbers in "reply" yourself.
 
 ### Action:
 - CHAT — FAQ, product info, greetings
@@ -661,9 +674,23 @@ ${deliveryCtx}${paymentCtx}${productCtx}${knowledgeCtx}${pricingCtx}${catalogCtx
         return null;
       }
       const c = parsed?.collected ?? {};
+      const cp = parsed?.calculatePricing;
+      const calculatePricing: PricingCalcInput | null =
+        cp &&
+        typeof cp === 'object' &&
+        Number(cp.customersPerDay) > 0 &&
+        Number(cp.msgsPerCustomer) > 0 &&
+        Number(cp.imagesPerCustomer) >= 0
+          ? {
+              customersPerDay: Number(cp.customersPerDay),
+              msgsPerCustomer: Number(cp.msgsPerCustomer),
+              imagesPerCustomer: Number(cp.imagesPerCustomer),
+            }
+          : null;
       return {
         reply,
         action: action as SmartBotResponse['action'],
+        calculatePricing,
         collected: {
           productCodes: Array.isArray(c.productCodes)
             ? c.productCodes.filter((x: any) => typeof x === 'string')
