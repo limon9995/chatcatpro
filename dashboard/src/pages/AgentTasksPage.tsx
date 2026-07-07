@@ -85,6 +85,7 @@ interface SettingsSummary {
     banglaVoiceFileUrl: string;
     englishVoiceFileUrl: string;
   };
+  modeAccess?: Record<string, boolean>;
 }
 
 interface TaskCard {
@@ -229,7 +230,9 @@ export function AgentTasksPage({ th, pageId, onToast, onOpenOrders, onOpenPrint,
 
   const orderModeActive = Boolean(settings?.orderModeOn);
   const callModeActive = Boolean(
-    settings?.callConfirmModeOn && settings?.callSettings.callConfirmModeOn,
+    settings?.modeAccess?.callFeatureEnabled &&
+      settings?.callConfirmModeOn &&
+      settings?.callSettings.callConfirmModeOn,
   );
   const printModeActive = Boolean(
     settings?.printModeOn ||

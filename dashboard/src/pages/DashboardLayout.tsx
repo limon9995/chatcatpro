@@ -52,6 +52,14 @@ class PageErrorBoundary extends Component<{ children: any; name: string }, { err
   }
 }
 
+// "FB পেজ কানেক্ট" / "নতুন Page যোগ" nav entries used to render a duplicate of the
+// Business Info settings tab. They actually mean "leave the dashboard and open the
+// full Connect Page screen" — same as the topbar's "Facebook Page" button.
+function ConnectFbPageRedirect({ onManagePages, muted }: { onManagePages?: () => void; muted: string }) {
+  useEffect(() => { onManagePages?.(); }, [onManagePages]);
+  return <div style={{ padding: 40, textAlign: 'center', color: muted, fontSize: 13 }}>Redirecting…</div>;
+}
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 type NavKey = 'OVERVIEW' | 'AGENT_TASKS' | 'ORDERS' | 'PRODUCTS' | 'ACCOUNTING' |
   'BOT_KNOWLEDGE' | 'PRINT' | 'MEMO_TEMPLATE' | 'CRM' | 'COURIER' |
@@ -475,13 +483,7 @@ export function DashboardLayout({
       );
     }
     if (nav === 'CONNECT_FB_PAGE') {
-      return (
-        <PageErrorBoundary name="SettingsPage">
-          <Suspense fallback={pageFallback}>
-            <SettingsPage th={th} pageId={pageId} tab="SETTINGS_BUSINESS" onToast={showToast} />
-          </Suspense>
-        </PageErrorBoundary>
-      );
+      return <ConnectFbPageRedirect onManagePages={onManagePages} muted={th.muted} />;
     }
     switch (nav) {
       case 'OVERVIEW':    return universityMode === true ? (
