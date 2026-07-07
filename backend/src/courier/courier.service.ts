@@ -20,7 +20,7 @@ export type CourierName =
 export interface CourierSettings {
   defaultCourier: CourierName;
   autoBookOnConfirm: boolean;
-  pathao?: { apiKey: string; secretKey: string; storeId?: string };
+  pathao?: { apiKey: string; secretKey: string; storeId?: string; username?: string; password?: string };
   steadfast?: { apiKey: string; secretKey: string };
   redx?: { apiKey: string };
   paperfly?: { apiKey: string; apiPassword: string };
@@ -363,7 +363,7 @@ export class CourierService {
     return {
       defaultCourier: 'manual',
       autoBookOnConfirm: false,
-      pathao: { apiKey: '', secretKey: '', storeId: '' },
+      pathao: { apiKey: '', secretKey: '', storeId: '', username: '', password: '' },
       steadfast: { apiKey: '', secretKey: '' },
       redx: { apiKey: '' },
       paperfly: { apiKey: '', apiPassword: '' },
@@ -383,6 +383,8 @@ export class CourierService {
         apiKey: String(input?.pathao?.apiKey || ''),
         secretKey: String(input?.pathao?.secretKey || ''),
         storeId: String(input?.pathao?.storeId || ''),
+        username: String(input?.pathao?.username || ''),
+        password: String(input?.pathao?.password || ''),
       },
       steadfast: {
         apiKey: String(input?.steadfast?.apiKey || ''),
@@ -438,12 +440,16 @@ export class CourierService {
   ) {
     if (!cfg?.apiKey)
       throw new BadRequestException('Pathao API key not configured');
+    if (!cfg?.username || !cfg?.password)
+      throw new BadRequestException('Pathao merchant username/password not configured');
     const tokenRes = await axios.post(
       'https://api-hermes.pathao.com/aladdin/api/v1/issue-token',
       {
         client_id: cfg.apiKey,
         client_secret: cfg.secretKey,
         grant_type: 'password',
+        username: cfg.username,
+        password: cfg.password,
       },
       { timeout: COURIER_TIMEOUT_MS },
     );

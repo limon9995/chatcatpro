@@ -577,8 +577,8 @@ export function CourierPage({ th, pageId, onToast }: {
                 label: 'Pathao',
                 icon: '🚴',
                 color: '#e11d48',
-                fields: [['apiKey','Client ID'],['secretKey','Client Secret'],['storeId','Store ID (optional)']],
-                guidance: copy('Log in to your Pathao Merchant account, then ask Pathao support or your account manager for the Client ID, Client Secret, and Store ID needed to connect your system via API.', 'আপনি Pathao Merchant account এ login করুন। তারপর Pathao support বা আপনার account manager-কে বলুন: "আমার system-এর সাথে Pathao API connect করতে হবে, Client ID, Client Secret, আর Store ID দিন।"'),
+                fields: [['apiKey','Client ID'],['secretKey','Client Secret'],['username','Merchant Username (phone/email)'],['password','Merchant Password'],['storeId','Store ID (optional)']],
+                guidance: copy('Log in to your Pathao Merchant account, then ask Pathao support or your account manager for the Client ID and Client Secret needed to connect your system via API. Pathao\'s API also requires your Merchant account\'s own login phone/email and password (not just the Client ID/Secret) — enter those below too.', 'আপনি Pathao Merchant account এ login করুন। তারপর Pathao support বা আপনার account manager-কে বলুন: "আমার system-এর সাথে Pathao API connect করতে হবে, Client ID আর Client Secret দিন।" এছাড়াও Pathao-এর API-এর জন্য আপনার Merchant account-এর নিজের login phone/email আর password ও লাগবে (শুধু Client ID/Secret যথেষ্ট না) — নিচে সেটাও দিন।'),
               },
               { key: 'steadfast', label: 'Steadfast', icon: '📦', color: '#0369a1', fields: [['apiKey','API Key'],['secretKey','Secret Key']] },
               {
