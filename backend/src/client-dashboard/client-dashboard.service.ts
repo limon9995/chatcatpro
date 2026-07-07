@@ -489,7 +489,7 @@ export class ClientDashboardService {
       const axios = (await import('axios')).default;
       if (courier === 'steadfast') {
         const res = await axios.get(
-          `https://portal.steadfast.com.bd/api/v1/status/by-cid/${trackingId}`,
+          `https://portal.packzy.com/api/v1/status/by-cid/${trackingId}`,
           {
             headers: {
               'Api-Key': settings.steadfast?.apiKey,

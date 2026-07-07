@@ -488,7 +488,7 @@ export class CourierService {
     if (!cfg?.apiKey)
       throw new BadRequestException('Steadfast API key not configured');
     const res = await axios.post(
-      'https://portal.steadfast.com.bd/api/v1/create_order',
+      'https://portal.packzy.com/api/v1/create_order',
       {
         invoice: String(input.orderId),
         recipient_name: input.recipientName,
