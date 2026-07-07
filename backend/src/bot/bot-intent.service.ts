@@ -433,7 +433,6 @@ export class BotIntentService {
       return 'CONFIRM';
     if (awaitingConfirm && this.includesAny(t, this.KW.confirmWeak))
       return 'CONFIRM';
-    if (this.includesAny(t, this.KW.confirm)) return 'CONFIRM';
     return null;
   }
 

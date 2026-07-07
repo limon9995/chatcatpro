@@ -22,6 +22,14 @@ storage/*.db-wal
 storage/uploads/
 storage/ocr/
 storage/global-config.json
+storage/global-pricing.json
+storage/settings/
+storage/products/
+storage/bot-knowledge/
+storage/courier-settings/
+storage/vision-ops/
+storage/*.xlsx
+data/
 
 # OS
 .DS_Store

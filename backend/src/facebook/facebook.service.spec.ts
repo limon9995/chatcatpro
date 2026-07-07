@@ -7,12 +7,21 @@ describe('FacebookService', () => {
   let authService: any;
   let encryption: any;
   let billing: any;
+  let telegram: any;
+  let mailer: any;
 
   beforeEach(() => {
+    process.env.STORAGE_PUBLIC_URL = 'https://api.chatcat.pro/storage';
+    process.env.FB_APP_ID = 'test-app-id';
+    process.env.FB_OAUTH_STATE_SECRET = 'test-state-secret';
     prisma = {
       page: {
         findUnique: jest.fn(),
         create: jest.fn(),
+        update: jest.fn(),
+      },
+      pageRequest: {
+        findUnique: jest.fn(),
         update: jest.fn(),
       },
     };
@@ -26,19 +35,28 @@ describe('FacebookService', () => {
     billing = {
       getOrCreateSubscription: jest.fn().mockResolvedValue({ plan: null }),
     };
+    telegram = {
+      sendMessage: jest.fn(),
+      sendMessageWithButtons: jest.fn(),
+    };
+    mailer = {
+      sendMail: jest.fn(),
+    };
     service = new FacebookService(
       prisma,
       authService,
       encryption,
       billing,
-      {} as any,
+      telegram,
+      mailer,
     );
-    process.env.STORAGE_PUBLIC_URL = 'https://api.chatcat.pro/storage';
   });
 
   afterEach(() => {
     jest.restoreAllMocks();
     delete process.env.STORAGE_PUBLIC_URL;
+    delete process.env.FB_APP_ID;
+    delete process.env.FB_OAUTH_STATE_SECRET;
   });
 
   it('rejects manual page connect when submitted pageId does not match token owner page', async () => {
@@ -198,6 +216,172 @@ describe('FacebookService', () => {
         'https://www.facebook.com/profile.php?id=61550984030942',
         'token-123',
       ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+});
+
+describe('FacebookService — admin moderator-access approval', () => {
+  let service: FacebookService;
+  let prisma: any;
+  let authService: any;
+  let encryption: any;
+  let billing: any;
+  let telegram: any;
+  let mailer: any;
+
+  beforeEach(() => {
+    process.env.FB_APP_ID = 'test-app-id';
+    process.env.FB_OAUTH_STATE_SECRET = 'test-state-secret';
+    prisma = {
+      page: { findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
+      pageRequest: { findUnique: jest.fn(), update: jest.fn() },
+    };
+    authService = { addPageToUser: jest.fn(), removePageFromUser: jest.fn() };
+    encryption = { encryptIfNeeded: jest.fn((v: string) => `ENC:${v}`) };
+    billing = { getOrCreateSubscription: jest.fn().mockResolvedValue({ plan: null }) };
+    telegram = { sendMessage: jest.fn(), sendMessageWithButtons: jest.fn() };
+    mailer = { sendMail: jest.fn() };
+    service = new FacebookService(prisma, authService, encryption, billing, telegram, mailer);
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+    delete process.env.FB_APP_ID;
+    delete process.env.FB_OAUTH_STATE_SECRET;
+  });
+
+  it('embeds a signed, purpose-tagged, round-trippable state in the admin approve URL', () => {
+    const url = service.getAdminApproveUrl(42);
+    const stateParam = new URL(url).searchParams.get('state')!;
+    const [payloadB64] = stateParam.split('.');
+    const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8'));
+
+    expect(payload.purpose).toBe('admin_approve_page_request');
+    expect(payload.pageRequestId).toBe(42);
+    expect(typeof payload.ts).toBe('number');
+  });
+
+  it('auto-connects when the admin moderates exactly one page (single-candidate shortcut)', async () => {
+    const req = {
+      id: 5,
+      userId: 'user-1',
+      pageUrl: 'https://facebook.com/myshop',
+      status: 'pending',
+      user: { name: 'Limon', email: 'limon@example.com' },
+    };
+    prisma.pageRequest.findUnique.mockResolvedValue(req);
+    jest.spyOn(service, 'connectPage').mockResolvedValue({
+      success: true,
+      page: { id: 42, pageId: '999', pageName: 'My Shop' },
+      webhookUrl: 'https://api.chatcat.pro/webhook',
+    } as any);
+
+    const result = await service.approvePageRequestViaFacebookLogin(5, [
+      { pageId: '999', pageName: 'My Shop', pageToken: 'tok' },
+    ]);
+
+    expect(result).toEqual({ status: 'connected', pageName: 'My Shop' });
+    expect(service.connectPage).toHaveBeenCalledWith('user-1', {
+      pageId: '999',
+      pageName: 'My Shop',
+      pageToken: 'tok',
+    });
+    expect(prisma.pageRequest.update).toHaveBeenCalledWith({
+      where: { id: 5 },
+      data: { status: 'approved', connectedPageId: 42 },
+    });
+    expect(mailer.sendMail).toHaveBeenCalledWith(
+      'limon@example.com',
+      expect.any(String),
+      expect.any(String),
+    );
+  });
+
+  it('returns no_match when none of the admin\'s pages correspond to the request', async () => {
+    prisma.pageRequest.findUnique.mockResolvedValue({
+      id: 6,
+      userId: 'user-1',
+      pageUrl: 'https://facebook.com/myshop',
+      status: 'pending',
+      user: { name: 'Limon', email: '' },
+    });
+
+    const result = await service.approvePageRequestViaFacebookLogin(6, [
+      { pageId: '111', pageName: 'Other Page A', pageToken: 'tok' },
+      { pageId: '222', pageName: 'Other Page B', pageToken: 'tok2' },
+    ]);
+
+    expect(result).toEqual({ status: 'no_match' });
+  });
+
+  it('returns an ambiguous picker when the request page matches multiple candidates', async () => {
+    prisma.pageRequest.findUnique.mockResolvedValue({
+      id: 7,
+      userId: 'user-1',
+      pageUrl: 'https://facebook.com/myshop',
+      status: 'pending',
+      user: { name: 'Limon', email: '' },
+    });
+
+    const result: any = await service.approvePageRequestViaFacebookLogin(7, [
+      { pageId: '111', pageName: 'MyShop', pageToken: 'tok' },
+      { pageId: '222', pageName: 'myshop', pageToken: 'tok2' },
+    ]);
+
+    expect(result.status).toBe('ambiguous');
+    expect(result.candidates).toHaveLength(2);
+    expect(typeof result.resultId).toBe('string');
+  });
+
+  it('finalizes an ambiguous approval once the admin picks a page', async () => {
+    prisma.pageRequest.findUnique.mockResolvedValue({
+      id: 7,
+      userId: 'user-1',
+      pageUrl: 'https://facebook.com/myshop',
+      status: 'pending',
+      user: { name: 'Limon', email: '' },
+    });
+
+    const ambiguous: any = await service.approvePageRequestViaFacebookLogin(7, [
+      { pageId: '111', pageName: 'MyShop', pageToken: 'tok' },
+      { pageId: '222', pageName: 'myshop', pageToken: 'tok2' },
+    ]);
+
+    jest.spyOn(service, 'connectPage').mockResolvedValue({
+      success: true,
+      page: { id: 55, pageId: '222', pageName: 'myshop' },
+      webhookUrl: 'https://api.chatcat.pro/webhook',
+    } as any);
+
+    const result = await service.finalizeAmbiguousApproval(ambiguous.resultId, '222');
+
+    expect(result).toEqual({ status: 'connected', pageName: 'myshop' });
+    expect(service.connectPage).toHaveBeenCalledWith('user-1', {
+      pageId: '222',
+      pageName: 'myshop',
+      pageToken: 'tok2',
+    });
+  });
+
+  it('rejects finalizing an unknown or expired ambiguous-approval session', async () => {
+    await expect(
+      service.finalizeAmbiguousApproval('does-not-exist', '222'),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('rejects approving a request that is no longer pending', async () => {
+    prisma.pageRequest.findUnique.mockResolvedValue({
+      id: 8,
+      userId: 'user-1',
+      pageUrl: 'https://facebook.com/myshop',
+      status: 'approved',
+      user: { name: 'Limon', email: '' },
+    });
+
+    await expect(
+      service.approvePageRequestViaFacebookLogin(8, [
+        { pageId: '1', pageName: 'X', pageToken: 't' },
+      ]),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 });

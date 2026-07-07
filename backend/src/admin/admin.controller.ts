@@ -427,9 +427,9 @@ export class AdminController {
     return this.svc.getPageRequests(status);
   }
 
-  @Post('page-requests/:id/approve')
-  approvePageRequest(@Param('id', ParseIntPipe) id: number, @Body() b: any) {
-    return this.svc.approvePageRequest(id, b?.adminNote);
+  @Get('page-requests/:id/approve-url')
+  getPageRequestApproveUrl(@Param('id', ParseIntPipe) id: number) {
+    return this.svc.getPageRequestApproveUrl(id);
   }
 
   @Post('page-requests/:id/reject')

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { LanguageSwitch, Spinner } from '../components/ui';
 import { API_BASE, useApi } from '../hooks/useApi';
 import { useLanguage } from '../i18n';
@@ -9,7 +9,8 @@ type ConnectedPage = {
   waEnabled?: boolean; waPhoneNumberId?: string | null; waConfigured?: boolean;
   igEnabled?: boolean; igBusinessAccountId?: string | null; igConfigured?: boolean;
 };
-type PageRequest = { id: number; pageUrl: string; fbProfile: string; note?: string; status: string; adminNote?: string; createdAt: string };
+type PageRequest = { id: number; pageUrl: string; fbProfile?: string; note?: string; status: string; adminNote?: string; connectedPageId?: number; createdAt: string };
+type ModeratorAccessInfo = { fbProfileLink?: string; email?: string };
 
 function extractYouTubeId(url: string): string | null {
   const m = url?.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/);
@@ -133,96 +134,6 @@ function ChannelStatusCards({ page, dark, text, muted, border, copy, onSetup }: 
   );
 }
 
-function DevAccountGuide({ dark, panel: _panel, border: _border, text, muted, copy }: {
-  dark: boolean; panel: string; border: string; text: string; muted: string;
-  copy: (bn: string, en: string) => string;
-}) {
-  const [open, setOpen] = React.useState(false);
-  const steps = [
-    {
-      step: '১',
-      emoji: '🌐',
-      title: copy('developers.facebook.com এ যান', 'Go to developers.facebook.com'),
-      desc: (
-        <span>
-          {copy('আপনার browser-এ ', 'Open your browser and visit ')}<a href="https://developers.facebook.com/" target="_blank" rel="noreferrer" style={{ color: '#6366f1', fontWeight: 700 }}>developers.facebook.com</a>
-          {copy(' — এই লিংকে যান।', '.')}
-        </span>
-      ),
-    },
-    {
-      step: '২',
-      emoji: '🔑',
-      title: copy('Facebook account দিয়ে Log in করুন', 'Log in with your Facebook account'),
-      desc: copy(
-        'পেজের উপরে "Log In" button-এ click করুন। আপনার regular Facebook username ও password দিয়ে login করুন। যে Facebook account দিয়ে Tester invite accept করতে চান, সেই account দিয়েই login করুন।',
-        'Click the "Log In" button at the top of the page. Use your regular Facebook username and password. Make sure to log in with the same account you want to use to accept the Tester invite.',
-      ),
-    },
-    {
-      step: '৩',
-      emoji: '🚀',
-      title: copy('"Get Started" বা "Register" click করুন', 'Click "Get Started" or "Register"'),
-      desc: copy(
-        'Login করার পর "Get Started" বা "Register" বাটন দেখবেন। সেটিতে click করুন। Facebook Developer Agreement-এর terms পড়ুন এবং "Accept" বা "Next" click করুন।',
-        'After logging in, you will see a "Get Started" or "Register" button. Click it. Read the Facebook Developer Agreement terms and click "Accept" or "Next".',
-      ),
-    },
-    {
-      step: '৪',
-      emoji: '📱',
-      title: copy('Phone number verify করুন (যদি চায়)', 'Verify your phone number (if prompted)'),
-      desc: copy(
-        'Facebook আপনার phone number verify করতে চাইতে পারে। আপনার mobile number দিন → SMS-এ আসা code টি enter করুন → "Confirm" click করুন। এটি একটি security step।',
-        'Facebook may ask you to verify your phone number. Enter your mobile number → enter the code received via SMS → click "Confirm". This is a security step.',
-      ),
-    },
-    {
-      step: '৫',
-      emoji: '✅',
-      title: copy('Developer Account তৈরি হয়ে গেছে!', 'Developer Account is ready!'),
-      desc: copy(
-        'Verify হলেই আপনার Facebook Developer Account active হয়ে যাবে। এখন আপনি developers.facebook.com Dashboard দেখতে পাবেন। এখন থেকে Tester invite notification পাবেন Facebook-এ।',
-        'Once verified, your Facebook Developer Account will be active. You will now see the developers.facebook.com Dashboard. From now on, you will receive Tester invite notifications on Facebook.',
-      ),
-    },
-  ];
-
-  return (
-    <div style={{ borderRadius: 10, border: `1px solid rgba(99,102,241,0.25)`, overflow: 'hidden', background: dark ? 'rgba(99,102,241,0.04)' : 'rgba(99,102,241,0.03)' }}>
-      <button
-        onClick={() => setOpen(v => !v)}
-        style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'transparent', border: 'none', cursor: 'pointer', color: text, fontFamily: 'inherit', fontWeight: 800, fontSize: 12.5 }}
-      >
-        <span>📖 {copy('Facebook Developer Account কিভাবে খুলবেন? — A-to-Z গাইড', 'How to create a Facebook Developer Account? — A-to-Z Guide')}</span>
-        <span style={{ color: muted, fontSize: 11, marginLeft: 8, flexShrink: 0 }}>{open ? '▲ বন্ধ করুন' : '▼ দেখুন'}</span>
-      </button>
-      {open && (
-        <div style={{ padding: '0 14px 14px', display: 'flex', flexDirection: 'column', gap: 8, borderTop: `1px solid rgba(99,102,241,0.2)` }}>
-          <div style={{ paddingTop: 10, fontSize: 12, color: muted, lineHeight: 1.7 }}>
-            {copy(
-              'একটি Developer Account খোলা সম্পূর্ণ বিনামূল্যে এবং মাত্র ২-৩ মিনিটের কাজ।',
-              'Creating a Developer Account is completely free and only takes 2-3 minutes.',
-            )}
-          </div>
-          {steps.map(({ step, emoji, title, desc }) => (
-            <div key={step} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', background: dark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)', borderRadius: 8, padding: '9px 11px' }}>
-              <div style={{ minWidth: 22, height: 22, borderRadius: '50%', background: 'rgba(99,102,241,0.2)', color: '#6366f1', fontSize: 11, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 1, flexShrink: 0 }}>{step}</div>
-              <div>
-                <div style={{ fontWeight: 700, fontSize: 12.5, color: text, marginBottom: 3 }}>{emoji} {title}</div>
-                <div style={{ color: muted, fontSize: 12, lineHeight: 1.75 }}>{desc}</div>
-              </div>
-            </div>
-          ))}
-          <div style={{ background: dark ? 'rgba(34,197,94,0.08)' : 'rgba(34,197,94,0.06)', border: '1px solid rgba(34,197,94,0.25)', borderRadius: 8, padding: '8px 11px', fontSize: 11.5, color: text, marginTop: 4 }}>
-            🎉 {copy('Developer Account খোলার পরই নিচের form submit করুন — তাহলে Admin আপনাকে Tester invite পাঠাবে এবং আপনি notification পাবেন।', 'After creating your Developer Account, submit the form below — the Admin will then send you a Tester invite and you will receive the notification.')}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 interface Props {
   dark: boolean; userId: string;
   onConnected: () => void; onLogout: () => void;
@@ -235,13 +146,13 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
   const [disconnecting, setDisconnecting] = useState<number | null>(null);
   const [error, setError]         = useState('');
 
-  // Manual form state
+  // Manual (Advanced / BYOA) form state
   const [manualPageName, setManualPageName] = useState('');
   const [manualToken, setManualToken]       = useState('');
   const [manualBusy, setManualBusy]         = useState(false);
   const [manualSuccess, setManualSuccess]   = useState(false);
   const [connectResult, setConnectResult]   = useState<{ verifyToken?: string; webhookUrl?: string; hasCustomApp?: boolean } | null>(null);
-  const [tab, setTab] = useState<'request' | 'manual'>('request');
+  const [showAdvanced, setShowAdvanced] = useState(false);
   // Linked page: optional master page to share settings from
   const [selectedMasterId, setSelectedMasterId] = useState<number | ''>('');
 
@@ -250,24 +161,18 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
   const [customFbAppId, setCustomFbAppId] = useState('');
   const [customFbAppSecret, setCustomFbAppSecret] = useState('');
 
-  // Request Access tab state
+  // Request Access (moderator-access) state
   const [reqPageUrl, setReqPageUrl] = useState('');
   const [reqFbProfile, setReqFbProfile] = useState('');
   const [reqNote, setReqNote] = useState('');
   const [reqBusy, setReqBusy] = useState(false);
   const [reqSubmitted, setReqSubmitted] = useState(false);
   const [myRequests, setMyRequests] = useState<PageRequest[]>([]);
+  const [moderatorAccess, setModeratorAccess] = useState<ModeratorAccessInfo>({});
+  const [copiedField, setCopiedField] = useState<'profile' | 'email' | ''>('');
 
   // Tutorial sidebar
   const [pageConnectTutorialUrl, setPageConnectTutorialUrl] = useState('');
-
-  // OAuth flow
-  const [oauthBusy, setOauthBusy] = useState(false);
-  const [oauthError, setOauthError] = useState('');
-  const [oauthPages, setOauthPages] = useState<{ pageId: string; pageName: string; pageToken: string }[]>([]);
-  const [showPagePicker, setShowPagePicker] = useState(false);
-  const [selectedOauthIdx, setSelectedOauthIdx] = useState(0);
-  const [oauthConnecting, setOauthConnecting] = useState(false);
 
   const bg     = dark ? '#080e1c' : '#f1f3fa';
   const panel  = dark ? '#0d1526' : '#fff';
@@ -278,90 +183,50 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
   const savedPages = alreadyConnected.filter((page) => !page.isActive);
 
   useEffect(() => {
-    request<ConnectedPage[]>(`${API_BASE}/facebook/my-pages`)
-      .then(pages => setAlreadyConnected(pages || []))
-      .catch(() => {});
-  }, [request]);
-
-  useEffect(() => {
     request<any>(`${API_BASE}/client-dashboard/tutorials`)
       .then(t => { if (t?.pageConnect) setPageConnectTutorialUrl(t.pageConnect); })
       .catch(() => {});
   }, [request]);
 
   useEffect(() => {
-    if (tab === 'request') {
-      request<PageRequest[]>(`${API_BASE}/facebook/page-request/my`)
-        .then(r => setMyRequests(r || []))
-        .catch(() => {});
-    }
-  }, [tab, request]);
+    request<ModeratorAccessInfo>(`${API_BASE}/facebook/moderator-access-info`)
+      .then(info => setModeratorAccess(info || {}))
+      .catch(() => {});
+  }, [request]);
 
-  // Consume oauthResult param after FB redirects back
+  const refreshRequestsAndPages = useCallback(() => {
+    request<PageRequest[]>(`${API_BASE}/facebook/page-request/my`)
+      .then(r => setMyRequests(r || []))
+      .catch(() => {});
+    request<ConnectedPage[]>(`${API_BASE}/facebook/my-pages`)
+      .then(pages => setAlreadyConnected(pages || []))
+      .catch(() => {});
+  }, [request]);
+
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const resultId = params.get('oauthResult');
-    if (!resultId) return;
-    // clean URL immediately so refresh doesn't re-trigger
-    window.history.replaceState({}, '', window.location.pathname + '?mode=connect-page');
-    setTab('manual');
-    setOauthBusy(true);
-    request<{ pages: { pageId: string; pageName: string; pageToken: string }[] }>(
-      `${API_BASE}/facebook/oauth-result/${resultId}`,
-    )
-      .then(data => {
-        const pages = data?.pages || [];
-        if (pages.length === 0) {
-          setOauthError(copy('কোনো page পাওয়া যায়নি।', 'No pages found.'));
-        } else if (pages.length === 1) {
-          connectOauthPage(pages[0]);
-        } else {
-          setOauthPages(pages);
-          setShowPagePicker(true);
-        }
-      })
-      .catch((e: any) => setOauthError(e?.message || copy('OAuth result load হয়নি।', 'Could not load OAuth result.')))
-      .finally(() => setOauthBusy(false));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    refreshRequestsAndPages();
+  }, [refreshRequestsAndPages]);
 
-  const connectOauthPage = async (page: { pageId: string; pageName: string; pageToken: string }) => {
-    setOauthConnecting(true); setError(''); setOauthError('');
-    try {
-      await request(`${API_BASE}/facebook/connect`, {
-        method: 'POST',
-        body: JSON.stringify({ pageId: page.pageId, pageName: page.pageName, pageToken: page.pageToken }),
-      });
-      setManualSuccess(true);
-      setShowPagePicker(false);
-      onConnected();
-    } catch (e: any) {
-      setOauthError(e?.message || copy('Page connect হয়নি।', 'Page connect failed.'));
-    } finally {
-      setOauthConnecting(false);
-    }
-  };
-
-  const handleOAuthClick = async () => {
-    setOauthBusy(true); setOauthError(''); setError('');
-    try {
-      const data: any = await request(`${API_BASE}/facebook/oauth-url`);
-      if (data?.url) window.location.href = data.url;
-      else setOauthError(copy('OAuth URL পাওয়া যায়নি।', 'Could not get OAuth URL.'));
-    } catch (e: any) {
-      setOauthError(e?.message || copy('OAuth শুরু করা যায়নি।', 'Could not start OAuth.'));
-      setOauthBusy(false);
-    }
-  };
+  // While any request is still pending, poll so an admin approval (from
+  // Telegram or the dashboard) shows up here automatically — no re-login,
+  // no extra click needed on the client's end.
+  useEffect(() => {
+    if (!myRequests.some(r => r.status === 'pending')) return;
+    const id = setInterval(refreshRequestsAndPages, 15_000);
+    return () => clearInterval(id);
+  }, [myRequests, refreshRequestsAndPages]);
 
   const submitPageRequest = async () => {
     if (!reqPageUrl.trim()) { setError(copy('Facebook Page link দিন', 'Enter your Facebook Page link')); return; }
-    if (!reqFbProfile.trim()) { setError(copy('আপনার Facebook profile link দিন', 'Enter your Facebook profile link')); return; }
     setReqBusy(true); setError('');
     try {
       await request(`${API_BASE}/facebook/page-request`, {
         method: 'POST',
-        body: JSON.stringify({ pageUrl: reqPageUrl.trim(), fbProfile: reqFbProfile.trim(), note: reqNote.trim() || undefined }),
+        body: JSON.stringify({
+          pageUrl: reqPageUrl.trim(),
+          fbProfile: reqFbProfile.trim() || undefined,
+          note: reqNote.trim() || undefined,
+        }),
       });
       setReqSubmitted(true);
       const updated = await request<PageRequest[]>(`${API_BASE}/facebook/page-request/my`);
@@ -371,6 +236,14 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
     } finally {
       setReqBusy(false);
     }
+  };
+
+  const copyToClipboard = (field: 'profile' | 'email', value: string) => {
+    if (!value) return;
+    navigator.clipboard.writeText(value).then(() => {
+      setCopiedField(field);
+      setTimeout(() => setCopiedField(''), 1500);
+    });
   };
 
   const connectManual = async () => {
@@ -552,186 +425,123 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
         )}
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {/* Tab bar — 2 tabs only */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-            {(['request', 'manual'] as const).map((t) => {
-              const labels: Record<string, string> = {
-                request: copy('📋 Request Access', '📋 Request Access'),
-                manual: copy('🔑 Access Token', '🔑 Access Token'),
-              };
-              return (
-                <div key={t} style={{ position: 'relative' }}>
-                  <button onClick={() => { setTab(t); setError(''); }}
-                    style={{
-                      width: '100%', padding: '9px 8px', borderRadius: 12, fontSize: 12,
-                      border: `1px solid ${tab === t ? '#6366f1' : border}`,
-                      background: tab === t ? (dark ? 'rgba(99,102,241,0.16)' : 'rgba(99,102,241,0.08)') : 'transparent',
-                      color: tab === t ? '#6366f1' : text, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit',
-                    }}
-                  >{labels[t]}</button>
-                  {t === 'request' && (
-                    <span style={{ position: 'absolute', top: -7, right: 6, background: '#22c55e', color: '#fff', fontSize: 9, fontWeight: 800, padding: '1px 6px', borderRadius: 20, letterSpacing: '0.04em' }}>
-                      {copy('প্রস্তাবিত', 'Recommended')}
-                    </span>
-                  )}
-                </div>
-              );
-            })}
+          {/* Moderator Access info — admin's FB profile/Gmail to add as moderator */}
+          <div style={{ background: dark ? 'rgba(99,102,241,0.08)' : 'rgba(99,102,241,0.05)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 12, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ fontWeight: 800, fontSize: 13, color: '#6366f1' }}>
+              🛡️ {copy('Admin-কে Page Moderator হিসেবে Add করুন', 'Add Admin as a Page Moderator')}
+            </div>
+            <div style={{ fontSize: 12, color: muted, lineHeight: 1.7 }}>
+              {copy(
+                'কোনো Developer Account লাগবে না। শুধু নিচের profile/Gmail-কে আপনার Facebook Page-এ moderator হিসেবে add করুন — এটাই সবচেয়ে সহজ ও নিরাপদ পদ্ধতি।',
+                'No Developer Account needed. Just add the profile/Gmail below as a moderator on your Facebook Page — this is the simplest and safest method.',
+              )}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <code style={{ flex: 1, background: dark ? 'rgba(0,0,0,0.2)' : '#fff', padding: '8px 12px', borderRadius: 8, fontSize: 12, color: text, wordBreak: 'break-all', fontFamily: 'monospace', border: `1px solid ${border}` }}>
+                  {moderatorAccess.fbProfileLink || copy('(এখনো সেট করা হয়নি)', '(not set yet)')}
+                </code>
+                <button onClick={() => copyToClipboard('profile', moderatorAccess.fbProfileLink || '')} disabled={!moderatorAccess.fbProfileLink}
+                  style={{ border: `1px solid rgba(99,102,241,0.4)`, borderRadius: 7, padding: '6px 12px', background: 'rgba(99,102,241,0.1)', color: '#6366f1', cursor: moderatorAccess.fbProfileLink ? 'pointer' : 'default', fontSize: 11, fontWeight: 700, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                  {copiedField === 'profile' ? copy('✓ Copied', '✓ Copied') : copy('Copy', 'Copy')}
+                </button>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <code style={{ flex: 1, background: dark ? 'rgba(0,0,0,0.2)' : '#fff', padding: '8px 12px', borderRadius: 8, fontSize: 12, color: text, wordBreak: 'break-all', fontFamily: 'monospace', border: `1px solid ${border}` }}>
+                  {moderatorAccess.email || copy('(এখনো সেট করা হয়নি)', '(not set yet)')}
+                </code>
+                <button onClick={() => copyToClipboard('email', moderatorAccess.email || '')} disabled={!moderatorAccess.email}
+                  style={{ border: `1px solid rgba(99,102,241,0.4)`, borderRadius: 7, padding: '6px 12px', background: 'rgba(99,102,241,0.1)', color: '#6366f1', cursor: moderatorAccess.email ? 'pointer' : 'default', fontSize: 11, fontWeight: 700, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                  {copiedField === 'email' ? copy('✓ Copied', '✓ Copied') : copy('Copy', 'Copy')}
+                </button>
+              </div>
+            </div>
+            <div style={{ fontSize: 11.5, color: muted, lineHeight: 1.7 }}>
+              → {copy(
+                'আপনার Page → Settings → Page access/Page roles → Add People → উপরের profile link বা Gmail দিয়ে moderator হিসেবে add করুন।',
+                'Your Page → Settings → Page access/Page roles → Add People → add the profile link or Gmail above as a moderator.',
+              )}
+            </div>
           </div>
 
-          {/* ── Request Access tab ── */}
-          {tab === 'request' ? (
+          {myRequests.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ fontSize: 11, color: muted, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                {copy('আপনার Requests', 'Your Requests')}
+              </div>
+              {myRequests.map(r => {
+                const statusColor = r.status === 'approved' ? '#16a34a' : r.status === 'rejected' ? '#ef4444' : '#f59e0b';
+                const statusLabel = r.status === 'approved' ? copy('✅ Approved', '✅ Approved') : r.status === 'rejected' ? copy('❌ Rejected', '❌ Rejected') : copy('⏳ Pending — Admin review করছে', '⏳ Pending — awaiting admin review');
+                return (
+                  <div key={r.id} style={{ border: `1px solid ${border}`, borderRadius: 10, padding: '10px 13px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                      <div style={{ fontSize: 12.5, fontWeight: 700, color: text }}>{r.pageUrl}</div>
+                      <span style={{ fontSize: 11, fontWeight: 800, color: statusColor }}>{statusLabel}</span>
+                    </div>
+                    {r.adminNote && (
+                      <div style={{ fontSize: 11.5, color: muted, marginTop: 3 }}>💬 {r.adminNote}</div>
+                    )}
+                    {r.status === 'approved' && (
+                      <div style={{ marginTop: 6, padding: '8px 10px', background: 'rgba(34,197,94,0.08)', borderRadius: 8, fontSize: 12, color: '#16a34a', fontWeight: 600 }}>
+                        🎉 {copy('আপনার page connect হয়ে গেছে! উপরের "Active Pages" এ দেখুন।', 'Your page is connected! Check "Active Pages" above.')}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              <div style={{ height: 1, background: border }} />
+            </div>
+          )}
+
+          {!reqSubmitted && !myRequests.some(r => r.status === 'pending' || r.status === 'approved') ? (
             <>
-              {/* Demo path explainer */}
-              <div style={{ background: dark ? 'rgba(99,102,241,0.08)' : 'rgba(99,102,241,0.05)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 12, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <div style={{ fontWeight: 800, fontSize: 13, color: '#6366f1' }}>
-                  🎯 {copy('Demo-র জন্য Tester হিসেবে যোগ দিন', 'Join as a Tester for Demo')}
-                </div>
-                <div style={{ fontSize: 12, color: muted, lineHeight: 1.7 }}>
-                  {copy(
-                    'আমাদের Facebook App ব্যবহার করে আপনার page-এ bot চালু করতে পারবেন। এটি সবচেয়ে সহজ পদ্ধতি — নিজের কোনো app বানাতে হবে না।',
-                    'You can run the bot on your page using our Facebook App. This is the easiest method — no need to create your own app.',
-                  )}
-                </div>
-                {/* Developer Account prerequisite warning */}
-                <div style={{ background: dark ? 'rgba(239,68,68,0.1)' : 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 9, padding: '10px 12px', display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-                  <span style={{ fontSize: 16, flexShrink: 0 }}>⚠️</span>
-                  <div>
-                    <div style={{ fontWeight: 800, fontSize: 12.5, color: '#ef4444', marginBottom: 3 }}>
-                      {copy('প্রথমে Facebook Developer Account লাগবে!', 'You need a Facebook Developer Account first!')}
-                    </div>
-                    <div style={{ fontSize: 11.5, color: muted, lineHeight: 1.7 }}>
-                      {copy(
-                        'Tester invite notification পেতে হলে আপনার অবশ্যই একটি Facebook Developer Account থাকতে হবে। Developer Account ছাড়া invite notification আসবে না।',
-                        'To receive the Tester invite notification, you must have a Facebook Developer Account. Without it, the invite notification will not appear.',
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Developer Account creation guide — collapsible */}
-                <DevAccountGuide dark={dark} panel={panel} border={border} text={text} muted={muted} copy={copy} />
-
-                {[
-                  {
-                    n: '১',
-                    title: copy('নিচের form পূরণ করুন', 'Fill the form below'),
-                    desc: copy('আপনার Facebook Page-এর link এবং আপনার Facebook Profile-এর link দিন। Admin এই তথ্য দিয়ে আপনাকে Tester হিসেবে add করবে।', 'Enter your Facebook Page link and your Facebook Profile link. Admin will use this to add you as a Tester.'),
-                  },
-                  {
-                    n: '২',
-                    title: copy('Facebook-এ Invite Accept করুন', 'Accept the Invite on Facebook'),
-                    desc: copy(
-                      'Admin add করলে আপনার Facebook account-এ একটি notification আসবে — "Developer Tester Invitation"। সেটি Accept করুন।\n→ facebook.com এ যান → Notifications → Tester invitation খুঁজুন → Accept করুন।\n\n⚠️ মনে রাখুন: Invite accept করলেই page connect হয়ে যাবে না — এটি শুধু আপনাকে আমাদের App ব্যবহারের permission দেয়। পরের ধাপে Access Token নিতে হবে।',
-                      'Once Admin adds you, you will receive a notification on Facebook — "Developer Tester Invitation". Accept it.\n→ Go to facebook.com → Notifications → find the Tester invitation → Accept it.\n\n⚠️ Note: Accepting the invite does NOT connect your page — it only gives you permission to use our App. You still need to get an Access Token in the next step.',
-                    ),
-                  },
-                  {
-                    n: '৩',
-                    title: copy('"Access Token" Tab থেকে Page Connect করুন', 'Connect your Page from the "Access Token" tab'),
-                    desc: copy(
-                      'Invitation accept করার পর উপরের "Access Token" tab-এ click করুন। Graph API Explorer-এ গিয়ে আমাদের App select করুন, আপনার Page select করুন, token generate করুন এবং নিচের form-এ paste করে Page Connect করুন।',
-                      'After accepting the invitation, click the "Access Token" tab above. Go to Graph API Explorer, select our App, select your Page, generate the token, and paste it in the form to connect your page.',
-                    ),
-                  },
-                ].map(({ n, title, desc }) => (
-                  <div key={n} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-                    <div style={{ minWidth: 22, height: 22, borderRadius: '50%', background: 'rgba(99,102,241,0.2)', color: '#6366f1', fontSize: 11, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 1, flexShrink: 0 }}>{n}</div>
-                    <div>
-                      <div style={{ fontWeight: 700, fontSize: 12.5, color: text, marginBottom: 2 }}>{title}</div>
-                      <div style={{ color: muted, fontSize: 12, lineHeight: 1.7, whiteSpace: 'pre-line' }}>{desc}</div>
-                    </div>
-                  </div>
-                ))}
-                <div style={{ background: dark ? 'rgba(251,191,36,0.08)' : 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.25)', borderRadius: 8, padding: '8px 12px', fontSize: 11.5, color: text }}>
-                  💡 {copy('পরবর্তীতে নিজের Facebook App বানিয়ে নিলে আরো ভালো — কারণ তখন আপনার page সম্পূর্ণ আপনার নিয়ন্ত্রণে থাকবে। উপরের "Access Token" tab-এ সেই guide আছে।', 'Later, creating your own Facebook App is better — your page will be fully under your control. The guide is in the "Access Token" tab above.')}
+              <div>
+                <label style={{ fontSize: 12, color: muted, fontWeight: 600, display: 'block', marginBottom: 5 }}>
+                  {copy('Facebook Page Link *', 'Facebook Page Link *')}
+                </label>
+                <input style={inp} value={reqPageUrl} onChange={e => setReqPageUrl(e.target.value)}
+                  placeholder="https://facebook.com/yourpage বা yourpage" />
+                <div style={{ fontSize: 11, color: muted, marginTop: 4 }}>
+                  {copy('আপনার Facebook Page এর link বা username', 'Your Facebook Page link or username')}
                 </div>
               </div>
-
-              {myRequests.length > 0 && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <div style={{ fontSize: 11, color: muted, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-                    {copy('আপনার Requests', 'Your Requests')}
-                  </div>
-                  {myRequests.map(r => {
-                    const statusColor = r.status === 'approved' ? '#16a34a' : r.status === 'rejected' ? '#ef4444' : '#f59e0b';
-                    const statusLabel = r.status === 'approved' ? copy('✅ Approved', '✅ Approved') : r.status === 'rejected' ? copy('❌ Rejected', '❌ Rejected') : copy('⏳ Pending', '⏳ Pending');
-                    return (
-                      <div key={r.id} style={{ border: `1px solid ${border}`, borderRadius: 10, padding: '10px 13px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                          <div style={{ fontSize: 12.5, fontWeight: 700, color: text }}>{r.pageUrl}</div>
-                          <span style={{ fontSize: 11, fontWeight: 800, color: statusColor }}>{statusLabel}</span>
-                        </div>
-                        {r.adminNote && (
-                          <div style={{ fontSize: 11.5, color: muted, marginTop: 3 }}>💬 {r.adminNote}</div>
-                        )}
-                        {r.status === 'approved' && (
-                          <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                            <div style={{ padding: '8px 10px', background: 'rgba(34,197,94,0.08)', borderRadius: 8, fontSize: 12, color: '#16a34a', fontWeight: 600 }}>
-                              🎉 {copy('Approved! নিচের বাটনে click করে Facebook দিয়ে আপনার page connect করুন।', 'Approved! Click the button below to connect your page via Facebook.')}
-                            </div>
-                            <button onClick={handleOAuthClick} disabled={oauthBusy || oauthConnecting}
-                              style={{ width: '100%', padding: '12px', borderRadius: 11, border: 'none', background: (oauthBusy || oauthConnecting) ? 'rgba(24,119,242,0.5)' : '#1877f2', color: '#fff', fontWeight: 800, fontSize: 14, cursor: (oauthBusy || oauthConnecting) ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontFamily: 'inherit' }}>
-                              {(oauthBusy || oauthConnecting) ? <><Spinner size={14} /> {copy('অপেক্ষা করুন...', 'Please wait...')}</> : <>{copy('🔵 Facebook দিয়ে Page Connect করুন', '🔵 Connect Page with Facebook')}</>}
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                  <div style={{ height: 1, background: border }} />
-                </div>
-              )}
-
-              {!reqSubmitted && !myRequests.some(r => r.status === 'approved') ? (
-                <>
-                  <div>
-                    <label style={{ fontSize: 12, color: muted, fontWeight: 600, display: 'block', marginBottom: 5 }}>
-                      {copy('Facebook Page Link *', 'Facebook Page Link *')}
-                    </label>
-                    <input style={inp} value={reqPageUrl} onChange={e => setReqPageUrl(e.target.value)}
-                      placeholder="https://facebook.com/yourpage বা yourpage" />
-                    <div style={{ fontSize: 11, color: muted, marginTop: 4 }}>
-                      {copy('আপনার Facebook Page এর link বা username', 'Your Facebook Page link or username')}
-                    </div>
-                  </div>
-                  <div>
-                    <label style={{ fontSize: 12, color: muted, fontWeight: 600, display: 'block', marginBottom: 5 }}>
-                      {copy('আপনার Facebook Profile Link *', 'Your Facebook Profile Link *')}
-                    </label>
-                    <input style={inp} value={reqFbProfile} onChange={e => setReqFbProfile(e.target.value)}
-                      placeholder="https://facebook.com/yourprofile" />
-                    <div style={{ fontSize: 11, color: muted, marginTop: 4 }}>
-                      {copy('Admin এই link দিয়ে আপনাকে Tester হিসেবে add করবে', 'Admin will use this to add you as Tester')}
-                    </div>
-                  </div>
-                  <div>
-                    <label style={{ fontSize: 12, color: muted, fontWeight: 600, display: 'block', marginBottom: 5 }}>
-                      {copy('Note (optional)', 'Note (optional)')}
-                    </label>
-                    <textarea style={{ ...inp, resize: 'vertical', minHeight: 60, lineHeight: 1.5 }}
-                      value={reqNote} onChange={e => setReqNote(e.target.value)}
-                      placeholder={copy('অতিরিক্ত কিছু জানাতে চাইলে লিখুন...', 'Any additional info for the admin...')} />
-                  </div>
-                  <button onClick={submitPageRequest} disabled={reqBusy}
-                    style={{ width: '100%', padding: '13px', borderRadius: 13, border: 'none', background: reqBusy ? 'rgba(99,102,241,0.5)' : '#6366f1', color: '#fff', fontWeight: 800, fontSize: 15, cursor: reqBusy ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, fontFamily: 'inherit' }}>
-                    {reqBusy ? <><Spinner size={15} /> {copy('Submitting...', 'Submitting...')}</> : copy('📤 Request Submit করুন', 'Submit Request')}
-                  </button>
-                </>
-              ) : (
-                <div style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.3)', borderRadius: 12, padding: '14px 16px', fontSize: 13, color: '#16a34a', fontWeight: 700, textAlign: 'center' }}>
-                  ✅ {copy('Request submit হয়েছে! Admin review করে approve করবে।', 'Request submitted! Admin will review and approve.')}
-                </div>
-              )}
+              <div>
+                <label style={{ fontSize: 12, color: muted, fontWeight: 600, display: 'block', marginBottom: 5 }}>
+                  {copy('আপনার Facebook Profile Link (optional)', 'Your Facebook Profile Link (optional)')}
+                </label>
+                <input style={inp} value={reqFbProfile} onChange={e => setReqFbProfile(e.target.value)}
+                  placeholder="https://facebook.com/yourprofile" />
+              </div>
+              <div>
+                <label style={{ fontSize: 12, color: muted, fontWeight: 600, display: 'block', marginBottom: 5 }}>
+                  {copy('Note (optional)', 'Note (optional)')}
+                </label>
+                <textarea style={{ ...inp, resize: 'vertical', minHeight: 60, lineHeight: 1.5 }}
+                  value={reqNote} onChange={e => setReqNote(e.target.value)}
+                  placeholder={copy('অতিরিক্ত কিছু জানাতে চাইলে লিখুন...', 'Any additional info for the admin...')} />
+              </div>
+              <button onClick={submitPageRequest} disabled={reqBusy}
+                style={{ width: '100%', padding: '13px', borderRadius: 13, border: 'none', background: reqBusy ? 'rgba(99,102,241,0.5)' : '#6366f1', color: '#fff', fontWeight: 800, fontSize: 15, cursor: reqBusy ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, fontFamily: 'inherit' }}>
+                {reqBusy ? <><Spinner size={15} /> {copy('Submitting...', 'Submitting...')}</> : copy('📤 Request Submit করুন', 'Submit Request')}
+              </button>
             </>
           ) : (
-            /* ── Access Token (manual) tab ── */
-            <>
-              {oauthError && !manualSuccess && (
-                <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 9, padding: '9px 12px', fontSize: 12.5, color: '#ef4444', fontWeight: 600 }}>
-                  ⚠️ {oauthError}
-                </div>
-              )}
+            <div style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.3)', borderRadius: 12, padding: '14px 16px', fontSize: 13, color: '#16a34a', fontWeight: 700, textAlign: 'center' }}>
+              ✅ {copy('Request submit হয়েছে! Admin moderator access দেখে approve করলে page automatically connect হয়ে যাবে — আপনাকে আর কিছু করতে হবে না।', 'Request submitted! Once the admin verifies moderator access and approves, your page connects automatically — no further action needed from you.')}
+            </div>
+          )}
+
+          {/* ── Advanced: bring-your-own Facebook Developer App ── */}
+          <div style={{ borderTop: `1px solid ${border}`, marginTop: 6, paddingTop: 14 }}>
+            <button
+              onClick={() => setShowAdvanced(v => !v)}
+              style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 2px', background: 'transparent', border: 'none', cursor: 'pointer', color: text, fontFamily: 'inherit', fontWeight: 800, fontSize: 13 }}
+            >
+              <span>⚙️ {copy('Advanced: নিজের Facebook Developer App দিয়ে Connect করুন', 'Advanced: Connect with your own Facebook Developer App')}</span>
+              <span style={{ color: muted, fontSize: 11 }}>{showAdvanced ? '▲' : '▼'}</span>
+            </button>
+            {showAdvanced && (
+              <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 14 }}>
 
               {/* ── Personal App full guide (collapsible) ── */}
               <div style={{ borderRadius: 12, border: `1px solid rgba(99,102,241,0.3)`, overflow: 'hidden', background: dark ? 'rgba(99,102,241,0.05)' : 'rgba(99,102,241,0.03)' }}>
@@ -1091,8 +901,9 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
                   </button>
                 </div>
               )}
-            </>
-          )}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Goto dashboard for active pages */}
@@ -1151,10 +962,10 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
                 {copy('দ্রুত শুরুর ধাপ:', 'Quick start steps:')}
               </div>
               {[
-                copy('১. Meta Developer Account খুলুন', '1. Create Meta Developer Account'),
-                copy('২. Request Access form পূরণ করুন', '2. Fill the Request Access form'),
-                copy('৩. Admin Approve করলে Tester invite Accept করুন', '3. Accept Tester invite after admin approval'),
-                copy('৪. Access Token দিয়ে page connect করুন', '4. Connect page with Access Token'),
+                copy('১. Admin-কে আপনার Page-এ moderator হিসেবে add করুন', '1. Add the admin as a moderator on your Page'),
+                copy('২. Request form submit করুন', '2. Submit the request form'),
+                copy('৩. Admin Facebook দিয়ে login করে approve করবে', '3. Admin logs in with Facebook and approves'),
+                copy('৪. আপনার page automatically connect হয়ে যাবে', '4. Your page connects automatically'),
               ].map((step, i) => (
                 <div key={i} style={{ fontSize: 12, color: muted, padding: '7px 10px', borderRadius: 8, background: dark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)', border: `1px solid ${border}` }}>
                   {step}
@@ -1172,69 +983,6 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
           </div>
         )}
       </div>
-
-      {/* ── OAuth Page Picker Modal ── */}
-      {showPagePicker && (
-        <div style={{
-          position: 'fixed', inset: 0, zIndex: 1000,
-          background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
-        }}>
-          <div style={{
-            background: panel, border: `1px solid ${border}`, borderRadius: 18,
-            padding: 24, width: '100%', maxWidth: 400, display: 'flex', flexDirection: 'column', gap: 14,
-          }}>
-            <div style={{ fontWeight: 800, fontSize: 16, color: text }}>
-              📋 {copy('কোন page connect করবেন?', 'Which page to connect?')}
-            </div>
-            <div style={{ fontSize: 12.5, color: muted }}>
-              {copy('আপনার Facebook account-এ একাধিক page পাওয়া গেছে। একটি select করুন।', 'Multiple pages found in your Facebook account. Please select one.')}
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {oauthPages.map((p, i) => (
-                <button
-                  key={p.pageId}
-                  onClick={() => setSelectedOauthIdx(i)}
-                  style={{
-                    padding: '12px 14px', borderRadius: 11, border: `2px solid ${selectedOauthIdx === i ? '#6366f1' : border}`,
-                    background: selectedOauthIdx === i ? (dark ? 'rgba(99,102,241,0.15)' : 'rgba(99,102,241,0.07)') : 'transparent',
-                    color: text, fontWeight: selectedOauthIdx === i ? 800 : 600, fontSize: 13,
-                    cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
-                    display: 'flex', alignItems: 'center', gap: 10,
-                  }}
-                >
-                  <span style={{ width: 18, height: 18, borderRadius: '50%', border: `2px solid ${selectedOauthIdx === i ? '#6366f1' : muted}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    {selectedOauthIdx === i && <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#6366f1', display: 'block' }} />}
-                  </span>
-                  <div>
-                    <div>{p.pageName}</div>
-                    <div style={{ fontSize: 11, color: muted, fontWeight: 500 }}>{p.pageId}</div>
-                  </div>
-                </button>
-              ))}
-            </div>
-            {oauthError && (
-              <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 9, padding: '9px 12px', fontSize: 12.5, color: '#ef4444' }}>
-                ⚠️ {oauthError}
-              </div>
-            )}
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button
-                onClick={() => setShowPagePicker(false)}
-                style={{ flex: 1, padding: '11px', borderRadius: 11, border: `1px solid ${border}`, background: 'transparent', color: muted, fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}
-              >
-                {copy('বাতিল', 'Cancel')}
-              </button>
-              <button
-                onClick={() => connectOauthPage(oauthPages[selectedOauthIdx])}
-                disabled={oauthConnecting}
-                style={{ flex: 2, padding: '11px', borderRadius: 11, border: 'none', background: oauthConnecting ? 'rgba(99,102,241,0.5)' : '#6366f1', color: '#fff', fontWeight: 800, fontSize: 13, cursor: oauthConnecting ? 'default' : 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
-              >
-                {oauthConnecting ? <><Spinner size={13} /> {copy('Connecting...', 'Connecting...')}</> : copy('✅ এই page connect করুন', 'Connect this page')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

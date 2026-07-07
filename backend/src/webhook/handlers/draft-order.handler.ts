@@ -574,17 +574,34 @@ export class DraftOrderHandler {
       parsed = this.parseCustomerInfo(workingText);
     }
 
-    if (!draft.customerName && parsed.name) draft.customerName = parsed.name;
+    if (!draft.customerName && parsed.name && !this.isFillerWord(parsed.name)) {
+      draft.customerName = parsed.name;
+    }
     if (!draft.phone && parsed.phone) draft.phone = parsed.phone;
-    if (!draft.address && parsed.address) draft.address = parsed.address;
+    // Only trust an address extracted at the 'name' step when it came from a genuine
+    // multi-field message that ALSO produced a name or phone (e.g. "Limon, Mirpur, Dhaka").
+    // A lone address-shaped reply to "what's your name?" must never silently become the
+    // address — it's handled as a name-step fallback below instead.
+    if (
+      !draft.address &&
+      parsed.address &&
+      (step !== 'name' || parsed.name || parsed.phone)
+    ) {
+      draft.address = parsed.address;
+    }
 
-    // At name step: if parser didn't find a name (may have mis-classified as address
-    // due to length heuristic), treat the raw input as the name directly.
-    if (step === 'name' && !parsed.name && !parsed.phone) {
+    // At name step: if parser didn't find a usable name (may have mis-classified as
+    // address due to length heuristic, or been a filler word), treat the raw input as
+    // the name — but still reject filler/greeting words ("ok"/"hi") so the bot re-asks.
+    if (step === 'name' && !draft.customerName) {
       if (this.botIntent.detectIntent(workingText, false) === 'CANCEL') {
         return fields.name.retryPrompt;
       }
-      draft.customerName = workingText.trim().slice(0, 80);
+      const raw = workingText.trim();
+      if (this.isFillerWord(raw)) {
+        return fields.name.retryPrompt;
+      }
+      if (!parsed.phone) draft.customerName = raw.slice(0, 80);
     }
 
     // If smart parser found nothing, apply strict current-step logic
@@ -1128,13 +1145,28 @@ export class DraftOrderHandler {
   }
 
   private isAdvanceNeeded(draft: DraftSession, page: any): boolean {
+    if (draft.paymentProof) return false; // already collected — never re-ask
+
+    // COD entirely disabled by merchant → advance always required, regardless of
+    // paymentMode/threshold (merchant said "no COD", not "COD above X taka").
+    if (page.codEnabled === false) return true;
+
     const mode = (page.paymentMode as string) || 'cod';
     if (mode === 'cod') return false;
-    if (mode === 'full_advance') return !draft.paymentProof; // always, unless already collected
-    if (mode === 'advance_outside') {
-      return (
-        !this.isInsideDhaka(draft.address || '', page) && !draft.paymentProof
+
+    // Order-value threshold: skip advance when subtotal is at/under the configured amount.
+    const threshold = Number(page.advanceThresholdAmount) || 0;
+    if (threshold > 0) {
+      const subtotal = draft.items.reduce(
+        (s: number, i: any) => s + i.unitPrice * i.qty,
+        0,
       );
+      if (subtotal <= threshold) return false;
+    }
+
+    if (mode === 'full_advance') return true;
+    if (mode === 'advance_outside') {
+      return !this.isInsideDhaka(draft.address || '', page);
     }
     return false;
   }
@@ -1268,6 +1300,27 @@ export class DraftOrderHandler {
     );
   }
 
+  private static readonly NAME_DENYLIST = new Set([
+    'ok', 'okk', 'okay', 'okey', 'k', 'kk',
+    'hi', 'hii', 'hello', 'hey',
+    'yes', 'ya', 'na', 'no',
+    'thanks', 'thank you', 'tnx', 'thx',
+    'হ্যাঁ', 'জি', 'জি হ্যাঁ', 'আচ্ছা', 'ধন্যবাদ',
+    'thik', 'thik ache', 'thik ase', 'accha', 'achha',
+  ]);
+
+  /** True for greeting/affirmation filler words that should never be captured as a name. */
+  private isFillerWord(text: string): boolean {
+    const clean = text.trim().toLowerCase().replace(/[.,!?।~]/g, '').trim();
+    return !clean || DraftOrderHandler.NAME_DENYLIST.has(clean);
+  }
+
+  /** Heuristic: does this look like a genuine question rather than field data? */
+  looksLikeQuestion(text: string): boolean {
+    const t = text.trim();
+    return t.includes('?') || (t.includes('।') === false && /কি|কী|কেন|কোন|কত/.test(t));
+  }
+
   private extractPhone(text: string): string | null {
     const normalized = text.replace(/[০-৯]/g, (d) =>
       String('০১২৩৪৫৬৭৮৯'.indexOf(d)),
@@ -1306,19 +1359,18 @@ export class DraftOrderHandler {
     }
 
     if (step === 'name') {
-      // Short text with no phone, no geo keyword, no question mark, no product code → name
+      // Short text with no phone, no geo keyword, no question mark, no product code,
+      // and not a generic filler/greeting word → name
       const hasPhone = /\d{7,}/.test(t);
-      const hasQuestion =
-        t.includes('?') ||
-        (t.includes('।') === false && /কি|কী|কেন|কোন|কত/.test(t));
       const hasCode = /\bDF[-\s]?\d{3,}/i.test(t);
       const isShort = t.length <= 50 && t.split(' ').length <= 6;
       if (
         isShort &&
         !hasPhone &&
-        !hasQuestion &&
+        !this.looksLikeQuestion(t) &&
         !hasCode &&
-        !this.hasGeoKeyword(t)
+        !this.hasGeoKeyword(t) &&
+        !this.isFillerWord(t)
       ) {
         return t;
       }

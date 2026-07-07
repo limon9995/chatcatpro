@@ -12,10 +12,17 @@ import { AuthService } from '../auth/auth.service';
 import { EncryptionService } from '../common/encryption.service';
 import { BillingService } from '../billing/billing.service';
 import { TelegramService } from '../common/telegram.service';
+import { MailerService } from '../common/mailer.service';
 
 type PendingOAuthResult = {
   userId: string;
   pages: FacebookPageInfo[];
+  createdAt: number;
+};
+
+type PendingApproval = {
+  pageRequestId: number;
+  candidates: FacebookPageInfo[];
   createdAt: number;
 };
 
@@ -45,6 +52,22 @@ function readGlobalPricing(): typeof DEFAULT_PRICING {
   return { ...DEFAULT_PRICING };
 }
 
+// Reads the same storage/global-config.json file AdminService writes to —
+// avoids a circular module dependency (AdminModule already imports FacebookModule).
+function readModeratorAccessConfig(): { fbProfileLink: string; email: string } {
+  try {
+    const file = path.join(process.cwd(), 'storage', 'global-config.json');
+    if (fs.existsSync(file)) {
+      const cfg = JSON.parse(fs.readFileSync(file, 'utf8'));
+      return {
+        fbProfileLink: String(cfg?.moderatorAccess?.fbProfileLink || ''),
+        email: String(cfg?.moderatorAccess?.email || ''),
+      };
+    }
+  } catch {}
+  return { fbProfileLink: '', email: '' };
+}
+
 @Injectable()
 export class FacebookService {
   private readonly logger = new Logger(FacebookService.name);
@@ -54,7 +77,10 @@ export class FacebookService {
     process.env.FB_OAUTH_STATE_SECRET || this.appSecret || 'dfbot_state_secret';
   private readonly redirectUri =
     process.env.FB_REDIRECT_URI || 'http://localhost:3000/facebook/callback';
+  private readonly oauthScope =
+    'pages_show_list,pages_read_engagement,pages_messaging,pages_manage_metadata,pages_manage_engagement,pages_manage_posts';
   private readonly pendingOAuthResults = new Map<string, PendingOAuthResult>();
+  private readonly pendingApprovals = new Map<string, PendingApproval>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -62,32 +88,50 @@ export class FacebookService {
     private readonly encryption: EncryptionService,
     private readonly billing: BillingService,
     private readonly telegram: TelegramService,
+    private readonly mailer: MailerService,
   ) {}
+
+  private buildSignedState(payload: Record<string, unknown>): string {
+    const body = Buffer.from(
+      JSON.stringify({ ...payload, ts: Date.now() }),
+    ).toString('base64url');
+    const sig = crypto.createHmac('sha256', this.stateSecret).update(body).digest('hex');
+    return `${body}.${sig}`;
+  }
 
   getOAuthUrl(userId: string): string {
     if (!this.appId) throw new BadRequestException('FB_APP_ID not configured');
-    const payload = Buffer.from(
-      JSON.stringify({ userId, ts: Date.now() }),
-    ).toString('base64url');
-    const sig = crypto
-      .createHmac('sha256', this.stateSecret)
-      .update(payload)
-      .digest('hex');
-    const state = `${payload}.${sig}`;
-    const scope =
-      'pages_show_list,pages_read_engagement,pages_messaging,pages_manage_metadata,pages_manage_engagement,pages_manage_posts';
-    return `https://www.facebook.com/v19.0/dialog/oauth?client_id=${this.appId}&redirect_uri=${encodeURIComponent(this.redirectUri)}&scope=${scope}&state=${encodeURIComponent(state)}&response_type=code`;
+    const state = this.buildSignedState({ userId });
+    return `https://www.facebook.com/v19.0/dialog/oauth?client_id=${this.appId}&redirect_uri=${encodeURIComponent(this.redirectUri)}&scope=${this.oauthScope}&state=${encodeURIComponent(state)}&response_type=code`;
+  }
+
+  // Builds the same OAuth dialog URL, but with state that identifies this as
+  // an admin confirming moderator access for a specific PageRequest instead
+  // of a client connecting their own page.
+  getAdminApproveUrl(pageRequestId: number): string {
+    if (!this.appId) throw new BadRequestException('FB_APP_ID not configured');
+    const state = this.buildSignedState({
+      purpose: 'admin_approve_page_request',
+      pageRequestId,
+    });
+    return `https://www.facebook.com/v19.0/dialog/oauth?client_id=${this.appId}&redirect_uri=${encodeURIComponent(this.redirectUri)}&scope=${this.oauthScope}&state=${encodeURIComponent(state)}&response_type=code`;
   }
 
   async handleCallback(
     code: string,
     state: string,
-  ): Promise<{ pages: FacebookPageInfo[]; userId: string }> {
+  ): Promise<
+    | { pages: FacebookPageInfo[]; userId: string; purpose?: undefined }
+    | { pages: FacebookPageInfo[]; purpose: 'admin_approve_page_request'; pageRequestId: number }
+  > {
     if (!code) throw new BadRequestException('Missing OAuth code');
-    const { userId } = this.parseSignedState(state);
+    const parsed = this.parseSignedState(state);
     const userToken = await this.exchangeCodeForToken(code);
     const pages = await this.getUserPages(userToken);
-    return { pages, userId };
+    if (parsed.purpose === 'admin_approve_page_request') {
+      return { pages, purpose: parsed.purpose, pageRequestId: parsed.pageRequestId! };
+    }
+    return { pages, userId: parsed.userId! };
   }
 
   createPendingOAuthResult(userId: string, pages: FacebookPageInfo[]): string {
@@ -573,7 +617,11 @@ export class FacebookService {
     return segments[0];
   }
 
-  private parseSignedState(state: string): { userId: string; ts: number } {
+  private parseSignedState(
+    state: string,
+  ):
+    | { userId: string; purpose?: undefined; pageRequestId?: undefined; ts: number }
+    | { userId?: undefined; purpose: 'admin_approve_page_request'; pageRequestId: number; ts: number } {
     const [payload, sig] = String(state || '').split('.');
     if (!payload || !sig) throw new BadRequestException('Invalid state');
 
@@ -593,30 +641,36 @@ export class FacebookService {
       throw new BadRequestException('Invalid state payload');
     }
 
-    const userId = String(decoded?.userId || '').trim();
     const ts = Number(decoded?.ts || 0);
-    if (!userId || !ts) throw new BadRequestException('Invalid state payload');
-
+    if (!ts) throw new BadRequestException('Invalid state payload');
     const ageMs = Date.now() - ts;
     if (ageMs < 0 || ageMs > 15 * 60 * 1000) {
       throw new BadRequestException('OAuth state expired');
     }
 
+    if (decoded?.purpose === 'admin_approve_page_request') {
+      const pageRequestId = Number(decoded?.pageRequestId || 0);
+      if (!pageRequestId) throw new BadRequestException('Invalid state payload');
+      return { purpose: decoded.purpose, pageRequestId, ts };
+    }
+
+    const userId = String(decoded?.userId || '').trim();
+    if (!userId) throw new BadRequestException('Invalid state payload');
+
     return { userId, ts };
   }
 
-  // ── Page Access Request (client submits, admin approves) ──────────────────
+  // ── Page Access Request (client adds admin as moderator, admin approves) ──
 
   async submitPageRequest(
     userId: string,
     pageUrl: string,
-    fbProfile: string,
+    fbProfile?: string,
     note?: string,
   ) {
     const url = pageUrl.trim();
-    const profile = fbProfile.trim();
+    const profile = (fbProfile || '').trim();
     if (!url) throw new BadRequestException('Facebook page link দিন');
-    if (!profile) throw new BadRequestException('আপনার Facebook profile link দিন');
 
     const existing = await this.prisma.pageRequest.findFirst({
       where: { userId, pageUrl: url, status: 'pending' },
@@ -626,7 +680,7 @@ export class FacebookService {
     }
 
     const req = await this.prisma.pageRequest.create({
-      data: { userId, pageUrl: url, fbProfile: profile, note: note?.trim() || null },
+      data: { userId, pageUrl: url, fbProfile: profile || null, note: note?.trim() || null },
     });
     this.logger.log(`[PageRequest] New request #${req.id} from user ${userId}: ${url}`);
 
@@ -635,11 +689,12 @@ export class FacebookService {
       `📄 <b>নতুন Page Request!</b> #${req.id}\n` +
       `👤 User: ${user?.name || userId} (${user?.email || ''})\n` +
       `🔗 Page URL: ${url}\n` +
-      `👤 FB Profile: ${profile}\n` +
+      (profile ? `👤 FB Profile: ${profile}\n` : '') +
       (note ? `📝 Note: ${note}\n` : '') +
+      `ℹ️ Client জানিয়েছে যে আপনাকে moderator হিসেবে add করা হয়েছে।\n` +
       `🕐 সময়: ${new Date().toLocaleString('bn-BD', { timeZone: 'Asia/Dhaka' })}`,
       [[
-        { text: '✅ Approve', callback_data: `pagereq_approve_${req.id}` },
+        { text: '🔗 Login with Facebook & Approve', url: this.getAdminApproveUrl(req.id) },
         { text: '❌ Reject', callback_data: `pagereq_reject_${req.id}` },
       ]],
     );
@@ -652,6 +707,113 @@ export class FacebookService {
       where: { userId },
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  getModeratorAccessInfo(): { fbProfileLink: string; email: string } {
+    return readModeratorAccessConfig();
+  }
+
+  // Matches the pages an admin moderates/manages (returned by Facebook after
+  // login) against the page the client referenced in their request.
+  private matchCandidatePages(pageUrl: string, pages: FacebookPageInfo[]): FacebookPageInfo[] {
+    // Common case: the admin only moderates one relevant page at that moment.
+    if (pages.length === 1) return pages;
+
+    const ref = this.parsePageReference(pageUrl);
+    if (!ref) return [];
+
+    if (/^\d+$/.test(ref)) {
+      const byId = pages.filter((p) => p.pageId === ref);
+      if (byId.length) return byId;
+    }
+
+    return pages.filter((p) => p.pageName.toLowerCase() === ref.toLowerCase());
+  }
+
+  private async finalizeApproval(
+    req: { id: number; userId: string; user: { name: string | null; email: string | null } },
+    matched: FacebookPageInfo,
+  ): Promise<{ status: 'connected'; pageName: string }> {
+    const result = await this.connectPage(req.userId, matched);
+
+    await this.prisma.pageRequest.update({
+      where: { id: req.id },
+      data: { status: 'approved', connectedPageId: result.page.id },
+    });
+
+    if (req.user.email) {
+      void this.mailer.sendMail(
+        req.user.email,
+        'আপনার Facebook Page Connect হয়েছে — ChatCat Pro',
+        `<p>স্বাগতম! আপনার Facebook Page <strong>${result.page.pageName}</strong> সফলভাবে ChatCat Pro-এর সাথে connect হয়েছে।</p>`,
+      );
+    }
+
+    void this.telegram.sendMessage(
+      `✅ Page Request #${req.id} approved — <b>${result.page.pageName}</b> connected to ${req.user.name || req.userId}.`,
+    );
+
+    return { status: 'connected', pageName: result.page.pageName };
+  }
+
+  async approvePageRequestViaFacebookLogin(
+    pageRequestId: number,
+    pages: FacebookPageInfo[],
+  ): Promise<
+    | { status: 'connected'; pageName: string }
+    | { status: 'no_match' }
+    | { status: 'ambiguous'; resultId: string; candidates: FacebookPageInfo[] }
+  > {
+    const req = await this.prisma.pageRequest.findUnique({
+      where: { id: pageRequestId },
+      include: { user: { select: { name: true, email: true } } },
+    });
+    if (!req) throw new BadRequestException('Page request not found');
+    if (req.status !== 'pending') throw new BadRequestException(`Request already ${req.status}`);
+
+    const matches = this.matchCandidatePages(req.pageUrl, pages);
+
+    if (matches.length === 0) return { status: 'no_match' };
+    if (matches.length === 1) return this.finalizeApproval(req, matches[0]);
+
+    const resultId = crypto.randomUUID();
+    this.pendingApprovals.set(resultId, {
+      pageRequestId,
+      candidates: matches,
+      createdAt: Date.now(),
+    });
+    this.cleanupPendingApprovals();
+    return { status: 'ambiguous', resultId, candidates: matches };
+  }
+
+  async finalizeAmbiguousApproval(
+    resultId: string,
+    pageId: string,
+  ): Promise<{ status: 'connected'; pageName: string }> {
+    const pending = this.pendingApprovals.get(resultId);
+    if (!pending) throw new BadRequestException('Approval session not found or expired');
+    this.pendingApprovals.delete(resultId);
+
+    const matched = pending.candidates.find((p) => p.pageId === pageId);
+    if (!matched) throw new BadRequestException('Selected page is not part of this approval session');
+
+    const req = await this.prisma.pageRequest.findUnique({
+      where: { id: pending.pageRequestId },
+      include: { user: { select: { name: true, email: true } } },
+    });
+    if (!req) throw new BadRequestException('Page request not found');
+    if (req.status !== 'pending') throw new BadRequestException(`Request already ${req.status}`);
+
+    return this.finalizeApproval(req, matched);
+  }
+
+  private cleanupPendingApprovals() {
+    const now = Date.now();
+    for (const [key, value] of this.pendingApprovals.entries()) {
+      if (now - value.createdAt > 10 * 60 * 1000) {
+        this.pendingApprovals.delete(key);
+      }
+    }
   }
 }
 

@@ -51,6 +51,10 @@ export interface GlobalConfig {
     note?: string;
   };
   adminPayment?: AdminPaymentConfig;
+  moderatorAccess?: {
+    fbProfileLink?: string;
+    email?: string;
+  };
 }
 
 const DEFAULT_CALL_SERVERS: CallServerConfig[] = [
@@ -468,6 +472,10 @@ export class AdminService {
         email: '',
         note: '',
       },
+      moderatorAccess: {
+        fbProfileLink: '',
+        email: '',
+      },
     };
   }
 
@@ -524,6 +532,16 @@ export class AdminService {
       adminPayment: input.adminPayment !== undefined
         ? { ...existing.adminPayment, ...input.adminPayment }
         : existing.adminPayment,
+      moderatorAccess: {
+        fbProfileLink: String(
+          input.moderatorAccess?.fbProfileLink ??
+            existing.moderatorAccess?.fbProfileLink ??
+            '',
+        ).trim(),
+        email: String(
+          input.moderatorAccess?.email ?? existing.moderatorAccess?.email ?? '',
+        ).trim(),
+      },
     };
     return this._writeGlobalConfig(merged);
   }
@@ -1158,15 +1176,10 @@ export class AdminService {
     });
   }
 
-  async approvePageRequest(id: number, adminNote?: string) {
-    const req = await this.prisma.pageRequest.findUnique({ where: { id } });
-    if (!req) throw new NotFoundException('Request not found');
-    if (req.status !== 'pending') throw new BadRequestException('Already processed');
-    await this.prisma.pageRequest.update({
-      where: { id },
-      data: { status: 'approved', adminNote: adminNote?.trim() || null },
-    });
-    return { success: true };
+  // Approval now always goes through FacebookService.approvePageRequestViaFacebookLogin
+  // (admin logs in with Facebook to confirm moderator access and auto-connect the page).
+  getPageRequestApproveUrl(id: number) {
+    return { url: this.facebook.getAdminApproveUrl(id) };
   }
 
   async rejectPageRequest(id: number, adminNote?: string) {

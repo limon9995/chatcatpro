@@ -29,11 +29,11 @@ export class TelegramService {
 
   /**
    * Send an admin-bot message with inline keyboard buttons (e.g. Approve/Reject).
-   * buttons: array of rows, each row is array of { text, callback_data }.
+   * buttons: array of rows, each row is array of { text, callback_data } or { text, url }.
    */
   async sendMessageWithButtons(
     text: string,
-    buttons: Array<Array<{ text: string; callback_data: string }>>,
+    buttons: Array<Array<{ text: string; callback_data?: string; url?: string }>>,
   ): Promise<void> {
     const token = this.apiKeys.getSync('telegramBotToken');
     const chatId = this.apiKeys.getSync('telegramChatId');

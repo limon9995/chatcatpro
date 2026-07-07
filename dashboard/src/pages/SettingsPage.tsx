@@ -15,6 +15,7 @@ interface Settings {
   deliveryFeeInsideDhaka: number; deliveryFeeOutsideDhaka: number;
   deliveryTimeText: string; deliveryTimeInsideDhaka: string; deliveryTimeOutsideDhaka: string;
   paymentMode: string; advanceAmount: number; advanceBkash: string; advanceNagad: string; advanceRocket: string; advancePaymentMessage: string; webOrderEnabled: boolean;
+  codEnabled: boolean; advanceThresholdAmount: number;
   smsGatewayEnabled: boolean;
   automationOn: boolean; ocrOn: boolean;
   waEnabled: boolean; waPhoneNumberId: string; waVerifyToken: string; waTokenSet: boolean; waFallbackTemplateName: string;
@@ -60,6 +61,7 @@ const S0: Settings = {
   currencySymbol: '৳', codLabel: 'COD', productCodePrefix: 'DF',
   deliveryFeeInsideDhaka: 80, deliveryFeeOutsideDhaka: 120, deliveryTimeText: '', deliveryTimeInsideDhaka: '', deliveryTimeOutsideDhaka: '',
   paymentMode: 'cod', advanceAmount: 0, advanceBkash: '', advanceNagad: '', advanceRocket: '', advancePaymentMessage: '', webOrderEnabled: false, smsGatewayEnabled: false,
+  codEnabled: true, advanceThresholdAmount: 0,
   knowledgeText: '',
   customPersonaPrompt: '',
   automationOn: false, ocrOn: false,
@@ -1372,6 +1374,14 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
             ))}
           </div>
 
+          <div style={{ marginTop: 12 }}>
+            <Toggle th={th}
+              label={copy('COD চালু আছে', 'COD enabled')}
+              sub={copy('বন্ধ করলে সব order-এই advance payment বাধ্যতামূলক হবে', 'If off, advance payment becomes mandatory for every order regardless of mode')}
+              checked={s.codEnabled !== false}
+              onChange={v => setS(p => ({ ...p, codEnabled: v }))} />
+          </div>
+
           {/* Extra config for advance modes */}
           {s.paymentMode !== 'cod' && (
             <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -1392,6 +1402,11 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
                     <div style={{ fontSize: 11, color: th.muted, marginTop: 3 }}>
                       {copy(`0 = Delivery fee (${s.paymentMode === 'advance_outside' ? 'Outside Dhaka fee' : 'full delivery fee'}) নেবে`, `0 = collects the delivery fee as advance`)}
                     </div>
+                  </div>
+                  <div>
+                    <Label text="Advance Threshold (৳)" hint={copy('এই amount-এর বেশি order হলেই advance লাগবে। 0 রাখলে সবসময় advance rule apply হবে।', 'Only require advance when the order total exceeds this amount. Leave 0 to always apply the advance rule.')}/>
+                    <input style={inp} type="number" min={0} value={s.advanceThresholdAmount || ''}
+                      onChange={e => setS(p => ({ ...p, advanceThresholdAmount: Number(e.target.value) }))} placeholder="0 = always"/>
                   </div>
                 </div>
               )}
@@ -2063,6 +2078,7 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
           paymentMode: s.paymentMode, advanceAmount: s.advanceAmount,
           advanceBkash: s.advanceBkash, advanceNagad: s.advanceNagad, advanceRocket: s.advanceRocket,
           advancePaymentMessage: s.advancePaymentMessage,
+          codEnabled: s.codEnabled, advanceThresholdAmount: s.advanceThresholdAmount,
           webOrderEnabled: s.webOrderEnabled,
         })} saving={saving}/>
       </div>

@@ -157,13 +157,16 @@ export class TelegramController {
     const data = cbq.data as string | undefined;
     if (!data) return { ok: true };
 
-    // Format: pagereq_approve_<id> | pagereq_reject_<id>
+    // Format: pagereq_reject_<id>
+    // (approval no longer happens via callback_data — the Telegram message's
+    // "Login with Facebook & Approve" button is a url button that goes
+    // straight to /facebook/callback, bypassing this handler entirely.)
     const parts = data.split('_');
     const domain = parts[0];
     const action = parts[1];
     const id = parseInt(parts[parts.length - 1] ?? '0', 10);
 
-    if (domain === 'pagereq' && id && (action === 'approve' || action === 'reject')) {
+    if (domain === 'pagereq' && id && action === 'reject') {
       await this.handleAdminPageRequestAction(id, action, callbackQueryId);
     } else {
       await this.adminTelegram.answerCallback(callbackQueryId, '❓ Unknown action');
@@ -174,7 +177,7 @@ export class TelegramController {
 
   private async handleAdminPageRequestAction(
     id: number,
-    action: 'approve' | 'reject',
+    action: 'reject',
     callbackQueryId: string,
   ) {
     const req = await this.prisma.pageRequest.findUnique({ where: { id } });
@@ -186,14 +189,10 @@ export class TelegramController {
       await this.adminTelegram.answerCallback(callbackQueryId, `⏭️ Already ${req.status}`);
       return;
     }
-    const status = action === 'approve' ? 'approved' : 'rejected';
-    await this.prisma.pageRequest.update({ where: { id }, data: { status } });
-    await this.adminTelegram.answerCallback(
-      callbackQueryId,
-      action === 'approve' ? '✅ Approved!' : '❌ Rejected!',
-    );
+    await this.prisma.pageRequest.update({ where: { id }, data: { status: 'rejected' } });
+    await this.adminTelegram.answerCallback(callbackQueryId, '❌ Rejected!');
     await this.adminTelegram.sendMessage(
-      `${action === 'approve' ? '✅' : '❌'} Page Request #${id} — ${status} (via Telegram button)`,
+      `❌ Page Request #${id} — rejected (via Telegram button)`,
     );
   }
 

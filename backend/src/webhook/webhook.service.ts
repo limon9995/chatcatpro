@@ -197,6 +197,10 @@ export class WebhookService implements OnModuleDestroy {
             this.handleCatalogReferral(resolvedPage, psid, productCode).catch(
               () => {},
             );
+            // Referral already produced the full reply for this event (product
+            // card / draft start). Never also run a bundled message through the
+            // normal pipeline — that caused two independent replies for one click.
+            continue;
           }
           if (!event.message) continue;
         }
@@ -588,13 +592,21 @@ export class WebhookService implements OnModuleDestroy {
     }
     this.activeReplyKey.delete(psid);
 
-    // Record the current draft step after processing so loop detection can compare next time
-    const updatedDraft = await this.ctx.getActiveDraft(pageId, psid);
-    await this.ctx.recordDraftStepAfterProcessing(
-      pageId,
-      psid,
-      updatedDraft?.currentStep ?? null,
-    );
+    // Record the current draft step after processing so loop detection can compare next time.
+    // Never let a bookkeeping failure surface as a job failure — a reply may already
+    // have been sent, and retrying the job would re-run AI generation and double-send.
+    try {
+      const updatedDraft = await this.ctx.getActiveDraft(pageId, psid);
+      await this.ctx.recordDraftStepAfterProcessing(
+        pageId,
+        psid,
+        updatedDraft?.currentStep ?? null,
+      );
+    } catch (err: any) {
+      this.logger.warn(
+        `[Webhook] recordDraftStepAfterProcessing failed: ${err?.message}`,
+      );
+    }
   }
 
   private async _processMessageInner(
@@ -883,6 +895,34 @@ export class WebhookService implements OnModuleDestroy {
           draft.currentStep,
         ));
     if (structuredStep && page.orderModeOn) {
+      // A genuine question during a structured step (e.g. "page theke dibo?" or "age
+      // payment korte hbe?" while waiting for name/phone/address) must be answered via
+      // FAQ, not silently swallowed by captureField's field-shaped-input validation,
+      // which would just re-send the same "please give your info" prompt.
+      if (
+        !draft!.currentStep.startsWith('cf:') &&
+        page.infoModeOn &&
+        this.draftHandler.looksLikeQuestion(text)
+      ) {
+        try {
+          const learned = await this.botKnowledge.resolveReply(
+            pageId,
+            text,
+            psid,
+          );
+          if (learned?.reply) {
+            void this.walletService.deductUsage(pageId, 'KEYWORD_REPLY');
+            await this.safeSend(
+              token,
+              psid,
+              `${learned.reply}\n\n${this.draftHandler.reminder(draft!)}`,
+            );
+            return;
+          }
+        } catch {}
+        // No FAQ match found — fall through to captureField as before.
+      }
+
       const result = await this.draftHandler.captureField(
         pageId,
         psid,

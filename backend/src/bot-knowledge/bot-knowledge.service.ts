@@ -682,16 +682,32 @@ export class BotKnowledgeService {
       return 'Product code দিলে নির্দিষ্ট তথ্য দেখানো যাবে।';
     }
 
-    return base || this.buildReplyFallback(question, paymentRules, product);
+    return base || this.buildReplyFallback(question, paymentRules, product, settings);
   }
 
   private buildAdvanceReply(paymentRules: any, settings: any) {
     const lines: string[] = [];
+    const sym = settings.currencySymbol || '৳';
 
-    if (!paymentRules.codEnabled) {
+    // Real, enforced setting (Page.codEnabled) — replaces the old cosmetic
+    // paymentRules.codEnabled, which had no effect on the actual checkout flow.
+    if (settings.codEnabled === false) {
       lines.push('এই business-এ COD available না।');
     } else {
       lines.push(`${settings.codLabel || 'COD'} available.`);
+    }
+
+    // Real, enforced threshold (Page.advanceThresholdAmount) — replaces the old
+    // cosmetic paymentRules.highValueThreshold/highValueAdvancePercent, which was
+    // never actually checked at checkout. This can no longer diverge from reality.
+    const mode = settings.paymentMode || 'cod';
+    const threshold = Number(settings.advanceThresholdAmount || 0);
+    if (mode !== 'cod' && threshold > 0) {
+      lines.push(`${threshold}${sym}+ order এ advance payment লাগবে।`);
+    } else if (mode === 'full_advance') {
+      lines.push('প্রতিটা order-এ full advance payment লাগবে।');
+    } else if (mode === 'advance_outside') {
+      lines.push('ঢাকার বাইরে advance payment লাগবে, ভিতরে normal COD।');
     }
 
     if (paymentRules.insideDhakaAdvanceEnabled) {
@@ -711,15 +727,6 @@ export class BotKnowledgeService {
           paymentRules.outsideDhakaAdvanceAmount,
           paymentRules.outsideDhakaAdvancePercent,
         )}.`,
-      );
-    }
-
-    if (
-      Number(paymentRules.highValueThreshold || 0) > 0 &&
-      Number(paymentRules.highValueAdvancePercent || 0) > 0
-    ) {
-      lines.push(
-        `${paymentRules.highValueThreshold}${settings.currencySymbol || '৳'}+ order এ ${paymentRules.highValueAdvancePercent}% advance লাগতে পারে।`,
       );
     }
 
@@ -767,7 +774,12 @@ export class BotKnowledgeService {
     return 'business rule অনুযায়ী';
   }
 
-  private buildReplyFallback(question: any, paymentRules: any, product: any) {
+  private buildReplyFallback(
+    question: any,
+    paymentRules: any,
+    product: any,
+    settings?: any,
+  ) {
     if (question.key === 'price' && product) {
       return `Price ${product.price ?? 0} taka.`;
     }
@@ -783,7 +795,7 @@ export class BotKnowledgeService {
         : 'Fabric details জানতে product code দিন, checking করে জানাচ্ছি 💖';
     }
     if (question.key === 'advance_payment') {
-      return this.buildAdvanceReply(paymentRules, {
+      return this.buildAdvanceReply(paymentRules, settings || {
         codLabel: 'COD',
         currencySymbol: '৳',
       });

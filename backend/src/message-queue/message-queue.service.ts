@@ -12,8 +12,10 @@ export class MessageQueueService implements OnModuleDestroy {
     this.queue = new Queue('incoming-messages', {
       connection: { url: REDIS_URL },
       defaultJobOptions: {
-        attempts: 3,
-        backoff: { type: 'exponential', delay: 2000 },
+        // A "retry" here re-runs the whole handler and produces a NEW AI reply —
+        // it is not a safe no-op resend, so replies are not retried on failure.
+        // FB's own webhook redelivery is still deduped separately via jobId=mid.
+        attempts: 1,
         removeOnComplete: 200,
         removeOnFail: 500,
       },

@@ -28,6 +28,11 @@ interface BillingSupportConfig {
   bankHolder?: string;
 }
 
+interface ModeratorAccessConfig {
+  fbProfileLink?: string;
+  email?: string;
+}
+
 const BILLING_FEATURES = [
   { key: 'automationAllowed', label: 'Automation' },
   { key: 'ocrAllowed', label: 'OCR' },
@@ -104,6 +109,8 @@ export function AdminPanel({ th, onToast, onLogout }: {
   const [pageRequests, setPageRequests] = useState<any[]>([]);
   const [pageReqFilter, setPageReqFilter] = useState<'all' | 'pending'>('pending');
   const [pageReqBusy, setPageReqBusy] = useState<number | null>(null);
+  const [moderatorAccess, setModeratorAccess] = useState<ModeratorAccessConfig>({});
+  const [moderatorAccessSaving, setModeratorAccessSaving] = useState(false);
   const [overview, setOverview] = useState<any>(null);
   const [pages, setPages]       = useState<ClientPage[]>([]);
   const [globalCfg, setGlobalCfg]       = useState<any>(null);
@@ -592,6 +599,7 @@ export function AdminPanel({ th, onToast, onLogout }: {
     if (tab === 'wallet')                                          loadWallet();
     if (tab === 'subscriptions') loadSubscriptions();
     if (tab === 'page-requests' || tab === 'overview') loadPageRequests();
+    if (tab === 'page-requests') loadModeratorAccess();
     if (tab === 'customers') loadCustomers('', 0);
     if (tab === 'domain-setup') loadDomainTab();
     if (tab === 'api-keys' && !apiKeysLoaded) loadApiKeys();
@@ -733,12 +741,41 @@ export function AdminPanel({ th, onToast, onLogout }: {
     } catch { /* silent */ }
   };
 
-  const handlePageReqAction = async (id: number, action: 'approve' | 'reject', note?: string) => {
+  const loadModeratorAccess = useCallback(async () => {
+    try {
+      const cfg = await request<any>(`${BASE}/global-config`);
+      setModeratorAccess(cfg?.moderatorAccess || {});
+    } catch { /* silent */ }
+  }, []);
+
+  const saveModeratorAccess = async (payload: ModeratorAccessConfig) => {
+    setModeratorAccessSaving(true);
+    try {
+      const updated = await request<any>(`${BASE}/global-config`, {
+        method: 'PATCH',
+        body: JSON.stringify({ moderatorAccess: payload }),
+      });
+      setModeratorAccess(updated?.moderatorAccess || payload);
+      onToast('✅ Moderator access info saved');
+    } catch (e: any) { onToast(e.message, 'error'); }
+    finally { setModeratorAccessSaving(false); }
+  };
+
+  const handlePageReqReject = async (id: number, note?: string) => {
     setPageReqBusy(id);
     try {
-      await request(`${BASE}/page-requests/${id}/${action}`, { method: 'POST', body: JSON.stringify({ adminNote: note || undefined }) });
-      onToast(action === 'approve' ? 'Approved!' : 'Rejected!', 'success');
+      await request(`${BASE}/page-requests/${id}/reject`, { method: 'POST', body: JSON.stringify({ adminNote: note || undefined }) });
+      onToast('Rejected!', 'success');
       await loadPageRequests();
+    } catch (e: any) { onToast(e.message, 'error'); }
+    finally { setPageReqBusy(null); }
+  };
+
+  const handlePageReqApprove = async (id: number) => {
+    setPageReqBusy(id);
+    try {
+      const data = await request<{ url: string }>(`${BASE}/page-requests/${id}/approve-url`);
+      if (data?.url) window.open(data.url, '_blank', 'noopener,noreferrer');
     } catch (e: any) { onToast(e.message, 'error'); }
     finally { setPageReqBusy(null); }
   };
@@ -1997,14 +2034,14 @@ export function AdminPanel({ th, onToast, onLogout }: {
             requests={pageRequests}
             filter={pageReqFilter}
             busy={pageReqBusy}
+            moderatorAccess={moderatorAccess}
+            moderatorAccessSaving={moderatorAccessSaving}
+            onSaveModeratorAccess={saveModeratorAccess}
             onFilterChange={(f) => { setPageReqFilter(f); loadPageRequests(f); }}
-            onApprove={(id) => {
-              const note = window.prompt('Admin note (optional):') ?? '';
-              handlePageReqAction(id, 'approve', note);
-            }}
+            onApprove={handlePageReqApprove}
             onReject={(id) => {
               const note = window.prompt('কেন reject করছেন? (optional):') ?? '';
-              handlePageReqAction(id, 'reject', note);
+              handlePageReqReject(id, note);
             }}
           />
         )}
@@ -2764,17 +2801,22 @@ export function AdminPanel({ th, onToast, onLogout }: {
 }
 
 // ── Page Requests Tab ─────────────────────────────────────────────────────────
-function PageRequestsTab({ th, requests, filter, busy, onFilterChange, onApprove, onReject }: {
+function PageRequestsTab({ th, requests, filter, busy, moderatorAccess, moderatorAccessSaving, onSaveModeratorAccess, onFilterChange, onApprove, onReject }: {
   th: Theme;
   requests: any[];
   filter: 'all' | 'pending';
   busy: number | null;
+  moderatorAccess: { fbProfileLink?: string; email?: string };
+  moderatorAccessSaving: boolean;
+  onSaveModeratorAccess: (payload: { fbProfileLink?: string; email?: string }) => void;
   onFilterChange: (f: 'all' | 'pending') => void;
   onApprove: (id: number) => void;
   onReject: (id: number) => void;
 }) {
   const statusColor = (s: string) => s === 'approved' ? '#16a34a' : s === 'rejected' ? '#ef4444' : '#f59e0b';
   const statusLabel = (s: string) => s === 'approved' ? '✅ Approved' : s === 'rejected' ? '❌ Rejected' : '⏳ Pending';
+  const [modForm, setModForm] = useState(moderatorAccess || {});
+  useEffect(() => { setModForm(moderatorAccess || {}); }, [moderatorAccess]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -2789,6 +2831,24 @@ function PageRequestsTab({ th, requests, filter, busy, onFilterChange, onApprove
             }}>{f === 'pending' ? '⏳ Pending' : '📋 All'}</button>
           ))}
         </div>
+      </div>
+
+      <div style={{ ...th.card, display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ fontWeight: 800, fontSize: 13, color: th.text }}>🛡️ Moderator Access Info</div>
+        <div style={{ fontSize: 11.5, color: th.muted, lineHeight: 1.6 }}>
+          Client-দের এই profile link ও Gmail দেখানো হবে — এগুলো দিয়ে তারা আপনাকে তাদের Page-এ moderator হিসেবে add করবে।
+        </div>
+        <div>
+          <label style={{ fontSize: 11.5, color: th.muted, fontWeight: 600, display: 'block', marginBottom: 4 }}>Admin FB Profile Link</label>
+          <input style={th.input} value={modForm.fbProfileLink || ''} onChange={e => setModForm(f => ({ ...f, fbProfileLink: e.target.value }))} placeholder="https://facebook.com/yourprofile" />
+        </div>
+        <div>
+          <label style={{ fontSize: 11.5, color: th.muted, fontWeight: 600, display: 'block', marginBottom: 4 }}>Admin Gmail</label>
+          <input style={th.input} value={modForm.email || ''} onChange={e => setModForm(f => ({ ...f, email: e.target.value }))} placeholder="admin@gmail.com" />
+        </div>
+        <button style={th.btnPrimary} disabled={moderatorAccessSaving} onClick={() => onSaveModeratorAccess(modForm)}>
+          {moderatorAccessSaving ? <Spinner size={12} /> : '💾 Save'}
+        </button>
       </div>
 
       {requests.length === 0 ? (
@@ -2811,9 +2871,11 @@ function PageRequestsTab({ th, requests, filter, busy, onFilterChange, onApprove
               <div style={{ fontSize: 12.5, color: th.muted, marginBottom: 3 }}>
                 📄 Page: <a href={r.pageUrl} target="_blank" rel="noreferrer" style={{ color: th.accent }}>{r.pageUrl}</a>
               </div>
-              <div style={{ fontSize: 12.5, color: th.muted, marginBottom: r.note ? 3 : 0 }}>
-                🧑 FB Profile: <a href={r.fbProfile} target="_blank" rel="noreferrer" style={{ color: th.accent }}>{r.fbProfile}</a>
-              </div>
+              {r.fbProfile && (
+                <div style={{ fontSize: 12.5, color: th.muted, marginBottom: r.note ? 3 : 0 }}>
+                  🧑 FB Profile: <a href={r.fbProfile} target="_blank" rel="noreferrer" style={{ color: th.accent }}>{r.fbProfile}</a>
+                </div>
+              )}
               {r.note && (
                 <div style={{ fontSize: 12, color: th.muted, marginTop: 4, fontStyle: 'italic' }}>💬 "{r.note}"</div>
               )}
@@ -2825,12 +2887,12 @@ function PageRequestsTab({ th, requests, filter, busy, onFilterChange, onApprove
             </div>
 
             {r.status === 'pending' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 100 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 160 }}>
                 <button disabled={busy === r.id} onClick={() => onApprove(r.id)} style={{
                   padding: '8px 12px', borderRadius: 8, border: 'none', background: '#16a34a', color: '#fff',
                   fontWeight: 800, fontSize: 12, cursor: busy === r.id ? 'default' : 'pointer', fontFamily: 'inherit',
                 }}>
-                  {busy === r.id ? <Spinner size={12} /> : '✅ Approve'}
+                  {busy === r.id ? <Spinner size={12} /> : '🔗 Login with Facebook & Approve'}
                 </button>
                 <button disabled={busy === r.id} onClick={() => onReject(r.id)} style={{
                   padding: '8px 12px', borderRadius: 8, border: 'none', background: 'rgba(239,68,68,0.12)', color: '#ef4444',
@@ -2844,7 +2906,7 @@ function PageRequestsTab({ th, requests, filter, busy, onFilterChange, onApprove
 
           {r.status === 'approved' && (
             <div style={{ background: 'rgba(34,197,94,0.07)', borderRadius: 8, padding: '8px 12px', fontSize: 12, color: '#15803d' }}>
-              ✅ Approved — এখন Facebook Developer Console এ গিয়ে <strong>{r.fbProfile}</strong> কে Tester হিসেবে add করুন। তারপর client FB Login দিয়ে page connect করতে পারবে।
+              ✅ Approved — page connect হয়ে গেছে{r.connectedPageId ? ` (Page #${r.connectedPageId})` : ''}।
             </div>
           )}
         </div>
