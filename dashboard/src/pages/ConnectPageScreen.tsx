@@ -170,6 +170,9 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
   const [myRequests, setMyRequests] = useState<PageRequest[]>([]);
   const [moderatorAccess, setModeratorAccess] = useState<ModeratorAccessInfo>({});
   const [copiedField, setCopiedField] = useState<'profile' | 'email' | ''>('');
+  // Customers who already have an active page shouldn't see the "connect a
+  // page" flow by default — only when they explicitly want to add another one.
+  const [showAddPageForm, setShowAddPageForm] = useState(false);
 
   // Tutorial sidebar
   const [pageConnectTutorialUrl, setPageConnectTutorialUrl] = useState('');
@@ -181,6 +184,8 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
   const muted  = dark ? 'rgba(226,232,255,0.45)' : 'rgba(26,31,54,0.45)';
   const activePages = alreadyConnected.filter((page) => page.isActive);
   const savedPages = alreadyConnected.filter((page) => !page.isActive);
+  const hasActivePage = activePages.length > 0;
+  const hasPendingRequest = myRequests.some((r) => r.status === 'pending');
 
   useEffect(() => {
     request<any>(`${API_BASE}/client-dashboard/tutorials`)
@@ -425,6 +430,15 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
         )}
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {hasActivePage && !showAddPageForm && !hasPendingRequest ? (
+            <button
+              onClick={() => setShowAddPageForm(true)}
+              style={{ width: '100%', padding: '12px', borderRadius: 12, border: `1px dashed rgba(99,102,241,0.4)`, background: 'transparent', color: '#6366f1', fontWeight: 700, fontSize: 13.5, cursor: 'pointer', fontFamily: 'inherit' }}
+            >
+              ➕ {copy('আরেকটি Facebook Page যোগ করুন', 'Add Another Facebook Page')}
+            </button>
+          ) : (
+          <>
           {/* Moderator Access info — admin's FB profile/Gmail to add as moderator */}
           <div style={{ background: dark ? 'rgba(99,102,241,0.08)' : 'rgba(99,102,241,0.05)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 12, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
             <div style={{ fontWeight: 800, fontSize: 13, color: '#6366f1' }}>
@@ -529,6 +543,8 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
             <div style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.3)', borderRadius: 12, padding: '14px 16px', fontSize: 13, color: '#16a34a', fontWeight: 700, textAlign: 'center' }}>
               ✅ {copy('Request submit হয়েছে! Admin moderator access দেখে approve করলে page automatically connect হয়ে যাবে — আপনাকে আর কিছু করতে হবে না।', 'Request submitted! Once the admin verifies moderator access and approves, your page connects automatically — no further action needed from you.')}
             </div>
+          )}
+          </>
           )}
 
           {/* ── Advanced: bring-your-own Facebook Developer App ── */}
