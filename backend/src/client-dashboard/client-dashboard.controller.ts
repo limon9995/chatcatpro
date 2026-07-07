@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Param,
+  ParseIntPipe,
   Patch,
   Post,
   Query,
@@ -102,20 +103,40 @@ export class ClientDashboardController {
   ) {
     return this.svc.createManualOrder(this.pid(r, p), b || {});
   }
+  // NOTE: literal-path GET routes below (delivery-zone, agent-issues,
+  // call-queue) MUST be registered before ':orderId' — Express/Nest match
+  // routes in registration order, and ':orderId' matches any single segment,
+  // so registering it first would silently shadow these and 500 on `Number(o)`
+  // being NaN.
+  @Get(':pageId/orders/delivery-zone')
+  deliveryZone(@Param('pageId') p: string, @Req() r: any) {
+    return this.svc.getDeliveryOrders(this.pid(r, p));
+  }
+
+  @Get(':pageId/orders/agent-issues')
+  getAgentIssues(@Param('pageId') p: string, @Req() r: any) {
+    return this.svc.getAgentIssues(this.pid(r, p));
+  }
+
+  @Get(':pageId/orders/call-queue')
+  getCallQueue(@Param('pageId') p: string, @Req() r: any) {
+    return this.svc.getCallQueue(this.pid(r, p));
+  }
+
   @Get(':pageId/orders/:orderId') getOrder(
     @Param('pageId') p: string,
-    @Param('orderId') o: string,
+    @Param('orderId', ParseIntPipe) o: number,
     @Req() r: any,
   ) {
-    return this.svc.getOrder(this.pid(r, p), Number(o));
+    return this.svc.getOrder(this.pid(r, p), o);
   }
   @Patch(':pageId/orders/:orderId') updateOrder(
     @Param('pageId') p: string,
-    @Param('orderId') o: string,
+    @Param('orderId', ParseIntPipe) o: number,
     @Body() b: any,
     @Req() r: any,
   ) {
-    return this.svc.updateOrder(this.pid(r, p), Number(o), b || {});
+    return this.svc.updateOrder(this.pid(r, p), o, b || {});
   }
   @Post(':pageId/orders/:orderId/action') orderAction(
     @Param('pageId') p: string,
@@ -131,19 +152,9 @@ export class ClientDashboardController {
       cancelNote,
     );
   }
-  @Get(':pageId/orders/delivery-zone')
-  deliveryZone(@Param('pageId') p: string, @Req() r: any) {
-    return this.svc.getDeliveryOrders(this.pid(r, p));
-  }
-
   @Post(':pageId/orders/sync-courier-deliveries')
   syncCourierDeliveries(@Param('pageId') p: string, @Req() r: any) {
     return this.svc.syncCourierDeliveries(this.pid(r, p));
-  }
-
-  @Get(':pageId/orders/agent-issues')
-  getAgentIssues(@Param('pageId') p: string, @Req() r: any) {
-    return this.svc.getAgentIssues(this.pid(r, p));
   }
 
   @Post(':pageId/orders/agent-issues/dismiss')
@@ -177,10 +188,6 @@ export class ClientDashboardController {
     @Req() r: any,
   ) {
     return this.svc.markOrdersPrinted(this.pid(r, p), ids || []);
-  }
-  @Get(':pageId/orders/call-queue')
-  getCallQueue(@Param('pageId') p: string, @Req() r: any) {
-    return this.svc.getCallQueue(this.pid(r, p));
   }
 
   @Post(':pageId/orders/:orderId/manual-call-log')
