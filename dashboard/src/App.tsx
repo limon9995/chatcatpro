@@ -383,7 +383,12 @@ export function AppContent() {
           myPages={myPages}
           activePage={activePage}
           onSelectPage={(page) => setActivePage(page as MyPage)}
-          onManagePages={() => setScreen('connect-page')}
+          onManagePages={() => {
+            // Already have an active page — don't leave the dashboard for
+            // the connect flow at all, just stay put.
+            if (myPages.some((p) => p.isActive)) return;
+            setScreen('connect-page');
+          }}
           onLogout={handleLogout}
         />
       </Suspense>
