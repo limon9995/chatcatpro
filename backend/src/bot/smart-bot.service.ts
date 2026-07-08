@@ -89,7 +89,13 @@ export class SmartBotService {
   }
 
   isAvailable(): boolean {
-    return (this.geminiRotator.isAvailable() || !!this.openAiKey) && Date.now() > this.cooldownUntil;
+    // The 5-fail circuit breaker (cooldownUntil) exists to stop hammering a
+    // provider that's currently broken. It must never block a healthy backup
+    // provider, though — if OpenAI is configured, Gemini having a rough patch
+    // (or being on cooldown) should still fall through to OpenAI per-message
+    // (see callOpenAI below), not silently degrade straight to keyword replies.
+    const geminiUsable = this.geminiRotator.isAvailable() && Date.now() > this.cooldownUntil;
+    return geminiUsable || !!this.openAiKey;
   }
 
   /**
