@@ -2793,6 +2793,7 @@ export class WebhookService implements OnModuleDestroy {
         (page.productCodePrefix as string | undefined) || 'DF';
 
       // Try OCR on each image sequentially — stop on first match
+      const ocrTexts: string[] = [];
       if (hasOcrProducts) {
         for (const url of imageUrls) {
           const ocrResult = await this.ocr.extractFull(
@@ -2801,6 +2802,7 @@ export class WebhookService implements OnModuleDestroy {
             pageProducts,
             customPrefix,
           );
+          if (ocrResult.text?.trim()) ocrTexts.push(ocrResult.text.trim());
           const highMedium = ocrResult.verifiedCodes
             .filter((v) => v.confidence === 'HIGH' || v.confidence === 'MEDIUM')
             .map((v) => v.code);
@@ -2832,9 +2834,45 @@ export class WebhookService implements OnModuleDestroy {
             return;
           }
         }
+
+        // No code in any image — the image may still show a product NAME
+        // (printed on packaging/label) instead of a code. Try matching the
+        // OCR'd text against Product.name before falling back to vision,
+        // mirroring the single-photo path in handleImageAttachment below.
+        const combinedOcrText = ocrTexts.join('\n').trim();
+        if (combinedOcrText) {
+          const allProds = await this.prisma.product.findMany({
+            where: { pageId, isActive: true },
+            select: {
+              code: true,
+              name: true,
+              price: true,
+              stockQty: true,
+              unit: true,
+              orderEnabled: true,
+              description: true,
+              productType: true,
+            },
+          });
+          const nameMatches = this.productNameMatch.matchProducts(
+            combinedOcrText,
+            allProds,
+          );
+          const strong = nameMatches.filter(
+            (m) => m.confidence === 'HIGH' || m.confidence === 'MEDIUM',
+          );
+          if (strong.length > 0) {
+            this.logger.log(
+              `[NameMatch] Batch OCR text matched product(s): ${strong.map((m) => m.productCode).join(',')}`,
+            );
+            await this.walletService.deductUsage(pageId, 'IMAGE_OCR');
+            await this.sendSimpleProductInfo(page, psid, strong);
+            return;
+          }
+        }
       }
 
-      // No OCR codes in any image — use batch Vision (one AI call for all angles)
+      // No OCR codes or name match in any image — use batch Vision (one AI call for all angles)
       if (!page.imageRecognitionOn) {
         const reply = await this.botKnowledge.resolveSystemReply(
           pageId,
