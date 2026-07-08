@@ -85,7 +85,7 @@ export class SmartBotService {
     private readonly geminiRotator: GeminiKeyRotatorService,
   ) {
     this.openAiKey = process.env.OPENAI_API_KEY ?? '';
-    this.model = process.env.AI_INTENT_MODEL ?? 'gemini-2.0-flash';
+    this.model = process.env.AI_INTENT_MODEL ?? 'gemini-2.5-flash-lite';
   }
 
   isAvailable(): boolean {
