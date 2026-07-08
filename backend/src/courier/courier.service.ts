@@ -225,6 +225,63 @@ export class CourierService {
     return s;
   }
 
+  /** Normalizes a raw courier-API status string into our internal shipment status vocabulary. */
+  normalizeCourierStatus(raw: string): string {
+    const s = (raw || '').toLowerCase();
+    if (['delivered', 'deliver', 'success'].includes(s)) return 'delivered';
+    if (['returned', 'return', 'cancelled', 'canceled', 'failed'].includes(s))
+      return 'returned';
+    if (
+      ['picked', 'picked_up', 'in_transit', 'intransit', 'on_the_way'].includes(
+        s,
+      )
+    )
+      return 'in_transit';
+    return s;
+  }
+
+  /**
+   * Calls the courier's real tracking API (not the cached CourierShipment.status
+   * row) and returns the normalized status, or null if the courier has no live
+   * tracking endpoint wired up here, or the call fails.
+   */
+  async getLiveStatus(
+    courier: CourierName,
+    settings: CourierSettings,
+    trackingId: string,
+  ): Promise<string | null> {
+    try {
+      if (courier === 'steadfast') {
+        const res = await axios.get(
+          `https://portal.packzy.com/api/v1/status/by-cid/${trackingId}`,
+          {
+            headers: {
+              'Api-Key': settings.steadfast?.apiKey,
+              'Secret-Key': settings.steadfast?.secretKey,
+            },
+            timeout: COURIER_TIMEOUT_MS,
+          },
+        );
+        const raw = res.data?.delivery_status;
+        return raw ? this.normalizeCourierStatus(raw) : null;
+      }
+      if (courier === 'redx') {
+        const res = await axios.get(
+          `https://openapi.redx.com.bd/v1.0.0-beta/parcel/track/${trackingId}`,
+          {
+            headers: { 'API-ACCESS-TOKEN': `Bearer ${settings.redx?.apiKey}` },
+            timeout: COURIER_TIMEOUT_MS,
+          },
+        );
+        const raw = res.data?.info?.status;
+        return raw ? this.normalizeCourierStatus(raw) : null;
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
   async listShipments(pageId: number, status?: string) {
     const where: any = { pageId };
     if (status) where.status = status;

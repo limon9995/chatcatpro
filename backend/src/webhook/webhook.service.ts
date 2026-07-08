@@ -34,6 +34,8 @@ import { SmartBotService } from '../bot/smart-bot.service';
 import { ProductNameMatchService } from '../product-name-match/product-name-match.service';
 import { UniversityBotService } from '../university/university-bot.service';
 import { TelegramNotificationService } from '../telegram/telegram-notification.service';
+import { CourierService } from '../courier/courier.service';
+import { normalizePhone } from '../crm/phone.util';
 
 function getFullImageUrl(url?: string | null): string | undefined {
   if (!url) return undefined;
@@ -64,6 +66,9 @@ export class WebhookService implements OnModuleDestroy {
   private readonly activeReplyKey = new Map<string, string>();
   // Debounce postback ORDER clicks — prevents double-click duplicate
   private readonly recentPostbacks = new Map<string, number>();
+  // De-dupe incoming messages by Facebook's message.mid — Meta can redeliver
+  // the same webhook event, which without this caused double replies.
+  private readonly recentMessageIds = new Map<string, number>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -95,6 +100,7 @@ export class WebhookService implements OnModuleDestroy {
     private readonly productNameMatch: ProductNameMatchService,
     private readonly universityBot: UniversityBotService,
     private readonly telegram: TelegramNotificationService,
+    private readonly courier: CourierService,
   ) {}
 
   onModuleDestroy() {
@@ -231,6 +237,25 @@ export class WebhookService implements OnModuleDestroy {
         }
 
         if (!event.message) continue;
+
+        // De-dupe by Facebook's message id: Meta can redeliver the same
+        // webhook event (slow ack, network retry, etc.). Without this, the
+        // same customer message gets queued and processed twice — sometimes
+        // producing two different replies for one message if bot state
+        // (e.g. AI availability) shifted between the two runs.
+        const mid: string | undefined = event.message?.mid;
+        if (mid) {
+          if (this.recentMessageIds.has(mid)) {
+            continue;
+          }
+          this.recentMessageIds.set(mid, Date.now());
+          if (this.recentMessageIds.size > 2000) {
+            const cutoff = Date.now() - 10 * 60 * 1000;
+            for (const [k, t] of this.recentMessageIds) {
+              if (t < cutoff) this.recentMessageIds.delete(k);
+            }
+          }
+        }
 
         // Push to persistent queue — returns immediately, worker processes async
         await this.messageQueue
@@ -878,6 +903,20 @@ export class WebhookService implements OnModuleDestroy {
       }
     }
 
+    // ── ORDER STATUS / LIVE TRACKING QUERY ────────────────────────────────────
+    // Runs before the SmartBot gate so it works the same whether the page uses
+    // SmartBot or the keyword pipeline — SmartBot answers everything itself and
+    // never falls through to the keyword-only block further below. Gated on
+    // !draft so it never interrupts an order the customer is actively placing.
+    if (!draft && page.orderModeOn && this.isOrderStatusQuery(text)) {
+      const phone = this.extractTrackingPhone(text);
+      const orders = await this.findOrdersForTrackingQuery(pageId, psid, phone);
+      if (orders.length > 0) {
+        await this.safeSend(token, psid, await this.buildOrderStatusReply(pageId, orders));
+        return;
+      }
+    }
+
     // ── CATALOG REQUEST (pre-SmartBot) — always send card view ──────────
     const preSmartBotIntent = this.botIntent.detectIntent(text, awaitingConfirm);
     if (preSmartBotIntent === 'CATALOG_REQUEST') {
@@ -1323,15 +1362,6 @@ export class WebhookService implements OnModuleDestroy {
           ? `❌ আপনার অর্ডার #${cancelledOrder.id} বাতিল করা হয়েছে।\n\nকারণ: ${note}`
           : `❌ আপনার অর্ডার #${cancelledOrder.id} বাতিল করা হয়েছে।${businessPhone ? `\n\nআরও জানতে যোগাযোগ করুন: ${businessPhone}` : ''}`;
         await this.safeSend(token, psid, reply);
-        return;
-      }
-    }
-
-    // ── ORDER STATUS QUERY: show all active orders ───────────────────────────
-    if (page.orderModeOn && this.isOrderStatusQuery(text)) {
-      const allOrders = await this.findAllCustomerOrders(pageId, psid);
-      if (allOrders.length > 0) {
-        await this.safeSend(token, psid, this.buildOrderStatusReply(allOrders));
         return;
       }
     }
@@ -2298,15 +2328,41 @@ export class WebhookService implements OnModuleDestroy {
       || /(ফেরত|ferot|refund|back).*?(tk|taka|টাকা|advance|অগ্রিম)/.test(t);
   }
 
-  private async findAllCustomerOrders(pageId: number, psid: string) {
+  /** Pulls a BD phone number out of free-form customer text, if present. */
+  private extractTrackingPhone(text: string): string | null {
+    const converted = text.replace(/[০-৯]/g, (d) => String('০১২৩৪৫৬৭৮৯'.indexOf(d)));
+    const match = converted.match(/(?:\+?88)?01[3-9]\d{8}/);
+    return match ? normalizePhone(match[0]) : null;
+  }
+
+  /**
+   * Matches orders by the customer's Facebook PSID (the account they ordered
+   * from) OR a phone number they typed in this message — either is enough,
+   * since a customer might message from a different FB account than the one
+   * used to place the order.
+   */
+  private async findOrdersForTrackingQuery(
+    pageId: number,
+    psid: string,
+    phone: string | null,
+  ) {
+    const or: any[] = [{ customerPsid: psid }];
+    if (phone) or.push({ phone });
     return this.prisma.order.findMany({
       where: {
         pageIdRef: pageId,
-        customerPsid: psid,
+        OR: or,
         status: { in: ['RECEIVED', 'CONFIRMED', 'PACKED', 'SHIPPED', 'DELIVERED'] },
       },
       orderBy: { id: 'desc' },
-      select: { id: true, status: true, createdAt: true, items: { select: { productCode: true, qty: true } } },
+      take: 5,
+      select: {
+        id: true,
+        status: true,
+        createdAt: true,
+        items: { select: { productCode: true, qty: true } },
+        courierShipment: { select: { trackingId: true, courierName: true, status: true } },
+      },
     });
   }
 
@@ -2316,7 +2372,20 @@ export class WebhookService implements OnModuleDestroy {
       /kothay|status|ki holo|ki khbr|khobor|update|কোথায়|আপডেট|কী হলো|খবর|কি হইলো|delivered|deliver|pack|ship|paini|pai ni|পাইনি|পেলাম না|কবে পাবো|kobe pabo|কখন|kakhn/.test(t);
   }
 
-  private buildOrderStatusReply(orders: any[]): string {
+  /**
+   * Builds the reply for an order-status query. When an order has a booked
+   * courier shipment, calls the courier's live tracking API for the real
+   * current status instead of just the internal Order.status snapshot.
+   */
+  private async buildOrderStatusReply(
+    pageId: number,
+    orders: Array<{
+      id: number;
+      status: string;
+      items: { productCode: string; qty: number }[];
+      courierShipment: { trackingId: string | null; courierName: string; status: string } | null;
+    }>,
+  ): Promise<string> {
     if (orders.length === 0) return 'আপনার কোনো active order নেই।';
     const statusLabel: Record<string, string> = {
       RECEIVED: '📥 প্রাপ্ত (প্রসেসিং)',
@@ -2325,10 +2394,39 @@ export class WebhookService implements OnModuleDestroy {
       SHIPPED: '🚚 পাঠানো হয়েছে',
       DELIVERED: '🎉 ডেলিভারি হয়েছে',
     };
-    const lines = orders.map(o => {
-      const items = o.items.map((i: any) => `${i.productCode}×${i.qty}`).join(', ');
-      return `#${o.id} — ${items || '—'}\n   ${statusLabel[o.status] || o.status}`;
-    });
+    const courierStatusLabel: Record<string, string> = {
+      delivered: '🎉 ডেলিভারি সম্পন্ন হয়েছে',
+      in_transit: '🚚 কুরিয়ারে পথে আছে',
+      returned: '↩️ রিটার্ন হয়েছে',
+    };
+
+    let settings: any = null;
+    const lines = await Promise.all(
+      orders.map(async (o) => {
+        const items = o.items.map((i) => `${i.productCode}×${i.qty}`).join(', ');
+        let statusLine = statusLabel[o.status] || o.status;
+
+        const shipment = o.courierShipment;
+        if (shipment?.trackingId && shipment.courierName !== 'manual') {
+          try {
+            if (!settings) {
+              settings = this.courier.parseSettings(await this.courier.getSettings(pageId));
+            }
+            const liveStatus = await this.courier.getLiveStatus(
+              shipment.courierName as any,
+              settings,
+              shipment.trackingId,
+            );
+            if (liveStatus) {
+              statusLine = courierStatusLabel[liveStatus] || `🚚 ${liveStatus}`;
+            }
+          } catch {
+            // live tracking call failed — fall back to the internal status silently
+          }
+        }
+        return `#${o.id} — ${items || '—'}\n   ${statusLine}`;
+      }),
+    );
     return `আপনার অর্ডারের আপডেট:\n\n${lines.join('\n\n')}`;
   }
 

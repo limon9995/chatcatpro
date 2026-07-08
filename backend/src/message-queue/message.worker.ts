@@ -26,6 +26,11 @@ export class MessageWorker implements OnModuleInit, OnModuleDestroy {
         connection: { url: REDIS_URL },
         concurrency: 5,
         limiter: { max: 200, duration: 1000 },
+        // Default 30s lock is too tight for jobs that call a slow AI provider —
+        // if lock renewal falls behind, BullMQ marks the job "stalled" and
+        // re-runs it on another worker slot while the original run may still
+        // be finishing, producing two independent replies for one message.
+        lockDuration: 60_000,
       },
     );
 
@@ -36,6 +41,12 @@ export class MessageWorker implements OnModuleInit, OnModuleDestroy {
     this.worker.on('failed', (job, err) => {
       this.logger.error(
         `[MessageWorker] failed job=${job?.id} attempts=${job?.attemptsMade} err=${err.message}`,
+      );
+    });
+
+    this.worker.on('stalled', (jobId) => {
+      this.logger.warn(
+        `[MessageWorker] job=${jobId} stalled — BullMQ will re-run it, which can cause a duplicate reply. Investigate slow handlers if this recurs.`,
       );
     });
 

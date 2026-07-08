@@ -438,15 +438,12 @@ export class ClientDashboardService {
       )
         continue;
       try {
-        const apiStatus = await this.fetchCourierStatus(
+        const normalized = await this.courierService.getLiveStatus(
           shipment.courierName as any,
           settings,
           shipment.trackingId,
         );
-        if (!apiStatus) continue;
-
-        const normalized = this.normalizeCourierStatus(apiStatus);
-        if (normalized === shipment.status) continue;
+        if (!normalized || normalized === shipment.status) continue;
 
         await this.courierAccounting.updateShipmentStatus(
           pageId,
@@ -464,56 +461,6 @@ export class ClientDashboardService {
     }
 
     return { synced: results.filter((r) => !r.error).length, results };
-  }
-
-  private normalizeCourierStatus(raw: string): string {
-    const s = (raw || '').toLowerCase();
-    if (['delivered', 'deliver', 'success'].includes(s)) return 'delivered';
-    if (['returned', 'return', 'cancelled', 'canceled', 'failed'].includes(s))
-      return 'returned';
-    if (
-      ['picked', 'picked_up', 'in_transit', 'intransit', 'on_the_way'].includes(
-        s,
-      )
-    )
-      return 'in_transit';
-    return s;
-  }
-
-  private async fetchCourierStatus(
-    courier: 'steadfast' | 'redx' | 'pathao' | 'paperfly',
-    settings: any,
-    trackingId: string,
-  ): Promise<string | null> {
-    try {
-      const axios = (await import('axios')).default;
-      if (courier === 'steadfast') {
-        const res = await axios.get(
-          `https://portal.packzy.com/api/v1/status/by-cid/${trackingId}`,
-          {
-            headers: {
-              'Api-Key': settings.steadfast?.apiKey,
-              'Secret-Key': settings.steadfast?.secretKey,
-            },
-            timeout: 10000,
-          },
-        );
-        return res.data?.delivery_status ?? null;
-      }
-      if (courier === 'redx') {
-        const res = await axios.get(
-          `https://openapi.redx.com.bd/v1.0.0-beta/parcel/track/${trackingId}`,
-          {
-            headers: { 'API-ACCESS-TOKEN': `Bearer ${settings.redx?.apiKey}` },
-            timeout: 10000,
-          },
-        );
-        return res.data?.info?.status ?? null;
-      }
-      return null;
-    } catch {
-      return null;
-    }
   }
 
   // ── Manual Call Queue ──────────────────────────────────────────────────────
