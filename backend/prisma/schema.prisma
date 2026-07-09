@@ -401,6 +401,11 @@ model Order {
   editToken   String?   @unique
   cancelNote  String?
 
+  // V25: True once stockQty has actually been decremented for this order's
+  // items — lets cancelOrder restore stock safely without over-crediting
+  // orders that were cancelled before stock was ever reserved.
+  stockDecremented Boolean @default(false)
+
   // Spam/Fraud check result
   spamRisk        String   @default("unknown")
   spamScore       Float?

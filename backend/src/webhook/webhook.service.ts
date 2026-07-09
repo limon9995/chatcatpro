@@ -795,11 +795,21 @@ export class WebhookService implements OnModuleDestroy {
     }
 
     // ── CANCELLED ORDER GUARD ─────────────────────────────────────────────────
-    // If customer has no active order but has a cancelled one, intercept everything
+    // If customer has no active order but has a cancelled one, let them know —
+    // but only once, and never block them from starting a new order. Without
+    // these two checks this used to repeat the same cancellation notice
+    // verbatim on every single message forever, with no way out.
     if (!draft && page.orderModeOn) {
       const activeOrder = await this.findRecentCustomerOrder(pageId, psid);
       if (!activeOrder) {
-        const cancelledOrder = await this.findCancelledOrder(pageId, psid);
+        const wantsNewOrder =
+          /notun|new\s*or?der|abar\s*or?der|নতুন\s*অর্ডার|আবার\s*অর্ডার/i.test(text) ||
+          ['ORDER_INTENT', 'CATALOG_REQUEST'].includes(
+            this.botIntent.detectIntent(text, false) || '',
+          );
+        const cancelledOrder = wantsNewOrder
+          ? null
+          : await this.findCancelledOrder(pageId, psid);
         if (cancelledOrder) {
           const pageInfo = await this.prisma.page.findUnique({
             where: { id: pageId },
@@ -879,8 +889,16 @@ export class WebhookService implements OnModuleDestroy {
           const reply = note
             ? `❌ আপনার অর্ডার #${cancelledOrder.id} বাতিল করা হয়েছে।\n\nকারণ: ${note}`
             : `❌ আপনার অর্ডার #${cancelledOrder.id} বাতিল করা হয়েছে।${businessPhone ? `\n\nআরও জানতে যোগাযোগ করুন: ${businessPhone}` : ''}`;
-          await this.safeSend(token, psid, reply);
-          return;
+          const lastReply = this.inFlightReply.get(
+            this.activeReplyKey.get(psid) ?? psid,
+          );
+          if (lastReply === reply) {
+            // Already told them this exact thing last turn — don't repeat it
+            // forever, fall through to normal handling instead.
+          } else {
+            await this.safeSend(token, psid, reply);
+            return;
+          }
         }
       }
     }
@@ -1333,7 +1351,12 @@ export class WebhookService implements OnModuleDestroy {
 
     // ── CANCELLED ORDER: customer asking about product ───────────────────────
     if (!recentOrder && page.orderModeOn) {
-      const cancelledOrder = await this.findCancelledOrder(pageId, psid);
+      const wantsNewOrder =
+        /notun|new\s*or?der|abar\s*or?der|নতুন\s*অর্ডার|আবার\s*অর্ডার/i.test(text) ||
+        ['ORDER_INTENT', 'CATALOG_REQUEST'].includes(intent || '');
+      const cancelledOrder = wantsNewOrder
+        ? null
+        : await this.findCancelledOrder(pageId, psid);
       if (cancelledOrder) {
         const businessPhone = (await this.prisma.page.findUnique({
           where: { id: pageId },
@@ -1343,8 +1366,13 @@ export class WebhookService implements OnModuleDestroy {
         const reply = note
           ? `❌ আপনার অর্ডার #${cancelledOrder.id} বাতিল করা হয়েছে।\n\nকারণ: ${note}`
           : `❌ আপনার অর্ডার #${cancelledOrder.id} বাতিল করা হয়েছে।${businessPhone ? `\n\nআরও জানতে যোগাযোগ করুন: ${businessPhone}` : ''}`;
-        await this.safeSend(token, psid, reply);
-        return;
+        const lastReply = this.inFlightReply.get(
+          this.activeReplyKey.get(psid) ?? psid,
+        );
+        if (lastReply !== reply) {
+          await this.safeSend(token, psid, reply);
+          return;
+        }
       }
     }
 

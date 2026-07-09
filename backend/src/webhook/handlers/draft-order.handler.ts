@@ -892,6 +892,7 @@ export class DraftOrderHandler {
           status: orderStatus,
           source: draft.platform ?? 'FACEBOOK',
           confirmedAt: confirmedAt,
+          stockDecremented: true,
           negotiationRequested: draft.negotiationRequested ?? false,
           customerOfferedPrice: draft.offeredPrice ?? null,
           orderNote: combinedNote,

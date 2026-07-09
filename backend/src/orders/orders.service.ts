@@ -143,28 +143,33 @@ export class OrdersService {
       });
 
     await this.prisma.$transaction(async (tx) => {
-      for (const item of order.items || []) {
-        // Page-scoped product lookup
-        const product = await tx.product.findFirst({
-          where: { pageId: order.pageIdRef, code: item.productCode },
-        });
-        if (!product)
-          throw new BadRequestException(
-            `Product not found: ${item.productCode}`,
-          );
-        if (product.stockQty < item.qty) {
-          throw new BadRequestException(
-            `Not enough stock for ${item.productCode}. Available: ${product.stockQty}`,
-          );
+      // Bot-created orders already decrement stock at draft-finalize time —
+      // only decrement here if that hasn't happened yet, so confirming an
+      // order never removes stock twice.
+      if (!order.stockDecremented) {
+        for (const item of order.items || []) {
+          // Page-scoped product lookup
+          const product = await tx.product.findFirst({
+            where: { pageId: order.pageIdRef, code: item.productCode },
+          });
+          if (!product)
+            throw new BadRequestException(
+              `Product not found: ${item.productCode}`,
+            );
+          if (product.stockQty < item.qty) {
+            throw new BadRequestException(
+              `Not enough stock for ${item.productCode}. Available: ${product.stockQty}`,
+            );
+          }
+          await tx.product.update({
+            where: { id: product.id },
+            data: { stockQty: { decrement: item.qty } },
+          });
         }
-        await tx.product.update({
-          where: { id: product.id },
-          data: { stockQty: { decrement: item.qty } },
-        });
       }
       await tx.order.update({
         where: { id },
-        data: { status: 'CONFIRMED', confirmedAt: new Date() },
+        data: { status: 'CONFIRMED', confirmedAt: new Date(), stockDecremented: true },
       });
     });
 
@@ -182,9 +187,27 @@ export class OrdersService {
 
   async cancelOrder(id: number, pageId?: number, cancelNote?: string) {
     const order = await this.findOrFail(id, pageId);
-    const result = await this.prisma.order.update({
-      where: { id },
-      data: { status: 'CANCELLED', ...(cancelNote !== undefined ? { cancelNote } : {}) },
+    const result = await this.prisma.$transaction(async (tx) => {
+      // Restore stock for any reason the order is cancelled — but only if it
+      // was actually decremented, so we never over-credit an order that was
+      // cancelled before stock was ever reserved (e.g. still RECEIVED and
+      // never sent through confirmByAgent).
+      if (order.stockDecremented) {
+        for (const item of order.items || []) {
+          await tx.product.updateMany({
+            where: { pageId: order.pageIdRef, code: item.productCode },
+            data: { stockQty: { increment: item.qty } },
+          });
+        }
+      }
+      return tx.order.update({
+        where: { id },
+        data: {
+          status: 'CANCELLED',
+          stockDecremented: false,
+          ...(cancelNote !== undefined ? { cancelNote } : {}),
+        },
+      });
     });
     void this.tryRecurringSubscribePrompt(order.pageIdRef, order.customerPsid);
     const noteStr = cancelNote ? ` কারণ: ${cancelNote}` : '';

@@ -505,8 +505,9 @@ export class ClientDashboardService {
     await this.prisma.$transaction(async (tx) => {
       const order = await tx.order.findUnique({
         where: { id: orderId },
-        select: { callRetryCount: true, phone: true },
-      });
+        select: { callRetryCount: true, phone: true, stockDecremented: true },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      }) as any;
 
       await tx.callAttempt.create({
         data: {
@@ -532,6 +533,18 @@ export class ClientDashboardService {
       if (newOrderStatus) {
         patch.status = newOrderStatus;
         if (newOrderStatus === 'CONFIRMED') patch.confirmedAt = now;
+        if (newOrderStatus === 'CANCELLED' && order?.stockDecremented) {
+          // Same restore-on-cancel rule as orders.service.ts's cancelOrder() —
+          // this path bypasses that method, so it needs its own copy.
+          const items = await tx.orderItem.findMany({ where: { orderId } });
+          for (const item of items) {
+            await tx.product.updateMany({
+              where: { pageId, code: item.productCode },
+              data: { stockQty: { increment: item.qty } },
+            });
+          }
+          patch.stockDecremented = false;
+        }
       }
       if (body.note) patch.callResult = body.note;
 
