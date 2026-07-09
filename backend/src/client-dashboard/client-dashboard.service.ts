@@ -538,6 +538,13 @@ export class ClientDashboardService {
       await tx.order.update({ where: { id: orderId }, data: patch });
     });
 
+    // Customer never got a Messenger message when confirmed via the call-log
+    // button — this path updates order.status directly and skipped the
+    // notification that confirmOrder() sends elsewhere.
+    if (newOrderStatus === 'CONFIRMED') {
+      void this.orderNotification.notifyConfirmed(pageId, orderId);
+    }
+
     // Telegram notification for call result
     const callEmoji: Record<string, string> = {
       CONFIRMED: '✅', CANCELLED: '❌', NOT_ANSWERED: '📵', CALLBACK_LATER: '🔄',
