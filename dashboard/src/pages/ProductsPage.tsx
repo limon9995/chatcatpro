@@ -304,6 +304,54 @@ export function ProductsPage({ th, pageId, onToast }: {
     return merged.join('\n');
   };
 
+  /** Clipboard-image support: copy a screenshot/image and Ctrl+V it straight into a field. */
+  const extractPastedImageFiles = (e: React.ClipboardEvent): File[] => {
+    const items = e.clipboardData?.items;
+    if (!items) return [];
+    const files: File[] = [];
+    for (let i = 0; i < items.length; i++) {
+      const file = items[i].type.startsWith('image/') ? items[i].getAsFile() : null;
+      if (file) files.push(file);
+    }
+    return files;
+  };
+
+  const handleMainImagePaste = async (e: React.ClipboardEvent, target: 'new' | 'edit') => {
+    const files = extractPastedImageFiles(e);
+    if (!files.length) return; // no image on clipboard — let normal text paste happen
+    e.preventDefault();
+    const setUploading = target === 'new' ? setUploadingNewImage : setUploadingEditImage;
+    setUploading(true);
+    try {
+      const url = await uploadProductFile(files[0]);
+      if (target === 'new') setNewP(p => ({ ...p, imageUrl: url }));
+      else setEditData(d => ({ ...d, imageUrl: url }));
+      onToast(copy('ছবি paste করে upload হয়েছে ✓', 'Image pasted & uploaded ✓'), 'success');
+    } catch (err: any) {
+      onToast(err.message, 'error');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleRefImagesPaste = async (e: React.ClipboardEvent, target: 'new' | 'edit') => {
+    const files = extractPastedImageFiles(e);
+    if (!files.length) return;
+    e.preventDefault();
+    const setUploading = target === 'new' ? setUploadingNewRefs : setUploadingEditRefs;
+    setUploading(true);
+    try {
+      const urls = await Promise.all(files.map(uploadProductFile));
+      if (target === 'new') setNewP(p => ({ ...p, referenceImagesJson: appendReferenceUrls(p.referenceImagesJson, urls) }));
+      else setEditData(d => ({ ...d, referenceImagesJson: appendReferenceUrls(d.referenceImagesJson || '', urls) }));
+      onToast(copy('ছবি paste করে upload হয়েছে ✓', 'Image pasted & uploaded ✓'), 'success');
+    } catch (err: any) {
+      onToast(err.message, 'error');
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const analyzeImage = async (imageUrl: string, target: 'new' | 'edit') => {
     if (!imageUrl.trim()) {
       onToast(copy('আগে image দিন', 'Add an image first'), 'error');
@@ -618,8 +666,9 @@ export function ProductsPage({ th, pageId, onToast }: {
             </FieldWithInfo>
             <FieldWithInfo th={th} label="Image URL" helpText={copy('Product এর ছবির URL', 'Product image URL')}>
               <div style={{ display: 'grid', gap: 8 }}>
-                <input style={th.input} placeholder="https://..." value={newP.imageUrl}
-                  onChange={e => setNewP(p => ({ ...p, imageUrl: e.target.value }))} />
+                <input style={th.input} placeholder={copy('https://... (অথবা ছবি copy করে এখানে paste করুন)', 'https://... (or copy an image and paste here)')} value={newP.imageUrl}
+                  onChange={e => setNewP(p => ({ ...p, imageUrl: e.target.value }))}
+                  onPaste={e => handleMainImagePaste(e, 'new')} />
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   <button type="button" style={th.btnGhost} onClick={() => newImageRef.current?.click()} disabled={uploadingNewImage}>
                     {uploadingNewImage ? copy('Uploading...', 'Uploading...') : copy('Upload Main Image', 'Upload Main Image')}
@@ -695,9 +744,10 @@ export function ProductsPage({ th, pageId, onToast }: {
               <div style={{ display: 'grid', gap: 8 }}>
                 <textarea
                   style={{ ...th.input, minHeight: 92, resize: 'vertical', fontSize: 12.5 }}
-                  placeholder={'https://...\nhttps://...\nhttps://...'}
+                  placeholder={copy('https://...\nhttps://...\n(অথবা ছবি copy করে এখানে paste করুন)', 'https://...\nhttps://...\n(or copy image(s) and paste here)')}
                   value={newP.referenceImagesJson}
                   onChange={e => setNewP(p => ({ ...p, referenceImagesJson: e.target.value }))}
+                  onPaste={e => handleRefImagesPaste(e, 'new')}
                 />
                 <button type="button" style={th.btnGhost} onClick={() => newRefsRef.current?.click()} disabled={uploadingNewRefs}>
                   {uploadingNewRefs ? copy('Uploading...', 'Uploading...') : copy('Upload Angle Images', 'Upload Angle Images')}
@@ -966,8 +1016,9 @@ export function ProductsPage({ th, pageId, onToast }: {
                         </div>
                         <input style={{ ...th.input, fontSize: 12.5 }} type="number" placeholder="Stock" value={editData.stockQty ?? ''}
                           onChange={e => setEditData(d => ({ ...d, stockQty: Number(e.target.value) }))} />
-                        <input style={{ ...th.input, fontSize: 12.5 }} placeholder="Image URL" value={editData.imageUrl ?? ''}
-                          onChange={e => setEditData(d => ({ ...d, imageUrl: e.target.value }))} />
+                        <input style={{ ...th.input, fontSize: 12.5 }} placeholder={copy('Image URL (বা ছবি paste করুন)', 'Image URL (or paste an image)')} value={editData.imageUrl ?? ''}
+                          onChange={e => setEditData(d => ({ ...d, imageUrl: e.target.value }))}
+                          onPaste={e => handleMainImagePaste(e, 'edit')} />
                         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                           <button type="button" style={th.btnSmGhost} onClick={() => editImageRef.current?.click()} disabled={uploadingEditImage}>
                             {uploadingEditImage ? 'Uploading…' : 'Upload Main'}
@@ -999,9 +1050,10 @@ export function ProductsPage({ th, pageId, onToast }: {
                         />
                         <textarea
                           style={{ ...th.input, fontSize: 12, minHeight: 82, resize: 'vertical' }}
-                          placeholder={'Reference image URLs\nhttps://...\nhttps://...'}
+                          placeholder={copy('Reference image URLs\nhttps://...\n(বা ছবি paste করুন)', 'Reference image URLs\nhttps://...\n(or paste image(s))')}
                           value={editData.referenceImagesJson ?? ''}
                           onChange={e => setEditData(d => ({ ...d, referenceImagesJson: e.target.value }))}
+                          onPaste={e => handleRefImagesPaste(e, 'edit')}
                         />
                         <button type="button" style={th.btnSmGhost} onClick={() => editRefsRef.current?.click()} disabled={uploadingEditRefs}>
                           {uploadingEditRefs ? 'Uploading…' : 'Upload Angles'}
