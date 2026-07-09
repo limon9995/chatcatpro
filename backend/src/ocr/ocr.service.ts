@@ -1017,7 +1017,10 @@ export class OcrService {
               { inlineData: { mimeType: 'image/jpeg', data: base64 } },
             ],
           }],
-          generationConfig: { maxOutputTokens: 300 },
+          // thinkingBudget: 0 — gemini-2.5-flash has "thinking" on by default and
+          // can burn the whole maxOutputTokens budget on internal reasoning before
+          // writing any actual text, truncating the response mid-word.
+          generationConfig: { thinkingConfig: { thinkingBudget: 0 }, maxOutputTokens: 300 },
         }),
         signal: AbortSignal.timeout(15_000),
       });

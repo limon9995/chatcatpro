@@ -277,7 +277,9 @@ export class SupportChatService {
         body: JSON.stringify({
           system_instruction: { parts: [{ text: systemPrompt }] },
           contents,
-          generationConfig: { maxOutputTokens: 400, temperature: 0.7 },
+          // thinkingBudget: 0 — avoid gemini-2.5-flash's default "thinking" mode
+          // eating the output budget and truncating the reply.
+          generationConfig: { maxOutputTokens: 400, temperature: 0.7, thinkingConfig: { thinkingBudget: 0 } },
         }),
         signal: AbortSignal.timeout(12_000),
       },

@@ -132,7 +132,10 @@ export class AutoPostService {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
     const body = JSON.stringify({
       contents: [{ role: 'user', parts: [{ text: system ? `${system}\n\n${user}` : user }] }],
-      generationConfig: { temperature: 0.8, maxOutputTokens: 512 },
+      // thinkingBudget: 0 — gemini-2.5-flash defaults to "thinking" mode, which can
+      // consume the whole maxOutputTokens budget on internal reasoning and truncate
+      // the actual caption/hashtag output.
+      generationConfig: { temperature: 0.8, maxOutputTokens: 512, thinkingConfig: { thinkingBudget: 0 } },
     });
 
     const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });

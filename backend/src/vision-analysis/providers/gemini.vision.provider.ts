@@ -56,7 +56,9 @@ Respond with ONLY the JSON array — no other text, no markdown.`;
             ],
           },
         ],
-        generationConfig: { maxOutputTokens: 100 },
+        // thinkingBudget: 0 — see note in callAPIWithKey; without it, "thinking"
+        // tokens can silently eat the whole budget and truncate the output.
+        generationConfig: { thinkingConfig: { thinkingBudget: 0 }, maxOutputTokens: 200 },
       }),
       signal: AbortSignal.timeout(20_000),
     });
@@ -225,7 +227,12 @@ Rules:
           },
         ],
         generationConfig: {
-          maxOutputTokens: isMulti ? 500 : 300,
+          // gemini-2.5-flash spends part of maxOutputTokens on internal "thinking"
+          // before writing the actual JSON — without disabling it, a low budget
+          // (or a request that makes it "think" more, e.g. more images) can burn
+          // the whole budget on thinking and truncate the JSON output mid-string.
+          thinkingConfig: { thinkingBudget: 0 },
+          maxOutputTokens: isMulti ? 900 : 500,
           responseMimeType: 'application/json',
         },
       }),

@@ -96,7 +96,7 @@ export class UniversityPosterService {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               contents: [{ parts: [{ text: prompt }] }],
-              generationConfig: { temperature: 0.5, maxOutputTokens: 700 },
+              generationConfig: { temperature: 0.5, maxOutputTokens: 700, thinkingConfig: { thinkingBudget: 0 } },
             }),
             signal: AbortSignal.timeout(12_000),
           },

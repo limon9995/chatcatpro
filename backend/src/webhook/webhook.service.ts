@@ -3925,7 +3925,9 @@ ${businessInfo}
             body: JSON.stringify({
               system_instruction: { parts: [{ text: systemPrompt }] },
               contents: [{ role: 'user', parts: [{ text: userMsg }] }],
-              generationConfig: { maxOutputTokens: 300, temperature: 0.5 },
+              // thinkingBudget: 0 — gemini-2.5-flash's default "thinking" mode can
+              // eat the whole output budget and truncate the reply mid-sentence.
+              generationConfig: { maxOutputTokens: 300, temperature: 0.5, thinkingConfig: { thinkingBudget: 0 } },
             }),
             signal: AbortSignal.timeout(10_000),
           },
