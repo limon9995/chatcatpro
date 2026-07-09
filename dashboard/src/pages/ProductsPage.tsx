@@ -317,6 +317,28 @@ export function ProductsPage({ th, pageId, onToast }: {
     return merged.join('\n');
   };
 
+  /** Whichever photo is added first — via Image URL upload or Reference Images —
+   *  becomes the product's main profile photo (shown in cards/website/catalog).
+   *  Any additional photos in the same batch still go to Reference Images. */
+  const addImagesPromotingFirst = <T extends { imageUrl?: string; referenceImagesJson?: string }>(
+    prev: T,
+    urls: string[],
+  ): T => {
+    if (!urls.length) return prev;
+    if (!String(prev.imageUrl || '').trim()) {
+      const [first, ...rest] = urls;
+      return {
+        ...prev,
+        imageUrl: first,
+        referenceImagesJson: appendReferenceUrls(prev.referenceImagesJson || '', rest),
+      };
+    }
+    return {
+      ...prev,
+      referenceImagesJson: appendReferenceUrls(prev.referenceImagesJson || '', urls),
+    };
+  };
+
   /** Clipboard-image support: copy a screenshot/image and Ctrl+V it straight into a field. */
   const extractPastedImageFiles = (e: React.ClipboardEvent): File[] => {
     const items = e.clipboardData?.items;
@@ -355,8 +377,8 @@ export function ProductsPage({ th, pageId, onToast }: {
     setUploading(true);
     try {
       const urls = await Promise.all(files.map(uploadProductFile));
-      if (target === 'new') setNewP(p => ({ ...p, referenceImagesJson: appendReferenceUrls(p.referenceImagesJson, urls) }));
-      else setEditData(d => ({ ...d, referenceImagesJson: appendReferenceUrls(d.referenceImagesJson || '', urls) }));
+      if (target === 'new') setNewP(p => addImagesPromotingFirst(p, urls));
+      else setEditData(d => addImagesPromotingFirst(d, urls));
       onToast(copy('ছবি paste করে upload হয়েছে ✓', 'Image pasted & uploaded ✓'), 'success');
     } catch (err: any) {
       onToast(err.message, 'error');
@@ -826,10 +848,7 @@ export function ProductsPage({ th, pageId, onToast }: {
                     setUploadingNewRefs(true);
                     try {
                       const urls = await Promise.all(files.map(uploadProductFile));
-                      setNewP((p) => ({
-                        ...p,
-                        referenceImagesJson: appendReferenceUrls(p.referenceImagesJson, urls),
-                      }));
+                      setNewP((p) => addImagesPromotingFirst(p, urls));
                       onToast(copy('Angle images uploaded', 'Angle images uploaded'), 'success');
                     } catch (err: any) {
                       onToast(err.message, 'error');
@@ -1146,10 +1165,7 @@ export function ProductsPage({ th, pageId, onToast }: {
                             setUploadingEditRefs(true);
                             try {
                               const urls = await Promise.all(files.map(uploadProductFile));
-                              setEditData((d) => ({
-                                ...d,
-                                referenceImagesJson: appendReferenceUrls(d.referenceImagesJson || '', urls),
-                              }));
+                              setEditData((d) => addImagesPromotingFirst(d, urls));
                               onToast(copy('Angle images uploaded', 'Angle images uploaded'), 'success');
                             } catch (err: any) {
                               onToast(err.message, 'error');
