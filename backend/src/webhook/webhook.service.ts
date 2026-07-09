@@ -916,15 +916,22 @@ export class WebhookService implements OnModuleDestroy {
       }
     }
 
-    // ── STRUCTURED DRAFT STEPS — bypass SmartBot, use deterministic handler ─
-    // cf:*, name, phone, address steps need strict validation (choice lists, phone
-    // format, address heuristics). SmartBot does not handle these reliably.
-    const structuredStep =
+    // ── STRUCTURED DRAFT STEPS — deterministic handler ────────────────────
+    // Payment-proof (needs OCR) and custom-choice (cf:*) steps always use the
+    // deterministic handler. For name/phone/address, SmartBot pages let the AI
+    // collect them instead — it understands combined input like
+    // "Limon, Mirpur-2 Dhaka, 01700000000" in one message, whereas captureField
+    // sends a rigid "fill this form" template and re-asks. Non-SmartBot pages
+    // keep the strict deterministic capture for those basic fields.
+    const isPaymentOrCustomStep =
       draft?.currentStep &&
       (draft.currentStep.startsWith('cf:') ||
-        ['name', 'phone', 'address', 'advance_payment'].includes(
-          draft.currentStep,
-        ));
+        draft.currentStep === 'advance_payment');
+    const isBasicFieldStep =
+      draft?.currentStep &&
+      ['name', 'phone', 'address'].includes(draft.currentStep);
+    const structuredStep =
+      isPaymentOrCustomStep || (isBasicFieldStep && !page.smartBotOn);
     if (structuredStep && page.orderModeOn) {
       // A genuine question during a structured step (e.g. "page theke dibo?" or "age
       // payment korte hbe?" while waiting for name/phone/address) must be answered via
@@ -997,9 +1004,9 @@ export class WebhookService implements OnModuleDestroy {
         );
         if (result !== false) {
           if (typeof result === 'object' && result.showCatalog) {
-            // AI chose to show the catalog (replaces the CATALOG_REQUEST keyword)
-            if (result.reply?.trim())
-              await this.safeSend(token, psid, result.reply);
+            // AI chose to show the catalog (replaces the CATALOG_REQUEST keyword).
+            // Send just the product cards — they carry their own text, so we skip
+            // the AI lead-in to avoid a redundant second catalog message.
             await this.sendCatalogFallback(token, psid, page);
           } else {
             const replyText =
