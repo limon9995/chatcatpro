@@ -115,8 +115,17 @@ export class BillingService {
     const sub = await this.getOrCreateSubscription(userId);
     const now = new Date();
 
-    // Auto-expire trial
-    if (sub.status === 'trial' && sub.trialEndsAt && sub.trialEndsAt < now) {
+    // Auto-expire trial — only once the actual granted period (periodEnd) has
+    // also passed. trialEndsAt alone isn't enough: if an admin extends
+    // periodEnd (e.g. adminSetSubscription) without also moving status off
+    // 'trial', this used to flip a legitimately-extended subscription to
+    // 'expired' the moment the original short trial window passed.
+    if (
+      sub.status === 'trial' &&
+      sub.trialEndsAt &&
+      sub.trialEndsAt < now &&
+      sub.periodEnd < now
+    ) {
       await this.prisma.subscription.update({
         where: { id: sub.id },
         data: { status: 'expired', updatedAt: now },
@@ -419,6 +428,11 @@ export class BillingService {
         ? body.ordersLimit
         : -1;
     const pagePatch = this.buildPageFeaturePatch(body.featureAccess);
+    // trialEndsAt is only meaningful while status stays 'trial' — otherwise it's
+    // a stale short window that the auto-expire check (getStatus) can use to
+    // wrongly expire an extension. Keep it in sync with the new periodEnd, or
+    // clear it entirely once the subscription isn't a trial anymore.
+    const nextTrialEndsAt = body.status === 'trial' ? periodEnd : null;
 
     if (existing) {
       await this.prisma.subscription.update({
@@ -429,6 +443,7 @@ export class BillingService {
           ordersUsed: 0,
           periodStart: now,
           periodEnd,
+          trialEndsAt: nextTrialEndsAt,
           nextPaymentDue: periodEnd,
           note: body.note ?? null,
           updatedAt: now,
@@ -442,6 +457,7 @@ export class BillingService {
           planId: plan.id,
           status: body.status,
           ordersLimit: nextOrdersLimit,
+          trialEndsAt: nextTrialEndsAt,
           periodStart: now,
           periodEnd,
           nextPaymentDue: periodEnd,
