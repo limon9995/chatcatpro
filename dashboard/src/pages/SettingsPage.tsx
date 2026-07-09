@@ -2116,7 +2116,7 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
                       const sections: Record<string, string> = {
                         'chatcat-intro': `আমরা Facebook Messenger automation সেবা দিই। আপনার page এর bot automatically order নেবে, reply করবে, courier booking করবে।`,
                         'platform-fee': `## Platform Fee\nআলোচনা সাপেক্ষ — আপনার পেজের size ও ব্যবহার অনুযায়ী admin এর সাথে কথা বলে deal হবে।`,
-                        'ai-pricing': `## AI Usage Pricing (Pay-as-you-go)\n- Keyword reply: ৳০.০২/message\n- AI text reply: ৳০.০৫/message\n- AI SmartBot: ৳০.০৮/message\n- Customer image (Vision AI): ৳০.২০/image\n- OCR scan: ৳০.০২–০.০৫\n- Voice note (STT): ৳১.০০/voice\n- Broadcast: ৳০.০৫/message\n- Subscriber notification: ৳০.১০/message\n- Memo print: ৳০.১০`,
+                        'ai-pricing': `## AI Usage Pricing (Pay-as-you-go)\n- AI text reply: ৳০.০৫/message\n- AI SmartBot: ৳০.০৮/message\n- Customer image (Vision AI): ৳০.২০/image\n- OCR scan: ৳০.০২–০.০৫\n- Voice note (STT): ৳১.০০/voice\n- Broadcast: ৳০.০৫/message\n- Subscriber notification: ৳০.১০/message\n- Memo print: ৳০.১০`,
                         'free-features': `## বিনামূল্যে\nCourier booking (Pathao, Steadfast, RedX, Paperfly), Accounting, CRM, Analytics, Order management`,
                         'subscriber-feature': `## Special Feature: Subscriber Notification\nOrder complete/cancel হলে bot customer কে subscribe করতে বলে।\nSubscribed customer দের যেকোনো সময় নতুন পণ্যের message পাঠানো যায়।\nFacebook Ad ছাড়া — মাত্র ৳০.১০/message। ১০০০ জন = মাত্র ৳১০০।`,
                         'payment-trial': `## Payment ও Trial\n- Payment: bKash, Nagad, Rocket, Bank transfer\n- ৭ দিন সম্পূর্ণ free trial — কোনো credit card লাগে না\n- Contact: WhatsApp — wa.me/8801720450797`,
@@ -2185,8 +2185,8 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
         {!isUniversityMode && <Section title="🧠 SmartBot Mode" desc="AI — customer যেকোনো ভাষায় কথা বলবে, bot বুঝে order নেবে। Knowledge box-এর তথ্য দিয়ে reply দেবে।">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             <Toggle th={th}
-              label="SmartBot চালু করুন"
-              sub="Keyword matching বন্ধ — AI সরাসরি customer-এর সব message বুঝে reply দেবে এবং order নেবে। খরচ তুলনামূলক বেশি হবে, কিন্তু Bot Personality/tone পুরো conversation-এ consistently কাজ করবে।"
+              label="SmartBot চালু করুন (সুপারিশকৃত)"
+              sub="AI সরাসরি customer-এর প্রতিটা message বুঝে natural reply দেবে এবং order নেবে — আগের কথা (chat history) মনে রাখবে, Bot Personality/tone পুরো conversation-এ consistent থাকবে। এটাই এখন default।"
               checked={s.smartBotOn}
               onChange={v => saveMode('smartBotOn', v)} />
             {!s.smartBotOn && (
@@ -2201,7 +2201,7 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
             )}
             {isAdmin && (
               <div style={{ fontSize: 11, color: th.muted, padding: '8px 12px', borderRadius: 8, background: 'rgba(79,110,247,0.07)', border: '1px solid rgba(79,110,247,0.2)' }}>
-                Admin only — rates: Keyword ৳0.02/msg · AI text ৳0.05/msg · SmartBot ৳0.10/msg · Customer image ৳0.20
+                Admin only — rates: AI text ৳0.05/msg · SmartBot ৳0.10/msg · Customer image ৳0.20
               </div>
             )}
           </div>
@@ -2333,7 +2333,7 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
               <div style={{ background: th.surface, borderRadius: 8, padding: '10px 12px', fontSize: 11.5, color: th.muted, lineHeight: 1.8, border: `1px solid ${th.border}`, marginBottom: 10, maxHeight: 160, overflowY: 'auto' }}>
                 <strong style={{ color: th.text }}>ChatCat — যা bot জানবে:</strong><br/>
                 ✦ Platform fee: আলোচনা সাপেক্ষ (admin এর সাথে কথা বলে deal)<br/>
-                ✦ Keyword reply: ৳০.০২/msg | AI reply: ৳০.০৫/msg | SmartBot: ৳০.০৮/msg<br/>
+                ✦ AI reply: ৳০.০৫/msg | SmartBot: ৳০.০৮/msg<br/>
                 ✦ Customer image (Vision AI): ৳০.২০ | OCR: ৳০.০২–০.০৫<br/>
                 ✦ Voice note (STT): ৳১.০০ | Product analyze: ৳০.২০<br/>
                 ✦ Broadcast: ৳০.০৫/msg | Subscriber notification: ৳০.১০/msg<br/>
@@ -2347,7 +2347,7 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
                 style={{ ...th.btnPrimary, fontSize: 12, padding: '7px 14px' }}
                 onClick={() => {
                   const sections: Record<string, string> = {
-                    'cc-pricing': `## ChatCat AI Pricing (Wallet)\n- Keyword reply: ৳০.০২/msg\n- AI text reply: ৳০.০৫/msg\n- AI SmartBot: ৳০.০৮/msg\n- Customer image (Vision AI): ৳০.২০/image\n- OCR: ৳০.০২–০.০৫/scan\n- Voice note (STT): ৳১.০০/voice\n- Product analyze: ৳০.২০\n- Broadcast: ৳০.০৫/msg\n- Subscriber notification: ৳০.১০/msg\n- Comment reply: ৳০.০৫\n- Memo print: ৳০.১০`,
+                    'cc-pricing': `## ChatCat AI Pricing (Wallet)\n- AI text reply: ৳০.০৫/msg\n- AI SmartBot: ৳০.০৮/msg\n- Customer image (Vision AI): ৳০.২০/image\n- OCR: ৳০.০২–০.০৫/scan\n- Voice note (STT): ৳১.০০/voice\n- Product analyze: ৳০.২০\n- Broadcast: ৳০.০৫/msg\n- Subscriber notification: ৳০.১০/msg\n- Comment reply: ৳০.০৫\n- Memo print: ৳০.১০`,
                     'cc-free': `## বিনামূল্যে\nCourier (Pathao/Steadfast/RedX/Paperfly), Order management, Accounting, CRM, Analytics, Product catalog`,
                     'cc-example': `## Real Example\n১ image + ৫ AI reply = ৳০.২০ + (৫×৳০.০৮) = মাত্র ৳০.৬০`,
                     'cc-subscriber': `## Subscriber Notification\nOrder পরে subscribe করা customer দের যেকোনো সময় নতুন পণ্যের message — ৳০.১০/msg। Facebook Ad ছাড়া।`,

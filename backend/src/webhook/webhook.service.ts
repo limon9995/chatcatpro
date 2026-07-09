@@ -904,11 +904,16 @@ export class WebhookService implements OnModuleDestroy {
       }
     }
 
-    // ── CATALOG REQUEST (pre-SmartBot) — always send card view ──────────
-    const preSmartBotIntent = this.botIntent.detectIntent(text, awaitingConfirm);
-    if (preSmartBotIntent === 'CATALOG_REQUEST') {
-      await this.sendCatalogFallback(token, psid, page);
-      return;
+    // ── CATALOG REQUEST (pre-SmartBot) — card view ──────────────────────
+    // Only for pages that opted OUT of SmartBot. SmartBot pages let the AI
+    // decide when to show the catalog (SHOW_CATALOG action), so no keyword
+    // matching runs for them.
+    if (!page.smartBotOn) {
+      const preSmartBotIntent = this.botIntent.detectIntent(text, awaitingConfirm);
+      if (preSmartBotIntent === 'CATALOG_REQUEST') {
+        await this.sendCatalogFallback(token, psid, page);
+        return;
+      }
     }
 
     // ── STRUCTURED DRAFT STEPS — bypass SmartBot, use deterministic handler ─
@@ -974,20 +979,39 @@ export class WebhookService implements OnModuleDestroy {
       }
     }
 
-    // ── SMART BOT (V19) — single AI call replaces keyword pipeline ────────
-    if (page.smartBotOn && aiAllowed && this.smartBot.isAvailable()) {
-      const reply = await this.smartBot.handle(
-        page,
-        psid,
-        text,
-        draft,
-        this.draftHandler,
-      );
-      if (reply !== false) {
-        // Use WebhookService.safeSend so inFlightReply is updated → history gets saved
-        await this.safeSend(token, psid, reply);
-        return;
+    // ── SMART BOT — the ONLY brain for SmartBot pages ─────────────────────
+    // Keyword intent matching is fully removed here: every message goes
+    // straight to the AI, which reads the full chat history for context.
+    // If the AI is momentarily unavailable we send a graceful "busy" reply
+    // instead of falling back to the retired keyword pipeline.
+    if (page.smartBotOn) {
+      if (aiAllowed && this.smartBot.isAvailable()) {
+        // "typing…" indicator so the bot feels like a real person
+        void this.messenger.sendSenderAction(token, psid, 'typing_on');
+        const result = await this.smartBot.handle(
+          page,
+          psid,
+          text,
+          draft,
+          this.draftHandler,
+        );
+        if (result !== false) {
+          if (typeof result === 'object' && result.showCatalog) {
+            // AI chose to show the catalog (replaces the CATALOG_REQUEST keyword)
+            if (result.reply?.trim())
+              await this.safeSend(token, psid, result.reply);
+            await this.sendCatalogFallback(token, psid, page);
+          } else {
+            const replyText =
+              typeof result === 'string' ? result : result.reply;
+            await this.sendReplyInChunks(token, psid, replyText);
+          }
+          return;
+        }
       }
+      // SmartBot on but AI unavailable/failed — graceful fallback, never keyword
+      await this.sendSmartBotUnavailable(token, psid, page);
+      return;
     }
 
     // ── INTENT DETECTION ──────────────────────────────────────────────────
@@ -3618,6 +3642,61 @@ export class WebhookService implements OnModuleDestroy {
     } catch (err) {
       this.logger.error(`[Webhook] safeSend failed psid=${psid}: ${err}`);
     }
+  }
+
+  /**
+   * Send a reply as 1–3 short message bubbles (feels more human than one wall
+   * of text). The AI marks intended split points with "|||". We cap the number
+   * of bubbles and store the FULL reply in inFlightReply so chat history keeps
+   * the complete message, not just the last bubble.
+   */
+  private async sendReplyInChunks(
+    token: string,
+    psid: string,
+    fullText: string,
+  ): Promise<void> {
+    const text = (fullText ?? '').trim();
+    if (!text) return;
+    const parts = text
+      .split('|||')
+      .map((p) => p.trim())
+      .filter(Boolean)
+      .slice(0, 3);
+    const bubbles = parts.length > 0 ? parts : [text];
+    for (let i = 0; i < bubbles.length; i++) {
+      if (i > 0) {
+        // brief pause + typing indicator between bubbles, like a person
+        void this.messenger.sendSenderAction(token, psid, 'typing_on');
+        await new Promise((r) => setTimeout(r, 700));
+      }
+      try {
+        await this.messenger.sendText(token, psid, bubbles[i]);
+      } catch (err) {
+        this.logger.error(`[Webhook] chunk send failed psid=${psid}: ${err}`);
+      }
+    }
+    const key = this.activeReplyKey.get(psid) ?? psid;
+    this.inFlightReply.set(key, bubbles.join('\n')); // full reply for history
+  }
+
+  /**
+   * SmartBot page but the AI provider is momentarily unavailable / out of
+   * balance. We deliberately do NOT fall back to keyword matching (retired for
+   * SmartBot pages) — instead send a short, friendly holding message so the
+   * customer never sees silence.
+   */
+  private async sendSmartBotUnavailable(
+    token: string,
+    psid: string,
+    page: any,
+  ): Promise<void> {
+    const pageId = page.id as number;
+    const fallback = 'একটু ব্যস্ত আছি 😊 একটু পরে আবার লিখুন, আমি সাহায্য করছি।';
+    const msg = await this.botKnowledge
+      .resolveSystemReply(pageId, 'ai_busy', undefined, page.agentType)
+      .catch(() => fallback);
+    // resolveSystemReply may return empty for an unregistered key — never send silence
+    await this.safeSend(token, psid, msg?.trim() ? msg : fallback);
   }
 
   // ── Voice message handler (Whisper STT) ────────────────────────────────────

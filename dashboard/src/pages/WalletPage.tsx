@@ -485,8 +485,6 @@ export default function WalletPage({
         }}>
           <div style={{ fontWeight: 700, marginBottom: 6, opacity: 0.9 }}>💰 Usage Pricing (BDT)</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '4px 16px', fontSize: 11.5 }}>
-            <span style={{ opacity: 0.75 }}>Keyword/Template Reply</span>
-            <span style={{ fontWeight: 700 }}>৳ {wallet?.costPerKeywordReplyBdt ?? 0.02}</span>
             <span style={{ opacity: 0.75 }}>AI Text Reply</span>
             <span style={{ fontWeight: 700 }}>৳ {wallet?.costPerTextMsgBdt ?? 0.05}</span>
             <span style={{ opacity: 0.75 }}>Customer Image (Vision)</span>

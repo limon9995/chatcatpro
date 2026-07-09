@@ -157,7 +157,7 @@ model Page {
   imageMediumConfidence Float   @default(0.45) // >= this: show options, ask customer
   imageFallbackAiOn     Boolean @default(false) // use AI fallback when low confidence
   textFallbackAiOn      Boolean @default(false) // use AI fallback for unmatched text messages
-  smartBotOn            Boolean @default(false)  // V19: SmartBot — single AI call replaces keyword pipeline
+  smartBotOn            Boolean @default(true)   // V20: SmartBot — single AI call is the bot brain (keyword pipeline retired); default ON for all pages
   businessBotOn         Boolean @default(false)  // Business Info Bot — replies to all messages using businessInfo
   businessInfo          String? // Full business description; used as AI knowledge base for businessBotOn mode
   commentReplyOn        Boolean @default(false)

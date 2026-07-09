@@ -52,9 +52,17 @@ export interface SmartBotCollected {
 
 export interface SmartBotResponse {
   reply: string;
-  action: 'CHAT' | 'COLLECT' | 'CONFIRM_ORDER' | 'CANCEL_ORDER' | 'AGENT' | 'CAPTURE_LEAD' | 'CONFIRM_LEAD';
+  action: 'CHAT' | 'COLLECT' | 'CONFIRM_ORDER' | 'CANCEL_ORDER' | 'AGENT' | 'CAPTURE_LEAD' | 'CONFIRM_LEAD' | 'SHOW_CATALOG';
   collected: SmartBotCollected;
   calculatePricing: PricingCalcInput | null;
+}
+
+// Returned by handle() when the AI decides to show the product catalog cards.
+// The webhook sends `reply` (a short lead-in) then the carousel of products —
+// this replaces the old CATALOG_REQUEST keyword match.
+export interface SmartBotCatalogResult {
+  reply: string;
+  showCatalog: true;
 }
 
 const VALID_ACTIONS = new Set([
@@ -65,6 +73,7 @@ const VALID_ACTIONS = new Set([
   'AGENT',
   'CAPTURE_LEAD',
   'CONFIRM_LEAD',
+  'SHOW_CATALOG',
 ]);
 
 @Injectable()
@@ -109,7 +118,7 @@ export class SmartBotService {
     text: string,
     draft: DraftSession | null,
     draftHandler: IDraftOrderHandler,
-  ): Promise<string | false> {
+  ): Promise<string | false | SmartBotCatalogResult> {
     const pageId = page.id as number;
 
     if (!this.isAvailable()) {
@@ -156,6 +165,15 @@ export class SmartBotService {
       .getAgentBehavior(page.agentType || 'commerce')
       .catch(() => ({}) as AgentBehaviorConfig);
 
+    // Returning-customer recognition — so the bot greets known customers by
+    // name and never re-asks info it already has on file.
+    const crmCustomer = await this.prisma.customer
+      .findUnique({
+        where: { pageId_psid: { pageId, psid } },
+        select: { name: true, totalOrders: true, lastOrderAt: true },
+      })
+      .catch(() => null);
+
     const systemPrompt = this.buildSystemPrompt(
       businessContext,
       draft,
@@ -164,6 +182,7 @@ export class SmartBotService {
       orderById,
       orderIdMatch ? parseInt(orderIdMatch[1]) : null,
       agentBehavior,
+      crmCustomer,
     );
     const messages: { role: string; content: string }[] = [
       { role: 'system', content: systemPrompt },
@@ -274,6 +293,12 @@ export class SmartBotService {
         return parsed.reply;
       }
 
+      case 'SHOW_CATALOG': {
+        // AI wants to show the product catalog cards. Signal the webhook to send
+        // the carousel; parsed.reply is a short lead-in line.
+        return { reply: parsed.reply, showCatalog: true };
+      }
+
       default: // CHAT or COLLECT
         return parsed.reply;
     }
@@ -297,6 +322,7 @@ export class SmartBotService {
     orderById?: any,
     queriedOrderId?: number | null,
     agentBehavior: AgentBehaviorConfig = {},
+    crmCustomer?: { name?: string | null; totalOrders?: number | null; lastOrderAt?: Date | null } | null,
   ): string {
     const shop = ctx.businessName
       ? `"${ctx.businessName}" নামের Bangladeshi e-commerce shop`
@@ -466,13 +492,24 @@ export class SmartBotService {
     }
 
 
+    // Returning-customer context (from CRM) — greet known customers by name
+    let customerCtx = '';
+    if (crmCustomer && (crmCustomer.name || (crmCustomer.totalOrders ?? 0) > 0)) {
+      const bits: string[] = [];
+      if (crmCustomer.name) bits.push(`নাম: ${crmCustomer.name}`);
+      if ((crmCustomer.totalOrders ?? 0) > 0)
+        bits.push(`আগে ${crmCustomer.totalOrders} বার order দিয়েছে (পুরনো/চেনা customer)`);
+      const greetName = crmCustomer.name ? `${crmCustomer.name}, ` : '';
+      customerCtx = `\n\n## এই Customer (CRM থেকে চেনা)\n${bits.join(' | ')}\n⚠️ ইনি আগে থেকেই চেনা — আন্তরিকভাবে নাম ধরে সম্বোধন করো (যেমন "${greetName}আবার স্বাগতম 😊"), নতুন করে নাম জিজ্ঞেস করো না। order নিলে CRM-এর জানা তথ্য কাজে লাগাও।`;
+    }
+
     // Task rules
     const taskRules = `\n\n## তোমার কাজ
 Customer-এর message দেখে **strictly valid JSON** return করো:
 
 {
   "reply": "<Bangla/Banglish natural reply>",
-  "action": "<CHAT|COLLECT|CONFIRM_ORDER|CANCEL_ORDER|AGENT|CAPTURE_LEAD|CONFIRM_LEAD>",
+  "action": "<CHAT|COLLECT|CONFIRM_ORDER|CANCEL_ORDER|AGENT|CAPTURE_LEAD|CONFIRM_LEAD|SHOW_CATALOG>",
   "collected": {
     "productCodes": [],
     "qty": {},
@@ -496,6 +533,7 @@ Customer-এর message দেখে **strictly valid JSON** return করো:
 - AGENT — complaint/payment issue → human agent দরকার
 - CAPTURE_LEAD — customer free trial / service নিতে আগ্রহী → নাম + WhatsApp নম্বর collect করো
 - CONFIRM_LEAD — নাম ও WhatsApp দুটোই পাওয়া গেছে → বলো "আমাদের প্রতিনিধি শীঘ্রই আপনাকে WhatsApp-এ call করবেন 🎉"
+- SHOW_CATALOG — customer সব product / ছবি / catalog / collection দেখতে চাইছে ("ki ki ache", "সব দেখাও", "catalog", "photo dao", "collection দেখান") → product card পাঠানো হবে। reply-তে শুধু ছোট এক লাইন lead-in দাও (যেমন "এই যে আমাদের collection 😊"), card গুলো system পাঠাবে।
 
 ### CRITICAL RULES:
 1. "⚠️ এখনো পাওয়া যায়নি" list দেখো — শুধু সেই fields চাও। ✅ collected fields আর কখনো চাইবে না।
@@ -503,8 +541,8 @@ Customer-এর message দেখে **strictly valid JSON** return করো:
 3. Phone: 01XXXXXXXXX বা +8801XXXXXXXXX দুটোই valid — COLLECT করো।
 4. Customer একসাথে নাম+ফোন+ঠিকানা দিলে সব একসাথে collect করো — এমনকি address সংক্ষেপে লেখা হলেও (যেমন: "Mirpur 2,Dhaka" বা "Mirpur2,Dhaka" — কমা দিয়ে বা ছাড়া, স্পেস দিয়ে বা ছাড়া) সেটাকে ঠিকানা হিসেবেই ধরো, আবার ঠিকানা চেয়ো না।
 5. reply-এ order summary সহ confirm চাইতে পারো যখন সব ✅ হয়ে যায়।
-6. **Photo/ছবি চাইলে**: "ছবি দেখতে এই link-এ যান 👉 ${catalogUrl}" — সরাসরি catalog link দাও।
-7. **"ki ki ache / সব দেখাও / catalog" চাইলে**: product list briefly বলো তারপর catalog link দাও।
+6. **Photo/ছবি চাইলে**: SHOW_CATALOG action দাও (ছবিসহ product card চলে যাবে) — reply-তে ছোট lead-in দাও (যেমন "এই যে ছবিসহ আমাদের product গুলো 😊")।
+7. **"ki ki ache / সব দেখাও / catalog / collection" চাইলে**: SHOW_CATALOG action দাও — reply-তে ছোট lead-in, card system পাঠাবে।
 8. **Advance payment**: Customer-এর ঠিকানা দেখে ঢাকার ভিতরে/বাইরে বুঝো, তারপর সেই zone-এর payment rule দেখো। ঢাকার ভিতরে COD হলে advance চাইবে না। Order confirm করার আগে আগে ঠিকানা collect করো।
 9. **Order already confirmed**: যদি draft আগেই confirm হয়ে গিয়ে থাকে এবং customer "ok/ধন্যবাদ/received" বলে, তাহলে CHAT action দিয়ে সাধারণ reply করো — আর order confirm করো না।
 10. **Delivery সময় ও fee**: Customer "কবে পাবো / delivery কতদিন / কত তাড়াতাড়ি / koto din" জিজ্ঞেস করলে **শুধু** "Delivery সময়:" লাইন দেখো — সেটা যদি ফাঁকা হয়, বলো "আমাদের সাথে সরাসরি জানতে চাইলে এখানে message করুন, টিম জানিয়ে দেবে 😊"। কখনো delivery FEE (৳80/৳120) দিয়ে delivery TIME-এর প্রশ্নের উত্তর দেবে না। Fee শুধু তখন বলবে যখন customer সরাসরি "delivery charge কত / কত টাকা লাগবে" জিজ্ঞেস করে।
@@ -520,7 +558,10 @@ status reply-এর পরে, যদি "Delivery সময়:" সেটি�
 13. **Lead confirm**: Lead draft এ নাম ও WhatsApp দুটোই ✅ হলে CONFIRM_LEAD action দাও এবং বলো "আমাদের প্রতিনিধি শীঘ্রই আপনার WhatsApp-এ যোগাযোগ করবেন। ধন্যবাদ! 🎉"
 14. **"কীভাবে যোগাযোগ করব?" / "Kmne jogajog korbo?"**: Customer ইতিমধ্যে এই page-এ message করেই যোগাযোগ করছে। বলো: "এই page-এ message করেই কথা বলতে পারেন, আমরা সবসময় reply দিচ্ছি 😊 কোনো প্রশ্ন থাকলে বলুন।"
 15. **Short replies ("Na", "Aca", "Ok", "Hmm")**: Context বুঝে natural reply করো। কোনো active draft না থাকলে এবং customer শুধু acknowledge করছে — CHAT action দিয়ে simple friendly reply করো। কখনো "আমাদের সাথে যোগাযোগ করুন" বলবে না — customer ইতিমধ্যে message করছেই।
-16. **নাম চাওয়ার পর confirmation word পেলে**: তুমি নামটা চাওয়ার পর customer যদি "ji/hae/হ্যাঁ/ok/thik ache/nibo/lagbe" এই ধরনের শুধু হ্যাঁ-বোধক শব্দ দেয় (আসল নাম না দিয়ে), সেটাকে customerName হিসেবে collect **করবে না** — এটা শুধু "হ্যাঁ, নিতে চাই" বোঝাচ্ছে, নাম না। reply-তে আবার স্পষ্ট করে নামটা চাও (যেমন: "ঠিক আছে 😊 এখন আপনার নামটা বলুন")।`;
+16. **নাম চাওয়ার পর confirmation word পেলে**: তুমি নামটা চাওয়ার পর customer যদি "ji/hae/হ্যাঁ/ok/thik ache/nibo/lagbe" এই ধরনের শুধু হ্যাঁ-বোধক শব্দ দেয় (আসল নাম না দিয়ে), সেটাকে customerName হিসেবে collect **করবে না** — এটা শুধু "হ্যাঁ, নিতে চাই" বোঝাচ্ছে, নাম না। reply-তে আবার স্পষ্ট করে নামটা চাও (যেমন: "ঠিক আছে 😊 এখন আপনার নামটা বলুন")।
+17. **তুমি/আপনি (সম্বোধন)**: Customer যেভাবে সম্বোধন করে ঠিক সেভাবেই reply করো — "tumi/tui" দিলে informal, "apni" দিলে formal। Customer "আমাকে আপনি বলবেন না / amk apni bolba na / tumi kore bolo" বললে সঙ্গে সঙ্গে informal-এ switch করো এবং পুরো কথোপকথনে সেটা ধরে রাখো।
+18. **আগের কথা পড়ো (history)**: reply করার আগে উপরের পুরো conversation history পড়ো। আগে জানা তথ্য (নাম, ফোন, পছন্দ, আগের প্রশ্নের উত্তর) আবার জিজ্ঞেস করো না, একই কথা/greeting দুইবার বলো না, প্রসঙ্গ ধরে রাখো।
+19. **ছোট ছোট বার্তা (মানুষের মতো)**: reply ছোট রাখো। খুব দরকার হলে বড়জোর ২-৩টা ছোট বার্তায় ভাগ করো "|||" দিয়ে (যেমন "পেয়েছি ভাই 😊|||কোন color লাগবে বলুন?")। আলাদা bubble করতে শুধু "|||" ব্যবহার করো, অন্য কিছু না। বেশিরভাগ reply একটাই ছোট বার্তা হবে।`;
 
     const customPersona = String(page?.customPersonaPrompt || '').trim();
     const intro = customPersona
@@ -533,7 +574,7 @@ status reply-এর পরে, যদি "Delivery সময়:" সেটি�
       : DEFAULT_SMART_BOT_TONE_BLOCK;
 
     return `${intro}${toneBlock}
-${deliveryCtx}${paymentCtx}${productCtx}${knowledgeCtx}${pricingCtx}${catalogCtx}${draftCtx}${orderTrackCtx}${orderByIdCtx}${taskRules}`;
+${deliveryCtx}${paymentCtx}${productCtx}${knowledgeCtx}${pricingCtx}${catalogCtx}${customerCtx}${draftCtx}${orderTrackCtx}${orderByIdCtx}${taskRules}`;
   }
 
   private async callOpenAI(

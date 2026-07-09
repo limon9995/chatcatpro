@@ -88,6 +88,31 @@ export class MessengerService {
     }
   }
 
+  /**
+   * Send a sender_action (e.g. 'typing_on', 'typing_off', 'mark_seen') so the
+   * customer sees a "typing…" indicator before the bot replies — makes the bot
+   * feel like a real person. Best-effort: never throws, no retry (it's cosmetic).
+   */
+  async sendSenderAction(
+    pageToken: string,
+    psid: string,
+    action: 'typing_on' | 'typing_off' | 'mark_seen' = 'typing_on',
+  ): Promise<void> {
+    if (!pageToken || !psid) return;
+    try {
+      const rawToken = this.encryption.decrypt(pageToken);
+      const url = `https://graph.facebook.com/v20.0/me/messages?access_token=${encodeURIComponent(rawToken)}`;
+      await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recipient: { id: psid }, sender_action: action }),
+      });
+    } catch (err) {
+      // Cosmetic only — swallow errors so it never blocks the actual reply
+      this.logger.debug(`[Messenger] sender_action failed psid=${psid}: ${err}`);
+    }
+  }
+
   async sendCommentReply(pageToken: string, commentId: string, text: string): Promise<void> {
     if (!pageToken || !commentId || !text) return;
     const rawToken = this.encryption.decrypt(pageToken);
