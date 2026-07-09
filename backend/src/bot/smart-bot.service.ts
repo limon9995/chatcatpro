@@ -421,10 +421,23 @@ export class SmartBotService {
           draftCtx += `\n\n✅ সব তথ্য আছে — CONFIRM_LEAD action দাও এবং বলো "আমাদের প্রতিনিধি আপনাকে call করবেন"।`;
         }
       } else {
+        // Codes of products with FREE home delivery — so the AI never quotes a
+        // delivery charge for a product the shop marked free.
+        const freeDeliveryCodes = new Set(
+          ctx.products
+            .filter((p) => (p as any).deliveryCharge === 'FREE')
+            .map((p) => p.code),
+        );
+        const anyFreeInDraft = draft.items.some((i) =>
+          freeDeliveryCodes.has(i.productCode),
+        );
         const items =
           draft.items.length > 0
             ? draft.items
-                .map((i) => `[${i.productCode}] x${i.qty} — ৳${i.unitPrice}`)
+                .map(
+                  (i) =>
+                    `[${i.productCode}] x${i.qty} — ৳${i.unitPrice}${freeDeliveryCodes.has(i.productCode) ? ' (🚚 Home Delivery FREE — কোনো delivery charge নেই)' : ''}`,
+                )
                 .join(', ')
             : null;
 
@@ -444,6 +457,9 @@ export class SmartBotService {
         }
 
         draftCtx = `\n\n## Current Order Draft (এখন পর্যন্ত collected)\n${collected.join('\n')}`;
+        if (anyFreeInDraft) {
+          draftCtx += `\n\n🚚 এই order-এর product-এ Home Delivery FREE — customer "delivery fee/charge কত" জিজ্ঞেস করলে স্পষ্ট বলো "এই product-এ ডেলিভারি একদম ফ্রি 🚚, কোনো চার্জ নেই"। ঢাকার ভিতরে/বাইরে rate কখনো বলবে না।`;
+        }
         if (stillNeeded.length > 0) {
           draftCtx += `\n\n⚠️ এখনো পাওয়া যায়নি (ONLY এগুলো চাও): ${stillNeeded.join(', ')}`;
         } else {
@@ -545,7 +561,7 @@ Customer-এর message দেখে **strictly valid JSON** return করো:
 7. **"ki ki ache / সব দেখাও / catalog / collection" চাইলে**: SHOW_CATALOG action দাও — reply-তে ছোট lead-in, card system পাঠাবে।
 8. **Advance payment**: Customer-এর ঠিকানা দেখে ঢাকার ভিতরে/বাইরে বুঝো, তারপর সেই zone-এর payment rule দেখো। ঢাকার ভিতরে COD হলে advance চাইবে না। Order confirm করার আগে আগে ঠিকানা collect করো।
 9. **Order already confirmed / "ok" বললে**: order নেওয়া হয়ে গেলে বা draft confirm হয়ে গেলে customer "ok / আচ্ছা / ধন্যবাদ / received / thik ache" বললে — শুধু একটা ছোট্ট আন্তরিক reply দাও (যেমন "ধন্যবাদ ভাই 😊" বা "স্বাগতম 💖"), CHAT action দাও। আর order confirm করো না, order status/"প্যাক করা হবে/কনফার্ম হয়েছে" এসব আবার বলবে না — customer জিজ্ঞেস করলে তবেই status বলবে।
-10. **Delivery সময় ও fee**: Customer "কবে পাবো / delivery কতদিন / কত তাড়াতাড়ি / koto din" জিজ্ঞেস করলে **শুধু** "Delivery সময়:" লাইন দেখো — সেটা যদি ফাঁকা হয়, বলো "আমাদের সাথে সরাসরি জানতে চাইলে এখানে message করুন, টিম জানিয়ে দেবে 😊"। কখনো delivery FEE (৳80/৳120) দিয়ে delivery TIME-এর প্রশ্নের উত্তর দেবে না। Fee শুধু তখন বলবে যখন customer সরাসরি "delivery charge কত / কত টাকা লাগবে" জিজ্ঞেস করে।
+10. **Delivery সময় ও fee**: Customer "কবে পাবো / delivery কতদিন / কত তাড়াতাড়ি / koto din" জিজ্ঞেস করলে **শুধু** "Delivery সময়:" লাইন দেখো — সেটা যদি ফাঁকা হয়, বলো "আমাদের সাথে সরাসরি জানতে চাইলে এখানে message করুন, টিম জানিয়ে দেবে 😊"। কখনো delivery FEE (৳80/৳120) দিয়ে delivery TIME-এর প্রশ্নের উত্তর দেবে না। Fee শুধু তখন বলবে যখন customer সরাসরি "delivery charge কত / কত টাকা লাগবে" জিজ্ঞেস করে। ⚠️ Fee বলার আগে দেখো — যে product নিয়ে কথা হচ্ছে বা order-এ আছে তার পাশে Product Catalog-এ "🚚 Home Delivery FREE" লেখা থাকলে বলো "এই product-এ ডেলিভারি একদম ফ্রি 🚚, কোনো চার্জ নেই" — ঢাকার ভিতরে/বাইরে কোনো rate বলবে না। শুধু যেসব product-এ FREE mark নেই সেগুলোর জন্যই normal rate বলবে।
 11. **Order status**: Customer "কবে পাবো / parsel kobe pabo / order কোথায় / status কী / কি হলো" জিজ্ঞেস করলে "## Customer-এর সর্বশেষ Order (DB থেকে)" section দেখো এবং নিচের নিয়মে reply করো:
 - RECEIVED → "আপনার অর্ডার পাওয়া গেছে, প্রসেস হচ্ছে 📝"
 - CONFIRMED → "অর্ডার কনফার্ম হয়েছে, প্যাক করা হবে শীঘ্রই ✅"
