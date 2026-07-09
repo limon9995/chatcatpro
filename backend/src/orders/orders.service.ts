@@ -210,6 +210,7 @@ export class OrdersService {
       });
     });
     void this.tryRecurringSubscribePrompt(order.pageIdRef, order.customerPsid);
+    void this.notification.notifyCancelled(order.pageIdRef, id, cancelNote);
     const noteStr = cancelNote ? ` কারণ: ${cancelNote}` : '';
     this.telegram
       .notify(order.pageIdRef, `❌ Order #${order.id} cancelled.${noteStr}`)

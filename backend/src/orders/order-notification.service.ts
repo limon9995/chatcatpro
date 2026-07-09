@@ -75,6 +75,18 @@ export class OrderNotificationService {
     await this.send(pageId, orderId, 'order_delivery_cancelled', {});
   }
 
+  /** Send order-cancelled message to customer — once, at the moment of cancellation. */
+  async notifyCancelled(
+    pageId: number,
+    orderId: number,
+    cancelNote?: string | null,
+  ): Promise<void> {
+    const note = cancelNote?.trim();
+    await this.send(pageId, orderId, 'order_cancelled', {
+      cancelNoteBlock: note ? `\n\nকারণ: ${note}` : '',
+    });
+  }
+
   // ── Private ───────────────────────────────────────────────────────────────
 
   private async send(

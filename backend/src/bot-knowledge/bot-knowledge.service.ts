@@ -1701,7 +1701,7 @@ export class BotKnowledgeService {
         fallback: '📦 আপনার অর্ডার courier-এ পাঠানো হয়েছে।',
       },
       order_cancelled: {
-        template: '❌ আপনার অর্ডারটি বাতিল করা হয়েছে।',
+        template: '❌ আপনার অর্ডার #{{orderId}} বাতিল করা হয়েছে।{{cancelNoteBlock}}',
         fallback: '❌ আপনার অর্ডারটি বাতিল করা হয়েছে।',
       },
       product_not_found: {

@@ -557,6 +557,9 @@ export class ClientDashboardService {
     if (newOrderStatus === 'CONFIRMED') {
       void this.orderNotification.notifyConfirmed(pageId, orderId);
     }
+    if (newOrderStatus === 'CANCELLED') {
+      void this.orderNotification.notifyCancelled(pageId, orderId, body.note);
+    }
 
     // Telegram notification for call result
     const callEmoji: Record<string, string> = {

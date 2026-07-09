@@ -794,11 +794,12 @@ export class WebhookService implements OnModuleDestroy {
       }
     }
 
-    // ── CANCELLED ORDER GUARD ─────────────────────────────────────────────────
-    // If customer has no active order but has a cancelled one, let them know —
-    // but only once, and never block them from starting a new order. Without
-    // these two checks this used to repeat the same cancellation notice
-    // verbatim on every single message forever, with no way out.
+    // ── CANCELLED ORDER: advance refund request ───────────────────────────────
+    // The cancellation itself is now announced once, proactively, right when
+    // the order is cancelled (OrderNotificationService.notifyCancelled) — this
+    // block only handles a customer asking about their refund afterward. It
+    // used to also unconditionally repeat the cancellation notice on every
+    // subsequent message forever with no way out; that's gone.
     if (!draft && page.orderModeOn) {
       const activeOrder = await this.findRecentCustomerOrder(pageId, psid);
       if (!activeOrder) {
@@ -813,9 +814,8 @@ export class WebhookService implements OnModuleDestroy {
         if (cancelledOrder) {
           const pageInfo = await this.prisma.page.findUnique({
             where: { id: pageId },
-            select: { businessPhone: true, telegramBotToken: true, telegramChatId: true, currencySymbol: true },
+            select: { telegramBotToken: true, telegramChatId: true, currencySymbol: true },
           });
-          const businessPhone = pageInfo?.businessPhone || null;
 
           // ── ADVANCE REFUND REQUEST ──────────────────────────────────────────
           if (this.isAdvanceRefundRequest(text)) {
@@ -883,22 +883,9 @@ export class WebhookService implements OnModuleDestroy {
             await this.safeSend(token, psid, `✅ আপনার অগ্রিম ফেরতের অনুরোধ পাঠানো হয়েছে। শীঘ্রই আপনার সাথে যোগাযোগ করা হবে।`);
             return;
           }
-          // ── END ADVANCE REFUND REQUEST ──────────────────────────────────────
-
-          const note = cancelledOrder.cancelNote?.trim();
-          const reply = note
-            ? `❌ আপনার অর্ডার #${cancelledOrder.id} বাতিল করা হয়েছে।\n\nকারণ: ${note}`
-            : `❌ আপনার অর্ডার #${cancelledOrder.id} বাতিল করা হয়েছে।${businessPhone ? `\n\nআরও জানতে যোগাযোগ করুন: ${businessPhone}` : ''}`;
-          const lastReply = this.inFlightReply.get(
-            this.activeReplyKey.get(psid) ?? psid,
-          );
-          if (lastReply === reply) {
-            // Already told them this exact thing last turn — don't repeat it
-            // forever, fall through to normal handling instead.
-          } else {
-            await this.safeSend(token, psid, reply);
-            return;
-          }
+          // Not an advance-refund request — nothing more to intercept here;
+          // fall through to normal handling (SmartBot/keyword pipeline) so
+          // the customer's actual message still gets answered.
         }
       }
     }
@@ -1349,32 +1336,11 @@ export class WebhookService implements OnModuleDestroy {
         ? await this.findRecentCustomerOrder(pageId, psid)
         : null;
 
-    // ── CANCELLED ORDER: customer asking about product ───────────────────────
-    if (!recentOrder && page.orderModeOn) {
-      const wantsNewOrder =
-        /notun|new\s*or?der|abar\s*or?der|নতুন\s*অর্ডার|আবার\s*অর্ডার/i.test(text) ||
-        ['ORDER_INTENT', 'CATALOG_REQUEST'].includes(intent || '');
-      const cancelledOrder = wantsNewOrder
-        ? null
-        : await this.findCancelledOrder(pageId, psid);
-      if (cancelledOrder) {
-        const businessPhone = (await this.prisma.page.findUnique({
-          where: { id: pageId },
-          select: { businessPhone: true },
-        }))?.businessPhone || null;
-        const note = cancelledOrder.cancelNote?.trim();
-        const reply = note
-          ? `❌ আপনার অর্ডার #${cancelledOrder.id} বাতিল করা হয়েছে।\n\nকারণ: ${note}`
-          : `❌ আপনার অর্ডার #${cancelledOrder.id} বাতিল করা হয়েছে।${businessPhone ? `\n\nআরও জানতে যোগাযোগ করুন: ${businessPhone}` : ''}`;
-        const lastReply = this.inFlightReply.get(
-          this.activeReplyKey.get(psid) ?? psid,
-        );
-        if (lastReply !== reply) {
-          await this.safeSend(token, psid, reply);
-          return;
-        }
-      }
-    }
+    // Cancellation is now announced once, proactively, at cancel time
+    // (OrderNotificationService.notifyCancelled) — the earlier CANCELLED
+    // ORDER block already handles refund follow-up questions, so there's
+    // nothing left to intercept here. Removed the duplicate repeat-notice
+    // that used to fire again at this later point in the pipeline.
 
     // ── POST-ORDER FOLLOW-UP (after draft already finalized) ──────────────
     if (recentOrder && intent === 'EDIT_ORDER') {
