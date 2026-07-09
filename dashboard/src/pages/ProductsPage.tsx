@@ -229,15 +229,26 @@ export function ProductsPage({ th, pageId, onToast }: {
     setLiveSessions(rows);
   }, [BASE]);
 
+  // Real per-image cost actually charged by the backend (wallet.service.ts) —
+  // shown instead of a guessed number, since admins can customize these per page.
+  const [visionCosts, setVisionCosts] = useState({ ocr: 0.02, vision: 0.2 });
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [prods, settings] = await Promise.all([
+      const [prods, settings, wallet] = await Promise.all([
         request<Product[]>(`${BASE}/products`),
         request<any>(`${BASE}/settings`).catch(() => null),
+        request<any>(`${BASE}/wallet`).catch(() => null),
       ]);
       setProducts(prods);
       if (settings?.productCodePrefix) setCodePrefix(settings.productCodePrefix);
+      if (wallet) {
+        setVisionCosts({
+          ocr: Number(wallet.costPerOcrLocalBdt ?? 0.02),
+          vision: Number(wallet.costPerAnalyzeBdt ?? 0.2),
+        });
+      }
     }
     catch (e: any) { onToast(e.message, 'error'); }
     finally { setLoading(false); }
@@ -861,8 +872,8 @@ export function ProductsPage({ th, pageId, onToast }: {
                   </div>
                   <span style={{ fontSize: 11, color: th.muted ?? '#888', lineHeight: 1.5 }}>
                     {mode === 'OCR'
-                      ? 'Customer image থেকে product code পড়বে। কোনো AI API call হবে না। খরচ: ৳0.25/image'
-                      : 'OpenAI Vision দিয়ে product detect করবে। খরচ: ৳0.50/image'}
+                      ? `Customer image থেকে product code পড়বে। কোনো AI API call হবে না। খরচ: ৳${visionCosts.ocr}/image`
+                      : `AI দিয়ে product detect করবে। খরচ: ৳${visionCosts.vision}/image`}
                   </span>
                 </label>
               ))}
@@ -1185,7 +1196,7 @@ export function ProductsPage({ th, pageId, onToast }: {
                                   <span style={{ fontWeight: 700, fontSize: 12, color: th.text }}>{mode === 'OCR' ? '📷 OCR Mode' : '🤖 AI Vision'}</span>
                                 </div>
                                 <span style={{ fontSize: 10, color: th.muted ?? '#888', lineHeight: 1.4 }}>
-                                  {mode === 'OCR' ? 'Product code পড়বে • ৳0.25/image' : 'AI দিয়ে detect করবে • ৳0.50/image'}
+                                  {mode === 'OCR' ? `Product code পড়বে • ৳${visionCosts.ocr}/image` : `AI দিয়ে detect করবে • ৳${visionCosts.vision}/image`}
                                 </span>
                               </label>
                             ))}
@@ -1646,7 +1657,7 @@ export function ProductsPage({ th, pageId, onToast }: {
                       style={{ ...th.btnPrimary, fontSize: 11.5, padding: '7px 16px', marginLeft: 'auto' }}
                       disabled={isAnalyzingThis || !screenshots.length}
                       onClick={() => analyzeSession(session.id)}>
-                      {isAnalyzingThis ? <><Spinner size={11}/> GPT-4o analyzing...</> : isAnalyzed ? '🔄 Re-analyze' : '🧠 AI কে মনে রাখাও'}
+                      {isAnalyzingThis ? <><Spinner size={11}/> AI analyzing...</> : isAnalyzed ? '🔄 Re-analyze' : '🧠 AI কে মনে রাখাও'}
                     </button>
                   </div>
 
