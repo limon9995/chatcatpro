@@ -140,6 +140,69 @@ export class AiGenerateService {
     return result.text;
   }
 
+  private extractJson(content: string): string {
+    const fenceMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (fenceMatch) return fenceMatch[1].trim();
+    const objMatch = content.match(/\{[\s\S]*\}/);
+    if (objMatch) return objMatch[0];
+    return content.trim();
+  }
+
+  /** Parses a free-text "Full Description" and pulls out structured fields the
+   *  dashboard can auto-fill (name/price/category/color/size/tags) — only what's
+   *  actually stated in the text, never invented. */
+  async extractProductFieldsFromDescription(
+    pageId: number,
+    description: string,
+  ): Promise<{
+    nameGuess: string | null;
+    category: string | null;
+    color: string | null;
+    priceGuess: number | null;
+    sizeGuess: string | null;
+    tags: string;
+    imageKeywords: string;
+  } | null> {
+    const text = String(description || '').trim();
+    if (!text) return null;
+
+    const systemPrompt = `তুমি একটি e-commerce product listing থেকে structured তথ্য বের করার AI।
+নিচের product description পড়ে ONLY নিচের JSON format-এ ফলাফল দাও (markdown/extra text ছাড়া):
+{
+  "nameGuess": "<একটা ছোট product name — description-এ স্পষ্ট না থাকলে সংক্ষিপ্ত descriptive name বানাও, একেবারেই কিছু বোঝা না গেলে null>",
+  "category": "<এক শব্দে category (যেমন: lamp, dress, electronics, cosmetics), না বুঝলে null>",
+  "color": "<প্রধান রঙ যদি লেখা থাকে, না থাকলে null>",
+  "priceGuess": <সংখ্যা — description-এ স্পষ্ট দাম উল্লেখ থাকলে, না থাকলে null>,
+  "sizeGuess": "<size/dimension/capacity/battery-backup ইত্যাদি যদি লেখা থাকে, না থাকলে null>",
+  "tags": ["ছোট","lowercase","keyword","tags"],
+  "imageKeywords": "<space দিয়ে আলাদা করা keyword গুলো>"
+}
+Rules:
+- শুধু description-এ যা আছে তাই ব্যবহার করো — কোনো সংখ্যা বা তথ্য বানিও না।
+- priceGuess শুধু তখনই দাও যখন description-এ স্পষ্টভাবে দাম লেখা আছে।`;
+
+    const result = await this.generate(systemPrompt, text, 300);
+    if (!result) return null;
+
+    await this.walletService.deductUsage(pageId, 'AI_GENERATE', { provider: result.provider });
+
+    try {
+      const parsed = JSON.parse(this.extractJson(result.text));
+      return {
+        nameGuess: parsed.nameGuess ?? null,
+        category: parsed.category ?? null,
+        color: parsed.color ?? null,
+        priceGuess: typeof parsed.priceGuess === 'number' ? parsed.priceGuess : null,
+        sizeGuess: parsed.sizeGuess ?? null,
+        tags: Array.isArray(parsed.tags) ? JSON.stringify(parsed.tags) : '',
+        imageKeywords: typeof parsed.imageKeywords === 'string' ? parsed.imageKeywords : '',
+      };
+    } catch {
+      this.logger.warn(`[AiGenerate] extractProductFieldsFromDescription: bad JSON: ${result.text.slice(0, 200)}`);
+      return null;
+    }
+  }
+
   async generateBroadcastMessage(
     pageId: number,
     params: { title: string; targetType: string; businessName?: string | null },

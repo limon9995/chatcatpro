@@ -22,6 +22,17 @@ export class AiGenerateController {
     return { text };
   }
 
+  @Post('product-fields-from-description')
+  async productFieldsFromDescription(@Body() b: any) {
+    const pageId = Number(b?.pageId);
+    if (!pageId) return { suggested: null };
+    const suggested = await this.svc.extractProductFieldsFromDescription(
+      pageId,
+      String(b?.description ?? ''),
+    );
+    return { suggested };
+  }
+
   @Post('broadcast')
   async broadcastMessage(@Body() b: any) {
     const pageId = Number(b?.pageId);

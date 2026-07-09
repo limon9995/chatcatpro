@@ -193,6 +193,8 @@ export function ProductsPage({ th, pageId, onToast }: {
   const [uniquenessEditHidden, setUniquenessEditHidden] = useState(false);
   const [generatingDescNew, setGeneratingDescNew] = useState(false);
   const [generatingDescEdit, setGeneratingDescEdit] = useState(false);
+  const [extractingNew, setExtractingNew] = useState(false);
+  const [extractingEdit, setExtractingEdit] = useState(false);
   const newImageRef = useRef<HTMLInputElement>(null);
   const newRefsRef = useRef<HTMLInputElement>(null);
   const editImageRef = useRef<HTMLInputElement>(null);
@@ -488,6 +490,33 @@ export function ProductsPage({ th, pageId, onToast }: {
     }
   };
 
+  /** Reads the Full Description text and auto-fills Name/Price/Category/Color/etc. — only empty fields, via AI. */
+  const extractFieldsFromDescription = async (target: 'new' | 'edit') => {
+    const data = target === 'new' ? newP : editData;
+    const description = (data.description || '').trim();
+    if (!description) return onToast(copy('আগে Full Description লিখুন', 'Write a Full Description first'), 'error');
+    if (target === 'new') setExtractingNew(true);
+    else setExtractingEdit(true);
+    try {
+      const result = await request<{ suggested: any }>(`${API_BASE}/ai-generate/product-fields-from-description`, {
+        method: 'POST',
+        body: JSON.stringify({ pageId, description }),
+      });
+      if (result?.suggested) {
+        if (target === 'new') setNewP((p) => applyAiSuggestions(p, result.suggested));
+        else setEditData((d) => applyAiSuggestions(d, result.suggested));
+        onToast(copy('Description থেকে fields fill হয়েছে ✓', 'Fields filled from description ✓'), 'success');
+      } else {
+        onToast(copy('Description থেকে কিছু বোঝা যায়নি', 'Could not extract anything from the description'), 'warning');
+      }
+    } catch (e: any) {
+      onToast(e.message ?? copy('Fields fill ব্যর্থ হয়েছে', 'Failed to fill fields'), 'error');
+    } finally {
+      if (target === 'new') setExtractingNew(false);
+      else setExtractingEdit(false);
+    }
+  };
+
   const loadVideoGuide = async (videoUrl: string, existingImages: number, target: 'new' | 'edit') => {
     if (!videoUrl.trim()) {
       onToast(copy('আগে video URL দিন', 'Add a video URL first'), 'error');
@@ -736,9 +765,14 @@ export function ProductsPage({ th, pageId, onToast }: {
                   value={newP.description}
                   onChange={e => setNewP(p => ({ ...p, description: e.target.value }))}
                 />
-                <button type="button" style={th.btnGhost} onClick={() => generateDescription('new')} disabled={generatingDescNew}>
-                  {generatingDescNew ? copy('AI লিখছে...', 'AI writing...') : copy('✨ AI লিখুন', '✨ AI Write')}
-                </button>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <button type="button" style={th.btnGhost} onClick={() => generateDescription('new')} disabled={generatingDescNew}>
+                    {generatingDescNew ? copy('AI লিখছে...', 'AI writing...') : copy('✨ AI লিখুন', '✨ AI Write')}
+                  </button>
+                  <button type="button" style={th.btnGhost} onClick={() => extractFieldsFromDescription('new')} disabled={extractingNew || !newP.description.trim()}>
+                    {extractingNew ? copy('Fields fill হচ্ছে...', 'Filling fields...') : copy('🪄 Description থেকে Fields Fill করো', '🪄 Fill Fields from Description')}
+                  </button>
+                </div>
               </div>
             </FieldWithInfo>
           </div>
@@ -1177,9 +1211,14 @@ export function ProductsPage({ th, pageId, onToast }: {
                             value={editData.description ?? ''}
                             onChange={e => setEditData(d => ({ ...d, description: e.target.value }))}
                           />
-                          <button type="button" style={{ ...th.btnSmGhost, marginTop: 6 }} onClick={() => generateDescription('edit')} disabled={generatingDescEdit}>
-                            {generatingDescEdit ? copy('AI লিখছে...', 'AI writing...') : copy('✨ AI লিখুন', '✨ AI Write')}
-                          </button>
+                          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+                            <button type="button" style={th.btnSmGhost} onClick={() => generateDescription('edit')} disabled={generatingDescEdit}>
+                              {generatingDescEdit ? copy('AI লিখছে...', 'AI writing...') : copy('✨ AI লিখুন', '✨ AI Write')}
+                            </button>
+                            <button type="button" style={th.btnSmGhost} onClick={() => extractFieldsFromDescription('edit')} disabled={extractingEdit || !(editData.description ?? '').trim()}>
+                              {extractingEdit ? copy('Fields fill হচ্ছে...', 'Filling...') : copy('🪄 Fields Fill করো', '🪄 Fill Fields')}
+                            </button>
+                          </div>
                         </div>
                         {/* V23: Home delivery charge */}
                         <div>
