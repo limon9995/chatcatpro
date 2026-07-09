@@ -168,6 +168,11 @@ export class ProductInfoHandler {
     });
     if (!products.length) return;
 
+    // Remember these as the products just discussed — without this, a later
+    // "koto dam?" / negotiation message with no active draft and no literal
+    // Messenger reply-quote has no way to know which product it refers to.
+    await this.ctx.setLastPresentedProducts(page.id, psid, products);
+
     const sym = page.currencySymbol || '৳';
     const catalogBase = (page.catalogBaseUrl || '').replace(/\/$/, '') ||
       `https://api.chatcat.pro/catalog/${page.id}`;

@@ -27,13 +27,20 @@ export class NegotiationHandler {
     const pricingPolicy = (cfg as any).pricingPolicy || {};
     const offered = this.botIntent.extractOfferedPrice(text);
 
-    // Try to find the product being discussed
+    // Try to find the product being discussed — in order of confidence:
+    // an explicit Messenger reply-quote, an item already in the draft, or
+    // (most common when the customer hasn't started an order yet) whatever
+    // product was last shown/discussed in this conversation.
     let product: any = null;
     const codeFromReply = replyToText
       ? this.botIntent.extractSingleCode(replyToText)
       : null;
     const codeFromDraft = draft?.items?.[0]?.productCode;
-    const code = codeFromReply || codeFromDraft;
+    let code = codeFromReply || codeFromDraft;
+    if (!code) {
+      const lastPresented = await this.ctx.getLastPresentedProducts(pageId, psid);
+      code = lastPresented?.[0]?.code;
+    }
     if (code) {
       product = await this.prisma.product.findFirst({
         where: { pageId, code },
