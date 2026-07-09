@@ -851,16 +851,25 @@ export function ProductsPage({ th, pageId, onToast }: {
                     </div>
                   ))}
                 </div>
-                {(parseReferenceImages(newP.referenceImagesJson).length + (newP.imageUrl ? 1 : 0)) >= 2 && (
-                  <button
-                    type="button"
-                    style={{ ...th.btnGhost, marginTop: 8, width: '100%', justifyContent: 'center', background: 'rgba(16,185,129,0.08)', borderColor: 'rgba(16,185,129,0.3)', color: '#34d399', fontSize: 12, fontWeight: 700 }}
-                    onClick={() => batchAnalyzeAll(newP.referenceImagesJson, newP.imageUrl, 'new')}
-                    disabled={analyzingNew}
-                  >
-                    {analyzingNew ? '⏳ AI analyzing all angles...' : `🤖 Analyze All ${parseReferenceImages(newP.referenceImagesJson).length + (newP.imageUrl ? 1 : 0)} Angles Together`}
-                  </button>
-                )}
+                {(() => {
+                  const totalImages = parseReferenceImages(newP.referenceImagesJson).length + (newP.imageUrl ? 1 : 0);
+                  if (totalImages < 1) return null;
+                  const onlyRef = !newP.imageUrl ? parseReferenceImages(newP.referenceImagesJson)[0] : '';
+                  return (
+                    <button
+                      type="button"
+                      style={{ ...th.btnGhost, marginTop: 8, width: '100%', justifyContent: 'center', background: 'rgba(16,185,129,0.08)', borderColor: 'rgba(16,185,129,0.3)', color: '#34d399', fontSize: 12, fontWeight: 700 }}
+                      onClick={() => totalImages >= 2 ? batchAnalyzeAll(newP.referenceImagesJson, newP.imageUrl, 'new') : analyzeImage(newP.imageUrl || onlyRef, 'new')}
+                      disabled={analyzingNew}
+                    >
+                      {analyzingNew
+                        ? '⏳ AI analyzing...'
+                        : totalImages >= 2
+                          ? `🤖 Analyze All ${totalImages} Angles Together`
+                          : '🤖 AI Analyze This Photo'}
+                    </button>
+                  );
+                })()}
               </div>
             )}
           </div>
@@ -1160,16 +1169,25 @@ export function ProductsPage({ th, pageId, onToast }: {
                                 </div>
                               ))}
                             </div>
-                            {(parseReferenceImages(editData.referenceImagesJson).length + (editData.imageUrl ? 1 : 0)) >= 2 && (
-                              <button
-                                type="button"
-                                style={{ ...th.btnSmGhost, marginTop: 6, width: '100%', justifyContent: 'center', background: 'rgba(16,185,129,0.08)', borderColor: 'rgba(16,185,129,0.3)', color: '#34d399', fontSize: 11, fontWeight: 700 }}
-                                onClick={() => batchAnalyzeAll(editData.referenceImagesJson, editData.imageUrl, 'edit')}
-                                disabled={analyzingEdit}
-                              >
-                                {analyzingEdit ? '⏳ Analyzing...' : `🤖 Analyze All ${parseReferenceImages(editData.referenceImagesJson).length + (editData.imageUrl ? 1 : 0)} Angles Together`}
-                              </button>
-                            )}
+                            {(() => {
+                              const totalImages = parseReferenceImages(editData.referenceImagesJson).length + (editData.imageUrl ? 1 : 0);
+                              if (totalImages < 1) return null;
+                              const onlyRef = !editData.imageUrl ? parseReferenceImages(editData.referenceImagesJson)[0] : '';
+                              return (
+                                <button
+                                  type="button"
+                                  style={{ ...th.btnSmGhost, marginTop: 6, width: '100%', justifyContent: 'center', background: 'rgba(16,185,129,0.08)', borderColor: 'rgba(16,185,129,0.3)', color: '#34d399', fontSize: 11, fontWeight: 700 }}
+                                  onClick={() => totalImages >= 2 ? batchAnalyzeAll(editData.referenceImagesJson, editData.imageUrl, 'edit') : analyzeImage(editData.imageUrl || onlyRef, 'edit')}
+                                  disabled={analyzingEdit}
+                                >
+                                  {analyzingEdit
+                                    ? '⏳ Analyzing...'
+                                    : totalImages >= 2
+                                      ? `🤖 Analyze All ${totalImages} Angles Together`
+                                      : '🤖 AI Analyze This Photo'}
+                                </button>
+                              );
+                            })()}
                           </div>
                         )}
                         {/* Video URL */}
