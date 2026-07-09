@@ -22,21 +22,22 @@ export function normalizeProductCode(input: string, prefix = 'DF'): string {
   const raw = String(input || '')
     .trim()
     .toUpperCase()
-    .replace(/\s+/g, '');
+    .replace(/\s+/g, '-');
   if (!raw) throw new BadRequestException('Product code is required');
 
-  // Accept any PREFIX-DIGITS or PREFIX_DIGITS or PREFIXDIGITS
-  // where PREFIX is 2-6 letters and DIGITS is 1-8 numbers
-  const re = new RegExp(`^([A-Z]{2,6})[-_]?(\\d{1,8})$`);
-  const m = raw.match(re);
-  if (!m)
-    throw new BadRequestException(
-      `Invalid code format. Use ${prefix}-0001 style`,
-    );
+  // Shop owners can use any code scheme they like (barcodes, SKUs, plain
+  // numbers, PREFIX-0001, etc) — just normalize to letters/digits/-/_ and
+  // cap the length. If it happens to match the classic PREFIX+DIGITS shape,
+  // pad the digits to 4 for a tidy, consistent look; otherwise use as-is.
+  const cleaned = raw.replace(/[^A-Z0-9_-]/g, '');
+  if (!cleaned)
+    throw new BadRequestException('Product code must contain letters or numbers');
+  if (cleaned.length > 30)
+    throw new BadRequestException('Product code is too long (max 30 characters)');
 
-  const codePrefix = m[1]; // use whatever prefix was typed
-  const digits = m[2].padStart(4, '0');
-  return `${codePrefix}-${digits}`;
+  const classic = cleaned.match(/^([A-Z]{2,6})[-_]?(\d{1,8})$/);
+  if (classic) return `${classic[1]}-${classic[2].padStart(4, '0')}`;
+  return cleaned;
 }
 
 function normalizeDeliveryCharge(input?: string | null): 'FREE' | 'PAID' {

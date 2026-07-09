@@ -782,8 +782,8 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
             </div>
             <div>
               <Label text="Product Code Prefix" hint={copy('যেমন: DF → DF-0001, SK → SK-0001', 'For example: DF -> DF-0001, SK -> SK-0001')}/>
-              <input style={{ ...inp, textTransform: 'uppercase' }} value={s.productCodePrefix} maxLength={6} placeholder="DF"
-                onChange={e => setS(p => ({ ...p, productCodePrefix: e.target.value.toUpperCase().replace(/[^A-Z]/g,'') }))}/>
+              <input style={{ ...inp, textTransform: 'uppercase' }} value={s.productCodePrefix} maxLength={10} placeholder="DF"
+                onChange={e => setS(p => ({ ...p, productCodePrefix: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,'') }))}/>
               <div style={{ fontSize: 11.5, color: th.muted, marginTop: 5 }}>
                 Preview: <code style={{ background: th.accentSoft, color: th.accentText, padding: '1px 7px', borderRadius: 5, fontSize: 11 }}>
                   {(s.productCodePrefix||'DF')}-0001

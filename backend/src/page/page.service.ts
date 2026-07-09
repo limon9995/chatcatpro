@@ -160,13 +160,13 @@ export class PageService {
       data.currencySymbol = body.currencySymbol.trim();
     if (typeof body.primaryColor === 'string')
       data.primaryColor = body.primaryColor.trim();
-    // V8: custom product code prefix — uppercase, 2-6 letters only
+    // V8: custom product code prefix — any letters/digits, shop owner's choice
     if (typeof body.productCodePrefix === 'string') {
       const p = body.productCodePrefix
         .trim()
         .toUpperCase()
-        .replace(/[^A-Z]/g, '');
-      if (p.length >= 2 && p.length <= 6) data.productCodePrefix = p;
+        .replace(/[^A-Z0-9]/g, '');
+      if (p.length >= 1 && p.length <= 10) data.productCodePrefix = p;
     }
 
     if (body.deliveryFeeInsideDhaka !== undefined)

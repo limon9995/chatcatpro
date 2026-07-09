@@ -319,8 +319,8 @@ export class AdminService {
       } else if (k === 'productCodePrefix') {
         const p = String(v || 'DF')
           .toUpperCase()
-          .replace(/[^A-Z]/g, '');
-        if (p.length >= 2 && p.length <= 6) patch[k] = p;
+          .replace(/[^A-Z0-9]/g, '');
+        if (p.length >= 1 && p.length <= 10) patch[k] = p;
       } else {
         patch[k] = v === '' ? null : v;
       }
