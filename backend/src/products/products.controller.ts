@@ -56,6 +56,7 @@ export class ProductsController {
       productType?: string;
       unit?: string | null;
       orderEnabled?: boolean;
+      deliveryCharge?: string;
     },
   ) {
     this.auth.ensurePageAccess(req.user || req.authUser, Number(body.pageId));
@@ -108,6 +109,7 @@ export class ProductsController {
       visionSearchable?: boolean;
       unit?: string | null;
       orderEnabled?: boolean;
+      deliveryCharge?: string;
     },
   ) {
     return this.products.updateOne(this.pid(req, pageId), code, body);

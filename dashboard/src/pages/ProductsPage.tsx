@@ -24,6 +24,8 @@ type Product = {
   productType: 'CODED' | 'SIMPLE';
   unit: string | null;
   orderEnabled: boolean;
+  // V23: Per-product home delivery charge
+  deliveryCharge: 'FREE' | 'PAID';
 };
 
 type EditData = {
@@ -35,9 +37,11 @@ type EditData = {
   visionSearchable?: boolean;
   // V19: Detection mode
   detectionMode?: 'OCR' | 'AI_VISION';
+  // V23: Per-product home delivery charge
+  deliveryCharge?: 'FREE' | 'PAID';
 };
 
-const EMPTY = { code: '', name: '', price: 0, costPrice: 0, stockQty: 0, postCaption: '', videoUrl: '', fbPostUrl: '', catalogVisible: true, description: '', imageUrl: '', referenceImagesJson: '', productGroup: '', variantLabel: '', variantOptions: '', category: '', color: '', tags: '', imageKeywords: '', visionSearchable: false, detectionMode: 'AI_VISION' as 'OCR' | 'AI_VISION' };
+const EMPTY = { code: '', name: '', price: 0, costPrice: 0, stockQty: 0, postCaption: '', videoUrl: '', fbPostUrl: '', catalogVisible: true, description: '', imageUrl: '', referenceImagesJson: '', productGroup: '', variantLabel: '', variantOptions: '', category: '', color: '', tags: '', imageKeywords: '', visionSearchable: false, detectionMode: 'AI_VISION' as 'OCR' | 'AI_VISION', deliveryCharge: 'PAID' as 'FREE' | 'PAID' };
 
 /** Convert DB JSON variantOptions → textarea text ("Size: S,M,L,XL\nColor: Red,Blue") */
 function variantOptionsToText(json: string | null): string {
@@ -196,10 +200,10 @@ export function ProductsPage({ th, pageId, onToast }: {
   const BASE = `${API_BASE}/client-dashboard/${pageId}`;
 
   // V22: Simple Products tab state
-  const [simpleForm, setSimpleForm] = useState({ name: '', price: 0, stockQty: 0, unit: 'kg', description: '', orderEnabled: true, isActive: true });
+  const [simpleForm, setSimpleForm] = useState({ name: '', price: 0, stockQty: 0, unit: 'kg', description: '', orderEnabled: true, isActive: true, deliveryCharge: 'PAID' as 'FREE' | 'PAID' });
   const [showSimpleForm, setShowSimpleForm] = useState(false);
   const [simpleEditId, setSimpleEditId] = useState<number | null>(null);
-  const [simpleEditData, setSimpleEditData] = useState<{ name?: string; price?: number; stockQty?: number; unit?: string; description?: string; orderEnabled?: boolean; isActive?: boolean }>({});
+  const [simpleEditData, setSimpleEditData] = useState<{ name?: string; price?: number; stockQty?: number; unit?: string; description?: string; orderEnabled?: boolean; isActive?: boolean; deliveryCharge?: 'FREE' | 'PAID' }>({});
   const [busySimple, setBusySimple] = useState(false);
 
   // Dual Photo Mode
@@ -244,7 +248,7 @@ export function ProductsPage({ th, pageId, onToast }: {
 
   const openEdit = (p: Product) => {
     setEditId(p.id);
-    setEditData({ name: p.name ?? '', price: p.price, costPrice: p.costPrice, stockQty: p.stockQty, postCaption: p.postCaption ?? '', videoUrl: p.videoUrl ?? '', fbPostUrl: p.fbPostUrl ?? '', catalogVisible: p.catalogVisible ?? true, description: p.description ?? '', imageUrl: p.imageUrl ?? '', referenceImagesJson: referenceImagesToText(p.referenceImagesJson), productGroup: p.productGroup ?? '', variantLabel: p.variantLabel ?? '', variantOptions: variantOptionsToText(p.variantOptions), category: p.category ?? '', color: p.color ?? '', tags: p.tags ?? '', imageKeywords: p.imageKeywords ?? '', visionSearchable: p.visionSearchable ?? false, detectionMode: p.detectionMode ?? 'AI_VISION' });
+    setEditData({ name: p.name ?? '', price: p.price, costPrice: p.costPrice, stockQty: p.stockQty, postCaption: p.postCaption ?? '', videoUrl: p.videoUrl ?? '', fbPostUrl: p.fbPostUrl ?? '', catalogVisible: p.catalogVisible ?? true, description: p.description ?? '', imageUrl: p.imageUrl ?? '', referenceImagesJson: referenceImagesToText(p.referenceImagesJson), productGroup: p.productGroup ?? '', variantLabel: p.variantLabel ?? '', variantOptions: variantOptionsToText(p.variantOptions), category: p.category ?? '', color: p.color ?? '', tags: p.tags ?? '', imageKeywords: p.imageKeywords ?? '', visionSearchable: p.visionSearchable ?? false, detectionMode: p.detectionMode ?? 'AI_VISION', deliveryCharge: p.deliveryCharge ?? 'PAID' });
     setEditVideoGuide(null);
     setUniquenessEdit(null);
     setUniquenessEditHidden(false);
@@ -663,11 +667,11 @@ export function ProductsPage({ th, pageId, onToast }: {
             </FieldWithInfo>
           </div>
           <div style={{ marginTop: 12 }}>
-            <FieldWithInfo th={th} label="Description" helpText={copy('Product সম্পর্কে ছোট বিবরণ — catalog ও bot reply-এ দেখাবে', 'Short description shown in catalog and bot replies')}>
+            <FieldWithInfo th={th} label={copy('Full Description', 'Full Description')} helpText={copy('যা কিছু লিখবেন সবটাই bot মনে রাখবে — customer জিজ্ঞেস করলে এখান থেকে সঠিক উত্তর দিতে পারবে। catalog-এও দেখাবে।', 'Everything you write here the bot remembers and uses to answer customer questions accurately. Also shown in the catalog.')}>
               <div style={{ display: 'grid', gap: 8 }}>
                 <textarea
-                  style={{ ...th.input, minHeight: 72, resize: 'vertical', fontSize: 12.5 }}
-                  placeholder={copy('এই product সম্পর্কে ২-৩ লাইন লিখুন...', 'Write 2-3 lines about this product...')}
+                  style={{ ...th.input, minHeight: 96, resize: 'vertical', fontSize: 12.5 }}
+                  placeholder={copy('এই product সম্পর্কে যত তথ্য আছে সব লিখুন (মাপ, উপকরণ, যত্ন, ব্যবহার ইত্যাদি)...', 'Write everything about this product (size, material, care, usage, etc.)...')}
                   value={newP.description}
                   onChange={e => setNewP(p => ({ ...p, description: e.target.value }))}
                 />
@@ -675,6 +679,15 @@ export function ProductsPage({ th, pageId, onToast }: {
                   {generatingDescNew ? copy('AI লিখছে...', 'AI writing...') : copy('✨ AI লিখুন', '✨ AI Write')}
                 </button>
               </div>
+            </FieldWithInfo>
+          </div>
+          <div style={{ marginTop: 12 }}>
+            <FieldWithInfo th={th} label={copy('🚚 Home Delivery', '🚚 Home Delivery')} helpText={copy('Free করলে bot সবসময় এই product-এর ডেলিভারি ফ্রি বলবে। Paid হলে Settings-এ সেট করা ঢাকার ভিতরে/বাইরের rate অনুযায়ী বলবে।', 'Free always tells the customer delivery is free for this item. Paid uses the inside/outside Dhaka rate configured in Settings.')}>
+              <select style={th.input} value={newP.deliveryCharge}
+                onChange={e => setNewP(p => ({ ...p, deliveryCharge: e.target.value as 'FREE' | 'PAID' }))}>
+                <option value="PAID">{copy('Paid (Settings rate অনুযায়ী)', 'Paid (uses Settings rate)')}</option>
+                <option value="FREE">{copy('Free', 'Free')}</option>
+              </select>
             </FieldWithInfo>
           </div>
           <div style={{ marginTop: 12 }}>
@@ -910,6 +923,7 @@ export function ProductsPage({ th, pageId, onToast }: {
                     <div style={{ position: 'absolute', top: 8, left: 8, display: 'flex', gap: 4 }}>
                       {getVideoEmbedUrl(p.videoUrl) && <span style={{ ...th.pill, background: '#0891b244', color: '#0891b2', border: '1px solid #0891b244', fontSize: 9.5 }}>🎬</span>}
                       {referenceCount > 0 && <span style={{ ...th.pill, background: '#ec489922', color: '#db2777', border: '1px solid #ec489944', fontSize: 9.5 }}>📸 {referenceCount + 1}</span>}
+                      {p.deliveryCharge === 'FREE' && <span style={{ ...th.pill, ...th.pillGreen, fontSize: 9.5 }}>🚚 Free</span>}
                       {!p.catalogVisible && <span style={{ ...th.pill, ...th.pillGray, fontSize: 9.5 }}>Hidden</span>}
                     </div>
                     {/* Stock badge */}
@@ -1087,7 +1101,7 @@ export function ProductsPage({ th, pageId, onToast }: {
                         </div>
                         {/* Description + AI */}
                         <div>
-                          <div style={{ fontSize: 11, color: th.muted, marginBottom: 4 }}>Description</div>
+                          <div style={{ fontSize: 11, color: th.muted, marginBottom: 4 }}>{copy('Full Description', 'Full Description')}</div>
                           <textarea
                             style={{ ...th.input, fontSize: 12, minHeight: 64, resize: 'vertical' }}
                             placeholder={copy('Product বিবরণ...', 'Product description...')}
@@ -1097,6 +1111,15 @@ export function ProductsPage({ th, pageId, onToast }: {
                           <button type="button" style={{ ...th.btnSmGhost, marginTop: 6 }} onClick={() => generateDescription('edit')} disabled={generatingDescEdit}>
                             {generatingDescEdit ? copy('AI লিখছে...', 'AI writing...') : copy('✨ AI লিখুন', '✨ AI Write')}
                           </button>
+                        </div>
+                        {/* V23: Home delivery charge */}
+                        <div>
+                          <div style={{ fontSize: 11, color: th.muted, marginBottom: 4 }}>{copy('🚚 Home Delivery', '🚚 Home Delivery')}</div>
+                          <select style={{ ...th.input, fontSize: 12.5 }} value={editData.deliveryCharge ?? 'PAID'}
+                            onChange={e => setEditData(d => ({ ...d, deliveryCharge: e.target.value as 'FREE' | 'PAID' }))}>
+                            <option value="PAID">{copy('Paid (Settings rate অনুযায়ী)', 'Paid (uses Settings rate)')}</option>
+                            <option value="FREE">{copy('Free', 'Free')}</option>
+                          </select>
                         </div>
                         {/* V19: Detection Mode */}
                         <div style={{ padding: '8px 10px', borderRadius: 8, background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.2)' }}>
@@ -1205,6 +1228,7 @@ export function ProductsPage({ th, pageId, onToast }: {
                       </td>
                       <td style={th.td}>
                         {getVideoEmbedUrl(p.videoUrl) && <span style={{ ...th.pill, ...th.pillBlue, fontSize: 10, marginRight: 4 }}>🎬</span>}
+                        {p.deliveryCharge === 'FREE' && <span style={{ ...th.pill, ...th.pillGreen, fontSize: 10, marginRight: 4 }}>🚚 Free</span>}
                         {!p.catalogVisible && <span style={{ ...th.pill, ...th.pillGray, fontSize: 10 }}>Hidden</span>}
                       </td>
                       <td style={th.td}>
@@ -1323,6 +1347,17 @@ export function ProductsPage({ th, pageId, onToast }: {
                   />
                   Active
                 </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+                  {copy('🚚 Delivery:', '🚚 Delivery:')}
+                  <select style={{ ...th.input, fontSize: 12.5, padding: '4px 8px' }}
+                    value={simpleEditId !== null ? (simpleEditData.deliveryCharge ?? 'PAID') : simpleForm.deliveryCharge}
+                    onChange={e => simpleEditId !== null
+                      ? setSimpleEditData(d => ({ ...d, deliveryCharge: e.target.value as 'FREE' | 'PAID' }))
+                      : setSimpleForm(f => ({ ...f, deliveryCharge: e.target.value as 'FREE' | 'PAID' }))}>
+                    <option value="PAID">{copy('Paid', 'Paid')}</option>
+                    <option value="FREE">{copy('Free', 'Free')}</option>
+                  </select>
+                </label>
               </div>
 
               <div style={{ display: 'flex', gap: 8 }}>
@@ -1343,7 +1378,7 @@ export function ProductsPage({ th, pageId, onToast }: {
                       onToast(isEdit ? '✓ Updated' : '✓ Created');
                       setShowSimpleForm(false);
                       setSimpleEditId(null);
-                      setSimpleForm({ name: '', price: 0, stockQty: 0, unit: 'kg', description: '', orderEnabled: true, isActive: true });
+                      setSimpleForm({ name: '', price: 0, stockQty: 0, unit: 'kg', description: '', orderEnabled: true, isActive: true, deliveryCharge: 'PAID' });
                       setSimpleEditData({});
                       load();
                     } catch (e: any) { onToast(e.message, 'error'); }
@@ -1378,13 +1413,14 @@ export function ProductsPage({ th, pageId, onToast }: {
                       <span style={{ ...th.pill, fontSize: 11, ...(p.stockQty === 0 ? th.pillRed : p.stockQty <= 5 ? th.pillYellow : th.pillGreen) }}>
                         {p.stockQty} {p.unit || 'pcs'}
                       </span>
+                      {p.deliveryCharge === 'FREE' && <span style={{ ...th.pill, ...th.pillGreen, fontSize: 10 }}>🚚 Free</span>}
                       {!p.orderEnabled && <span style={{ ...th.pill, ...th.pillGray, fontSize: 10 }}>Info Only</span>}
                       {!p.isActive && <span style={{ ...th.pill, ...th.pillGray, fontSize: 10 }}>Inactive</span>}
                     </div>
                     <div style={{ display: 'flex', gap: 6 }}>
                       <button style={th.btnSmGhost} onClick={() => {
                         setSimpleEditId(p.id);
-                        setSimpleEditData({ name: p.name ?? '', price: p.price, stockQty: p.stockQty, unit: p.unit ?? 'kg', description: p.description ?? '', orderEnabled: p.orderEnabled, isActive: p.isActive });
+                        setSimpleEditData({ name: p.name ?? '', price: p.price, stockQty: p.stockQty, unit: p.unit ?? 'kg', description: p.description ?? '', orderEnabled: p.orderEnabled, isActive: p.isActive, deliveryCharge: p.deliveryCharge ?? 'PAID' });
                         setShowSimpleForm(false);
                       }}>Edit</button>
                       <button style={th.btnSmDanger} onClick={() => deleteProduct(p.code)}>✕</button>

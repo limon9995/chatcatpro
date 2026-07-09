@@ -39,6 +39,10 @@ export function normalizeProductCode(input: string, prefix = 'DF'): string {
   return `${codePrefix}-${digits}`;
 }
 
+function normalizeDeliveryCharge(input?: string | null): 'FREE' | 'PAID' {
+  return String(input || '').trim().toUpperCase() === 'FREE' ? 'FREE' : 'PAID';
+}
+
 function normalizeReferenceImagesJson(input?: string | null): string | null {
   const raw = String(input || '').trim();
   if (!raw) return null;
@@ -292,6 +296,8 @@ export class ProductsService {
     productType?: string;
     unit?: string | null;
     orderEnabled?: boolean;
+    // V23: Per-product delivery charge — "FREE" | "PAID"
+    deliveryCharge?: string;
   }) {
     const eid = await this.effectiveId(data.pageId);
     const isSimple = data.productType === 'SIMPLE';
@@ -331,6 +337,7 @@ export class ProductsService {
         productType: data.productType ?? 'CODED',
         unit: data.unit ?? null,
         orderEnabled: data.orderEnabled !== false,
+        deliveryCharge: normalizeDeliveryCharge(data.deliveryCharge),
       },
     });
     await this.setSidecarMetaForProduct(eid, created.code, {
@@ -399,6 +406,8 @@ export class ProductsService {
       // V22: Simple products
       unit?: string | null;
       orderEnabled?: boolean;
+      // V23: Per-product delivery charge — "FREE" | "PAID"
+      deliveryCharge?: string;
     },
   ) {
     const code = codeRaw.startsWith('SP-') ? codeRaw : normalizeProductCode(codeRaw);
@@ -442,6 +451,8 @@ export class ProductsService {
     if (data.unit !== undefined) payload.unit = data.unit || null;
     if (typeof data.orderEnabled === 'boolean')
       payload.orderEnabled = data.orderEnabled;
+    if (data.deliveryCharge !== undefined)
+      payload.deliveryCharge = normalizeDeliveryCharge(data.deliveryCharge);
     const eid = await this.effectiveId(pageId);
     const sidecarOnlyUpdate =
       data.referenceImagesJson !== undefined ||

@@ -11,6 +11,11 @@ export interface BusinessProduct {
   productType?: string;
   unit?: string | null;
   orderEnabled?: boolean;
+  // Full product info the bot reads to answer detailed customer questions
+  description?: string | null;
+  // "FREE" — bot always says delivery is free for this item, ignoring the
+  // page's inside/outside Dhaka rate. "PAID" (default) — normal rate applies.
+  deliveryCharge?: string;
 }
 
 export interface DualProduct {
@@ -81,6 +86,8 @@ export class BotContextService {
           productType: true,
           unit: true,
           orderEnabled: true,
+          description: true,
+          deliveryCharge: true,
         },
         orderBy: { createdAt: 'desc' },
         take: 50,

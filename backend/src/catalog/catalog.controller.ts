@@ -232,6 +232,7 @@ export class CatalogController {
         description: true,
         videoUrl: true,
         variantOptions: true,
+        deliveryCharge: true,
       },
     });
     if (!product) {
@@ -660,6 +661,7 @@ export class CatalogController {
         description: true,
         videoUrl: true,
         productViews: true,
+        deliveryCharge: true,
       },
     });
 
@@ -1105,6 +1107,7 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:var(--b
         <div class="price-block">
           <div class="price-val">${currency}${Number(p.price).toLocaleString()}</div>
           <span class="stock-pill ${inStock ? 's-in' : 's-out'}">${inStock ? '✓ In Stock' : '✕ Stock Out'}</span>
+          ${p.deliveryCharge === 'FREE' ? '<span class="stock-pill s-in">🚚 Free Delivery</span>' : ''}
         </div>
 
         ${variantHtml ? `${variantHtml}<div class="divider"></div>` : ''}
@@ -1547,7 +1550,7 @@ ${poweredByBadge()}
       <a class="card" href="/catalog/${esc(page.id)}/product/${esc(p.code)}${selectionMode ? shortlistQuery : ''}" style="animation-delay:${delay}ms" id="p-${esc(p.id)}" data-price="${Number(p.price) || 0}" data-custom-index="${idx}" data-new-index="${idx}" data-product-id="${esc(p.id)}" data-name="${esc((p.name || p.code || '').toLowerCase())}" data-code="${esc((p.code || '').toLowerCase())}" data-desc="${esc((p.description || '').toLowerCase().slice(0, 300))}">
         <div class="c-media">
           ${topBlock}
-          ${!inStock ? '<div class="c-out-badge">Stock Out</div>' : ''}
+          ${!inStock ? '<div class="c-out-badge">Stock Out</div>' : p.deliveryCharge === 'FREE' ? '<div class="c-free-badge">🚚 Free Delivery</div>' : ''}
           ${videoType ? '<div class="c-vid-badge">🎬</div>' : ''}
         </div>
         <div class="c-body">
@@ -1717,6 +1720,7 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:radial-
 .c-ph{width:100%;aspect-ratio:1;background:radial-gradient(circle at top left,#eff4ff,#dfe8ff);display:flex;align-items:center;justify-content:center;font-size:54px}
 .c-out-badge{position:absolute;top:14px;left:14px;background:rgba(220,38,38,.92);color:#fff;font-size:10px;font-weight:800;padding:5px 10px;border-radius:999px;letter-spacing:.06em}
 .c-vid-badge{position:absolute;top:14px;right:14px;background:rgba(15,23,42,.72);color:#fff;font-size:10px;font-weight:700;padding:5px 10px;border-radius:999px;backdrop-filter:blur(6px)}
+.c-free-badge{position:absolute;top:14px;left:14px;background:rgba(22,163,74,.92);color:#fff;font-size:10px;font-weight:800;padding:5px 10px;border-radius:999px;letter-spacing:.03em}
 .c-store-badge{position:absolute;left:14px;bottom:14px;background:rgba(255,255,255,.88);color:var(--text);font-size:10.5px;font-weight:800;padding:6px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.95);backdrop-filter:blur(8px)}
 
 /* Body */

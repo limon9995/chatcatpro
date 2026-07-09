@@ -27,6 +27,7 @@ const DEFAULT_SMART_BOT_TONE_BLOCK = `
 - বাংলা/Banglish — customer যেভাবে লেখে সেভাবে reply করো।
 - নাম জানলে নাম ধরে ডাকো।
 - "আপনার ফোন নম্বরটি উল্লেখ করলে আমরা আপনার জন্য অর্ডার প্রসেস করতে পারব" — এই ধরনের লম্বা বাক্য নয়। সরাসরি বলো: "ফোন নম্বরটা দিন 😊"
+- Customer "Assalamu Alaikum" / "Salam" / "আসসালামু আলাইকুম" / "সালাম" দিয়ে message শুরু করলে reply-ও "ওয়ালাইকুম আসসালাম" দিয়ে শুরু করো, তারপর স্বাভাবিকভাবে বাকি কথা বলো।
 
 ⛔ HARD BAN: "আমাদের সাথে যোগাযোগ করুন" / "আরও জানতে যোগাযোগ করুন" — কখনো না।
 ⛔ HARD BAN: একই কথা দুইবার বলা, unnecessary ব্যাখ্যা, filler বাক্য।`;
@@ -307,23 +308,31 @@ export class SmartBotService {
 
     const codedLines = codedProducts
       .slice(0, 30)
-      .map(
-        (p) =>
-          `[${p.code}] ${p.name ?? p.code} — ৳${p.price} | ${p.stockQty > 0 ? `${p.stockQty} পিস আছে` : 'Stock শেষ'}`,
-      )
+      .map((p) => {
+        const stock = p.stockQty > 0 ? `${p.stockQty} পিস আছে` : 'Stock শেষ';
+        const deliveryNote =
+          (p as any).deliveryCharge === 'FREE' ? ' | 🚚 Home Delivery FREE' : '';
+        const desc = String((p as any).description || '').trim();
+        const descLine = desc ? `\n    বিবরণ: ${desc}` : '';
+        return `[${p.code}] ${p.name ?? p.code} — ৳${p.price} | ${stock}${deliveryNote}${descLine}`;
+      })
       .join('\n');
 
     const simpleLines = simpleProducts
       .map((p) => {
         const unit = (p as any).unit || 'pcs';
         const stock = p.stockQty > 0 ? `${p.stockQty} ${unit} আছে` : 'Stock শেষ';
-        return `${p.name ?? p.code} — ৳${p.price}/${unit} | ${stock}`;
+        const deliveryNote =
+          (p as any).deliveryCharge === 'FREE' ? ' | 🚚 Home Delivery FREE' : '';
+        const desc = String((p as any).description || '').trim();
+        const descLine = desc ? `\n    বিবরণ: ${desc}` : '';
+        return `${p.name ?? p.code} — ৳${p.price}/${unit} | ${stock}${deliveryNote}${descLine}`;
       })
       .join('\n');
 
     const productCtx =
       ctx.products.length > 0
-        ? `\n\n## Product Catalog\n${codedLines}${simpleLines ? `\n\n### Simple Items\n${simpleLines}` : ''}`
+        ? `\n\n## Product Catalog\n${codedLines}${simpleLines ? `\n\n### Simple Items\n${simpleLines}` : ''}\n\n(প্রতিটা product-এর "বিবরণ" লাইনে পুরো তথ্য দেওয়া আছে — customer কোনো product সম্পর্কে বিস্তারিত জিজ্ঞেস করলে এখান থেকে উত্তর দাও, কিছু বানিয়ো না।)`
         : '\n\n## Product Catalog\n(কোনো product নেই)';
 
     // Delivery & payment
@@ -332,7 +341,8 @@ export class SmartBotService {
 - ঢাকার বাইরে delivery fee: ৳${ctx.deliveryOutsideFee}${ctx.deliveryTimeOutside ? ` | সময়: ${ctx.deliveryTimeOutside}` : ''}
 - Delivery সময়: ${ctx.deliveryTime || (ctx.deliveryTimeInside || ctx.deliveryTimeOutside ? 'zone দেখো' : '(সেট করা নেই)')}
 
-⚠️ Customer-এর address দেখে zone বুঝো: ঢাকার ভেতরে হলে inside row, বাইরে হলে outside row এর সময় বলো।`;
+⚠️ Customer-এর address দেখে zone বুঝো: ঢাকার ভেতরে হলে inside row, বাইরে হলে outside row এর সময় বলো।
+⚠️ Product Catalog-এ যে product-এর পাশে "🚚 Home Delivery FREE" লেখা আছে, সেই product-এর delivery charge সবসময় ফ্রি — ঢাকার ভিতরে/বাইরে rate এখানে apply হবে না। এই মার্ক না থাকলে উপরের normal rate অনুযায়ী চার্জ বলবে।`;
 
     const paymentRules = ctx.paymentRules as any;
     let paymentCtx = '';

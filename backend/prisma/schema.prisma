@@ -345,6 +345,11 @@ model Product {
   unit          String?                     // "kg", "liter", "piece", "dozen" — for SIMPLE
   orderEnabled  Boolean @default(true)      // false = info-only, no order flow
 
+  // V23: Per-product home delivery charge — "FREE" bypasses the page's normal
+  // delivery-fee settings for this item; "PAID" (default) keeps today's
+  // behavior of quoting the page's inside/outside Dhaka rate.
+  deliveryCharge String @default("PAID") // "FREE" | "PAID"
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
