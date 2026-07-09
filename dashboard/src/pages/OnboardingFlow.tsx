@@ -44,14 +44,14 @@ export function OnboardingFlow({ dark, user, activePage, onComplete, onSkip }: P
   const [showSkipConfirm, setShowSkipConfirm] = useState(false);
   const { request } = useApi();
 
-  // Every client now runs the single commerce AI engine — no more agent-type
-  // picker. Tone/personality is customized per-page via customPersonaPrompt
-  // in Settings instead. Turn automation on immediately so the bot is live
+  // Every client runs the single commerce AI engine — no agent-type picker.
+  // Tone/personality is customized per-page via customPersonaPrompt in
+  // Settings instead. Turn automation on immediately so the bot is live
   // as soon as onboarding starts.
   useEffect(() => {
     request(`${API_BASE}/client-dashboard/${activePage.id}/modes`, {
       method: 'PATCH',
-      body: JSON.stringify({ automationOn: true, agentType: 'commerce', universityModeOn: false }),
+      body: JSON.stringify({ automationOn: true, universityModeOn: false }),
     }).catch(() => {});
   }, [activePage.id]);
 

@@ -124,7 +124,6 @@ export class ClientDashboardService {
       businessInfo: page.businessInfo ?? '',
       commentReplyOn: Boolean(page.commentReplyOn),
       recurringNotifMode: Boolean(page.recurringNotifMode),
-      agentType: page.agentType || 'commerce',
       modeAccess: this.getModeAccess(page),
     };
   }
@@ -161,8 +160,6 @@ export class ClientDashboardService {
     }
     if (typeof body.businessInfo === 'string')
       patch.businessInfo = body.businessInfo.trim() || null;
-    if (typeof body.agentType === 'string' && body.agentType.trim())
-      patch.agentType = body.agentType.trim();
     if (Object.keys(patch).length > 0)
       await this.prisma.page.update({ where: { id: pageId }, data: patch });
     return this.getModes(pageId);
