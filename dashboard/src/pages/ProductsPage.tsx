@@ -618,7 +618,23 @@ export function ProductsPage({ th, pageId, onToast }: {
           </p>
         </div>
         {productTab === 'single' && (
-          <button style={th.btnPrimary} onClick={() => { if (!showNew) setNewP(p => ({ ...p, code: p.code || codePrefix + '-' })); setShowNew(v => !v); }}>
+          <button style={th.btnPrimary} onClick={async () => {
+            if (!showNew) {
+              // Re-fetch the prefix fresh each time the form opens — codePrefix
+              // in state can go stale if Settings was changed without a full
+              // page remount, and this form should always use the current one.
+              let prefix = codePrefix;
+              try {
+                const settings = await request<any>(`${BASE}/settings`);
+                if (settings?.productCodePrefix) {
+                  prefix = settings.productCodePrefix;
+                  setCodePrefix(prefix);
+                }
+              } catch {}
+              setNewP(p => ({ ...p, code: `${prefix}-` }));
+            }
+            setShowNew(v => !v);
+          }}>
             {showNew ? copy('✕ Cancel', '✕ Cancel') : copy('+ Add Product', '+ Add Product')}
           </button>
         )}
