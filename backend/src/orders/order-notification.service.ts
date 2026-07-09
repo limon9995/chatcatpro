@@ -95,16 +95,27 @@ export class OrderNotificationService {
     key: string,
     vars: Record<string, any>,
   ): Promise<void> {
+    this.logger.log(
+      `[OrderNotify] send() called key=${key} pageId=${pageId} orderId=${orderId} caller-stack=${new Error().stack?.split('\n').slice(2, 5).join(' | ')}`,
+    );
     try {
       // Get order — need customerPsid
       const order = await this.prisma.order.findUnique({
         where: { id: orderId },
       });
-      if (!order || !order.customerPsid || order.pageIdRef !== pageId) return;
+      if (!order || !order.customerPsid || order.pageIdRef !== pageId) {
+        this.logger.warn(
+          `[OrderNotify] ${key} skipped — order not found / no psid / page mismatch (orderId=${orderId})`,
+        );
+        return;
+      }
 
       // Get page token
       const page = await this.prisma.page.findUnique({ where: { id: pageId } });
-      if (!page || !page.pageToken) return;
+      if (!page || !page.pageToken) {
+        this.logger.warn(`[OrderNotify] ${key} skipped — page/pageToken missing (pageId=${pageId})`);
+        return;
+      }
 
       // Resolve template with order-specific variables
       const text = await this.knowledge.resolveSystemReply(pageId, key, {
@@ -113,7 +124,10 @@ export class OrderNotificationService {
         customerName: order.customerName || '',
       });
 
-      if (!text) return;
+      if (!text) {
+        this.logger.warn(`[OrderNotify] ${key} skipped — resolved template was empty (orderId=${orderId})`);
+        return;
+      }
 
       await this.messenger.sendText(page.pageToken, order.customerPsid, text);
       this.logger.log(

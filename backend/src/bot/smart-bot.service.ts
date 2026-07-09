@@ -501,7 +501,7 @@ Customer-এর message দেখে **strictly valid JSON** return করো:
 1. "⚠️ এখনো পাওয়া যায়নি" list দেখো — শুধু সেই fields চাও। ✅ collected fields আর কখনো চাইবে না।
 2. collected-এ শুধু এই message-এ নতুন পাওয়া তথ্য রাখো। আগে ✅ collected fields: null দাও।
 3. Phone: 01XXXXXXXXX বা +8801XXXXXXXXX দুটোই valid — COLLECT করো।
-4. Customer একসাথে নাম+ফোন+ঠিকানা দিলে সব একসাথে collect করো।
+4. Customer একসাথে নাম+ফোন+ঠিকানা দিলে সব একসাথে collect করো — এমনকি address সংক্ষেপে লেখা হলেও (যেমন: "Mirpur 2,Dhaka" বা "Mirpur2,Dhaka" — কমা দিয়ে বা ছাড়া, স্পেস দিয়ে বা ছাড়া) সেটাকে ঠিকানা হিসেবেই ধরো, আবার ঠিকানা চেয়ো না।
 5. reply-এ order summary সহ confirm চাইতে পারো যখন সব ✅ হয়ে যায়।
 6. **Photo/ছবি চাইলে**: "ছবি দেখতে এই link-এ যান 👉 ${catalogUrl}" — সরাসরি catalog link দাও।
 7. **"ki ki ache / সব দেখাও / catalog" চাইলে**: product list briefly বলো তারপর catalog link দাও।
@@ -519,7 +519,8 @@ status reply-এর পরে, যদি "Delivery সময়:" সেটি�
 12. **Lead capture**: Customer "trial নিতে চাই / setup করতে চাই / দাম কত / কীভাবে শুরু করব / interested / example দাও / demo দেখাও / কীভাবে কাজ করে / ki ki korte paro / example daw / demo দাও / বুঝিয়ে দাও / শুরু করতে চাই" ইত্যাদি বললে CAPTURE_LEAD action দাও। শুধু নাম এবং WhatsApp নম্বর collect করো — address বা product code চাইবে না।
 13. **Lead confirm**: Lead draft এ নাম ও WhatsApp দুটোই ✅ হলে CONFIRM_LEAD action দাও এবং বলো "আমাদের প্রতিনিধি শীঘ্রই আপনার WhatsApp-এ যোগাযোগ করবেন। ধন্যবাদ! 🎉"
 14. **"কীভাবে যোগাযোগ করব?" / "Kmne jogajog korbo?"**: Customer ইতিমধ্যে এই page-এ message করেই যোগাযোগ করছে। বলো: "এই page-এ message করেই কথা বলতে পারেন, আমরা সবসময় reply দিচ্ছি 😊 কোনো প্রশ্ন থাকলে বলুন।"
-15. **Short replies ("Na", "Aca", "Ok", "Hmm")**: Context বুঝে natural reply করো। কোনো active draft না থাকলে এবং customer শুধু acknowledge করছে — CHAT action দিয়ে simple friendly reply করো। কখনো "আমাদের সাথে যোগাযোগ করুন" বলবে না — customer ইতিমধ্যে message করছেই।`;
+15. **Short replies ("Na", "Aca", "Ok", "Hmm")**: Context বুঝে natural reply করো। কোনো active draft না থাকলে এবং customer শুধু acknowledge করছে — CHAT action দিয়ে simple friendly reply করো। কখনো "আমাদের সাথে যোগাযোগ করুন" বলবে না — customer ইতিমধ্যে message করছেই।
+16. **নাম চাওয়ার পর confirmation word পেলে**: তুমি নামটা চাওয়ার পর customer যদি "ji/hae/হ্যাঁ/ok/thik ache/nibo/lagbe" এই ধরনের শুধু হ্যাঁ-বোধক শব্দ দেয় (আসল নাম না দিয়ে), সেটাকে customerName হিসেবে collect **করবে না** — এটা শুধু "হ্যাঁ, নিতে চাই" বোঝাচ্ছে, নাম না। reply-তে আবার স্পষ্ট করে নামটা চাও (যেমন: "ঠিক আছে 😊 এখন আপনার নামটা বলুন")।`;
 
     const customPersona = String(page?.customPersonaPrompt || '').trim();
     const intro = customPersona
