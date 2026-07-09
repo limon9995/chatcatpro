@@ -359,13 +359,23 @@ export class VisionOpsService {
       (value: string, index: number, all: string[]) =>
         all.indexOf(value) === index,
     );
+    // Fold any text read off the product/label into the searchable AI description
+    // too, so vision-search matching also benefits from it.
+    const aiDescription = [attrs.rawDescription, attrs.visibleText]
+      .filter((v) => v && String(v).trim())
+      .join(' | ');
     return {
       category: attrs.category || '',
       color: attrs.color || '',
       imageKeywords: uniqTokens.join(' '),
-      aiDescription: attrs.rawDescription || '',
+      aiDescription: aiDescription || '',
       tags: JSON.stringify(uniqTokens.filter((t: string) => t && t !== 'null')),
       visionSearchable: attrs.confidence >= 0.35 && !!attrs.category,
+      // V24: image-read suggestions — dashboard only auto-fills empty fields with these
+      nameGuess: attrs.nameGuess || '',
+      priceGuess: typeof attrs.priceGuess === 'number' ? attrs.priceGuess : null,
+      sizeGuess: attrs.sizeGuess || '',
+      visibleText: attrs.visibleText || '',
     };
   }
 

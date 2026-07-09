@@ -26,6 +26,14 @@ export interface VisionAttributes {
   usedApi?: boolean;
   /** True when the result was served from the in-memory URL cache (same image analyzed before) */
   fromCache?: boolean;
+  /** Any readable text found on the product, label, tag, or packaging — verbatim, or null if none visible */
+  visibleText?: string | null;
+  /** Short product name guess (brand/label name if visible, else a concise descriptive name), or null */
+  nameGuess?: string | null;
+  /** Price guess ONLY if a price is clearly printed/visible on a tag or sticker, else null */
+  priceGuess?: number | null;
+  /** Size/dimension/weight/volume text if visible (e.g. "M", "30cm", "500ml"), else null */
+  sizeGuess?: string | null;
 }
 
 export interface VisionAnalysisProvider {

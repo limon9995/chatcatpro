@@ -363,6 +363,29 @@ export function ProductsPage({ th, pageId, onToast }: {
     }
   };
 
+  /** Merges AI-analyze suggestions into a product form — never overwrites fields the user already filled in. */
+  const applyAiSuggestions = (prev: any, suggested: any) => {
+    if (!prev) return prev;
+    const next: any = {
+      ...prev,
+      category: (suggested.category || prev.category || '').trim(),
+      color: (suggested.color || prev.color || '').trim(),
+      imageKeywords: (suggested.imageKeywords || prev.imageKeywords || '').trim(),
+      tags: (suggested.tags || prev.tags || '').trim(),
+      visionSearchable: typeof suggested.visionSearchable === 'boolean' ? suggested.visionSearchable : !!prev.visionSearchable,
+    };
+    if (!String(prev.name || '').trim() && suggested.nameGuess) next.name = suggested.nameGuess;
+    if (!Number(prev.price) && typeof suggested.priceGuess === 'number') next.price = suggested.priceGuess;
+    if (!String(prev.description || '').trim()) {
+      const extraLines = [
+        suggested.sizeGuess ? `মাপ/সাইজ: ${suggested.sizeGuess}` : '',
+        suggested.visibleText ? `ছবিতে লেখা তথ্য: ${suggested.visibleText}` : '',
+      ].filter(Boolean);
+      if (extraLines.length) next.description = extraLines.join('\n');
+    }
+    return next;
+  };
+
   const analyzeImage = async (imageUrl: string, target: 'new' | 'edit') => {
     if (!imageUrl.trim()) {
       onToast(copy('আগে image দিন', 'Add an image first'), 'error');
@@ -377,22 +400,11 @@ export function ProductsPage({ th, pageId, onToast }: {
         body: JSON.stringify({ imageUrl, excludeCode: currentCode }),
       });
       const suggested = result?.suggested || {};
-      const applyFn = (prev: any) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          category: (suggested.category || prev.category || '').trim(),
-          color: (suggested.color || prev.color || '').trim(),
-          imageKeywords: (suggested.imageKeywords || prev.imageKeywords || '').trim(),
-          tags: (suggested.tags || prev.tags || '').trim(),
-          visionSearchable: typeof suggested.visionSearchable === 'boolean' ? suggested.visionSearchable : !!prev.visionSearchable,
-        };
-      };
       if (target === 'new') {
-        setNewP((p) => applyFn(p));
+        setNewP((p) => applyAiSuggestions(p, suggested));
         setUniquenessNew(result?.uniqueness || null);
       } else {
-        setEditData((d) => applyFn(d));
+        setEditData((d) => applyAiSuggestions(d, suggested));
         setUniquenessEdit(result?.uniqueness || null);
       }
       if (result?.fromCache) {
@@ -426,22 +438,11 @@ export function ProductsPage({ th, pageId, onToast }: {
         body: JSON.stringify({ imageUrls: urls, excludeCode: currentCode }),
       });
       const suggested = result?.suggested || {};
-      const applyFn = (prev: any) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          category: (suggested.category || prev.category || '').trim(),
-          color: (suggested.color || prev.color || '').trim(),
-          imageKeywords: (suggested.imageKeywords || prev.imageKeywords || '').trim(),
-          tags: (suggested.tags || prev.tags || '').trim(),
-          visionSearchable: typeof suggested.visionSearchable === 'boolean' ? suggested.visionSearchable : !!prev.visionSearchable,
-        };
-      };
       if (target === 'new') {
-        setNewP((p) => applyFn(p));
+        setNewP((p) => applyAiSuggestions(p, suggested));
         setUniquenessNew(result?.uniqueness || null);
       } else {
-        setEditData((d) => applyFn(d));
+        setEditData((d) => applyAiSuggestions(d, suggested));
         setUniquenessEdit(result?.uniqueness || null);
       }
       if (result?.fromCache) {
@@ -571,7 +572,7 @@ export function ProductsPage({ th, pageId, onToast }: {
     total:    codedProducts.length,
     active:   codedProducts.filter(p => p.isActive).length,
     lowStock: codedProducts.filter(p => p.stockQty <= 3 && p.isActive).length,
-    withImg:  codedProducts.filter(p => p.imageUrl).length,
+    withImg:  codedProducts.filter(p => p.imageUrl || parseReferenceImages(p.referenceImagesJson).length > 0).length,
     withAngles: codedProducts.filter(p => parseReferenceImages(p.referenceImagesJson).length > 0).length,
     withVid:  codedProducts.filter(p => p.videoUrl).length,
   };
@@ -966,7 +967,12 @@ export function ProductsPage({ th, pageId, onToast }: {
             {filtered.map(p => {
               const isEditing = editId === p.id;
               const videoEmbedUrl = getVideoEmbedUrl(editData.videoUrl ?? p.videoUrl ?? '');
-              const referenceCount = parseReferenceImages(p.referenceImagesJson).length;
+              const referenceImages = parseReferenceImages(p.referenceImagesJson);
+              const referenceCount = referenceImages.length;
+              // Main Image URL and pasted/uploaded Reference Images both land in real
+              // hosted URLs the same way — if no main image was set, show the first
+              // reference image instead of a blank thumbnail (matches the public catalog).
+              const thumbUrl = p.imageUrl || referenceImages[0] || '';
 
               return (
                 <div key={p.id} style={{
@@ -976,8 +982,8 @@ export function ProductsPage({ th, pageId, onToast }: {
                 }}>
                   {/* Image */}
                   <div style={{ position: 'relative', aspectRatio: '4/3', background: th.surface, overflow: 'hidden' }}>
-                    {p.imageUrl
-                      ? <img src={p.imageUrl} alt={p.name || p.code} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                    {thumbUrl
+                      ? <img src={thumbUrl} alt={p.name || p.code} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                       : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 32, color: th.muted }}>🛍</div>
                     }
                     {/* Badges */}
@@ -1273,7 +1279,7 @@ export function ProductsPage({ th, pageId, onToast }: {
                       <td style={{ ...th.td, fontWeight: 700, color: th.accentText, fontSize: 12.5 }}>{p.code}</td>
                       <td style={th.td}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          {p.imageUrl && <img src={p.imageUrl} style={{ width: 32, height: 32, borderRadius: 6, objectFit: 'cover' }} onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}/>}
+                          {(p.imageUrl || parseReferenceImages(p.referenceImagesJson)[0]) && <img src={p.imageUrl || parseReferenceImages(p.referenceImagesJson)[0]} style={{ width: 32, height: 32, borderRadius: 6, objectFit: 'cover' }} onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}/>}
                           <span style={{ fontWeight: 600 }}>{p.name || '—'}</span>
                           {parseReferenceImages(p.referenceImagesJson).length > 0 && (
                             <span style={{ ...th.pill, background: '#ec489922', color: '#db2777', border: '1px solid #ec489944', fontSize: 9.5 }}>

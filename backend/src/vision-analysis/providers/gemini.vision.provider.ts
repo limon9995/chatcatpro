@@ -98,7 +98,11 @@ Required JSON format:
     multi
       ? 'comprehensive 2-3 sentence description covering all visible angles, fabric texture, design details, embellishments, and distinctive visual features'
       : 'one sentence natural description'
-  } in English>"
+  } in English>",
+  "visibleText": "<any readable text on the product, label, tag, packaging, or price sticker — copied as accurately as possible, or null if no text is visible>",
+  "nameGuess": "<a short product name — use a brand/product name if printed on the item, otherwise a concise descriptive name (e.g. 'Blue Ceramic Table Lamp'), or null if you cannot form a reasonable name>",
+  "priceGuess": <number — ONLY if a price is clearly printed/visible on a tag or sticker in the image, else null>,
+  "sizeGuess": "<size, dimensions, weight, or volume text if visible (e.g. 'M', '30cm', '500ml', '1kg'), else null>"
 }
 
 Rules:
@@ -108,7 +112,8 @@ Rules:
 - For non-clothing items (bags, shoes, accessories), still analyze and set confidence based on image clarity
 - Do NOT guess gender unless clearly evident from the product style
 - Be honest about uncertainty but do NOT penalize clear images with low confidence
-- category "non_clothing" means the image is definitely not a clothing product`;
+- category "non_clothing" means the image is definitely not a clothing product
+- visibleText/nameGuess/priceGuess/sizeGuess must be based ONLY on what's actually visible in the image — never invent numbers or text that aren't printed/shown`;
   }
 
   private extractJson(content: string): string {
@@ -133,6 +138,10 @@ Rules:
           ? Math.min(1, Math.max(0, parsed.confidence))
           : 0,
       rawDescription: parsed.rawDescription ?? content,
+      visibleText: parsed.visibleText ?? null,
+      nameGuess: parsed.nameGuess ?? null,
+      priceGuess: typeof parsed.priceGuess === 'number' ? parsed.priceGuess : null,
+      sizeGuess: parsed.sizeGuess ?? null,
     };
   }
 
