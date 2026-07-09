@@ -699,24 +699,6 @@ export class WebhookService implements OnModuleDestroy {
 
       if (!page.infoModeOn) return;
 
-      // Send "processing" only on the first photo of this burst
-      const bufKey = `${page.id}:${psid}`;
-      if (!this.imageBuffer.has(bufKey)) {
-        const processingMsg = await this.botKnowledge.resolveSystemReply(
-          pageId,
-          'ocr_processing',
-          undefined,
-          page.agentType,
-        );
-        await this.messenger
-          .sendText(token, psid, processingMsg)
-          .catch((e) =>
-            this.logger.error(
-              `[Webhook] sendText(ocr_processing) failed psid=${psid}: ${e}`,
-            ),
-          );
-      }
-
       // V8: pass caption text alongside image URL for combined detection
       const caption = (message.text || '').trim() || undefined;
       this.bufferCustomerImage(page, psid, img.payload.url, caption);

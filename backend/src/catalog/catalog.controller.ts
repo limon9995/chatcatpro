@@ -648,7 +648,7 @@ export class CatalogController {
       where.code = { in: filteredCodes };
     }
 
-    const products = await this.prisma.product.findMany({
+    const rawProducts = await this.prisma.product.findMany({
       where,
       orderBy: [{ catalogSortOrder: 'asc' }, { id: 'desc' }],
       select: {
@@ -664,6 +664,17 @@ export class CatalogController {
         deliveryCharge: true,
       },
     });
+    // Fall back to the first Reference Image when no main Image URL is set —
+    // otherwise products added via paste-into-Reference-Images show no photo here,
+    // even though the single product page already handles this correctly.
+    const productsWithRefs = await this.productsService.attachReferenceImagesList(
+      page.id,
+      rawProducts,
+    );
+    const products = productsWithRefs.map((p: any) => ({
+      ...p,
+      imageUrl: p.imageUrl || this.parseReferenceImages(p.referenceImagesJson)[0] || null,
+    }));
 
     return {
       page: {

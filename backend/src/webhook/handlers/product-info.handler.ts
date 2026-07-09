@@ -4,12 +4,25 @@ import { MessengerService } from '../../messenger/messenger.service';
 import { BotKnowledgeService } from '../../bot-knowledge/bot-knowledge.service';
 import { BotIntentService } from '../../bot/bot-intent.service';
 import { ConversationContextService } from '../../conversation-context/conversation-context.service';
+import { ProductsService } from '../../products/products.service';
 
 function getFullImageUrl(url?: string | null): string | undefined {
   if (!url) return undefined;
   if (url.startsWith('http://') || url.startsWith('https://')) return url;
   const base = process.env.API_BASE_URL || 'https://api.chatcat.pro';
   return `${base.replace(/\/$/, '')}${url.startsWith('/') ? '' : '/'}${url}`;
+}
+
+/** First reference/angle image URL, if any — used as a fallback when a product
+ *  has no main Image URL set (e.g. photos were only pasted into Reference Images). */
+function firstReferenceImage(referenceImagesJson?: string | null): string | undefined {
+  if (!referenceImagesJson) return undefined;
+  try {
+    const arr = JSON.parse(referenceImagesJson);
+    return Array.isArray(arr) ? arr.find((u) => typeof u === 'string' && u.trim()) : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 @Injectable()
@@ -20,6 +33,7 @@ export class ProductInfoHandler {
     private readonly botKnowledge: BotKnowledgeService,
     private readonly botIntent: BotIntentService,
     private readonly ctx: ConversationContextService,
+    private readonly products: ProductsService,
   ) {}
 
   async sendProductInfo(page: any, psid: string, code: string): Promise<void> {
@@ -48,7 +62,8 @@ export class ProductInfoHandler {
     }
 
     // Send generic template card
-    const imageUrl = getFullImageUrl(product.imageUrl);
+    const [withRefs] = await this.products.attachReferenceImagesList(page.id, [product]);
+    const imageUrl = getFullImageUrl(product.imageUrl) || getFullImageUrl(firstReferenceImage(withRefs?.referenceImagesJson));
     const catalogBase = (page.catalogBaseUrl || '').replace(/\/$/, '') ||
       `https://api.chatcat.pro/catalog/${page.id}`;
     const productUrl = `${catalogBase}/product/${product.code}`;
@@ -105,8 +120,9 @@ export class ProductInfoHandler {
     await this.ctx.setLastPresentedProducts(page.id, psid, products);
 
     // Send generic template carousel
-    const elements = products.map((p: any) => {
-      const imageUrl = getFullImageUrl(p.imageUrl);
+    const productsWithRefs = await this.products.attachReferenceImagesList(page.id, products);
+    const elements = productsWithRefs.map((p: any) => {
+      const imageUrl = getFullImageUrl(p.imageUrl) || getFullImageUrl(firstReferenceImage(p.referenceImagesJson));
       const productUrl = `https://api.chatcat.pro/catalog/${page.id}/product/${p.code}`;
       return {
         title: p.name || p.code,
@@ -159,8 +175,9 @@ export class ProductInfoHandler {
     await this.messenger.sendText(page.pageToken, psid, introText);
 
     // Generic template cards for Messenger
-    const elements = products.map((p: any) => {
-      const imageUrl = getFullImageUrl(p.imageUrl);
+    const productsWithRefs = await this.products.attachReferenceImagesList(page.id, products);
+    const elements = productsWithRefs.map((p: any) => {
+      const imageUrl = getFullImageUrl(p.imageUrl) || getFullImageUrl(firstReferenceImage(p.referenceImagesJson));
       const productUrl = `${catalogBase}/product/${p.code}`;
       return {
         title: p.name || p.code,
