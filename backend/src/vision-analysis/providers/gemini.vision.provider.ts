@@ -80,7 +80,7 @@ Respond with ONLY the JSON array — no other text, no markdown.`;
   }
 
   private buildPrompt(multi: boolean): string {
-    return `You are an expert fashion product analyzer for a Bangladeshi e-commerce store.
+    return `You are an expert product analyzer for a Bangladeshi e-commerce store that sells all kinds of products, not just clothing.
 ${
   multi
     ? 'You are given multiple photos of the SAME product from different angles. Analyze ALL images together and provide a comprehensive description that captures every visible detail.'
@@ -90,7 +90,7 @@ Respond ONLY with a valid JSON object (no markdown, no explanation).
 
 Required JSON format:
 {
-  "category": "<one of: dress, saree, panjabi, shirt, t-shirt, kurti, tops, lehenga, salwar_kameez, three_piece, other_clothing, non_clothing>",
+  "category": "<if this is a clothing item, one of: dress, saree, panjabi, shirt, t-shirt, kurti, tops, lehenga, salwar_kameez, three_piece, other_clothing — if it is NOT clothing, never say 'non_clothing'; instead name the actual product type in 1-2 words, e.g. 'lamp', 'watch', 'handbag', 'mug', 'toy', 'shoes', 'electronics', 'furniture'>",
   "color": "<primary color: black, white, red, blue, green, yellow, orange, pink, purple, maroon, navy, grey, multicolor, beige, cream, golden, silver>",
   "pattern": "<one of: plain, printed, floral, embroidered, striped, checked, geometric, abstract, solid>",
   "sleeveType": "<one of: full, half, three_quarter, sleeveless, null if not visible>",
@@ -114,7 +114,6 @@ Rules:
 - For non-clothing items (bags, shoes, accessories), still analyze and set confidence based on image clarity
 - Do NOT guess gender unless clearly evident from the product style
 - Be honest about uncertainty but do NOT penalize clear images with low confidence
-- category "non_clothing" means the image is definitely not a clothing product
 - visibleText/nameGuess/priceGuess/sizeGuess must be based ONLY on what's actually visible in the image — never invent numbers or text that aren't printed/shown`;
   }
 
