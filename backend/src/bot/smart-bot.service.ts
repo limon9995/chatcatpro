@@ -468,7 +468,7 @@ export class SmartBotService {
         .map((i: any) => `${i.productCode} x${i.qty}`)
         .join(', ');
       const date = new Date(lastOrder.createdAt).toLocaleDateString('bn-BD');
-      orderTrackCtx = `\n\n## Customer-এর সর্বশেষ Order (DB থেকে)\nOrder #${lastOrder.id} — ${date}\nProducts: ${products || '?'}\nStatus: **${statusBn}**\n\n⚠️ Customer "কবে পাবো / কোথায় আছে / status / order কী হলো / cancel হয়েছে" ইত্যাদি জিজ্ঞেস করলে এই DB status দেখে CHAT action দিয়ে reply করো। অনুমান করবে না।`;
+      orderTrackCtx = `\n\n## Customer-এর সর্বশেষ Order (DB থেকে)\nOrder #${lastOrder.id} — ${date}\nProducts: ${products || '?'}\nStatus: **${statusBn}**\n\n⚠️ এই status **শুধু তখনই** বলবে যখন customer সরাসরি "কবে পাবো / কোথায় আছে / status / order কী হলো" জিজ্ঞেস করে। Customer শুধু "ok / আচ্ছা / ধন্যবাদ / thik ache" বললে status বলবে না — ছোট্ট একটা আন্তরিক reply দাও (যেমন "ধন্যবাদ 😊")। অনুমান করবে না।`;
     }
 
     // Specific Order ID lookup context
@@ -544,7 +544,7 @@ Customer-এর message দেখে **strictly valid JSON** return করো:
 6. **Photo/ছবি চাইলে**: SHOW_CATALOG action দাও (ছবিসহ product card চলে যাবে) — reply-তে ছোট lead-in দাও (যেমন "এই যে ছবিসহ আমাদের product গুলো 😊")।
 7. **"ki ki ache / সব দেখাও / catalog / collection" চাইলে**: SHOW_CATALOG action দাও — reply-তে ছোট lead-in, card system পাঠাবে।
 8. **Advance payment**: Customer-এর ঠিকানা দেখে ঢাকার ভিতরে/বাইরে বুঝো, তারপর সেই zone-এর payment rule দেখো। ঢাকার ভিতরে COD হলে advance চাইবে না। Order confirm করার আগে আগে ঠিকানা collect করো।
-9. **Order already confirmed**: যদি draft আগেই confirm হয়ে গিয়ে থাকে এবং customer "ok/ধন্যবাদ/received" বলে, তাহলে CHAT action দিয়ে সাধারণ reply করো — আর order confirm করো না।
+9. **Order already confirmed / "ok" বললে**: order নেওয়া হয়ে গেলে বা draft confirm হয়ে গেলে customer "ok / আচ্ছা / ধন্যবাদ / received / thik ache" বললে — শুধু একটা ছোট্ট আন্তরিক reply দাও (যেমন "ধন্যবাদ ভাই 😊" বা "স্বাগতম 💖"), CHAT action দাও। আর order confirm করো না, order status/"প্যাক করা হবে/কনফার্ম হয়েছে" এসব আবার বলবে না — customer জিজ্ঞেস করলে তবেই status বলবে।
 10. **Delivery সময় ও fee**: Customer "কবে পাবো / delivery কতদিন / কত তাড়াতাড়ি / koto din" জিজ্ঞেস করলে **শুধু** "Delivery সময়:" লাইন দেখো — সেটা যদি ফাঁকা হয়, বলো "আমাদের সাথে সরাসরি জানতে চাইলে এখানে message করুন, টিম জানিয়ে দেবে 😊"। কখনো delivery FEE (৳80/৳120) দিয়ে delivery TIME-এর প্রশ্নের উত্তর দেবে না। Fee শুধু তখন বলবে যখন customer সরাসরি "delivery charge কত / কত টাকা লাগবে" জিজ্ঞেস করে।
 11. **Order status**: Customer "কবে পাবো / parsel kobe pabo / order কোথায় / status কী / কি হলো" জিজ্ঞেস করলে "## Customer-এর সর্বশেষ Order (DB থেকে)" section দেখো এবং নিচের নিয়মে reply করো:
 - RECEIVED → "আপনার অর্ডার পাওয়া গেছে, প্রসেস হচ্ছে 📝"
