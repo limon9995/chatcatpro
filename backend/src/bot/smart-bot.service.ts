@@ -174,6 +174,13 @@ export class SmartBotService {
       })
       .catch(() => null);
 
+    // Products the customer just saw / is talking about (e.g. replied to a
+    // product post, or a card was just shown) — so "price?" / "eta nibo" is
+    // understood without asking "which product?".
+    const lastPresented = await this.ctx
+      .getLastPresentedProducts(pageId, psid)
+      .catch(() => [] as { code: string; price: number; name?: string | null }[]);
+
     const systemPrompt = this.buildSystemPrompt(
       businessContext,
       draft,
@@ -183,6 +190,7 @@ export class SmartBotService {
       orderIdMatch ? parseInt(orderIdMatch[1]) : null,
       agentBehavior,
       crmCustomer,
+      lastPresented,
     );
     const messages: { role: string; content: string }[] = [
       { role: 'system', content: systemPrompt },
@@ -323,6 +331,7 @@ export class SmartBotService {
     queriedOrderId?: number | null,
     agentBehavior: AgentBehaviorConfig = {},
     crmCustomer?: { name?: string | null; totalOrders?: number | null; lastOrderAt?: Date | null } | null,
+    lastPresented?: { code: string; price: number; name?: string | null }[],
   ): string {
     const shop = ctx.businessName
       ? `"${ctx.businessName}" নামের Bangladeshi e-commerce shop`
@@ -519,6 +528,15 @@ export class SmartBotService {
       customerCtx = `\n\n## এই Customer (CRM থেকে চেনা)\n${bits.join(' | ')}\n⚠️ ইনি আগে থেকেই চেনা — আন্তরিকভাবে নাম ধরে সম্বোধন করো (যেমন "${greetName}আবার স্বাগতম 😊"), নতুন করে নাম জিজ্ঞেস করো না। order নিলে CRM-এর জানা তথ্য কাজে লাগাও।`;
     }
 
+    // Products the customer just saw / is asking about (post reply, shown card)
+    let lastPresentedCtx = '';
+    if (lastPresented && lastPresented.length > 0) {
+      const lines = lastPresented
+        .map((p) => `[${p.code}] ${p.name ?? p.code} — ৳${p.price}`)
+        .join('\n');
+      lastPresentedCtx = `\n\n## Customer এইমাত্র যে product নিয়ে কথা বলছে (post-এ reply বা দেখানো card)\n${lines}\n⚠️ Customer "price / দাম কত / এটা / এটার দাম / নিবো / এই product-টা" বললে এই product-ই বোঝাচ্ছে — সরাসরি এটার দাম/তথ্য দাও, "কোন product?" জিজ্ঞেস করবে না।`;
+    }
+
     // Task rules
     const taskRules = `\n\n## তোমার কাজ
 Customer-এর message দেখে **strictly valid JSON** return করো:
@@ -590,7 +608,7 @@ status reply-এর পরে, যদি "Delivery সময়:" সেটি�
       : DEFAULT_SMART_BOT_TONE_BLOCK;
 
     return `${intro}${toneBlock}
-${deliveryCtx}${paymentCtx}${productCtx}${knowledgeCtx}${pricingCtx}${catalogCtx}${customerCtx}${draftCtx}${orderTrackCtx}${orderByIdCtx}${taskRules}`;
+${deliveryCtx}${paymentCtx}${productCtx}${knowledgeCtx}${pricingCtx}${catalogCtx}${customerCtx}${lastPresentedCtx}${draftCtx}${orderTrackCtx}${orderByIdCtx}${taskRules}`;
   }
 
   private async callOpenAI(

@@ -168,11 +168,92 @@ export class TelegramController {
 
     if (domain === 'pagereq' && id && action === 'reject') {
       await this.handleAdminPageRequestAction(id, action, callbackQueryId);
+    } else if (
+      domain === 'recharge' &&
+      id &&
+      (action === 'approve' || action === 'reject')
+    ) {
+      await this.handleRechargeAction(id, action, callbackQueryId);
     } else {
       await this.adminTelegram.answerCallback(callbackQueryId, '❓ Unknown action');
     }
 
     return { ok: true };
+  }
+
+  /**
+   * Approve/reject a wallet recharge request straight from the admin Telegram
+   * bot's inline buttons. The approve path mirrors
+   * AdminService.approveRechargeRequest — replicated here (not injected) because
+   * AdminModule already imports TelegramModule, so injecting AdminService would
+   * create a circular dependency.
+   */
+  private async handleRechargeAction(
+    id: number,
+    action: 'approve' | 'reject',
+    callbackQueryId: string,
+  ) {
+    const req = await this.prisma.walletRechargeRequest.findUnique({
+      where: { id },
+    });
+    if (!req) {
+      await this.adminTelegram.answerCallback(callbackQueryId, '❌ Request not found');
+      return;
+    }
+    if (req.status !== 'pending') {
+      await this.adminTelegram.answerCallback(
+        callbackQueryId,
+        `⏭️ Already ${req.status}`,
+      );
+      return;
+    }
+
+    if (action === 'reject') {
+      await this.prisma.walletRechargeRequest.update({
+        where: { id },
+        data: { status: 'rejected', rejectedReason: 'Rejected via Telegram' },
+      });
+      await this.adminTelegram.answerCallback(callbackQueryId, '❌ Rejected');
+      await this.adminTelegram.sendMessage(
+        `❌ Recharge Request #${id} — rejected (via Telegram button)`,
+      );
+      return;
+    }
+
+    // approve — credit the wallet in one transaction
+    await this.prisma.$transaction(async (tx) => {
+      await tx.page.update({
+        where: { id: req.pageId },
+        data: {
+          walletBalanceBdt: { increment: req.amountBdt },
+          subscriptionStatus: 'ACTIVE',
+        },
+      });
+      await tx.walletTransaction.create({
+        data: {
+          pageId: req.pageId,
+          type: 'RECHARGE',
+          amountBdt: req.amountBdt,
+          description: `${req.method.toUpperCase()} Recharge — TrxID: ${req.transactionId}`,
+        },
+      });
+      await tx.walletRechargeRequest.update({
+        where: { id },
+        data: {
+          status: 'approved',
+          approvedAt: new Date(),
+          approvedBy: 'telegram-admin',
+        },
+      });
+    });
+
+    await this.adminTelegram.answerCallback(
+      callbackQueryId,
+      `✅ Approved! ৳${req.amountBdt} added`,
+    );
+    await this.adminTelegram.sendMessage(
+      `✅ <b>Recharge Approved</b>\nRequest #${id} — ৳${req.amountBdt} balance যোগ হয়েছে (via Telegram)`,
+    );
   }
 
   private async handleAdminPageRequestAction(

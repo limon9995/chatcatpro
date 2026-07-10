@@ -756,6 +756,40 @@ export class WebhookService implements OnModuleDestroy {
       (draft?.pendingMultiPreview?.length ?? 0) > 0 ||
       (draft?.pendingVisionMatches?.length ?? 0) > 0;
 
+    // ── Reply-to-post product recognition ─────────────────────────────────
+    // When a customer replies to / shares one of our Facebook posts (e.g. opens
+    // a product post and asks "price?"), figure out which product it is by
+    // matching the referenced post id against Product.fbPostId, and remember it
+    // as the "last presented product" so SmartBot answers directly instead of
+    // asking "which product?". Best-effort + additive: on no match it just logs
+    // and normal handling continues.
+    try {
+      const refPostId = this.extractReferencedPostId(message);
+      if (refPostId) {
+        const linked = await this.prisma.product.findMany({
+          where: { pageId, isActive: true, fbPostId: refPostId },
+          select: { code: true, name: true, price: true },
+          take: 5,
+        });
+        if (linked.length > 0) {
+          await this.ctx.setLastPresentedProducts(
+            pageId,
+            psid,
+            linked.map((p) => ({ code: p.code, name: p.name, price: p.price })),
+          );
+          this.logger.log(
+            `[Webhook] Reply-to-post matched ${linked.map((p) => p.code).join(',')} via fbPostId=${refPostId} psid=${psid}`,
+          );
+        } else {
+          this.logger.debug(
+            `[Webhook] Reply-to-post postId=${refPostId} matched no product (page=${pageId})`,
+          );
+        }
+      }
+    } catch (e) {
+      this.logger.debug(`[Webhook] extractReferencedPostId failed: ${e}`);
+    }
+
     const aiAllowed = await this.isAiAllowedForPage(page.ownerId);
     const aiStatus: AiStatus = await this.walletService.getAiStatus(pageId);
 
@@ -3634,6 +3668,41 @@ export class WebhookService implements OnModuleDestroy {
     this.logger.log(
       `[AgentEcho] Agent replied — bot muted for psid=${customerPsid} page=${page.pageId}`,
     );
+  }
+
+  /**
+   * Best-effort extraction of a referenced Facebook post/story id from an
+   * inbound Messenger message — used to recognise which product a customer is
+   * asking about when they reply to / share one of our posts. Scans the
+   * reply_to reference and any attachment URLs for a numeric FB id, which is
+   * matched against Product.fbPostId. Returns null if nothing usable is found
+   * (then normal handling continues). The raw shapes vary by interaction, so we
+   * cover the common ones and log unknowns for later refinement.
+   */
+  private extractReferencedPostId(message: any): string | null {
+    try {
+      const candidates: string[] = [];
+      const rt = message?.reply_to;
+      if (rt?.story?.id) candidates.push(String(rt.story.id));
+      if (rt?.story?.url) candidates.push(String(rt.story.url));
+      if (rt?.link) candidates.push(String(rt.link));
+      for (const a of message?.attachments ?? []) {
+        const url = a?.payload?.url;
+        if (url) candidates.push(String(url));
+        if (a?.payload?.title) candidates.push(String(a.payload.title));
+      }
+      for (const c of candidates) {
+        const m =
+          c.match(/(?:posts|photos|videos)\/(?:[^/?]*\/)?(\d{6,})/) ||
+          c.match(/(?:story_fbid|fbid|story_id|multi_permalinks)=(\d{6,})/) ||
+          c.match(/_(\d{6,})(?:[/?#]|$)/) ||
+          c.match(/^(\d{6,})$/);
+        if (m) return m[1];
+      }
+    } catch {
+      /* ignore — best effort */
+    }
+    return null;
   }
 
   /** Safe sendText — logs error but does not throw */

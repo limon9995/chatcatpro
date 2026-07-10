@@ -1962,7 +1962,10 @@ Return ONLY valid JSON (no markdown):
       };
     }
 
-    void this.telegram.sendMessage(
+    // Notify admin on Telegram with inline Approve/Reject buttons so the admin
+    // can credit the balance straight from Telegram (no dashboard needed).
+    // The callbacks are handled in TelegramController.handleAdminCallback.
+    void this.telegram.sendMessageWithButtons(
       `💰 <b>নতুন Wallet Recharge Request!</b>\n` +
         `🏪 Page: ${page?.pageName || pageId}\n` +
         `💵 Amount: ${amountBdt} BDT\n` +
@@ -1970,6 +1973,12 @@ Return ONLY valid JSON (no markdown):
         `🔖 TxID: ${transactionId.trim()}\n` +
         (note ? `📝 Note: ${note}\n` : '') +
         `🕐 সময়: ${new Date().toLocaleString('bn-BD', { timeZone: 'Asia/Dhaka' })}`,
+      [
+        [
+          { text: '✅ Approve', callback_data: `recharge_approve_${req.id}` },
+          { text: '❌ Reject', callback_data: `recharge_reject_${req.id}` },
+        ],
+      ],
     );
 
     return { success: true, requestId: req.id, autoVerified: false };
