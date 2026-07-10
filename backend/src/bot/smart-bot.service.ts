@@ -538,16 +538,18 @@ export class SmartBotService {
       if (crmCustomer.name) bits.push(`নাম: ${crmCustomer.name}`);
       if ((crmCustomer.totalOrders ?? 0) > 0)
         bits.push(`আগে ${crmCustomer.totalOrders} বার order দিয়েছে (পুরনো/চেনা customer)`);
-      const greetName = crmCustomer.name ? `${crmCustomer.name}, ` : '';
-      customerCtx = `\n\n## এই Customer (CRM থেকে চেনা)\n${bits.join(' | ')}\n⚠️ ইনি আগে থেকেই চেনা — আন্তরিকভাবে নাম ধরে সম্বোধন করো (যেমন "${greetName}আবার স্বাগতম 😊"), নতুন করে নাম জিজ্ঞেস করো না। order নিলে CRM-এর জানা তথ্য কাজে লাগাও।`;
+      // Plain data only — addressing behaviour is in the task rules, so the weak
+      // model does not echo an inline example back to the customer.
+      customerCtx = `\n\n## এই Customer (CRM থেকে চেনা)\n${bits.join(' | ')}\nইনি আগে থেকেই চেনা — নতুন করে নাম জিজ্ঞেস করবে না, order নিলে CRM-এর জানা তথ্য কাজে লাগাও।`;
     }
 
-    // Greet the customer by name ("প্রিয় <name>") — from their Facebook profile
-    // even before they give an order name. Only when it's not already covered by
-    // the returning-customer (CRM) block above.
+    // Customer's name (Facebook, when we don't already have a CRM name). Kept as
+    // plain DATA only — the "how to use it" lives in the task rules — because the
+    // weak model would otherwise echo an inline instruction verbatim to the
+    // customer ("এখানে প্রিয় (নাম) দিয়েন")।
     let greetingCtx = '';
     if (greetName && !(crmCustomer && crmCustomer.name)) {
-      greetingCtx = `\n\n## Customer-এর নাম (Facebook থেকে — সম্বোধনের জন্য)\nনাম: ${greetName}\n⚠️ greeting/কথার শুরুতে আন্তরিকভাবে "প্রিয় ${greetName}" বলে সম্বোধন করো (যেমন "প্রিয় ${greetName}, আপনাকে কীভাবে সাহায্য করতে পারি? 😊")। এটা তাদের Facebook নাম — order নেওয়ার সময় দরকার হলে আসল নাম আলাদাভাবে জিজ্ঞেস করো।`;
+      greetingCtx = `\n\n## Customer পরিচিতি\nCustomer-এর নাম: ${greetName} (Facebook profile)।`;
     }
 
     // Products the customer just saw / is asking about (post reply, shown card)
@@ -617,7 +619,8 @@ status reply-এর পরে, যদি "Delivery সময়:" সেটি�
 16. **নাম চাওয়ার পর confirmation word পেলে**: তুমি নামটা চাওয়ার পর customer যদি "ji/hae/হ্যাঁ/ok/thik ache/nibo/lagbe" এই ধরনের শুধু হ্যাঁ-বোধক শব্দ দেয় (আসল নাম না দিয়ে), সেটাকে customerName হিসেবে collect **করবে না** — এটা শুধু "হ্যাঁ, নিতে চাই" বোঝাচ্ছে, নাম না। reply-তে আবার স্পষ্ট করে নামটা চাও (যেমন: "ঠিক আছে 😊 এখন আপনার নামটা বলুন")।
 17. **তুমি/আপনি (সম্বোধন)**: Customer যেভাবে সম্বোধন করে ঠিক সেভাবেই reply করো — "tumi/tui" দিলে informal, "apni" দিলে formal। Customer "আমাকে আপনি বলবেন না / amk apni bolba na / tumi kore bolo" বললে সঙ্গে সঙ্গে informal-এ switch করো এবং পুরো কথোপকথনে সেটা ধরে রাখো।
 18. **আগের কথা পড়ো (history)**: reply করার আগে উপরের পুরো conversation history পড়ো। আগে জানা তথ্য (নাম, ফোন, পছন্দ, আগের প্রশ্নের উত্তর) আবার জিজ্ঞেস করো না, একই কথা/greeting দুইবার বলো না, প্রসঙ্গ ধরে রাখো।
-19. **ছোট ছোট বার্তা (মানুষের মতো)**: reply ছোট রাখো। খুব দরকার হলে বড়জোর ২-৩টা ছোট বার্তায় ভাগ করো "|||" দিয়ে (যেমন "পেয়েছি ভাই 😊|||কোন color লাগবে বলুন?")। আলাদা bubble করতে শুধু "|||" ব্যবহার করো, অন্য কিছু না। বেশিরভাগ reply একটাই ছোট বার্তা হবে।`;
+19. **ছোট ছোট বার্তা (মানুষের মতো)**: reply ছোট রাখো। খুব দরকার হলে বড়জোর ২-৩টা ছোট বার্তায় ভাগ করো "|||" দিয়ে (যেমন "পেয়েছি ভাই 😊|||কোন color লাগবে বলুন?")। আলাদা bubble করতে শুধু "|||" ব্যবহার করো, অন্য কিছু না। বেশিরভাগ reply একটাই ছোট বার্তা হবে।
+20. **নাম ধরে সম্বোধন**: উপরে "Customer পরিচিতি" বা "CRM" section-এ নাম দেওয়া থাকলে, reply-তে সেই নাম ধরে আন্তরিকভাবে ডাকো — greeting-এ "প্রিয় <নাম>" দিয়ে শুরু করতে পারো (যেমন নাম Limon হলে reply হবে: প্রিয় Limon, আপনাকে কীভাবে সাহায্য করতে পারি? 😊)। ⛔ কখনো এই নির্দেশনা বা section-এর লেখা (যেমন "এখানে নাম দিন", "প্রিয় <নাম> বলো") হুবহু customer-কে পাঠাবে না — তুমি নিজে সরাসরি নাম বসিয়ে স্বাভাবিকভাবে কথা বলবে।`;
 
     const customPersona = String(page?.customPersonaPrompt || '').trim();
     const intro = customPersona
