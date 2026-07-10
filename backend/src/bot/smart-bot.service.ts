@@ -10,6 +10,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { GeminiKeyRotatorService } from '../common/gemini-key-rotator.service';
 import { AgentBehaviorConfig } from '../agents/agent-behavior-config.interface';
 import { estimateMonthlyCost, PricingCalcInput } from '../common/pricing-estimator';
+import { MessengerService } from '../messenger/messenger.service';
 
 // Verbatim defaults — used whenever an agent type has no AgentBehaviorConfig
 // personaPrompt/toneRules override, so agentType='commerce' pages (the vast
@@ -93,6 +94,7 @@ export class SmartBotService {
     private readonly walletService: WalletService,
     private readonly prisma: PrismaService,
     private readonly geminiRotator: GeminiKeyRotatorService,
+    private readonly messenger: MessengerService,
   ) {
     this.openAiKey = process.env.OPENAI_API_KEY ?? '';
     this.model = process.env.AI_INTENT_MODEL ?? 'gemini-2.5-flash-lite';
@@ -181,6 +183,16 @@ export class SmartBotService {
       .getLastPresentedProducts(pageId, psid)
       .catch(() => [] as { code: string; price: number; name?: string | null }[]);
 
+    // Name to greet the customer by. Prefer their CRM/order name; otherwise
+    // fetch their Facebook first name so the bot can say "প্রিয় <name>" even
+    // before they've given an order name.
+    let greetName: string | null = crmCustomer?.name ?? null;
+    if (!greetName) {
+      greetName = await this.messenger
+        .getUserFirstName(page.pageToken, psid)
+        .catch(() => null);
+    }
+
     const systemPrompt = this.buildSystemPrompt(
       businessContext,
       draft,
@@ -191,6 +203,7 @@ export class SmartBotService {
       agentBehavior,
       crmCustomer,
       lastPresented,
+      greetName,
     );
     const messages: { role: string; content: string }[] = [
       { role: 'system', content: systemPrompt },
@@ -332,6 +345,7 @@ export class SmartBotService {
     agentBehavior: AgentBehaviorConfig = {},
     crmCustomer?: { name?: string | null; totalOrders?: number | null; lastOrderAt?: Date | null } | null,
     lastPresented?: { code: string; price: number; name?: string | null }[],
+    greetName?: string | null,
   ): string {
     const shop = ctx.businessName
       ? `"${ctx.businessName}" নামের Bangladeshi e-commerce shop`
@@ -528,6 +542,14 @@ export class SmartBotService {
       customerCtx = `\n\n## এই Customer (CRM থেকে চেনা)\n${bits.join(' | ')}\n⚠️ ইনি আগে থেকেই চেনা — আন্তরিকভাবে নাম ধরে সম্বোধন করো (যেমন "${greetName}আবার স্বাগতম 😊"), নতুন করে নাম জিজ্ঞেস করো না। order নিলে CRM-এর জানা তথ্য কাজে লাগাও।`;
     }
 
+    // Greet the customer by name ("প্রিয় <name>") — from their Facebook profile
+    // even before they give an order name. Only when it's not already covered by
+    // the returning-customer (CRM) block above.
+    let greetingCtx = '';
+    if (greetName && !(crmCustomer && crmCustomer.name)) {
+      greetingCtx = `\n\n## Customer-এর নাম (Facebook থেকে — সম্বোধনের জন্য)\nনাম: ${greetName}\n⚠️ greeting/কথার শুরুতে আন্তরিকভাবে "প্রিয় ${greetName}" বলে সম্বোধন করো (যেমন "প্রিয় ${greetName}, আপনাকে কীভাবে সাহায্য করতে পারি? 😊")। এটা তাদের Facebook নাম — order নেওয়ার সময় দরকার হলে আসল নাম আলাদাভাবে জিজ্ঞেস করো।`;
+    }
+
     // Products the customer just saw / is asking about (post reply, shown card)
     let lastPresentedCtx = '';
     if (lastPresented && lastPresented.length > 0) {
@@ -608,7 +630,7 @@ status reply-এর পরে, যদি "Delivery সময়:" সেটি�
       : DEFAULT_SMART_BOT_TONE_BLOCK;
 
     return `${intro}${toneBlock}
-${deliveryCtx}${paymentCtx}${productCtx}${knowledgeCtx}${pricingCtx}${catalogCtx}${customerCtx}${lastPresentedCtx}${draftCtx}${orderTrackCtx}${orderByIdCtx}${taskRules}`;
+${deliveryCtx}${paymentCtx}${productCtx}${knowledgeCtx}${pricingCtx}${catalogCtx}${customerCtx}${greetingCtx}${lastPresentedCtx}${draftCtx}${orderTrackCtx}${orderByIdCtx}${taskRules}`;
   }
 
   private async callOpenAI(

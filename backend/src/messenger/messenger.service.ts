@@ -113,6 +113,41 @@ export class MessengerService {
     }
   }
 
+  // Cache Facebook profile names so we don't hit the Graph API on every message.
+  private readonly profileCache = new Map<string, { name: string | null; ts: number }>();
+  private readonly PROFILE_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+  /**
+   * Fetch the customer's Facebook first name for a PSID (so the bot can greet
+   * "প্রিয় <name>" before they've given their order name). Cached for an hour;
+   * returns null if unavailable (privacy settings, error) — caller must handle.
+   */
+  async getUserFirstName(pageToken: string, psid: string): Promise<string | null> {
+    if (!pageToken || !psid) return null;
+    const cached = this.profileCache.get(psid);
+    if (cached && Date.now() - cached.ts < this.PROFILE_TTL_MS) return cached.name;
+    try {
+      const rawToken = this.encryption.decrypt(pageToken);
+      const url = `https://graph.facebook.com/${encodeURIComponent(psid)}?fields=first_name&access_token=${encodeURIComponent(rawToken)}`;
+      const res = await fetch(url, { signal: AbortSignal.timeout(5_000) });
+      let name: string | null = null;
+      if (res.ok) {
+        const data = (await res.json()) as any;
+        name = data?.first_name ? String(data.first_name).trim() || null : null;
+      }
+      this.profileCache.set(psid, { name, ts: Date.now() });
+      if (this.profileCache.size > 5000) {
+        const cutoff = Date.now() - this.PROFILE_TTL_MS;
+        for (const [k, v] of this.profileCache) {
+          if (v.ts < cutoff) this.profileCache.delete(k);
+        }
+      }
+      return name;
+    } catch {
+      return null;
+    }
+  }
+
   async sendCommentReply(pageToken: string, commentId: string, text: string): Promise<void> {
     if (!pageToken || !commentId || !text) return;
     const rawToken = this.encryption.decrypt(pageToken);
