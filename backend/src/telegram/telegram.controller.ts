@@ -1,10 +1,15 @@
 import { Body, Controller, Param, Post, UseGuards } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { AuthGuard } from '../auth/auth.guard';
 import { TelegramNotificationService } from './telegram-notification.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { EncryptionService } from '../common/encryption.service';
 import { MessengerService } from '../messenger/messenger.service';
 import { TelegramService as AdminTelegramService } from '../common/telegram.service';
+// Type import + runtime token for ModuleRef lookup. Not imported as a Nest
+// module (CourierModule → OrdersModule → TelegramModule would be circular), so
+// we resolve CourierService lazily via ModuleRef instead.
+import { CourierService } from '../courier/courier.service';
 
 @Controller('telegram')
 export class TelegramController {
@@ -14,6 +19,7 @@ export class TelegramController {
     private readonly encryption: EncryptionService,
     private readonly messenger: MessengerService,
     private readonly adminTelegram: AdminTelegramService,
+    private readonly moduleRef: ModuleRef,
   ) {}
 
   @Post('test')
@@ -126,6 +132,8 @@ export class TelegramController {
       await this.handleAdvanceRefund(page.id, orderId, subAction, token, callbackQueryId, page.telegramChatId ?? '');
     } else if (action === 'confirm' && orderId) {
       await this.handleConfirm(page.id, orderId, token, callbackQueryId, page.telegramChatId ?? '');
+    } else if (action === 'courier' && orderId) {
+      await this.handleCourierBook(page.id, orderId, token, callbackQueryId, page.telegramChatId ?? '');
     } else if (action === 'fraud' && orderId) {
       await this.handleFraud(page.id, orderId, token, callbackQueryId, page.telegramChatId ?? '');
     } else {
@@ -317,6 +325,90 @@ export class TelegramController {
       chatId,
       `✅ <b>Order #${orderId} Confirmed!</b>\n👤 ${order.customerName}\n📞 ${order.phone ?? '-'}`,
     );
+  }
+
+  /**
+   * Book the courier for an order straight from the Telegram button, using the
+   * page's own courier settings (default courier + credentials configured on the
+   * website). CourierService is resolved via ModuleRef to avoid a circular module
+   * dependency (CourierModule → OrdersModule → TelegramModule).
+   */
+  private async handleCourierBook(
+    pageId: number,
+    orderId: number,
+    token: string,
+    callbackQueryId: string,
+    chatId: string,
+  ) {
+    const order = await this.prisma.order.findFirst({
+      where: { id: orderId, pageIdRef: pageId },
+      include: { items: true },
+    });
+    if (!order) {
+      await this.telegram.answerCallback(token, callbackQueryId, '❌ Order not found');
+      return;
+    }
+    if (order.status === 'CANCELLED') {
+      await this.telegram.answerCallback(token, callbackQueryId, '❌ Order is cancelled');
+      return;
+    }
+    const existing = await this.prisma.courierShipment.findUnique({
+      where: { orderId },
+    });
+    if (existing?.trackingId) {
+      await this.telegram.answerCallback(
+        token,
+        callbackQueryId,
+        `✅ Already booked (${existing.trackingId})`,
+      );
+      return;
+    }
+
+    const courier = this.moduleRef.get(CourierService, { strict: false });
+    const settings = courier.parseSettings(await courier.getSettings(pageId));
+    if (!settings.defaultCourier || settings.defaultCourier === 'manual') {
+      await this.telegram.answerCallback(
+        token,
+        callbackQueryId,
+        '⚠️ Website-এ default courier setup করুন',
+      );
+      return;
+    }
+
+    const subtotal = (order.items || []).reduce(
+      (s: number, i: any) => s + i.unitPrice * i.qty,
+      0,
+    );
+
+    // Answer immediately (courier APIs can take a few seconds), then book.
+    await this.telegram.answerCallback(
+      token,
+      callbackQueryId,
+      `🚚 ${settings.defaultCourier}-এ পাঠানো হচ্ছে...`,
+    );
+
+    try {
+      const shipment = await courier.bookShipment(pageId, {
+        orderId,
+        pageId,
+        courier: settings.defaultCourier,
+        recipientName: order.customerName || 'Customer',
+        recipientPhone: order.phone || '',
+        recipientAddress: order.address || '',
+        codAmount: subtotal,
+      });
+      await this.telegram.sendRaw(
+        token,
+        chatId,
+        `✅ <b>Order #${orderId} — Courier Booked</b> 🚚\n📦 ${settings.defaultCourier}\n🔖 Tracking: ${shipment?.trackingId || '-'}`,
+      );
+    } catch (err: any) {
+      await this.telegram.sendRaw(
+        token,
+        chatId,
+        `❌ Order #${orderId} courier booking failed: ${err?.message ?? err}`,
+      );
+    }
   }
 
   private async handleAdvanceRefund(

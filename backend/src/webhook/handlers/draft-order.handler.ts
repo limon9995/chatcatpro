@@ -964,6 +964,9 @@ export class DraftOrderHandler {
           { text: '🔍 Fraud Check', callback_data: `fraud_${order.id}` },
         ],
         [
+          { text: '🚚 Courier পাঠাও', callback_data: `courier_${order.id}` },
+        ],
+        [
           { text: `📞 Call ${order.phone || ''}`, url: `tel:${order.phone || ''}` },
         ],
       ];
