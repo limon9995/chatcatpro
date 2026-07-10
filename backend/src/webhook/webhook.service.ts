@@ -58,7 +58,7 @@ export class WebhookService implements OnModuleDestroy {
       timer: ReturnType<typeof setTimeout>;
     }
   >();
-  private readonly IMAGE_BUFFER_MS = 4_000; // 4-second window
+  private readonly IMAGE_BUFFER_MS = 2_000; // 2s window to batch multi-image sends (lower = faster reply)
 
   // Tracks the last reply sent per pageId:psid during a processMessage call
   private readonly inFlightReply = new Map<string, string>();
