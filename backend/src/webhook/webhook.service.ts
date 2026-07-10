@@ -58,7 +58,7 @@ export class WebhookService implements OnModuleDestroy {
       timer: ReturnType<typeof setTimeout>;
     }
   >();
-  private readonly IMAGE_BUFFER_MS = 2_000; // 2s window to batch multi-image sends (lower = faster reply)
+  private readonly IMAGE_BUFFER_MS = 500; // near-instant: process each image as it arrives; tiny window only coalesces a same-burst multi-send (duplicates already de-duped by message.mid)
 
   // Tracks the last reply sent per pageId:psid during a processMessage call
   private readonly inFlightReply = new Map<string, string>();
@@ -2827,8 +2827,11 @@ export class WebhookService implements OnModuleDestroy {
         },
       });
 
+      // Only run OCR if some product is explicitly OCR mode. A product being
+      // AI_VISION but not yet embedded (visionSearchable=false) must NOT force
+      // the whole page back to slow OCR — go straight to vision instead.
       const hasOcrProducts = pageProducts.some(
-        (p) => p.detectionMode === 'OCR' || !p.visionSearchable,
+        (p) => p.detectionMode === 'OCR',
       );
       const customPrefix =
         (page.productCodePrefix as string | undefined) || 'DF';
@@ -3019,10 +3022,11 @@ export class WebhookService implements OnModuleDestroy {
         },
       });
 
-      // If ALL active products are AI_VISION mode (none use OCR/product codes),
-      // skip OCR entirely and go straight to vision for faster response
+      // Skip OCR unless some product is explicitly OCR mode. A product that is
+      // AI_VISION but not yet embedded (visionSearchable=false) must not force
+      // the whole page onto slow OCR — go straight to vision instead.
       const hasOcrProducts = pageProducts.some(
-        (p) => p.detectionMode === 'OCR' || !p.visionSearchable,
+        (p) => p.detectionMode === 'OCR',
       );
       if (!hasOcrProducts && page.imageRecognitionOn) {
         this.logger.log(
