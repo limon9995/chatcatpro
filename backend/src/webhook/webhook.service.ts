@@ -211,11 +211,19 @@ export class WebhookService implements OnModuleDestroy {
           if (!event.message) continue;
         }
 
-        // Card view "Order করব" postback — payload: ORDER_<code>
+        // Card-view "এটা নিব / Order করব" postback. Two payload shapes exist:
+        //   ORDER_<code>            — catalog card
+        //   SELECT_PRODUCT:<code>   — vision-match card
+        // Both start an order draft for that product via handleCatalogReferral.
         if (event.postback?.payload && !event.message) {
           const payload: string = String(event.postback.payload);
+          let productCode: string | null = null;
           if (payload.startsWith('ORDER_')) {
-            const productCode = payload.slice(6).toUpperCase();
+            productCode = payload.slice(6).toUpperCase();
+          } else if (payload.startsWith('SELECT_PRODUCT:')) {
+            productCode = payload.slice('SELECT_PRODUCT:'.length).toUpperCase();
+          }
+          if (productCode) {
             // Debounce: ignore duplicate postback within 5 seconds (double-click)
             const debounceKey = `${psid}:${payload}`;
             const lastAt = this.recentPostbacks.get(debounceKey) ?? 0;
