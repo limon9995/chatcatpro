@@ -1058,7 +1058,46 @@ export class WebhookService implements OnModuleDestroy {
           return;
         }
       }
-      // SmartBot on but AI unavailable/failed — graceful fallback, never keyword
+      // SmartBot on but AI unavailable/failed (e.g. zero balance, provider down).
+      // If the customer is mid-order, fall back to the deterministic capture
+      // handler so order-taking still works without AI. Otherwise a graceful
+      // "busy" reply (never the retired keyword pipeline).
+      const orderStep =
+        draft?.currentStep &&
+        (draft.currentStep.startsWith('cf:') ||
+          ['name', 'phone', 'address', 'advance_payment', 'confirm'].includes(
+            draft.currentStep,
+          ));
+      if (orderStep && page.orderModeOn) {
+        const result = await this.draftHandler.captureField(
+          pageId,
+          psid,
+          text,
+          draft!,
+          page,
+        );
+        if (result === null) {
+          const stillExists = await this.ctx.getActiveDraft(pageId, psid);
+          if (!stillExists) {
+            const wasConfirm =
+              draft!.currentStep === 'confirm' &&
+              this.botIntent.detectIntent(text, true) === 'CONFIRM';
+            const key = wasConfirm ? 'order_received' : 'order_cancelled';
+            const msg = await this.botKnowledge.resolveSystemReply(
+              pageId,
+              key,
+              undefined,
+              page.agentType,
+            );
+            await this.safeSend(token, psid, msg);
+          }
+          return;
+        }
+        if (typeof result === 'string') {
+          await this.safeSend(token, psid, result);
+          return;
+        }
+      }
       await this.sendSmartBotUnavailable(token, psid, page);
       return;
     }
