@@ -1034,7 +1034,17 @@ export class WebhookService implements OnModuleDestroy {
     // If the AI is momentarily unavailable we send a graceful "busy" reply
     // instead of falling back to the retired keyword pipeline.
     if (page.smartBotOn) {
-      if (aiAllowed && this.smartBot.isAvailable()) {
+      const smartBotReady = aiAllowed && this.smartBot.isAvailable();
+      if (!smartBotReady) {
+        // Diagnostic: without this, an aiAllowed=false page produces the "busy"
+        // reply with zero logs, making it undiagnosable. aiAllowed gates on the
+        // OWNER's billing subscription (plan status + order limit), separate
+        // from the page wallet; available gates on the AI provider key/cooldown.
+        this.logger.warn(
+          `[SmartBot] skipped psid=${psid} page=${pageId} aiStatus=${aiStatus} aiAllowed=${aiAllowed} available=${this.smartBot.isAvailable()} — aiAllowed=owner subscription/order-limit, available=provider key/cooldown`,
+        );
+      }
+      if (smartBotReady) {
         // "typing…" indicator so the bot feels like a real person
         void this.messenger.sendSenderAction(token, psid, 'typing_on');
         const result = await this.smartBot.handle(
