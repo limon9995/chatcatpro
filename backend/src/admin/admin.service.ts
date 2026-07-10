@@ -1087,6 +1087,12 @@ export class AdminService {
       });
     });
 
+    // Notify the client on their page Telegram that the balance was added.
+    void this.telegram.notify(
+      req.pageId,
+      `✅ <b>Wallet Recharge Approved</b>\n💰 ৳${req.amountBdt} আপনার balance-এ যোগ হয়েছে। ধন্যবাদ! 🎉`,
+    );
+
     return { success: true };
   }
 

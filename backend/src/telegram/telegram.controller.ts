@@ -254,6 +254,11 @@ export class TelegramController {
     await this.adminTelegram.sendMessage(
       `✅ <b>Recharge Approved</b>\nRequest #${id} — ৳${req.amountBdt} balance যোগ হয়েছে (via Telegram)`,
     );
+    // Notify the client on their page Telegram that the balance was added.
+    void this.telegram.notify(
+      req.pageId,
+      `✅ <b>Wallet Recharge Approved</b>\n💰 ৳${req.amountBdt} আপনার balance-এ যোগ হয়েছে। ধন্যবাদ! 🎉`,
+    );
   }
 
   private async handleAdminPageRequestAction(
