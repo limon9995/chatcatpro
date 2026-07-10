@@ -179,10 +179,11 @@ export class BillingService {
   }
 
   // ── Check if user can take new orders ────────────────────────────────────
-  canTakeOrders(sub: any): boolean {
-    if (!['trial', 'active', 'grace'].includes(sub.status)) return false;
-    if (sub.ordersLimit === -1) return true;
-    return sub.ordersUsed < sub.ordersLimit;
+  // Pay-as-you-go model: there is no plan / monthly order-limit system — AI,
+  // broadcasts and order-taking are gated ONLY by the per-page wallet balance
+  // (WalletService.canProcessAi). So order-taking is never blocked here.
+  canTakeOrders(_sub: any): boolean {
+    return true;
   }
 
   // ── Increment order usage ─────────────────────────────────────────────────
@@ -505,10 +506,7 @@ export class BillingService {
     if (sub.status === 'expired')
       w.push('❌ Subscription expired — payment করুন');
     if (sub.status === 'grace') w.push('⚠️ Grace period চলছে — payment করুন');
-    if (usagePct >= 90 && sub.ordersLimit !== -1)
-      w.push(`⚠️ ${usagePct}% order limit used`);
-    if (usagePct >= 100 && sub.ordersLimit !== -1)
-      w.push('❌ Order limit reached — upgrade করুন');
+    // No order-limit warnings — pay-as-you-go has no order cap.
     return w;
   }
 
