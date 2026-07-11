@@ -14,6 +14,7 @@ import { CourierModule } from '../courier/courier.module';
 import { TelegramModule } from '../telegram/telegram.module';
 import { PaymentVerifyModule } from '../payment-verify/payment-verify.module';
 import { SmsGatewayModule } from '../sms-gateway/sms-gateway.module';
+import { OrdersModule } from '../orders/orders.module';
 import { IgMessengerModule } from './ig-messenger.module';
 import { IgWebhookController } from './ig-webhook.controller';
 import { IgWebhookService } from './ig-webhook.service';
@@ -37,6 +38,7 @@ import { DraftOrderHandler } from '../webhook/handlers/draft-order.handler';
     TelegramModule,
     PaymentVerifyModule,
     SmsGatewayModule,
+    OrdersModule,
     IgMessengerModule,
   ],
   controllers: [IgWebhookController],
