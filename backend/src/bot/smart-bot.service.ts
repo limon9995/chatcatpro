@@ -367,7 +367,10 @@ export class SmartBotService {
     const codedLines = codedProducts
       .slice(0, 30)
       .map((p) => {
-        const stock = p.stockQty > 0 ? `${p.stockQty} পিস আছে` : 'Stock শেষ';
+        // V25: never expose the exact stock count to the AI's own output —
+        // only in-stock/out-of-stock, so it physically can't leak a number
+        // even if a customer asks "koto pis ase".
+        const stock = p.stockQty > 0 ? 'Stock আছে' : 'Stock শেষ';
         const deliveryNote =
           (p as any).deliveryCharge === 'FREE' ? ' | 🚚 Home Delivery FREE' : '';
         const desc = String((p as any).description || '').trim();
@@ -379,7 +382,8 @@ export class SmartBotService {
     const simpleLines = simpleProducts
       .map((p) => {
         const unit = (p as any).unit || 'pcs';
-        const stock = p.stockQty > 0 ? `${p.stockQty} ${unit} আছে` : 'Stock শেষ';
+        // V25: never expose the exact stock count — see codedLines note above.
+        const stock = p.stockQty > 0 ? `Stock আছে (${unit})` : 'Stock শেষ';
         const deliveryNote =
           (p as any).deliveryCharge === 'FREE' ? ' | 🚚 Home Delivery FREE' : '';
         const desc = String((p as any).description || '').trim();
@@ -390,7 +394,7 @@ export class SmartBotService {
 
     const productCtx =
       ctx.products.length > 0
-        ? `\n\n## Product Catalog\n${codedLines}${simpleLines ? `\n\n### Simple Items\n${simpleLines}` : ''}\n\n(প্রতিটা product-এর "বিবরণ" লাইনে পুরো তথ্য দেওয়া আছে — customer কোনো product সম্পর্কে বিস্তারিত জিজ্ঞেস করলে এখান থেকে উত্তর দাও, কিছু বানিয়ো না।)\n\n⚠️ "🔥 OFFER" মার্ক করা product-এর কথা উঠলে দাম/উপলব্ধতা জানানোর সাথে স্বাভাবিকভাবে discount-টাও একবার উল্লেখ করো — কিন্তু customer-কে disturb না করে, বারবার বলে জোর করবে না বা pushy sales pitch দেবে না। যতটুকু বলা দরকার ততটুকুই।`
+        ? `\n\n## Product Catalog\n${codedLines}${simpleLines ? `\n\n### Simple Items\n${simpleLines}` : ''}\n\n(প্রতিটা product-এর "বিবরণ" লাইনে পুরো তথ্য দেওয়া আছে — customer কোনো product সম্পর্কে বিস্তারিত জিজ্ঞেস করলে এখান থেকে উত্তর দাও, কিছু বানিয়ো না।)\n\n⚠️ "🔥 OFFER" মার্ক করা product-এর কথা উঠলে দাম/উপলব্ধতা জানানোর সাথে স্বাভাবিকভাবে discount-টাও একবার উল্লেখ করো — কিন্তু customer-কে disturb না করে, বারবার বলে জোর করবে না বা pushy sales pitch দেবে না। যতটুকু বলা দরকার ততটুকুই।\n\n⚠️ Customer যদি জিজ্ঞেস করে "কতগুলো/কয় পিস স্টক আছে" ধরনের exact quantity — কখনো সংখ্যা বলবে না (তোমাকে সেটা দেওয়াও হয়নি)। শুধু বলবে "সীমিত সংখ্যায় স্টক আছে" এবং স্বাভাবিকভাবে তাড়াতাড়ি অর্ডার করতে বলবে — pushy না হয়ে।`
         : '\n\n## Product Catalog\n(কোনো product নেই)';
 
     // Delivery & payment
