@@ -15,6 +15,8 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { SkipThrottle } from '@nestjs/throttler';
 import type { Response } from 'express';
+import * as fs from 'fs';
+import { join } from 'path';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProductsService } from '../products/products.service';
 import { OrdersService } from '../orders/orders.service';
@@ -310,6 +312,24 @@ export class CatalogController {
     void this.prisma.page.update({ where: { id: page.id }, data: { catalogViews: { increment: 1 } } }).catch(() => {});
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.send(this.buildHtml(data, q || '', { selectionMode: select === '1', shortlistCodes: this.normalizeCodeList(codes) }));
+  }
+
+  // Static Bangladesh division/district/upazila reference data for the
+  // checkout address selects — loaded once and cached in memory.
+  // Registered before the ':pageId' catch-all route below (literal routes
+  // must be declared before same-depth wildcard routes or they get shadowed).
+  private static bdGeoCache: any = null;
+  @Get('bd-geo')
+  getBdGeo(@Res() res: Response) {
+    if (!CatalogController.bdGeoCache) {
+      const raw = fs.readFileSync(
+        join(process.cwd(), 'src', 'catalog', 'bd-geo-data.json'),
+        'utf8',
+      );
+      CatalogController.bdGeoCache = JSON.parse(raw);
+    }
+    res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
+    res.json(CatalogController.bdGeoCache);
   }
 
   // ── Web Order Endpoints ────────────────────────────────────────────────────
@@ -1234,6 +1254,12 @@ ${page.webOrderEnabled ? `
 .wo-inp{width:100%;padding:11px 13px;border-radius:11px;border:1.5px solid var(--border);background:var(--bg);color:var(--text);font-size:14px;font-family:inherit;outline:none;transition:border-color .15s}
 .wo-inp:focus{border-color:var(--p)}
 .wo-row2{display:grid;grid-template-columns:1fr 80px;gap:10px}
+.wo-row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px}
+@media(max-width:380px){.wo-row3{grid-template-columns:1fr}}
+.wo-row3 select:disabled{opacity:.55;cursor:not-allowed}
+.wo-addr-lbl-row{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:5px}
+.wo-addr-loading{font-size:10.5px;color:var(--muted);display:none}
+.wo-addr-loading.show{display:inline}
 .wo-product-info{padding:12px 14px;background:var(--bg);border-radius:12px;border:1px solid var(--border);font-size:13.5px;color:var(--text)}
 .wo-product-info strong{color:var(--p);font-size:15px}
 .wo-btn{width:100%;padding:13px;border-radius:13px;border:none;background:linear-gradient(135deg,#059669,#047857);color:#fff;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 4px 18px rgba(5,150,105,.35)}
@@ -1299,7 +1325,13 @@ ${page.webOrderEnabled ? `
         </div>
         <div><div class="wo-lbl">আপনার নাম *</div><input class="wo-inp" id="woName" type="text" placeholder="পুরো নাম"></div>
         <div><div class="wo-lbl">ফোন নম্বর *</div><input class="wo-inp" id="woPhone" type="tel" placeholder="01XXXXXXXXX"></div>
-        <div><div class="wo-lbl">ঠিকানা *</div><textarea class="wo-inp" id="woAddr" rows="2" placeholder="বাসা/গ্রাম, উপজেলা, জেলা"></textarea></div>
+        <div class="wo-addr-lbl-row"><div class="wo-lbl" style="margin-bottom:0">ঠিকানা *</div><span class="wo-addr-loading" id="woGeoLoading">এলাকার তালিকা লোড হচ্ছে...</span></div>
+        <div class="wo-row3">
+          <div><select class="wo-inp" id="woDivision"><option value="">বিভাগ</option></select></div>
+          <div><select class="wo-inp" id="woDistrict" disabled><option value="">জেলা</option></select></div>
+          <div><select class="wo-inp" id="woUpazila" disabled><option value="">উপজেলা/থানা</option></select></div>
+        </div>
+        <div><textarea class="wo-inp" id="woAddrDetail" rows="2" placeholder="বাসা/রোড/গ্রামের নাম, ল্যান্ডমার্ক (বিস্তারিত ঠিকানা)"></textarea></div>
         <div><div class="wo-lbl">নোট (ঐচ্ছিক)</div><input class="wo-inp" id="woNote" type="text" placeholder="কোনো বিশেষ নির্দেশনা"></div>
         <div class="wo-err" id="woErr0"></div>
         <button class="wo-btn" id="woBtnSubmit" onclick="woSubmit()">অর্ডার দিন →</button>
@@ -1401,10 +1433,77 @@ var WO_ADV_MSG = ${JSON.stringify(String(page.advancePaymentMessage || ''))};
 var woOrderIdVal = null;
 var woPaymentUrl = null;
 
-function woOpen(){ document.getElementById('woModal').classList.add('open'); document.body.style.overflow='hidden'; }
+function woOpen(){ document.getElementById('woModal').classList.add('open'); document.body.style.overflow='hidden'; woLoadGeo(); }
 function woClose(){ document.getElementById('woModal').classList.remove('open'); document.body.style.overflow=''; }
-function woOpen(){ document.getElementById('woModal').classList.add('open'); document.body.style.overflow='hidden'; }
-function woClose(){ document.getElementById('woModal').classList.remove('open'); document.body.style.overflow=''; }
+
+// ── Division / District / Upazila cascading address selects ────────────────
+var woGeoData=null, woGeoLoaded=false, woGeoLoading=false;
+function woLoadGeo(){
+  if(woGeoLoaded||woGeoLoading) return;
+  woGeoLoading=true;
+  var loadingEl=document.getElementById('woGeoLoading'); if(loadingEl) loadingEl.classList.add('show');
+  fetch('/catalog/bd-geo').then(function(r){ return r.json(); }).then(function(d){
+    woGeoData=d; woGeoLoaded=true; woGeoLoading=false;
+    if(loadingEl) loadingEl.classList.remove('show');
+    var divSel=document.getElementById('woDivision');
+    d.divisions.forEach(function(dv){
+      var opt=document.createElement('option'); opt.value=dv.id; opt.textContent=dv.bn+' ('+dv.name+')'; divSel.appendChild(opt);
+    });
+  }).catch(function(){
+    woGeoLoading=false;
+    if(loadingEl){ loadingEl.textContent='এলাকার তালিকা লোড করা যায়নি — আবার চেষ্টা করুন'; loadingEl.classList.add('show'); }
+  });
+}
+function woOnDivisionChange(){
+  var distSel=document.getElementById('woDistrict'), upaSel=document.getElementById('woUpazila');
+  distSel.innerHTML='<option value="">জেলা</option>'; upaSel.innerHTML='<option value="">উপজেলা/থানা</option>';
+  upaSel.disabled=true;
+  var divId=parseInt(document.getElementById('woDivision').value)||null;
+  if(!divId||!woGeoData){ distSel.disabled=true; return; }
+  distSel.disabled=false;
+  woGeoData.districts.filter(function(d){ return d.divisionId===divId; }).forEach(function(d){
+    var opt=document.createElement('option'); opt.value=d.id; opt.textContent=d.bn+' ('+d.name+')'; distSel.appendChild(opt);
+  });
+}
+function woOnDistrictChange(){
+  var upaSel=document.getElementById('woUpazila');
+  upaSel.innerHTML='<option value="">উপজেলা/থানা</option>';
+  var distId=parseInt(document.getElementById('woDistrict').value)||null;
+  if(!distId||!woGeoData){ upaSel.disabled=true; return; }
+  upaSel.disabled=false;
+  woGeoData.upazilas.filter(function(u){ return u.districtId===distId; }).forEach(function(u){
+    var opt=document.createElement('option'); opt.value=u.id; opt.textContent=u.bn+' ('+u.name+')'; upaSel.appendChild(opt);
+  });
+}
+document.getElementById('woDivision').addEventListener('change', woOnDivisionChange);
+document.getElementById('woDistrict').addEventListener('change', woOnDistrictChange);
+
+function woGeoLabel(selId, dataKey){
+  var sel=document.getElementById(selId);
+  var id=parseInt(sel.value)||null;
+  if(!id||!woGeoData) return null;
+  var item=woGeoData[dataKey].find(function(x){ return x.id===id; });
+  return item?item.bn:null;
+}
+
+// ── Mobile keyboard: keep the focused field visible above the soft keyboard ─
+// Fixed-position bottom sheets don't shrink with the on-screen keyboard on
+// most mobile/in-app (Messenger/Facebook) browsers, so the focused input can
+// end up hidden behind it. visualViewport handles modern browsers; the
+// scrollIntoView-on-focus fallback covers in-app browsers that don't fire it.
+if(window.visualViewport){
+  window.visualViewport.addEventListener('resize', function(){
+    var sheet=document.querySelector('.wo-sheet');
+    if(sheet && document.getElementById('woModal').classList.contains('open')){
+      sheet.style.maxHeight=(window.visualViewport.height*0.95)+'px';
+    }
+  });
+}
+document.querySelectorAll('.wo-inp').forEach(function(el){
+  el.addEventListener('focus', function(){
+    setTimeout(function(){ el.scrollIntoView({block:'center', behavior:'smooth'}); }, 300);
+  });
+});
 function woShowStep(n){ ['woStep0','woStep1a','woStepM','woStepP','woStep2'].forEach(function(id){ var el=document.getElementById(id); if(el) el.classList.remove('active'); }); var t=document.getElementById('woStep'+n); if(t) t.classList.add('active'); woUpdateProgress(n); }
 function woUpdateProgress(n){
   var phase = (n==='2') ? 3 : (n==='0') ? 1 : 2; // Details -> Payment (gateway/method/proof) -> Done
@@ -1420,7 +1519,7 @@ var woAdvData={};
 async function woSubmit(){
   var name=document.getElementById('woName').value.trim();
   var phone=document.getElementById('woPhone').value.trim();
-  var addr=document.getElementById('woAddr').value.trim();
+  var addrDetail=document.getElementById('woAddrDetail').value.trim();
   var qty=parseInt(document.getElementById('woQty').value)||1;
   var note=document.getElementById('woNote').value.trim();
   if(!name){woSetErr('woErr0','নাম দিন');return;}
@@ -1429,7 +1528,14 @@ async function woSubmit(){
   if(phoneDigits.length<10||phoneDigits.length>12){woSetErr('woErr0','সঠিক ফোন নম্বর দিন (যেমন: 01XXXXXXXXX)');return;}
   var normPhone=phoneDigits.length===12&&phoneDigits.startsWith('88')?phoneDigits.slice(2):phoneDigits;
   if(normPhone.length!==11||!normPhone.startsWith('0')){woSetErr('woErr0','সঠিক বাংলাদেশি ফোন নম্বর দিন (01XXXXXXXXX)');return;}
-  if(!addr){woSetErr('woErr0','ঠিকানা দিন');return;}
+  var divLabel=woGeoLabel('woDivision','divisions');
+  var distLabel=woGeoLabel('woDistrict','districts');
+  var upaLabel=woGeoLabel('woUpazila','upazilas');
+  if(!divLabel){woSetErr('woErr0','বিভাগ বেছে নিন');return;}
+  if(!distLabel){woSetErr('woErr0','জেলা বেছে নিন');return;}
+  if(!upaLabel){woSetErr('woErr0','উপজেলা/থানা বেছে নিন');return;}
+  if(!addrDetail){woSetErr('woErr0','বিস্তারিত ঠিকানা দিন (বাসা/রোড/গ্রাম)');return;}
+  var addr=addrDetail+', '+upaLabel+', '+distLabel+', '+divLabel;
   woSetErr('woErr0','');
   var btn=document.getElementById('woBtnSubmit');
   btn.disabled=true; btn.textContent='পাঠানো হচ্ছে...';
