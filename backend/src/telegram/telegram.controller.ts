@@ -61,9 +61,16 @@ export class TelegramController {
           error: data.description || 'Invalid token or Telegram API error',
         };
       }
-      const update = (data.result ?? []).find(
+      const results = (data.result ?? []) as any[];
+      // Pick the MOST RECENT message, not the first — Telegram returns
+      // updates oldest-first, and stale test messages (e.g. the merchant
+      // trying the bot themselves before handing it to their client) stay
+      // queued for a while. Always fetching the last one ensures whoever
+      // messaged most recently (the intended recipient) wins.
+      const matching = results.filter(
         (u: any) => u.message?.chat?.id || u.channel_post?.chat?.id,
       );
+      const update = matching[matching.length - 1];
       const chatId =
         update?.message?.chat?.id ?? update?.channel_post?.chat?.id ?? null;
       if (!chatId) {
@@ -71,6 +78,15 @@ export class TelegramController {
           ok: false,
           error: 'No messages found. Please send a message to your bot first.',
         };
+      }
+      // Acknowledge all fetched updates so old/stale messages don't linger
+      // and get picked up again by a future auto-fetch for this same bot.
+      const lastUpdateId = results[results.length - 1]?.update_id;
+      if (lastUpdateId !== undefined) {
+        fetch(
+          `https://api.telegram.org/bot${token}/getUpdates?offset=${lastUpdateId + 1}`,
+          { signal: AbortSignal.timeout(8_000) },
+        ).catch(() => {});
       }
       return { ok: true, chatId: String(chatId) };
     } catch {
