@@ -37,14 +37,29 @@ export class TelegramController {
     if (!body?.token) {
       return { ok: false, error: 'token is required' };
     }
+    const token = body.token.trim();
     try {
+      // Telegram's getUpdates returns nothing (silently, ok:true + empty
+      // result) while a webhook is registered for this bot — and this app
+      // registers one on every successful save (for the inline Confirm/
+      // Courier buttons). A previous save attempt with this same token can
+      // leave a webhook attached, permanently blocking auto-fetch even
+      // though the customer's messages really did arrive. deleteWebhook is
+      // a harmless no-op if none was set, so always clear it first.
+      await fetch(`https://api.telegram.org/bot${token}/deleteWebhook`, {
+        signal: AbortSignal.timeout(8_000),
+      }).catch(() => {});
+
       const res = await fetch(
-        `https://api.telegram.org/bot${body.token.trim()}/getUpdates?limit=10`,
+        `https://api.telegram.org/bot${token}/getUpdates?limit=10`,
         { signal: AbortSignal.timeout(8_000) },
       );
-      const data = await res.json() as any;
+      const data = (await res.json()) as any;
       if (!data.ok) {
-        return { ok: false, error: 'Invalid token or Telegram API error' };
+        return {
+          ok: false,
+          error: data.description || 'Invalid token or Telegram API error',
+        };
       }
       const update = (data.result ?? []).find(
         (u: any) => u.message?.chat?.id || u.channel_post?.chat?.id,
