@@ -26,6 +26,7 @@ import { EmbeddingService } from '../embedding/embedding.service';
 import { ProductNameMatchService } from '../product-name-match/product-name-match.service';
 import { UniversityBotService } from '../university/university-bot.service';
 import { TelegramNotificationService } from '../telegram/telegram-notification.service';
+import { CourierService } from '../courier/courier.service';
 
 describe('WebhookService', () => {
   let service: WebhookService;
@@ -60,6 +61,7 @@ describe('WebhookService', () => {
         { provide: ProductNameMatchService, useValue: {} },
         { provide: UniversityBotService, useValue: {} },
         { provide: TelegramNotificationService, useValue: {} },
+        { provide: CourierService, useValue: {} },
       ],
     }).compile();
 

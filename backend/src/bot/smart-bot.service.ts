@@ -11,6 +11,7 @@ import { GeminiKeyRotatorService } from '../common/gemini-key-rotator.service';
 import { AgentBehaviorConfig } from '../agents/agent-behavior-config.interface';
 import { estimateMonthlyCost, PricingCalcInput } from '../common/pricing-estimator';
 import { MessengerService } from '../messenger/messenger.service';
+import { isInsideDhakaAddress } from '../webhook/handlers/dhaka-areas';
 
 // Verbatim defaults — used whenever an agent type has no AgentBehaviorConfig
 // personaPrompt/toneRules override, so agentType='commerce' pages (the vast
@@ -40,6 +41,8 @@ export interface IDraftOrderHandler {
     draft: DraftSession,
     page: any,
   ): Promise<number>;
+  buildSummary(draft: DraftSession, page: any): string;
+  buildAdvancePrompt(page: any, draft: DraftSession): string;
 }
 
 export interface SmartBotCollected {
@@ -230,6 +233,17 @@ export class SmartBotService {
       `[SmartBot] action=${parsed.action} reply="${parsed.reply.slice(0, 60)}"`,
     );
 
+    // Snapshot completeness BEFORE merging, so the deterministic next-step
+    // message below fires exactly once — on the turn that completes collection.
+    const wasComplete = !!(
+      draft &&
+      !(draft as any).isLead &&
+      draft.items.length > 0 &&
+      draft.customerName &&
+      draft.phone &&
+      draft.address
+    );
+
     // Merge collected fields into draft and persist
     const updatedDraft = await this.mergeAndSave(
       pageId,
@@ -237,6 +251,7 @@ export class SmartBotService {
       draft,
       parsed.collected,
       businessContext,
+      page,
     );
 
     // Execute side-effects (state changes), return reply string to caller for sending
@@ -320,8 +335,32 @@ export class SmartBotService {
         return { reply: parsed.reply, showCatalog: true };
       }
 
-      default: // CHAT or COLLECT
+      default: {
+        // CHAT or COLLECT — when this turn just completed the basic order info,
+        // don't leave the flow hanging on the model's initiative: append the
+        // deterministic next step (advance-payment request or order summary),
+        // the same messages the keyword pipeline sends. Without this the bot
+        // would say "সব তথ্য পেয়েছি" and then stall, never asking for the
+        // outside-Dhaka advance or a confirm.
+        const d = updatedDraft;
+        const nowComplete = !!(
+          d &&
+          !(d as any).isLead &&
+          d.items.length > 0 &&
+          d.customerName &&
+          d.phone &&
+          d.address
+        );
+        if (nowComplete && !wasComplete) {
+          if (d!.currentStep === 'advance_payment') {
+            return `${parsed.reply}\n\n${draftHandler.buildAdvancePrompt(page, d!)}`;
+          }
+          if (d!.currentStep === 'confirm') {
+            return `${parsed.reply}\n\n${draftHandler.buildSummary(d!, page)}`;
+          }
+        }
         return parsed.reply;
+      }
     }
   }
 
@@ -406,23 +445,64 @@ export class SmartBotService {
 ⚠️ Customer-এর address দেখে zone বুঝো: ঢাকার ভেতরে হলে inside row, বাইরে হলে outside row এর সময় বলো।
 ⚠️ Product Catalog-এ যে product-এর পাশে "🚚 Home Delivery FREE" লেখা আছে, সেই product-এর delivery charge সবসময় ফ্রি — ঢাকার ভিতরে/বাইরে rate এখানে apply হবে না। এই মার্ক না থাকলে উপরের normal rate অনুযায়ী চার্জ বলবে।`;
 
-    const paymentRules = ctx.paymentRules as any;
-    let paymentCtx = '';
-    if (paymentRules) {
-      const codLine =
-        paymentRules.codEnabled !== false
-          ? '✅ Cash on Delivery আছে'
-          : '❌ COD নেই';
-      const insideAdv = paymentRules.insideDhakaAdvanceEnabled
-        ? `⚠️ ঢাকার ভিতরে: Advance payment লাগবে ৳${paymentRules.insideDhakaAdvanceAmount ?? 100}`
+    // Effective payment rules. The merchant's real setting lives on the Page
+    // record (Settings → paymentMode/advanceAmount/codEnabled); the legacy
+    // knowledgeConfig paymentRules (never written by the dashboard, defaults
+    // to {}) can only ADD an advance requirement. Previously this section read
+    // only knowledgeConfig, so a page set to advance_outside was described to
+    // the AI as "ঢাকার বাইরে: COD (advance লাগে না)" — and the bot never asked
+    // for the advance.
+    const paymentRules = (ctx.paymentRules as any) || {};
+    const payMode = (page.paymentMode as string) || 'cod';
+    const fullAdvance = payMode === 'full_advance';
+    const codOn = page.codEnabled !== false && paymentRules.codEnabled !== false;
+    const insideAdvOn = fullAdvance || !!paymentRules.insideDhakaAdvanceEnabled;
+    const outsideAdvOn =
+      fullAdvance ||
+      payMode === 'advance_outside' ||
+      !!paymentRules.outsideDhakaAdvanceEnabled;
+    const fixedAdv = Number(page.advanceAmount) > 0 ? Number(page.advanceAmount) : 0;
+    const insideAmtTxt =
+      Number(paymentRules.insideDhakaAdvanceAmount) > 0
+        ? `৳${paymentRules.insideDhakaAdvanceAmount}`
+        : fixedAdv
+          ? `৳${fixedAdv}`
+          : `delivery fee-র সমান (৳${ctx.deliveryInsideFee})`;
+    const outsideAmtTxt =
+      Number(paymentRules.outsideDhakaAdvanceAmount) > 0
+        ? `৳${paymentRules.outsideDhakaAdvanceAmount}`
+        : fixedAdv
+          ? `৳${fixedAdv}`
+          : `delivery fee-র সমান (৳${ctx.deliveryOutsideFee})`;
+    const advThreshold = Number(page.advanceThresholdAmount) || 0;
+
+    const codLine = codOn
+      ? '✅ Cash on Delivery আছে'
+      : '❌ COD নেই — সব order-এ advance দিতে হবে';
+    const insideAdv = fullAdvance
+      ? '⚠️ ঢাকার ভিতরে: পুরো টাকা (product দাম + delivery fee) advance দিতে হবে'
+      : insideAdvOn
+        ? `⚠️ ঢাকার ভিতরে: Advance payment লাগবে ${insideAmtTxt}`
         : '✅ ঢাকার ভিতরে: Cash on Delivery (advance লাগে না)';
-      const outsideAdv = paymentRules.outsideDhakaAdvanceEnabled
-        ? `⚠️ ঢাকার বাইরে: Advance payment লাগবে ৳${paymentRules.outsideDhakaAdvanceAmount ?? 100}`
+    const outsideAdv = fullAdvance
+      ? '⚠️ ঢাকার বাইরে: পুরো টাকা (product দাম + delivery fee) advance দিতে হবে'
+      : outsideAdvOn
+        ? `⚠️ ঢাকার বাইরে: Advance payment লাগবে ${outsideAmtTxt} — advance পাওয়ার পরেই order confirm হবে`
         : '✅ ঢাকার বাইরে: Cash on Delivery (advance লাগে না)';
-      const bkash = page.advanceBkash ? `Bkash: ${page.advanceBkash}` : '';
-      const nagad = page.advanceNagad ? `Nagad: ${page.advanceNagad}` : '';
-      paymentCtx = `\n${[codLine, insideAdv, outsideAdv, bkash, nagad].filter(Boolean).join('\n')}`;
-    }
+    const thresholdLine =
+      advThreshold > 0 && (insideAdvOn || outsideAdvOn)
+        ? `ℹ️ Order subtotal ৳${advThreshold} পর্যন্ত হলে advance লাগবে না`
+        : '';
+    const bkash = page.advanceBkash ? `Bkash (Send Money): ${page.advanceBkash}` : '';
+    const nagad = page.advanceNagad ? `Nagad (Send Money): ${page.advanceNagad}` : '';
+    const rocket = page.advanceRocket ? `Rocket (Send Money): ${page.advanceRocket}` : '';
+    const zoneNote =
+      insideAdvOn !== outsideAdvOn
+        ? `\n⚠️ Zone বুঝতে ঠিকানার জেলা/এলাকা দেখো — ঠিকানায় শুধু "Dhaka" শব্দ থাকলেই ঢাকার ভিতরে না। "Tangail, Dhaka" মানে ঢাকা বিভাগ — এটা ঢাকার **বাইরে**। ঢাকা শহরের এলাকা (Mirpur, Uttara, Dhanmondi, Gulshan...) থাকলে তবেই ভিতরে।`
+        : '';
+    const paymentCtx = `\n${[codLine, insideAdv, outsideAdv, thresholdLine, bkash, nagad, rocket]
+      .filter(Boolean)
+      .join('\n')}${zoneNote}`;
 
     // V24: Pricing/negotiation policy — page-level, with a per-product
     // override applied when a specific product is currently in context
@@ -529,8 +609,11 @@ ${
         }
         if (stillNeeded.length > 0) {
           draftCtx += `\n\n⚠️ এখনো পাওয়া যায়নি (ONLY এগুলো চাও): ${stillNeeded.join(', ')}`;
+          if (stillNeeded.includes('advance payment proof')) {
+            draftCtx += `\n💳 Advance payment বাকি — Delivery & Payment section-এর amount আর Bkash/Nagad নম্বর দিয়ে advance পাঠাতে বলো, তারপর Transaction ID (বা screenshot) চাও। Advance না পেলে order confirm হবে না — এটা customer-কে ভদ্রভাবে জানাও।`;
+          }
         } else {
-          draftCtx += `\n\n✅ সব তথ্য আছে — customer confirm করলেই order হবে।`;
+          draftCtx += `\n\n✅ সব তথ্য আছে — customer confirm করলেই order হবে। Customer "হ্যাঁ/confirm/ok" বললে CONFIRM_ORDER action দাও। Customer যদি বলে "order nicchen na keno / order koi / নিচ্ছেন না কেন" — সে অভিযোগ করছে যে order আগাচ্ছে না; তাকে order summary দিয়ে confirm করতে বলো, ভুলেও "cancel করতে চান?" জিজ্ঞেস করবে না।`;
         }
       }
     }
@@ -645,7 +728,7 @@ Customer-এর message দেখে **strictly valid JSON** return করো:
 5. reply-এ order summary সহ confirm চাইতে পারো যখন সব ✅ হয়ে যায়।
 6. **Photo/ছবি চাইলে**: SHOW_CATALOG action দাও (ছবিসহ product card চলে যাবে) — reply-তে ছোট lead-in দাও (যেমন "এই যে ছবিসহ আমাদের product গুলো 😊")।
 7. **"ki ki ache / সব দেখাও / catalog / collection" চাইলে**: SHOW_CATALOG action দাও — reply-তে ছোট lead-in, card system পাঠাবে।
-8. **Advance payment**: Customer-এর ঠিকানা দেখে ঢাকার ভিতরে/বাইরে বুঝো, তারপর সেই zone-এর payment rule দেখো। ঢাকার ভিতরে COD হলে advance চাইবে না। Order confirm করার আগে আগে ঠিকানা collect করো।
+8. **Advance payment**: Customer-এর ঠিকানা দেখে ঢাকার ভিতরে/বাইরে বুঝো, তারপর সেই zone-এর payment rule দেখো। ঢাকার ভিতরে COD হলে advance চাইবে না। Order confirm করার আগে আগে ঠিকানা collect করো। ⚠️ ঠিকানায় "Dhaka" শব্দ থাকলেই ঢাকার ভিতরে ধরবে না — জেলা দেখো (যেমন "Tangail, Dhaka" = টাঙ্গাইল জেলা, ঢাকা বিভাগ = ঢাকার **বাইরে**)। Draft-এর "এখনো পাওয়া যায়নি" list-এ "advance payment proof" থাকলে বুঝবে system হিসাব করে দেখেছে advance লাগবে — তখন advance চাও। Customer advance পাঠিয়ে Transaction ID/নম্বর দিলে সেটা paymentProof হিসেবে COLLECT করো।
 9. **Order already confirmed / "ok" বললে**: order নেওয়া হয়ে গেলে বা draft confirm হয়ে গেলে customer "ok / আচ্ছা / ধন্যবাদ / received / thik ache" বললে — শুধু একটা ছোট্ট আন্তরিক reply দাও (যেমন "ধন্যবাদ ভাই 😊" বা "স্বাগতম 💖"), CHAT action দাও। আর order confirm করো না, order status/"প্যাক করা হবে/কনফার্ম হয়েছে" এসব আবার বলবে না — customer জিজ্ঞেস করলে তবেই status বলবে।
 10. **Delivery সময় ও fee**: Customer "কবে পাবো / delivery কতদিন / কত তাড়াতাড়ি / koto din" জিজ্ঞেস করলে **শুধু** "Delivery সময়:" লাইন দেখো — সেটা যদি ফাঁকা হয়, বলো "আমাদের সাথে সরাসরি জানতে চাইলে এখানে message করুন, টিম জানিয়ে দেবে 😊"। কখনো delivery FEE (৳80/৳120) দিয়ে delivery TIME-এর প্রশ্নের উত্তর দেবে না। Fee শুধু তখন বলবে যখন customer সরাসরি "delivery charge কত / কত টাকা লাগবে" জিজ্ঞেস করে। ⚠️ Fee বলার আগে দেখো — যে product নিয়ে কথা হচ্ছে বা order-এ আছে তার পাশে Product Catalog-এ "🚚 Home Delivery FREE" লেখা থাকলে বলো "এই product-এ ডেলিভারি একদম ফ্রি 🚚, কোনো চার্জ নেই" — ঢাকার ভিতরে/বাইরে কোনো rate বলবে না। শুধু যেসব product-এ FREE mark নেই সেগুলোর জন্যই normal rate বলবে।
 11. **Order status**: Customer "কবে পাবো / parsel kobe pabo / order কোথায় / status কী / কি হলো" জিজ্ঞেস করলে "## Customer-এর সর্বশেষ Order (DB থেকে)" section দেখো এবং নিচের নিয়মে reply করো:
@@ -888,6 +971,7 @@ ${deliveryCtx}${paymentCtx}${productCtx}${pricingPolicyCtx}${knowledgeCtx}${pric
     draft: DraftSession | null,
     collected: SmartBotCollected,
     ctx: BusinessContext,
+    page: any = null,
   ): Promise<DraftSession | null> {
     const codes = collected.productCodes ?? [];
     const hasNewProducts = codes.length > 0;
@@ -945,7 +1029,7 @@ ${deliveryCtx}${paymentCtx}${productCtx}${pricingPolicyCtx}${knowledgeCtx}${pric
     if (!base.customerName) base.currentStep = 'name';
     else if (!base.phone) base.currentStep = 'phone';
     else if (!base.address) base.currentStep = 'address';
-    else if (this.requiresAdvancePayment(base, null) && !base.paymentProof)
+    else if (this.requiresAdvancePayment(base, page) && !base.paymentProof)
       base.currentStep = 'advance_payment';
     else base.currentStep = 'confirm';
 
@@ -965,31 +1049,47 @@ ${deliveryCtx}${paymentCtx}${productCtx}${pricingPolicyCtx}${knowledgeCtx}${pric
 
   requiresAdvancePayment(draft: DraftSession, page: any): boolean {
     if (!page) return false;
+
+    // Zone via the same whitelist the keyword pipeline uses. The old regex
+    // here matched the bare word "dhaka", so a division-suffixed address like
+    // "Ellenga, Tangail, Dhaka" was wrongly treated as inside Dhaka and the
+    // advance_outside rule silently skipped.
+    const addr = draft?.address || '';
+    const insideDhaka = isInsideDhakaAddress(addr, page);
+
+    // Legacy knowledgeConfig-style rules, honoured only when explicitly enabled
     const paymentRules = page.paymentRules;
-    if (paymentRules) {
-      const addr = (draft?.address || '').toLowerCase();
-      const insideDhaka =
-        /dhaka|ঢাকা|mirpur|gulshan|dhanmondi|uttara|mohammadpur|badda|rampura|khilgaon|motijheel|pallabi|shyamoli|banani|bashundhara/.test(
-          addr,
-        );
-      if (insideDhaka) return !!paymentRules.insideDhakaAdvanceEnabled;
-      if (addr) return !!paymentRules.outsideDhakaAdvanceEnabled;
-      // address unknown: require advance if either zone needs it
-      return !!(
-        paymentRules.insideDhakaAdvanceEnabled ||
-        paymentRules.outsideDhakaAdvanceEnabled
-      );
+    if (
+      paymentRules &&
+      (paymentRules.insideDhakaAdvanceEnabled ||
+        paymentRules.outsideDhakaAdvanceEnabled)
+    ) {
+      if (!addr) return true; // address unknown: assume advance until it says otherwise
+      return insideDhaka
+        ? !!paymentRules.insideDhakaAdvanceEnabled
+        : !!paymentRules.outsideDhakaAdvanceEnabled;
     }
+
+    // COD entirely disabled by merchant → advance always required
+    if (page.codEnabled === false) return true;
+
     const paymentMode = (page.paymentMode as string) || 'cod';
+    if (paymentMode === 'cod') return false;
+
+    // Order-value threshold: skip advance when subtotal is at/under the configured amount
+    const threshold = Number(page.advanceThresholdAmount) || 0;
+    if (threshold > 0) {
+      const subtotal = (draft?.items ?? []).reduce(
+        (s, i) => s + i.unitPrice * i.qty,
+        0,
+      );
+      if (subtotal <= threshold) return false;
+    }
+
     if (paymentMode === 'full_advance') return true;
     if (paymentMode === 'advance_outside') {
       // Only outside-Dhaka orders need advance in this mode
-      const addr = (draft?.address || '').toLowerCase();
       if (!addr) return true;
-      const insideDhaka =
-        /dhaka|ঢাকা|mirpur|gulshan|dhanmondi|uttara|mohammadpur|badda|rampura|khilgaon|motijheel|pallabi|shyamoli|banani|bashundhara/.test(
-          addr,
-        );
       return !insideDhaka;
     }
     return false;

@@ -2,7 +2,7 @@ import { Injectable, Logger, Optional } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { BotIntentService } from '../../bot/bot-intent.service';
 import { AiIntentService } from '../../bot/ai-intent.service';
-import { DHAKA_AREA_WHITELIST } from './dhaka-areas';
+import { DHAKA_AREA_WHITELIST, isInsideDhakaAddress } from './dhaka-areas';
 import {
   ConversationContextService,
   DraftSession,
@@ -1178,7 +1178,7 @@ export class DraftOrderHandler {
     return false;
   }
 
-  private buildAdvancePrompt(page: any, draft: DraftSession): string {
+  buildAdvancePrompt(page: any, draft: DraftSession): string {
     const sym = page.currencySymbol || '৳';
     const mode = (page.paymentMode as string) || 'cod';
     const isOut = !this.isInsideDhaka(draft.address || '', page);
@@ -1397,20 +1397,7 @@ export class DraftOrderHandler {
   }
 
   isInsideDhaka(address: string, page: any): boolean {
-    const addr = address.toLowerCase();
-
-    // Custom area rules defined by page owner take priority
-    if (page?._areaRules?.globalInsideDhaka?.length) {
-      for (const area of page._areaRules.globalInsideDhaka) {
-        for (const alias of [area.areaName, ...(area.aliases || [])]) {
-          if (addr.includes(alias.toLowerCase())) return true;
-        }
-      }
-    }
-
-    // Whitelist-only: address must contain a known Dhaka area.
-    // Anything not matched → outside Dhaka (no false positives).
-    return DHAKA_AREA_WHITELIST.some((area) => addr.includes(area.toLowerCase()));
+    return isInsideDhakaAddress(address, page);
   }
 
   private isAddressLike(text: string): boolean {

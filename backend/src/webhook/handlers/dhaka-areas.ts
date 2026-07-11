@@ -149,3 +149,26 @@ export const DHAKA_AREA_WHITELIST: string[] = [
   '1219','1220','1221','1222','1223','1224','1225','1226','1227',
   '1228','1229','1230','1236',
 ];
+
+/**
+ * True only when the address names a known inside-Dhaka area.
+ * The bare word "Dhaka" does NOT count — customers routinely append their
+ * division ("Ellenga, Tangail, Dhaka"), which is outside Dhaka city.
+ * Page-owner custom area rules (page._areaRules.globalInsideDhaka) take priority.
+ */
+export function isInsideDhakaAddress(address: string, page?: any): boolean {
+  const addr = (address || '').toLowerCase();
+  if (!addr) return false;
+
+  if (page?._areaRules?.globalInsideDhaka?.length) {
+    for (const area of page._areaRules.globalInsideDhaka) {
+      for (const alias of [area.areaName, ...(area.aliases || [])]) {
+        if (alias && addr.includes(String(alias).toLowerCase())) return true;
+      }
+    }
+  }
+
+  // Whitelist-only: address must contain a known Dhaka area.
+  // Anything not matched → outside Dhaka (no false positives).
+  return DHAKA_AREA_WHITELIST.some((area) => addr.includes(area.toLowerCase()));
+}
