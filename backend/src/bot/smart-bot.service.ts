@@ -243,6 +243,7 @@ export class SmartBotService {
       draft.phone &&
       draft.address
     );
+    const hadProof = !!draft?.paymentProof;
 
     // Merge collected fields into draft and persist
     const updatedDraft = await this.mergeAndSave(
@@ -351,7 +352,11 @@ export class SmartBotService {
           d.phone &&
           d.address
         );
-        if (nowComplete && !wasComplete) {
+        // Fire when collection just completed, or when the advance payment
+        // proof (trxID) just arrived — the customer still needs the summary
+        // and a confirm ask, otherwise the flow dies on "অপেক্ষা করছি".
+        const proofJustArrived = !!d?.paymentProof && !hadProof;
+        if (nowComplete && (!wasComplete || proofJustArrived)) {
           if (d!.currentStep === 'advance_payment') {
             return `${parsed.reply}\n\n${draftHandler.buildAdvancePrompt(page, d!)}`;
           }

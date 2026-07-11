@@ -947,9 +947,20 @@ export class DraftOrderHandler {
         ? (insideDhaka ? '🏙️ ঢাকার ভিতরে' : '🌍 ঢাকার বাইরে')
         : '📍 ঠিকানা অজানা';
       const riskEmoji = order.spamRisk === 'high' ? '🔴' : order.spamRisk === 'medium' ? '🟡' : order.spamRisk === 'low' ? '🟢' : '⚪';
-      const payLabel = paymentStatus === 'advance_paid' || paymentStatus === 'advance_paid_verified'
-        ? '✅ Advance paid'
-        : paymentStatus === 'not_required' ? '💵 COD' : '⏳ Payment pending';
+      // Manual advance proof (trxID/screenshot) needs the merchant's eye —
+      // surface the proof and let them approve/reject straight from Telegram.
+      const needsPayVerify = paymentStatus === 'advance_paid';
+      const payLabel = needsPayVerify
+        ? '⏳ Advance দিয়েছে — verify বাকি'
+        : paymentStatus === 'advance_paid_verified'
+          ? '✅ Advance paid'
+          : paymentStatus === 'not_required' ? '💵 COD' : '⏳ Payment pending';
+
+      const proofLines = needsPayVerify
+        ? [
+            `💳 Payment proof: <code>${order.transactionId ?? '-'}</code>${order.paymentScreenshotUrl ? ' (📸 screenshot পাঠিয়েছে)' : ''}`,
+          ]
+        : [];
 
       const msg = [
         `🛒 <b>New Order #${order.id}</b>`,
@@ -957,15 +968,25 @@ export class DraftOrderHandler {
         `📞 ${order.phone || '-'}`,
         `📍 ${order.address || '-'} — ${zoneLabel}`,
         `💰 ৳${subtotal} | ${payLabel}`,
+        ...proofLines,
         `${riskEmoji} Fraud: ${order.spamRisk ?? 'unknown'}`,
       ].join('\n');
 
       const buttons = [
+        ...(needsPayVerify
+          ? [
+              [
+                { text: '✅ Payment Approve', callback_data: `payok_${order.id}` },
+                { text: '❌ Payment Reject', callback_data: `payfail_${order.id}` },
+              ],
+            ]
+          : [
+              [
+                { text: '✅ Confirm Order', callback_data: `confirm_${order.id}` },
+              ],
+            ]),
         [
-          { text: '✅ Confirm Order', callback_data: `confirm_${order.id}` },
           { text: '🔍 Fraud Check', callback_data: `fraud_${order.id}` },
-        ],
-        [
           { text: '🚚 Courier পাঠাও', callback_data: `courier_${order.id}` },
         ],
         [

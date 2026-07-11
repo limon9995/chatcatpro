@@ -533,6 +533,20 @@ export class OrdersService {
     // Send screenshot to merchant's Telegram instead of storing on server
     const caption = `📸 Payment Screenshot\nOrder #${orderId}${transactionId ? `\nTxID: ${transactionId}` : ''}\nCustomer: ${order.customerName ?? '?'} | ${order.phone ?? '?'}`;
     void this.telegram.sendPhoto(pageIdRef, file.buffer, caption).catch(() => {});
+    // sendPhoto can't carry inline buttons — follow up with an approve/reject
+    // message so the merchant can verify without opening the dashboard.
+    void this.telegram
+      .notifyWithButtons(
+        pageIdRef,
+        `💳 <b>Payment Proof — Order #${orderId}</b>\n👤 ${order.customerName ?? '?'} | 📞 ${order.phone ?? '?'}${transactionId ? `\n🔖 TrxID: <code>${transactionId}</code>` : ''}\n\nউপরের screenshot দেখে verify করুন:`,
+        [
+          [
+            { text: '✅ Payment Approve', callback_data: `payok_${orderId}` },
+            { text: '❌ Payment Reject', callback_data: `payfail_${orderId}` },
+          ],
+        ],
+      )
+      .catch(() => {});
 
     return this.prisma.order.update({
       where: { id: orderId },

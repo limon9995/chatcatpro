@@ -10,6 +10,9 @@ import { TelegramService as AdminTelegramService } from '../common/telegram.serv
 // module (CourierModule → OrdersModule → TelegramModule would be circular), so
 // we resolve CourierService lazily via ModuleRef instead.
 import { CourierService } from '../courier/courier.service';
+// Same circular-dependency situation as CourierService (OrdersModule imports
+// TelegramModule) — resolved lazily via ModuleRef.
+import { OrdersService } from '../orders/orders.service';
 
 @Controller('telegram')
 export class TelegramController {
@@ -153,7 +156,7 @@ export class TelegramController {
 
     const token = this.encryption.decrypt(page.telegramBotToken);
 
-    // Parse action: confirm_{orderId} | fraud_{orderId} | advrefund_confirm_{returnId} | advrefund_skip_{returnId}
+    // Parse action: confirm_{orderId} | fraud_{orderId} | payok_{orderId} | payfail_{orderId} | advrefund_confirm_{returnId} | advrefund_skip_{returnId}
     const parts = data.split('_');
     const action = parts[0];
     const orderId = parseInt(parts[parts.length - 1] ?? '0', 10);
@@ -165,6 +168,8 @@ export class TelegramController {
       await this.handleConfirm(page.id, orderId, token, callbackQueryId, page.telegramChatId ?? '');
     } else if (action === 'courier' && orderId) {
       await this.handleCourierBook(page.id, orderId, token, callbackQueryId, page.telegramChatId ?? '');
+    } else if ((action === 'payok' || action === 'payfail') && orderId) {
+      await this.handlePaymentVerify(page.id, orderId, action === 'payok', token, callbackQueryId, page.telegramChatId ?? '');
     } else if (action === 'fraud' && orderId) {
       await this.handleFraud(page.id, orderId, token, callbackQueryId, page.telegramChatId ?? '');
     } else {
@@ -510,6 +515,87 @@ export class TelegramController {
       chatId,
       `✅ <b>Refund Confirmed</b>\nOrder #${returnEntry.orderId} — ${returnEntry.order.customerName || 'Customer'}\n💰 ${sym}${amount} refunded`,
     );
+  }
+
+  /**
+   * Approve/reject a manual advance payment (trxID/screenshot) straight from
+   * the Telegram button. Delegates to OrdersService.verifyPayment — the same
+   * path the dashboard uses — so approve also confirms the order and sends the
+   * customer their confirmation message. OrdersService is resolved via
+   * ModuleRef to avoid the OrdersModule → TelegramModule circular dependency.
+   */
+  private async handlePaymentVerify(
+    pageId: number,
+    orderId: number,
+    approve: boolean,
+    token: string,
+    callbackQueryId: string,
+    chatId: string,
+  ) {
+    const order = await this.prisma.order.findFirst({
+      where: { id: orderId, pageIdRef: pageId },
+      select: {
+        id: true,
+        customerName: true,
+        phone: true,
+        customerPsid: true,
+        paymentStatus: true,
+        paymentVerifyStatus: true,
+        transactionId: true,
+        page: { select: { pageToken: true } },
+      },
+    });
+    if (!order) {
+      await this.telegram.answerCallback(token, callbackQueryId, '❌ Order not found');
+      return;
+    }
+    if (order.paymentStatus !== 'advance_paid') {
+      await this.telegram.answerCallback(token, callbackQueryId, '⚠️ এই order-এ কোনো advance payment নেই');
+      return;
+    }
+    if (order.paymentVerifyStatus === 'verified') {
+      await this.telegram.answerCallback(token, callbackQueryId, '✅ Already approved');
+      return;
+    }
+    if (!approve && order.paymentVerifyStatus === 'verify_failed') {
+      await this.telegram.answerCallback(token, callbackQueryId, '❌ Already rejected');
+      return;
+    }
+
+    const orders = this.moduleRef.get(OrdersService, { strict: false });
+
+    if (approve) {
+      try {
+        // verifyPayment('verified') also confirms the order, messages the
+        // customer (order_confirmed template) and sends the merchant a
+        // Telegram summary — no extra sends needed here.
+        await orders.verifyPayment(orderId, 'verified', pageId);
+        await this.telegram.answerCallback(token, callbackQueryId, '✅ Payment approved!');
+      } catch (err: any) {
+        await this.telegram.answerCallback(token, callbackQueryId, `❌ ${err?.message ?? 'Failed'}`);
+      }
+      return;
+    }
+
+    try {
+      await orders.verifyPayment(orderId, 'verify_failed', pageId);
+    } catch (err: any) {
+      await this.telegram.answerCallback(token, callbackQueryId, `❌ ${err?.message ?? 'Failed'}`);
+      return;
+    }
+    await this.telegram.answerCallback(token, callbackQueryId, '❌ Payment rejected');
+    await this.telegram.sendRaw(
+      token,
+      chatId,
+      `❌ <b>Payment Rejected</b> — Order #${orderId}\n👤 ${order.customerName || 'Customer'} | 📞 ${order.phone ?? '-'}\n💳 Proof: ${order.transactionId ?? '-'}\nCustomer-কে জানানো হয়েছে সঠিক Transaction ID পাঠাতে।`,
+    );
+    // Tell the customer politely so they can re-send the correct proof
+    if (order.customerPsid && order.page?.pageToken) {
+      const msg = `দুঃখিত, আপনার অর্ডার #${orderId}-এর payment টি আমরা verify করতে পারিনি 😔 অনুগ্রহ করে Transaction ID টি আবার check করে পাঠান, অথবা payment-এর screenshot দিন 💖`;
+      await this.messenger
+        .sendText(order.page.pageToken, order.customerPsid, msg, 'ACCOUNT_UPDATE')
+        .catch(() => {});
+    }
   }
 
   private async handleFraud(
