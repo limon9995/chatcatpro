@@ -19,6 +19,7 @@ import { PaymentVerifyService } from '../../payment-verify/payment-verify.servic
 import { SmsGatewayService } from '../../sms-gateway/sms-gateway.service';
 import { CourierService } from '../../courier/courier.service';
 import { TelegramNotificationService } from '../../telegram/telegram-notification.service';
+import { OrderOwnerMailerService } from '../../orders/order-owner-mailer.service';
 import { AgentCoreFieldDef } from '../../agents/agent-behavior-config.interface';
 
 // Verbatim defaults — reproduces today's exact name/phone/address prompts.
@@ -73,6 +74,7 @@ export class DraftOrderHandler {
     private readonly spamChecker: SpamCheckerService,
     private readonly courier: CourierService,
     private readonly telegram: TelegramNotificationService,
+    private readonly orderOwnerMailer: OrderOwnerMailerService,
     @Optional() private readonly paymentVerify?: PaymentVerifyService,
     @Optional() private readonly smsGateway?: SmsGatewayService,
   ) {}
@@ -972,6 +974,7 @@ export class DraftOrderHandler {
       ];
 
       this.telegram.notifyWithButtons(pageId, msg, buttons).catch(() => {});
+      this.orderOwnerMailer.sendNewOrderAlert(pageId, order.id).catch(() => {});
     }
 
     // Auto courier booking — only when the order is already CONFIRMED and the

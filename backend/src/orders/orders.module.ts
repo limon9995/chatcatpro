@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { OrdersService } from './orders.service';
 import { OrdersController } from './orders.controller';
 import { OrderNotificationService } from './order-notification.service';
+import { OrderOwnerMailerService } from './order-owner-mailer.service';
+import { OrderActionTokenService } from './order-action-token.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { MessengerModule } from '../messenger/messenger.module';
 import { BotKnowledgeModule } from '../bot-knowledge/bot-knowledge.module';
@@ -21,7 +23,17 @@ import { TelegramModule } from '../telegram/telegram.module';
     TelegramModule,
   ],
   controllers: [OrdersController],
-  providers: [OrdersService, OrderNotificationService],
-  exports: [OrdersService, OrderNotificationService],
+  providers: [
+    OrdersService,
+    OrderNotificationService,
+    OrderOwnerMailerService,
+    OrderActionTokenService,
+  ],
+  exports: [
+    OrdersService,
+    OrderNotificationService,
+    OrderOwnerMailerService,
+    OrderActionTokenService,
+  ],
 })
 export class OrdersModule {}

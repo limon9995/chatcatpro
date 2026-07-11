@@ -16,6 +16,10 @@ export interface BusinessProduct {
   // "FREE" — bot always says delivery is free for this item, ignoring the
   // page's inside/outside Dhaka rate. "PAID" (default) — normal rate applies.
   deliveryCharge?: string;
+  // V24: regular price the product is discounted from; only relevant when > price.
+  originalPrice?: number | null;
+  // V24: per-product pricing-policy override (JSON string) — see resolveEffectivePricingPolicy.
+  pricingPolicyOverride?: string | null;
 }
 
 export interface DualProduct {
@@ -88,6 +92,8 @@ export class BotContextService {
           orderEnabled: true,
           description: true,
           deliveryCharge: true,
+          originalPrice: true,
+          pricingPolicyOverride: true,
         },
         orderBy: { createdAt: 'desc' },
         take: 50,

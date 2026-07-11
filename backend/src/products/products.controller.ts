@@ -57,6 +57,8 @@ export class ProductsController {
       unit?: string | null;
       orderEnabled?: boolean;
       deliveryCharge?: string;
+      originalPrice?: number | null;
+      pricingPolicyOverride?: string | null;
     },
   ) {
     this.auth.ensurePageAccess(req.user || req.authUser, Number(body.pageId));
@@ -110,6 +112,8 @@ export class ProductsController {
       unit?: string | null;
       orderEnabled?: boolean;
       deliveryCharge?: string;
+      originalPrice?: number | null;
+      pricingPolicyOverride?: string | null;
     },
   ) {
     return this.products.updateOne(this.pid(req, pageId), code, body);

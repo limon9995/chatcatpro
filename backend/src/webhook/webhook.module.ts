@@ -24,6 +24,7 @@ import { SmsGatewayModule } from '../sms-gateway/sms-gateway.module';
 import { UniversityModule } from '../university/university.module';
 import { CourierModule } from '../courier/courier.module';
 import { TelegramModule } from '../telegram/telegram.module';
+import { OrdersModule } from '../orders/orders.module';
 import { WebhookController } from './webhook.controller';
 import { WebhookService } from './webhook.service';
 import { SmartBotService } from '../bot/smart-bot.service';
@@ -58,6 +59,7 @@ import { NegotiationHandler } from './handlers/negotiation.handler';
     UniversityModule,
     CourierModule,
     TelegramModule,
+    OrdersModule,
   ],
   controllers: [WebhookController],
   providers: [

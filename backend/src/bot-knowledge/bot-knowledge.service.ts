@@ -768,6 +768,52 @@ export class BotKnowledgeService {
     return parts.join(' ').trim();
   }
 
+  /**
+   * V24: merges a product's pricing-policy override (JSON string, every field
+   * optional/nullable) on top of the page-level policy — any field missing
+   * from the override falls back to the page's value. Used by SmartBot so
+   * per-product negotiation rules are enforced consistently with the
+   * page-level policy shape (defaultPricingPolicy()).
+   */
+  resolveEffectivePricingPolicy(
+    pagePolicy: any,
+    overrideJson?: string | null,
+  ): {
+    priceMode: string;
+    allowCustomerOffer: boolean;
+    agentApprovalRequired: boolean;
+    autoNoteCustomerOffer: boolean;
+    fixedPriceReplyText: string;
+    negotiationReplyText: string;
+    minNegotiationType: string;
+    minNegotiationValue: number;
+  } {
+    const page = pagePolicy || {};
+    let override: any = {};
+    if (overrideJson) {
+      try {
+        override = JSON.parse(overrideJson) || {};
+      } catch {
+        override = {};
+      }
+    }
+    const pick = (key: string) =>
+      override[key] !== undefined && override[key] !== null
+        ? override[key]
+        : page[key];
+
+    return {
+      priceMode: String(pick('priceMode') || 'FIXED').toUpperCase(),
+      allowCustomerOffer: Boolean(pick('allowCustomerOffer')),
+      agentApprovalRequired: pick('agentApprovalRequired') !== false,
+      autoNoteCustomerOffer: pick('autoNoteCustomerOffer') !== false,
+      fixedPriceReplyText: String(pick('fixedPriceReplyText') || ''),
+      negotiationReplyText: String(pick('negotiationReplyText') || ''),
+      minNegotiationType: String(pick('minNegotiationType') || 'none'),
+      minNegotiationValue: Number(pick('minNegotiationValue')) || 0,
+    };
+  }
+
   private describeAdvance(type: string, amount: number, percent: number) {
     if (type === 'fixed') return `${amount || 0} taka`;
     if (type === 'percent') return `${percent || 0}%`;

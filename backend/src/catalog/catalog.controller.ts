@@ -545,11 +545,11 @@ export class CatalogController {
   async getTrackPage(@Param('pageId') pid: string, @Res() res: Response) {
     const page = await this.prisma.page.findFirst({
       where: pageWhere(pid),
-      select: { id: true },
+      select: { id: true, primaryColor: true },
     });
     if (!page) { res.status(404).send('<h2>Not found</h2>'); return; }
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.send(this.buildTrackHtml(String(page.id)));
+    res.send(this.buildTrackHtml(String(page.id), page.primaryColor || '#5b63f5'));
   }
 
   @Get(':pageId/order-success/:orderId')
@@ -560,11 +560,11 @@ export class CatalogController {
   ) {
     const page = await this.prisma.page.findFirst({
       where: pageWhere(pid),
-      select: { id: true },
+      select: { id: true, primaryColor: true },
     });
     if (!page) { res.status(404).send('<h2>Not found</h2>'); return; }
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.send(this.buildOrderSuccessHtml(String(page.id), orderId));
+    res.send(this.buildOrderSuccessHtml(String(page.id), orderId, page.primaryColor || '#5b63f5'));
   }
 
   // Public HTML catalog page
@@ -1238,7 +1238,7 @@ ${page.webOrderEnabled ? `
 .wo-product-info strong{color:var(--p);font-size:15px}
 .wo-btn{width:100%;padding:13px;border-radius:13px;border:none;background:linear-gradient(135deg,#059669,#047857);color:#fff;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 4px 18px rgba(5,150,105,.35)}
 .wo-btn:disabled{opacity:.6;cursor:not-allowed}
-.wo-err{font-size:13px;color:#ef4444;padding:9px 12px;background:#fee2e2;border-radius:8px;border:1px solid #fecaca;display:none}
+.wo-err{font-size:13px;color:#991b1b;padding:10px 13px;background:#fef2f2;border-radius:10px;border:1.5px solid #fecaca;display:none;line-height:1.5}
 .wo-payment-box{padding:15px;background:color-mix(in srgb,var(--p) 8%,transparent);border:1.5px solid color-mix(in srgb,var(--p) 25%,transparent);border-radius:13px;font-size:13.5px;color:var(--text);line-height:1.7}
 .wo-num{font-size:22px;font-weight:900;color:var(--p);letter-spacing:.04em}
 .wo-file-area{display:flex;align-items:center;justify-content:center;gap:8px;padding:14px;border-radius:12px;border:2px dashed var(--border);cursor:pointer;font-size:13.5px;font-weight:600;color:var(--muted);transition:border-color .15s;background:var(--bg)}
@@ -1251,6 +1251,10 @@ ${page.webOrderEnabled ? `
 .wo-success .wo-oid{font-size:32px;font-weight:900;color:var(--p);margin:10px 0}
 .wo-success .wo-msg{font-size:13px;color:var(--sub);line-height:1.6;padding:12px 14px;background:var(--bg);border-radius:10px;border:1px solid var(--border);text-align:left;margin-top:10px}
 .wo-step{display:none}.wo-step.active{display:block}
+.wo-progress-track{height:4px;background:var(--border);border-radius:2px;margin:0 20px;overflow:hidden}
+.wo-progress-fill{height:100%;width:33%;border-radius:2px;background:linear-gradient(90deg,var(--p),var(--p-dark));transition:width .3s ease}
+.wo-progress-labels{display:flex;justify-content:space-between;padding:6px 20px 0;font-size:10.5px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.wo-progress-labels span.on{color:var(--p)}
 </style>
 
 <div class="wo-overlay" id="woModal" onclick="if(event.target===this)woClose()">
@@ -1258,6 +1262,12 @@ ${page.webOrderEnabled ? `
     <div class="wo-head">
       <span class="wo-title" id="woTitle">🛒 Order করুন</span>
       <button class="wo-close" onclick="woClose()">✕</button>
+    </div>
+    <div class="wo-progress-track"><div class="wo-progress-fill" id="woProgressFill"></div></div>
+    <div class="wo-progress-labels">
+      <span id="woProgLbl1" class="on">তথ্য</span>
+      <span id="woProgLbl2">পেমেন্ট</span>
+      <span id="woProgLbl3">সম্পন্ন</span>
     </div>
     <div class="wo-body">
 
@@ -1395,7 +1405,14 @@ function woOpen(){ document.getElementById('woModal').classList.add('open'); doc
 function woClose(){ document.getElementById('woModal').classList.remove('open'); document.body.style.overflow=''; }
 function woOpen(){ document.getElementById('woModal').classList.add('open'); document.body.style.overflow='hidden'; }
 function woClose(){ document.getElementById('woModal').classList.remove('open'); document.body.style.overflow=''; }
-function woShowStep(n){ ['woStep0','woStep1a','woStepM','woStepP','woStep2'].forEach(function(id){ var el=document.getElementById(id); if(el) el.classList.remove('active'); }); var t=document.getElementById('woStep'+n); if(t) t.classList.add('active'); }
+function woShowStep(n){ ['woStep0','woStep1a','woStepM','woStepP','woStep2'].forEach(function(id){ var el=document.getElementById(id); if(el) el.classList.remove('active'); }); var t=document.getElementById('woStep'+n); if(t) t.classList.add('active'); woUpdateProgress(n); }
+function woUpdateProgress(n){
+  var phase = (n==='2') ? 3 : (n==='0') ? 1 : 2; // Details -> Payment (gateway/method/proof) -> Done
+  var fill = document.getElementById('woProgressFill'); if(fill) fill.style.width = (phase*100/3)+'%';
+  [['woProgLbl1',1],['woProgLbl2',2],['woProgLbl3',3]].forEach(function(pair){
+    var el=document.getElementById(pair[0]); if(el) el.classList.toggle('on', phase>=pair[1]);
+  });
+}
 function woSetErr(id,msg){ var el=document.getElementById(id); if(el){ el.textContent=msg; el.style.display=msg?'block':'none'; } }
 
 var woAdvData={};
@@ -2136,31 +2153,44 @@ ${poweredByBadge()}
 </html>`;
   }
 
-  private buildTrackHtml(pageId: string): string {
+  private buildTrackHtml(pageId: string, primaryColor: string): string {
+    const primary = esc(primaryColor);
     return `<!DOCTYPE html>
 <html lang="bn">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Order Track করুন</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Segoe UI',system-ui,sans-serif;background:#f5f5f7;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px}
-.card{background:#fff;border-radius:20px;padding:32px 28px;width:100%;max-width:440px;box-shadow:0 8px 32px rgba(0,0,0,.10)}
-h1{font-size:20px;font-weight:800;color:#1a1a2e;margin-bottom:6px}
-p{font-size:13.5px;color:#666;margin-bottom:24px;line-height:1.6}
-label{display:block;font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px}
-input{width:100%;padding:12px 14px;border-radius:12px;border:1.5px solid #e5e7eb;font-size:15px;font-family:inherit;outline:none;transition:border-color .15s}
-input:focus{border-color:#6366f1}
-button{width:100%;margin-top:14px;padding:13px;border-radius:13px;border:none;background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit}
+:root{
+  --p:${primary};
+  --p-dark:color-mix(in srgb,${primary} 78%,#000);
+  --bg:#f4f6fb;
+  --surface:#fff;
+  --text:#0d1117;
+  --sub:#4b5563;
+  --muted:#9ca3af;
+  --border:#e5e7eb;
+}
+body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px;-webkit-font-smoothing:antialiased}
+.card{background:var(--surface);border-radius:20px;padding:32px 28px;width:100%;max-width:440px;box-shadow:0 8px 32px rgba(0,0,0,.10)}
+h1{font-size:20px;font-weight:800;color:var(--text);margin-bottom:6px}
+p{font-size:13.5px;color:var(--sub);margin-bottom:24px;line-height:1.6}
+label{display:block;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px}
+input{width:100%;padding:12px 14px;border-radius:12px;border:1.5px solid var(--border);background:var(--bg);color:var(--text);font-size:15px;font-family:inherit;outline:none;transition:border-color .15s}
+input:focus{border-color:var(--p)}
+button{width:100%;margin-top:14px;padding:13px;border-radius:13px;border:none;background:linear-gradient(135deg,var(--p),var(--p-dark));color:#fff;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 4px 18px color-mix(in srgb,var(--p) 35%,transparent)}
 button:disabled{opacity:.6;cursor:not-allowed}
 .result{margin-top:20px;padding:16px;border-radius:14px;font-size:14px;line-height:1.7;display:none}
 .result.ok{background:#f0fdf4;border:1.5px solid #bbf7d0;color:#14532d}
 .result.err{background:#fef2f2;border:1.5px solid #fecaca;color:#991b1b}
-.order-id{font-size:20px;font-weight:800;color:#4f46e5;margin-bottom:8px}
+.order-id{font-size:20px;font-weight:800;color:var(--p);margin-bottom:8px}
 .status-line{font-size:16px;font-weight:700;margin-bottom:6px}
 .items-list{font-size:13px;color:#555;margin-top:8px}
-.back{display:block;text-align:center;margin-top:20px;font-size:13px;color:#6366f1;text-decoration:none}
+.back{display:block;text-align:center;margin-top:20px;font-size:13px;color:var(--p);text-decoration:none}
 </style>
 </head>
 <body>
@@ -2204,28 +2234,37 @@ document.getElementById('oidInput').addEventListener('keydown', function(e){ if(
 </html>`;
   }
 
-  private buildOrderSuccessHtml(pageId: string, orderId: number): string {
+  private buildOrderSuccessHtml(pageId: string, orderId: number, primaryColor: string): string {
+    const primary = esc(primaryColor);
     return `<!DOCTYPE html>
 <html lang="bn">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>অর্ডার সম্পন্ন!</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0fdf4;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px}
+:root{
+  --p:${primary};
+  --p-dark:color-mix(in srgb,${primary} 78%,#000);
+  --p-light:color-mix(in srgb,${primary} 12%,#fff);
+  --p-mid:color-mix(in srgb,${primary} 22%,transparent);
+}
+body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:var(--p-light);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px;-webkit-font-smoothing:antialiased}
 .card{background:#fff;border-radius:24px;padding:40px 28px;width:100%;max-width:440px;text-align:center;box-shadow:0 8px 40px rgba(0,0,0,.10)}
 .icon{font-size:56px;margin-bottom:16px}
-h1{font-size:22px;font-weight:800;color:#15803d;margin-bottom:8px}
+h1{font-size:22px;font-weight:800;color:var(--p-dark);margin-bottom:8px}
 p{font-size:14px;color:#555;line-height:1.7;margin-bottom:20px}
-.order-id-box{background:#f0fdf4;border:2px solid #86efac;border-radius:16px;padding:16px 20px;margin-bottom:24px}
-.oid-label{font-size:11px;font-weight:700;color:#16a34a;text-transform:uppercase;letter-spacing:.1em}
-.oid-value{font-size:36px;font-weight:900;color:#15803d;letter-spacing:.05em}
+.order-id-box{background:var(--p-light);border:2px solid var(--p-mid);border-radius:16px;padding:16px 20px;margin-bottom:24px}
+.oid-label{font-size:11px;font-weight:700;color:var(--p-dark);text-transform:uppercase;letter-spacing:.1em}
+.oid-value{font-size:36px;font-weight:900;color:var(--p-dark);letter-spacing:.05em}
 .msg-box{background:#eff6ff;border:1.5px solid #bfdbfe;border-radius:14px;padding:14px 16px;font-size:13px;color:#1e40af;line-height:1.6;text-align:left;margin-bottom:20px}
 .msg-box strong{display:block;margin-bottom:4px;font-size:13.5px}
 .btn-row{display:flex;gap:10px;flex-wrap:wrap}
 .btn{flex:1;min-width:120px;padding:13px;border-radius:13px;border:none;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;text-decoration:none;display:block;text-align:center}
-.btn-primary{background:linear-gradient(135deg,#16a34a,#15803d);color:#fff}
+.btn-primary{background:linear-gradient(135deg,var(--p),var(--p-dark));color:#fff;box-shadow:0 4px 18px color-mix(in srgb,var(--p) 35%,transparent)}
 .btn-secondary{background:#f1f5f9;color:#334155;border:1.5px solid #e2e8f0}
 </style>
 </head>

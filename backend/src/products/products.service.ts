@@ -299,6 +299,9 @@ export class ProductsService {
     orderEnabled?: boolean;
     // V23: Per-product delivery charge — "FREE" | "PAID"
     deliveryCharge?: string;
+    // V24: discount (only shown when > price) and per-product policy override
+    originalPrice?: number | null;
+    pricingPolicyOverride?: string | null;
   }) {
     const eid = await this.effectiveId(data.pageId);
     const isSimple = data.productType === 'SIMPLE';
@@ -339,6 +342,8 @@ export class ProductsService {
         unit: data.unit ?? null,
         orderEnabled: data.orderEnabled !== false,
         deliveryCharge: normalizeDeliveryCharge(data.deliveryCharge),
+        originalPrice: data.originalPrice ?? null,
+        pricingPolicyOverride: data.pricingPolicyOverride ?? null,
       },
     });
     await this.setSidecarMetaForProduct(eid, created.code, {
@@ -409,6 +414,9 @@ export class ProductsService {
       orderEnabled?: boolean;
       // V23: Per-product delivery charge — "FREE" | "PAID"
       deliveryCharge?: string;
+      // V24: discount (only shown when > price) and per-product policy override
+      originalPrice?: number | null;
+      pricingPolicyOverride?: string | null;
     },
   ) {
     const code = codeRaw.startsWith('SP-') ? codeRaw : normalizeProductCode(codeRaw);
@@ -454,6 +462,10 @@ export class ProductsService {
       payload.orderEnabled = data.orderEnabled;
     if (data.deliveryCharge !== undefined)
       payload.deliveryCharge = normalizeDeliveryCharge(data.deliveryCharge);
+    if (data.originalPrice !== undefined)
+      payload.originalPrice = data.originalPrice;
+    if (data.pricingPolicyOverride !== undefined)
+      payload.pricingPolicyOverride = data.pricingPolicyOverride || null;
     const eid = await this.effectiveId(pageId);
     const sidecarOnlyUpdate =
       data.referenceImagesJson !== undefined ||

@@ -187,6 +187,9 @@ model Page {
   lowBalanceNotifiedAt DateTime? // debounce: last low-balance alert sent
   subExpiryNotifiedAt  DateTime? // debounce: last subscription-expiry alert sent
 
+  // V24: owner opt-out for the new "new order" email alert (Telegram alert unaffected).
+  orderEmailNotifEnabled Boolean @default(true)
+
   // -- PRICING CONFIG --
   costPerTextMsgBdt       Float @default(0.05)
   costPerVoiceMsgBdt      Float @default(1.00)  // For processing audio voice notes
@@ -349,6 +352,15 @@ model Product {
   // delivery-fee settings for this item; "PAID" (default) keeps today's
   // behavior of quoting the page's inside/outside Dhaka rate.
   deliveryCharge String @default("PAID") // "FREE" | "PAID"
+
+  // V24: per-product discount. Shown/mentioned only when originalPrice > price.
+  originalPrice Float?
+
+  // V24: per-product pricing-policy override, JSON mirroring the page-level
+  // PricingPolicy shape (bot-knowledge.service.ts defaultPricingPolicy()) but
+  // every field optional. null = fully inherit the page's policy (today's
+  // behavior, unchanged for every existing product).
+  pricingPolicyOverride String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

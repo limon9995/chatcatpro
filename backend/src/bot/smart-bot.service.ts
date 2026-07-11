@@ -355,6 +355,15 @@ export class SmartBotService {
     const codedProducts = ctx.products.filter((p) => (p as any).productType !== 'SIMPLE');
     const simpleProducts = ctx.products.filter((p) => (p as any).productType === 'SIMPLE');
 
+    // V24: per-product discount/offer note — shown only when originalPrice > price.
+    const offerNote = (p: any) => {
+      const orig = Number(p.originalPrice) || 0;
+      const price = Number(p.price) || 0;
+      if (!orig || orig <= price) return '';
+      const pct = Math.round((1 - price / orig) * 100);
+      return ` | 🔥 OFFER: ৳${price} (আগের দাম ৳${orig}, ছাড় ${pct}%)`;
+    };
+
     const codedLines = codedProducts
       .slice(0, 30)
       .map((p) => {
@@ -363,7 +372,7 @@ export class SmartBotService {
           (p as any).deliveryCharge === 'FREE' ? ' | 🚚 Home Delivery FREE' : '';
         const desc = String((p as any).description || '').trim();
         const descLine = desc ? `\n    বিবরণ: ${desc}` : '';
-        return `[${p.code}] ${p.name ?? p.code} — ৳${p.price} | ${stock}${deliveryNote}${descLine}`;
+        return `[${p.code}] ${p.name ?? p.code} — ৳${p.price} | ${stock}${deliveryNote}${offerNote(p)}${descLine}`;
       })
       .join('\n');
 
@@ -375,13 +384,13 @@ export class SmartBotService {
           (p as any).deliveryCharge === 'FREE' ? ' | 🚚 Home Delivery FREE' : '';
         const desc = String((p as any).description || '').trim();
         const descLine = desc ? `\n    বিবরণ: ${desc}` : '';
-        return `${p.name ?? p.code} — ৳${p.price}/${unit} | ${stock}${deliveryNote}${descLine}`;
+        return `${p.name ?? p.code} — ৳${p.price}/${unit} | ${stock}${deliveryNote}${offerNote(p)}${descLine}`;
       })
       .join('\n');
 
     const productCtx =
       ctx.products.length > 0
-        ? `\n\n## Product Catalog\n${codedLines}${simpleLines ? `\n\n### Simple Items\n${simpleLines}` : ''}\n\n(প্রতিটা product-এর "বিবরণ" লাইনে পুরো তথ্য দেওয়া আছে — customer কোনো product সম্পর্কে বিস্তারিত জিজ্ঞেস করলে এখান থেকে উত্তর দাও, কিছু বানিয়ো না।)`
+        ? `\n\n## Product Catalog\n${codedLines}${simpleLines ? `\n\n### Simple Items\n${simpleLines}` : ''}\n\n(প্রতিটা product-এর "বিবরণ" লাইনে পুরো তথ্য দেওয়া আছে — customer কোনো product সম্পর্কে বিস্তারিত জিজ্ঞেস করলে এখান থেকে উত্তর দাও, কিছু বানিয়ো না।)\n\n⚠️ "🔥 OFFER" মার্ক করা product-এর কথা উঠলে দাম/উপলব্ধতা জানানোর সাথে স্বাভাবিকভাবে discount-টাও একবার উল্লেখ করো — কিন্তু customer-কে disturb না করে, বারবার বলে জোর করবে না বা pushy sales pitch দেবে না। যতটুকু বলা দরকার ততটুকুই।`
         : '\n\n## Product Catalog\n(কোনো product নেই)';
 
     // Delivery & payment
@@ -410,6 +419,37 @@ export class SmartBotService {
       const nagad = page.advanceNagad ? `Nagad: ${page.advanceNagad}` : '';
       paymentCtx = `\n${[codLine, insideAdv, outsideAdv, bkash, nagad].filter(Boolean).join('\n')}`;
     }
+
+    // V24: Pricing/negotiation policy — page-level, with a per-product
+    // override applied when a specific product is currently in context
+    // (an item already in the draft, or whatever was last shown/discussed).
+    const policyProductCode: string | null =
+      (!(draft as any)?.isLead && draft?.items?.[0]?.productCode) ||
+      lastPresented?.[0]?.code ||
+      null;
+    const policyProduct = policyProductCode
+      ? ctx.products.find((p) => p.code === policyProductCode)
+      : undefined;
+    const effectivePolicy = this.botKnowledge.resolveEffectivePricingPolicy(
+      ctx.pricingPolicy,
+      (policyProduct as any)?.pricingPolicyOverride,
+    );
+    let floorPrice: number | null = null;
+    if (policyProduct && effectivePolicy.minNegotiationType !== 'none') {
+      const base = Number(policyProduct.price) || 0;
+      floorPrice =
+        effectivePolicy.minNegotiationType === 'PERCENT'
+          ? Math.round(base * (1 - effectivePolicy.minNegotiationValue / 100))
+          : Math.max(0, base - effectivePolicy.minNegotiationValue);
+    }
+    const pricingPolicyCtx = `\n\n## Pricing Policy${policyProduct ? ` (product [${policyProduct.code}])` : ' (shop-wide)'}
+${
+  effectivePolicy.priceMode === 'FIXED'
+    ? `⛔ Fixed price — negotiation/discount করা যাবে না। দর কষাকষি করলে বলো: "${effectivePolicy.fixedPriceReplyText}"`
+    : !effectivePolicy.allowCustomerOffer
+      ? `⛔ Customer offer allow করা নেই — negotiation mode হলেও discount দেওয়া যাবে না। বলো: "${effectivePolicy.fixedPriceReplyText}"`
+      : `✅ Negotiation চালু। ${floorPrice != null ? `সর্বনিম্ন ৳${floorPrice}-এর নিচে যাওয়া যাবে না — এর কম offer এলে ৳${floorPrice}-এ counter করো।` : 'নির্দিষ্ট floor price সেট নেই — যুক্তিসঙ্গত ছাড় দিতে পারো।'} ${effectivePolicy.agentApprovalRequired ? 'চূড়ান্ত confirm করার আগে জানিয়ে দাও যে agent শেষে confirm করবে।' : 'agent approval ছাড়াই সরাসরি accept করতে পারো।'}`
+}`;
 
     // Business knowledge
     const knowledgeCtx = ctx.knowledgeText
@@ -633,7 +673,7 @@ status reply-এর পরে, যদি "Delivery সময়:" সেটি�
       : DEFAULT_SMART_BOT_TONE_BLOCK;
 
     return `${intro}${toneBlock}
-${deliveryCtx}${paymentCtx}${productCtx}${knowledgeCtx}${pricingCtx}${catalogCtx}${customerCtx}${greetingCtx}${lastPresentedCtx}${draftCtx}${orderTrackCtx}${orderByIdCtx}${taskRules}`;
+${deliveryCtx}${paymentCtx}${productCtx}${pricingPolicyCtx}${knowledgeCtx}${pricingCtx}${catalogCtx}${customerCtx}${greetingCtx}${lastPresentedCtx}${draftCtx}${orderTrackCtx}${orderByIdCtx}${taskRules}`;
   }
 
   private async callOpenAI(

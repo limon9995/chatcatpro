@@ -26,6 +26,9 @@ type Product = {
   orderEnabled: boolean;
   // V23: Per-product home delivery charge
   deliveryCharge: 'FREE' | 'PAID';
+  // V24: discount price and per-product pricing-policy override
+  originalPrice: number | null;
+  pricingPolicyOverride: string | null;
 };
 
 type EditData = {
@@ -39,9 +42,109 @@ type EditData = {
   detectionMode?: 'OCR' | 'AI_VISION';
   // V23: Per-product home delivery charge
   deliveryCharge?: 'FREE' | 'PAID';
+  // V24: discount price and per-product pricing-policy override
+  originalPrice?: number | null;
+  pricingPolicyOverride?: string | null;
 };
 
-const EMPTY = { code: '', name: '', price: 0, costPrice: 0, stockQty: 0, postCaption: '', videoUrl: '', fbPostUrl: '', catalogVisible: true, description: '', imageUrl: '', referenceImagesJson: '', productGroup: '', variantLabel: '', variantOptions: '', category: '', color: '', tags: '', imageKeywords: '', visionSearchable: false, detectionMode: 'AI_VISION' as 'OCR' | 'AI_VISION', deliveryCharge: 'PAID' as 'FREE' | 'PAID' };
+const EMPTY = { code: '', name: '', price: 0, costPrice: 0, stockQty: 0, postCaption: '', videoUrl: '', fbPostUrl: '', catalogVisible: true, description: '', imageUrl: '', referenceImagesJson: '', productGroup: '', variantLabel: '', variantOptions: '', category: '', color: '', tags: '', imageKeywords: '', visionSearchable: false, detectionMode: 'AI_VISION' as 'OCR' | 'AI_VISION', deliveryCharge: 'PAID' as 'FREE' | 'PAID', originalPrice: null as number | null, pricingPolicyOverride: null as string | null };
+
+// V24: per-product pricing-policy override shape — mirrors the page-level
+// PricingPolicy fields (SettingsPage's "Pricing Policy" section /
+// bot-knowledge.service.ts's defaultPricingPolicy()) so a product can opt
+// out of inheriting the page policy field-for-field.
+type PolicyOverrideForm = {
+  priceMode: string; allowCustomerOffer: boolean; agentApprovalRequired: boolean;
+  minNegotiationType: string; minNegotiationValue: number;
+  fixedPriceReplyText: string; negotiationReplyText: string;
+};
+
+const POLICY_OVERRIDE_DEFAULT: PolicyOverrideForm = {
+  priceMode: 'FIXED', allowCustomerOffer: false, agentApprovalRequired: true,
+  minNegotiationType: 'PERCENT', minNegotiationValue: 0,
+  fixedPriceReplyText: '', negotiationReplyText: '',
+};
+
+/** Inline "Inherit from Page / Override" pricing-policy editor, reused across all 4 product forms. */
+function PricingPolicyOverrideField({ th, copy, value, onChange }: {
+  th: Theme; copy: (bn: string, en: string) => string;
+  value: string | null | undefined; onChange: (json: string | null) => void;
+}) {
+  let parsed: PolicyOverrideForm | null = null;
+  if (value) {
+    try { parsed = { ...POLICY_OVERRIDE_DEFAULT, ...JSON.parse(value) }; } catch { parsed = null; }
+  }
+  const enabled = parsed !== null;
+  const form = parsed ?? POLICY_OVERRIDE_DEFAULT;
+  const update = (patch: Partial<PolicyOverrideForm>) => onChange(JSON.stringify({ ...form, ...patch }));
+
+  return (
+    <FieldWithInfo th={th} label={copy('💬 Pricing Policy Override', '💬 Pricing Policy Override')} helpText={copy('Page-এর সাধারণ negotiation policy এই product-এর জন্য আলাদা করতে চাইলে চালু করুন — না হলে Settings-এর page-wide policy অনুসরণ হবে।', "Turn on to set a different negotiation policy for just this product — otherwise it inherits the page-wide policy from Settings.")}>
+      <div style={{ display: 'flex', gap: 8, marginBottom: enabled ? 10 : 0 }}>
+        <button type="button" onClick={() => onChange(null)}
+          style={{ ...th.btnSm, flex: 1, justifyContent: 'center',
+            background: !enabled ? th.accent : th.surface, color: !enabled ? '#fff' : th.textSub,
+            border: `1px solid ${!enabled ? th.accent : th.border}` }}>
+          {copy('Page থেকে Inherit', 'Inherit from Page')}
+        </button>
+        <button type="button" onClick={() => onChange(JSON.stringify(POLICY_OVERRIDE_DEFAULT))}
+          style={{ ...th.btnSm, flex: 1, justifyContent: 'center',
+            background: enabled ? th.accent : th.surface, color: enabled ? '#fff' : th.textSub,
+            border: `1px solid ${enabled ? th.accent : th.border}` }}>
+          {copy('Override করুন', 'Override')}
+        </button>
+      </div>
+
+      {enabled && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {['FIXED', 'NEGOTIABLE'].map(m => (
+              <button key={m} type="button" onClick={() => update({ priceMode: m })}
+                style={{ ...th.btnSm, flex: 1, justifyContent: 'center',
+                  background: form.priceMode === m ? th.accent : th.surface,
+                  color: form.priceMode === m ? '#fff' : th.textSub,
+                  border: `1px solid ${form.priceMode === m ? th.accent : th.border}` }}>
+                {m === 'FIXED' ? copy('🔒 Fixed', '🔒 Fixed') : copy('💬 Negotiable', '💬 Negotiable')}
+              </button>
+            ))}
+          </div>
+
+          {form.priceMode === 'NEGOTIABLE' && (
+            <>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, cursor: 'pointer' }}>
+                <input type="checkbox" checked={form.allowCustomerOffer}
+                  onChange={e => update({ allowCustomerOffer: e.target.checked })} />
+                {copy('Customer offer করতে পারবে', 'Allow customer offers')}
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, cursor: 'pointer' }}>
+                <input type="checkbox" checked={form.agentApprovalRequired}
+                  onChange={e => update({ agentApprovalRequired: e.target.checked })} />
+                {copy('Agent approval লাগবে', 'Agent approval required')}
+              </label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                <select style={{ ...th.input, fontSize: 12.5 }} value={form.minNegotiationType}
+                  onChange={e => update({ minNegotiationType: e.target.value })}>
+                  <option value="PERCENT">{copy('Percent (%)', 'Percent (%)')}</option>
+                  <option value="FIXED">{copy('Fixed (৳)', 'Fixed (৳)')}</option>
+                </select>
+                <input style={{ ...th.input, fontSize: 12.5 }} type="number" min={0} value={form.minNegotiationValue}
+                  onChange={e => update({ minNegotiationValue: Number(e.target.value) })}
+                  placeholder={copy('Min discount', 'Min discount')} />
+              </div>
+            </>
+          )}
+
+          <input style={{ ...th.input, fontSize: 12.5 }} value={form.fixedPriceReplyText}
+            onChange={e => update({ fixedPriceReplyText: e.target.value })}
+            placeholder={copy('Fixed price reply text', 'Fixed price reply text')} />
+          <input style={{ ...th.input, fontSize: 12.5 }} value={form.negotiationReplyText}
+            onChange={e => update({ negotiationReplyText: e.target.value })}
+            placeholder={copy('Negotiation reply text', 'Negotiation reply text')} />
+        </div>
+      )}
+    </FieldWithInfo>
+  );
+}
 
 /** Convert DB JSON variantOptions → textarea text ("Size: S,M,L,XL\nColor: Red,Blue") */
 function variantOptionsToText(json: string | null): string {
@@ -202,10 +305,10 @@ export function ProductsPage({ th, pageId, onToast }: {
   const BASE = `${API_BASE}/client-dashboard/${pageId}`;
 
   // V22: Simple Products tab state
-  const [simpleForm, setSimpleForm] = useState({ name: '', price: 0, stockQty: 0, unit: 'kg', description: '', orderEnabled: true, isActive: true, deliveryCharge: 'PAID' as 'FREE' | 'PAID' });
+  const [simpleForm, setSimpleForm] = useState({ name: '', price: 0, stockQty: 0, unit: 'kg', description: '', orderEnabled: true, isActive: true, deliveryCharge: 'PAID' as 'FREE' | 'PAID', originalPrice: null as number | null, pricingPolicyOverride: null as string | null });
   const [showSimpleForm, setShowSimpleForm] = useState(false);
   const [simpleEditId, setSimpleEditId] = useState<number | null>(null);
-  const [simpleEditData, setSimpleEditData] = useState<{ name?: string; price?: number; stockQty?: number; unit?: string; description?: string; orderEnabled?: boolean; isActive?: boolean; deliveryCharge?: 'FREE' | 'PAID' }>({});
+  const [simpleEditData, setSimpleEditData] = useState<{ name?: string; price?: number; stockQty?: number; unit?: string; description?: string; orderEnabled?: boolean; isActive?: boolean; deliveryCharge?: 'FREE' | 'PAID'; originalPrice?: number | null; pricingPolicyOverride?: string | null }>({});
   const [busySimple, setBusySimple] = useState(false);
 
   // Dual Photo Mode
@@ -261,7 +364,7 @@ export function ProductsPage({ th, pageId, onToast }: {
 
   const openEdit = (p: Product) => {
     setEditId(p.id);
-    setEditData({ name: p.name ?? '', price: p.price, costPrice: p.costPrice, stockQty: p.stockQty, postCaption: p.postCaption ?? '', videoUrl: p.videoUrl ?? '', fbPostUrl: p.fbPostUrl ?? '', catalogVisible: p.catalogVisible ?? true, description: p.description ?? '', imageUrl: p.imageUrl ?? '', referenceImagesJson: referenceImagesToText(p.referenceImagesJson), productGroup: p.productGroup ?? '', variantLabel: p.variantLabel ?? '', variantOptions: variantOptionsToText(p.variantOptions), category: p.category ?? '', color: p.color ?? '', tags: p.tags ?? '', imageKeywords: p.imageKeywords ?? '', visionSearchable: p.visionSearchable ?? false, detectionMode: p.detectionMode ?? 'AI_VISION', deliveryCharge: p.deliveryCharge ?? 'PAID' });
+    setEditData({ name: p.name ?? '', price: p.price, costPrice: p.costPrice, stockQty: p.stockQty, postCaption: p.postCaption ?? '', videoUrl: p.videoUrl ?? '', fbPostUrl: p.fbPostUrl ?? '', catalogVisible: p.catalogVisible ?? true, description: p.description ?? '', imageUrl: p.imageUrl ?? '', referenceImagesJson: referenceImagesToText(p.referenceImagesJson), productGroup: p.productGroup ?? '', variantLabel: p.variantLabel ?? '', variantOptions: variantOptionsToText(p.variantOptions), category: p.category ?? '', color: p.color ?? '', tags: p.tags ?? '', imageKeywords: p.imageKeywords ?? '', visionSearchable: p.visionSearchable ?? false, detectionMode: p.detectionMode ?? 'AI_VISION', deliveryCharge: p.deliveryCharge ?? 'PAID', originalPrice: p.originalPrice ?? null, pricingPolicyOverride: p.pricingPolicyOverride ?? null });
     setEditVideoGuide(null);
     setUniquenessEdit(null);
     setUniquenessEditHidden(false);
@@ -735,6 +838,10 @@ export function ProductsPage({ th, pageId, onToast }: {
               <input style={th.input} type="number" min={0} value={newP.price || ''}
                 onChange={e => setNewP(p => ({ ...p, price: Number(e.target.value) }))} />
             </FieldWithInfo>
+            <FieldWithInfo th={th} label={copy('আগের দাম (৳)', 'Original Price (৳)')} helpText={copy('ছাড় দেখাতে চাইলে দিন — বট স্বাভাবিকভাবে এই অফারের কথা জানাবে।', "Set this to show a discount — the bot will naturally mention the offer.")}>
+              <input style={th.input} type="number" min={0} value={newP.originalPrice ?? ''}
+                onChange={e => setNewP(p => ({ ...p, originalPrice: e.target.value === '' ? null : Number(e.target.value) }))} />
+            </FieldWithInfo>
             <FieldWithInfo th={th} label="Cost Price (৳)" helpText={copy('আপনার ক্রয় মূল্য — profit হিসাবের জন্য', 'Your purchase cost, used for profit calculation')}>
               <input style={th.input} type="number" min={0} value={newP.costPrice || ''}
                 onChange={e => setNewP(p => ({ ...p, costPrice: Number(e.target.value) }))} />
@@ -822,6 +929,10 @@ export function ProductsPage({ th, pageId, onToast }: {
                 <option value="FREE">{copy('Free', 'Free')}</option>
               </select>
             </FieldWithInfo>
+          </div>
+          <div style={{ marginTop: 12 }}>
+            <PricingPolicyOverrideField th={th} copy={copy} value={newP.pricingPolicyOverride}
+              onChange={json => setNewP(p => ({ ...p, pricingPolicyOverride: json }))} />
           </div>
           <div style={{ marginTop: 12 }}>
             <FieldWithInfo th={th} label="Reference Images" helpText={copy('একই product-এর front, side, back, close-up, video screenshot আলাদা লাইনে দিন। এতে customer shortlist দেখে সহজে confirm করতে পারবে।', 'Paste multiple angles of the same product, one URL per line: front, side, back, close-up, or clear video screenshots.')}>
@@ -1089,8 +1200,13 @@ export function ProductsPage({ th, pageId, onToast }: {
                           {[p.productGroup, p.variantLabel].filter(Boolean).join(' • ')}
                         </div>
                       )}
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                        <span style={{ fontWeight: 900, fontSize: 16, color: th.accent, letterSpacing: '-0.03em' }}>৳{p.price.toLocaleString()}</span>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 4 }}>
+                        <span style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                          <span style={{ fontWeight: 900, fontSize: 16, color: th.accent, letterSpacing: '-0.03em' }}>৳{p.price.toLocaleString()}</span>
+                          {p.originalPrice != null && p.originalPrice > p.price && (
+                            <span style={{ fontSize: 12, color: th.muted, textDecoration: 'line-through' }}>৳{p.originalPrice.toLocaleString()}</span>
+                          )}
+                        </span>
                         {p.costPrice > 0 && <span style={{ fontSize: 11, color: '#16a34a' }}>+৳{(p.price - p.costPrice).toLocaleString()} profit</span>}
                       </div>
                       <div style={{ display: 'flex', gap: 6 }}>
@@ -1109,6 +1225,9 @@ export function ProductsPage({ th, pageId, onToast }: {
                           <input style={{ ...th.input, fontSize: 12.5 }} type="number" placeholder="Cost" value={editData.costPrice ?? ''}
                             onChange={e => setEditData(d => ({ ...d, costPrice: Number(e.target.value) }))} />
                         </div>
+                        <input style={{ ...th.input, fontSize: 12.5 }} type="number" placeholder={copy('আগের দাম (ছাড় দেখাতে)', 'Original price (to show a discount)')}
+                          value={editData.originalPrice ?? ''}
+                          onChange={e => setEditData(d => ({ ...d, originalPrice: e.target.value === '' ? null : Number(e.target.value) }))} />
                         <input style={{ ...th.input, fontSize: 12.5 }} type="number" placeholder="Stock" value={editData.stockQty ?? ''}
                           onChange={e => setEditData(d => ({ ...d, stockQty: Number(e.target.value) }))} />
                         <input style={{ ...th.input, fontSize: 12.5 }} placeholder={copy('Image URL (বা ছবি paste করুন)', 'Image URL (or paste an image)')} value={editData.imageUrl ?? ''}
@@ -1279,6 +1398,9 @@ export function ProductsPage({ th, pageId, onToast }: {
                             <option value="FREE">{copy('Free', 'Free')}</option>
                           </select>
                         </div>
+                        {/* V24: Pricing policy override */}
+                        <PricingPolicyOverrideField th={th} copy={copy} value={editData.pricingPolicyOverride}
+                          onChange={json => setEditData(d => ({ ...d, pricingPolicyOverride: json }))} />
                         {/* V19: Detection Mode */}
                         <div style={{ padding: '8px 10px', borderRadius: 8, background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.2)' }}>
                           <div style={{ fontSize: 10, fontWeight: 700, color: '#34d399', marginBottom: 8, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Image Detection Mode</div>
@@ -1377,7 +1499,12 @@ export function ProductsPage({ th, pageId, onToast }: {
                           )}
                         </div>
                       </td>
-                      <td style={{ ...th.td, fontWeight: 700 }}>৳{p.price.toLocaleString()}</td>
+                      <td style={{ ...th.td, fontWeight: 700 }}>
+                        ৳{p.price.toLocaleString()}
+                        {p.originalPrice != null && p.originalPrice > p.price && (
+                          <span style={{ marginLeft: 6, fontWeight: 400, fontSize: 11, color: th.muted, textDecoration: 'line-through' }}>৳{p.originalPrice.toLocaleString()}</span>
+                        )}
+                      </td>
                       <td style={{ ...th.td, color: th.muted }}>৳{p.costPrice}</td>
                       <td style={th.td}>
                         <span style={{ ...th.pill, fontSize: 11, ...(p.stockQty === 0 ? th.pillRed : p.stockQty <= 3 ? th.pillYellow : th.pillGreen) }}>
@@ -1463,6 +1590,17 @@ export function ProductsPage({ th, pageId, onToast }: {
                   />
                 </div>
                 <div>
+                  <label style={{ fontSize: 12, color: th.muted, display: 'block', marginBottom: 4 }}>{copy('আগের দাম (৳)', 'Original Price (৳)')}</label>
+                  <input
+                    style={th.input} type="number" min={0}
+                    placeholder="৳"
+                    value={(simpleEditId !== null ? simpleEditData.originalPrice : simpleForm.originalPrice) ?? ''}
+                    onChange={e => simpleEditId !== null
+                      ? setSimpleEditData(d => ({ ...d, originalPrice: e.target.value === '' ? null : Number(e.target.value) }))
+                      : setSimpleForm(f => ({ ...f, originalPrice: e.target.value === '' ? null : Number(e.target.value) }))}
+                  />
+                </div>
+                <div>
                   <label style={{ fontSize: 12, color: th.muted, display: 'block', marginBottom: 4 }}>Stock Qty *</label>
                   <input
                     style={th.input} type="number" min={0}
@@ -1518,6 +1656,14 @@ export function ProductsPage({ th, pageId, onToast }: {
                 </label>
               </div>
 
+              <div>
+                <PricingPolicyOverrideField th={th} copy={copy}
+                  value={simpleEditId !== null ? simpleEditData.pricingPolicyOverride : simpleForm.pricingPolicyOverride}
+                  onChange={json => simpleEditId !== null
+                    ? setSimpleEditData(d => ({ ...d, pricingPolicyOverride: json }))
+                    : setSimpleForm(f => ({ ...f, pricingPolicyOverride: json }))} />
+              </div>
+
               <div style={{ display: 'flex', gap: 8 }}>
                 <button
                   style={th.btnPrimary}
@@ -1536,7 +1682,7 @@ export function ProductsPage({ th, pageId, onToast }: {
                       onToast(isEdit ? '✓ Updated' : '✓ Created');
                       setShowSimpleForm(false);
                       setSimpleEditId(null);
-                      setSimpleForm({ name: '', price: 0, stockQty: 0, unit: 'kg', description: '', orderEnabled: true, isActive: true, deliveryCharge: 'PAID' });
+                      setSimpleForm({ name: '', price: 0, stockQty: 0, unit: 'kg', description: '', orderEnabled: true, isActive: true, deliveryCharge: 'PAID', originalPrice: null, pricingPolicyOverride: null });
                       setSimpleEditData({});
                       load();
                     } catch (e: any) { onToast(e.message, 'error'); }
@@ -1567,7 +1713,12 @@ export function ProductsPage({ th, pageId, onToast }: {
                       {p.description && <div style={{ fontSize: 12, color: th.muted, marginTop: 2, lineHeight: 1.4 }}>{p.description.slice(0, 80)}{p.description.length > 80 ? '…' : ''}</div>}
                     </div>
                     <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-                      <span style={{ fontSize: 14, fontWeight: 700, color: th.accent }}>৳{Number(p.price).toLocaleString()}/{p.unit || 'pcs'}</span>
+                      <span style={{ fontSize: 14, fontWeight: 700, color: th.accent }}>
+                        ৳{Number(p.price).toLocaleString()}/{p.unit || 'pcs'}
+                        {p.originalPrice != null && p.originalPrice > p.price && (
+                          <span style={{ marginLeft: 6, fontWeight: 400, fontSize: 11.5, color: th.muted, textDecoration: 'line-through' }}>৳{p.originalPrice.toLocaleString()}</span>
+                        )}
+                      </span>
                       <span style={{ ...th.pill, fontSize: 11, ...(p.stockQty === 0 ? th.pillRed : p.stockQty <= 5 ? th.pillYellow : th.pillGreen) }}>
                         {p.stockQty} {p.unit || 'pcs'}
                       </span>
@@ -1578,7 +1729,7 @@ export function ProductsPage({ th, pageId, onToast }: {
                     <div style={{ display: 'flex', gap: 6 }}>
                       <button style={th.btnSmGhost} onClick={() => {
                         setSimpleEditId(p.id);
-                        setSimpleEditData({ name: p.name ?? '', price: p.price, stockQty: p.stockQty, unit: p.unit ?? 'kg', description: p.description ?? '', orderEnabled: p.orderEnabled, isActive: p.isActive, deliveryCharge: p.deliveryCharge ?? 'PAID' });
+                        setSimpleEditData({ name: p.name ?? '', price: p.price, stockQty: p.stockQty, unit: p.unit ?? 'kg', description: p.description ?? '', orderEnabled: p.orderEnabled, isActive: p.isActive, deliveryCharge: p.deliveryCharge ?? 'PAID', originalPrice: p.originalPrice ?? null, pricingPolicyOverride: p.pricingPolicyOverride ?? null });
                         setShowSimpleForm(false);
                       }}>Edit</button>
                       <button style={th.btnSmDanger} onClick={() => deleteProduct(p.code)}>✕</button>

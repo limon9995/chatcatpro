@@ -12,6 +12,7 @@ import { UniversityPosterService } from '../university/university-poster.service
 import { UniversityCrawlerService } from '../university/university-crawler.service';
 import { MessengerService } from '../messenger/messenger.service';
 import { TelegramNotificationService } from '../telegram/telegram-notification.service';
+import { MailerService } from '../common/mailer.service';
 
 const BASE_FEE_BDT = 500;
 const LOW_BALANCE_THRESHOLD_BDT = 100;
@@ -34,6 +35,7 @@ export class SchedulerService {
     private readonly universityCrawler: UniversityCrawlerService,
     private readonly messenger: MessengerService,
     private readonly telegram: TelegramNotificationService,
+    private readonly mailer: MailerService,
   ) {}
 
   // Every 30 minutes — scrape notice page and auto-post new notices
@@ -237,7 +239,12 @@ export class SchedulerService {
           walletBalanceBdt: { lt: LOW_BALANCE_THRESHOLD_BDT },
           lowBalanceNotifiedAt: null,
         },
-        select: { id: true, walletBalanceBdt: true },
+        select: {
+          id: true,
+          walletBalanceBdt: true,
+          businessName: true,
+          owner: { select: { email: true } },
+        },
       });
       for (const page of lowPages) {
         await this.telegram
@@ -246,6 +253,19 @@ export class SchedulerService {
             `⚠️ <b>Low wallet balance</b>: ৳${page.walletBalanceBdt.toFixed(2)} remaining. Please top up to avoid service interruption.`,
           )
           .catch(() => {});
+        if (page.owner?.email) {
+          await this.mailer
+            .sendMail(
+              page.owner.email,
+              'Chatcat wallet balance কম — Recharge করুন',
+              `<div style="font-family:sans-serif;max-width:480px;margin:0 auto">
+                <h2 style="color:#d97706">⚠️ Wallet balance কম</h2>
+                <p>${page.businessName ?? 'আপনার পেজ'}-এর wallet balance এখন <b>৳${page.walletBalanceBdt.toFixed(2)}</b> — সার্ভিস বন্ধ হওয়া এড়াতে এখনই recharge করুন।</p>
+                <p><a href="https://app.chatcat.pro/wallet" style="display:inline-block;padding:10px 20px;background:#4f46e5;color:#fff;text-decoration:none;border-radius:6px">Recharge করুন</a></p>
+              </div>`,
+            )
+            .catch(() => {});
+        }
         await this.prisma.page.update({
           where: { id: page.id },
           data: { lowBalanceNotifiedAt: new Date() },

@@ -255,6 +255,10 @@ export class MessengerService {
           type: 'template',
           payload: {
             template_type: 'generic',
+            // 'square' (1:1) crops far less aggressively than Facebook's default
+            // 'horizontal' (1.91:1) — most product photos here are portrait shots,
+            // which get cut off top/bottom under the horizontal default.
+            image_aspect_ratio: 'square',
             elements: elements.slice(0, 10).map((el) => ({
               title: el.title.slice(0, 80),
               image_url: el.image_url || undefined,

@@ -5,6 +5,8 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { TelegramNotificationService } from '../telegram/telegram-notification.service';
+import { OrdersService } from '../orders/orders.service';
+import { OrderActionTokenService } from '../orders/order-action-token.service';
 
 const LOCKED_STATUSES = ['SHIPPED', 'DELIVERED', 'CANCELLED'];
 
@@ -13,7 +15,31 @@ export class PublicOrderService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly telegram: TelegramNotificationService,
+    private readonly orders: OrdersService,
+    private readonly actionToken: OrderActionTokenService,
   ) {}
+
+  /** Verifies the owner-facing HMAC token from the "new order" email and cancels the order. */
+  async rejectByToken(token: string): Promise<{ orderId: number; businessName: string | null }> {
+    const payload = this.actionToken.verify(token);
+    if (payload.action !== 'reject') throw new BadRequestException('Invalid action');
+
+    const order = await this.prisma.order.findUnique({
+      where: { id: payload.orderId },
+      select: { id: true, pageIdRef: true, status: true },
+    });
+    if (!order || order.pageIdRef !== payload.pageId)
+      throw new NotFoundException('Order not found');
+    if (order.status !== 'CANCELLED') {
+      await this.orders.cancelOrder(order.id, order.pageIdRef, 'Owner rejected via email link');
+    }
+
+    const page = await this.prisma.page.findUnique({
+      where: { id: order.pageIdRef },
+      select: { businessName: true },
+    });
+    return { orderId: order.id, businessName: page?.businessName ?? null };
+  }
 
   async getByToken(token: string) {
     const order = await this.prisma.order.findUnique({
