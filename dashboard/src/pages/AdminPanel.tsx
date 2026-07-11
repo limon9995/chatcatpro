@@ -153,6 +153,8 @@ export function AdminPanel({ th, onToast, onLogout }: {
   const [walletReqFilter, setWalletReqFilter] = useState<'all' | 'pending'>('pending');
   const [walletDirectForm, setWalletDirectForm] = useState({ pageId: '', amountBdt: '', transactionId: '', note: '' });
   const [walletDirectSaving, setWalletDirectSaving] = useState(false);
+  const [walletAdjustForm, setWalletAdjustForm] = useState({ pageId: '', amountBdt: '', note: '' });
+  const [walletAdjustSaving, setWalletAdjustSaving] = useState(false);
 
   // Pricing tab state
   const DEFAULT_PRICING = {
@@ -450,6 +452,28 @@ export function AdminPanel({ th, onToast, onLogout }: {
       loadWallet();
     } catch (e: any) { onToast(e.message, 'error'); }
     finally { setWalletDirectSaving(false); }
+  };
+
+  const adjustWallet = async () => {
+    const pid = Number(walletAdjustForm.pageId);
+    const amt = Number(walletAdjustForm.amountBdt);
+    if (!pid || !amt) {
+      onToast('Page ও amount দিন (কমাতে negative number দিন, যেমন: -100)', 'error'); return;
+    }
+    setWalletAdjustSaving(true);
+    try {
+      await request(`${BASE}/wallet/${pid}/adjust`, {
+        method: 'POST',
+        body: JSON.stringify({
+          amountBdt: amt,
+          note: walletAdjustForm.note.trim() || undefined,
+        }),
+      });
+      onToast(`✅ Balance ${amt > 0 ? '+' : ''}৳${amt} adjust হয়েছে`, 'success');
+      setWalletAdjustForm({ pageId: '', amountBdt: '', note: '' });
+      loadWallet();
+    } catch (e: any) { onToast(e.message, 'error'); }
+    finally { setWalletAdjustSaving(false); }
   };
 
   const loadPricing = useCallback(async () => {
@@ -1996,10 +2020,14 @@ export function AdminPanel({ th, onToast, onLogout }: {
             directForm={walletDirectForm}
             setDirectForm={setWalletDirectForm}
             directSaving={walletDirectSaving}
+            adjustForm={walletAdjustForm}
+            setAdjustForm={setWalletAdjustForm}
+            adjustSaving={walletAdjustSaving}
             onRefresh={loadWallet}
             onApprove={approveRequest}
             onReject={rejectRequest}
             onDirectRecharge={directRecharge}
+            onAdjust={adjustWallet}
           />
         )}
         {tab === 'pricing' && (
@@ -3670,16 +3698,21 @@ const STATUS_COLORS_W: Record<string, string> = {
 };
 
 function AdminWalletTab({ th, loading, pages, requests, reqFilter, setReqFilter,
-  directForm, setDirectForm, directSaving, onRefresh, onApprove, onReject, onDirectRecharge,
+  directForm, setDirectForm, directSaving, adjustForm, setAdjustForm, adjustSaving,
+  onRefresh, onApprove, onReject, onDirectRecharge, onAdjust,
 }: {
   th: Theme; loading: boolean; pages: any[]; requests: any[];
   reqFilter: 'all' | 'pending'; setReqFilter: (v: 'all' | 'pending') => void;
   directForm: any; setDirectForm: (f: any) => void;
   directSaving: boolean;
+  adjustForm: any; setAdjustForm: (f: any) => void;
+  adjustSaving: boolean;
   onRefresh: () => void; onApprove: (id: number) => void;
   onReject: (id: number) => void; onDirectRecharge: () => void;
+  onAdjust: () => void;
 }) {
   const [showDirect, setShowDirect] = useState(false);
+  const [showAdjust, setShowAdjust] = useState(false);
   const [pageSearch, setPageSearch] = useState('');
 
   const card: React.CSSProperties = { ...th.card, borderRadius: 12, padding: 18, marginBottom: 16 };
@@ -3721,7 +3754,65 @@ function AdminWalletTab({ th, loading, pages, requests, reqFilter, setReqFilter,
         >
           {showDirect ? '✕ Close' : '➕ Manual Recharge'}
         </button>
+        <button
+          style={{
+            ...th.btnGhost,
+            fontSize: 13.5,
+            fontWeight: 800,
+            padding: '9px 18px',
+            borderRadius: 11,
+            border: `1px solid ${th.border}`,
+          }}
+          onClick={() => setShowAdjust(v => !v)}
+        >
+          {showAdjust ? '✕ Close' : '⚖️ Adjust Balance'}
+        </button>
       </div>
+
+      {/* ── Adjust balance form (add or subtract, no transaction ID needed) ── */}
+      {showAdjust && (
+        <div style={{ ...card, border: `1px solid ${th.border}` }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+            <span style={{ fontSize: 20 }}>⚖️</span>
+            <span style={{ fontWeight: 700, fontSize: 15 }}>Adjust Balance (Add/Subtract)</span>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div style={{ gridColumn: '1 / -1' }}>
+              <label style={{ fontSize: 11, color: th.muted, display: 'block', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Client / Page</label>
+              <select style={{ ...inp, cursor: 'pointer', fontWeight: 600, background: th.bg, color: th.text }} value={adjustForm.pageId}
+                onChange={e => setAdjustForm({ ...adjustForm, pageId: e.target.value })}>
+                <option value="" style={{ background: th.bg, color: th.muted }}>— Page বেছে নিন —</option>
+                {pages.map(p => (
+                  <option key={p.id} value={p.id} style={{ background: th.bg, color: th.text }}>
+                    {p.pageName || '(no name)'}  @{p.owner?.username || '?'}  [ID:{p.id}]  ৳{(p.walletBalanceBdt ?? 0).toFixed(2)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize: 11, color: th.muted, display: 'block', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Amount (BDT) — negative দিলে কমবে</label>
+              <input style={{ ...inp, fontWeight: 700, fontSize: 16 }} type="number" placeholder="200 বা -100" value={adjustForm.amountBdt}
+                onChange={e => setAdjustForm({ ...adjustForm, amountBdt: e.target.value })} />
+            </div>
+            <div>
+              <label style={{ fontSize: 11, color: th.muted, display: 'block', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Note (optional)</label>
+              <input style={inp} placeholder="কারণ লিখুন" value={adjustForm.note}
+                onChange={e => setAdjustForm({ ...adjustForm, note: e.target.value })} />
+            </div>
+          </div>
+          <button
+            style={{
+              marginTop: 16, width: '100%', padding: '13px 0',
+              background: adjustSaving ? th.muted : 'linear-gradient(135deg, #0891b2, #0e7490)',
+              color: '#fff', border: 'none', borderRadius: 12, fontWeight: 800,
+              fontSize: 15, cursor: adjustSaving ? 'not-allowed' : 'pointer',
+              letterSpacing: '0.01em', opacity: adjustSaving ? 0.7 : 1,
+            }}
+            disabled={adjustSaving} onClick={onAdjust}>
+            {adjustSaving ? <Spinner size={16} color="#fff" /> : <span>⚖️ Adjust করুন</span>}
+          </button>
+        </div>
+      )}
 
       {/* ── Direct recharge form ─────────────────────────────────────── */}
       {showDirect && (

@@ -364,6 +364,16 @@ export class AdminController {
     );
   }
 
+  @Post('wallet/:pageId/adjust')
+  adjustWallet(
+    @Param('pageId', ParseIntPipe) pageId: number,
+    @Body() b: any,
+  ) {
+    const amount = Number(b?.amountBdt);
+    if (!amount) throw new BadRequestException('amountBdt must be non-zero');
+    return this.svc.adjustPageWallet(pageId, amount, b?.note);
+  }
+
   @Patch('wallet/:pageId/pricing')
   updatePricing(@Param('pageId', ParseIntPipe) pageId: number, @Body() b: any) {
     const n = (v: any) => (v !== undefined ? Number(v) : undefined);

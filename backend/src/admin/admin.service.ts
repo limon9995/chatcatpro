@@ -890,6 +890,38 @@ export class AdminService {
     return { success: true, amountBdt };
   }
 
+  /**
+   * Manual admin balance correction — unlike rechargePageWallet, amountBdt
+   * may be negative (to deduct) and this never force-activates the
+   * subscription, since an arbitrary adjustment isn't necessarily a paid
+   * top-up.
+   */
+  async adjustPageWallet(pageId: number, amountBdt: number, note?: string) {
+    if (!amountBdt) throw new BadRequestException('amountBdt must be non-zero');
+    const page = await this.prisma.page.findUnique({
+      where: { id: pageId },
+      select: { id: true },
+    });
+    if (!page) throw new NotFoundException('Page not found');
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.page.update({
+        where: { id: pageId },
+        data: { walletBalanceBdt: { increment: amountBdt } },
+      });
+      await tx.walletTransaction.create({
+        data: {
+          pageId,
+          type: 'ADMIN_ADJUSTMENT',
+          amountBdt,
+          description: note || `Manual admin ${amountBdt > 0 ? 'credit' : 'deduction'}`,
+        },
+      });
+    });
+
+    return { success: true, amountBdt };
+  }
+
   async updatePagePricing(
     pageId: number,
     pricing: {

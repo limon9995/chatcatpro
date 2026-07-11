@@ -211,17 +211,23 @@ export class WebhookService implements OnModuleDestroy {
           if (!event.message) continue;
         }
 
-        // Card-view "এটা নিব / Order করব" postback. Two payload shapes exist:
-        //   ORDER_<code>            — catalog card
-        //   SELECT_PRODUCT:<code>   — vision-match card
-        // Both start an order draft for that product via handleCatalogReferral.
+        // Card-view postback. Three payload shapes exist:
+        //   ORDER_<code>            — catalog card, starts an order draft
+        //   SELECT_PRODUCT:<code>   — vision-match card, starts an order draft
+        //   DETAILS_<code>          — "বিস্তারিত দেখুন" on a card for a
+        //                             merchant using their own website
+        //                             (no ChatCat product page to link to)
         if (event.postback?.payload && !event.message) {
           const payload: string = String(event.postback.payload);
           let productCode: string | null = null;
+          let kind: 'order' | 'details' = 'order';
           if (payload.startsWith('ORDER_')) {
             productCode = payload.slice(6).toUpperCase();
           } else if (payload.startsWith('SELECT_PRODUCT:')) {
             productCode = payload.slice('SELECT_PRODUCT:'.length).toUpperCase();
+          } else if (payload.startsWith('DETAILS_')) {
+            productCode = payload.slice(8).toUpperCase();
+            kind = 'details';
           }
           if (productCode) {
             // Debounce: ignore duplicate postback within 5 seconds (double-click)
@@ -239,7 +245,11 @@ export class WebhookService implements OnModuleDestroy {
                 if (t < cutoff) this.recentPostbacks.delete(k);
               }
             }
-            this.handleCatalogReferral(resolvedPage, psid, productCode).catch(() => {});
+            if (kind === 'details') {
+              this.handleProductDetails(resolvedPage, psid, productCode).catch(() => {});
+            } else {
+              this.handleCatalogReferral(resolvedPage, psid, productCode).catch(() => {});
+            }
           }
           continue;
         }
@@ -595,6 +605,55 @@ export class WebhookService implements OnModuleDestroy {
     this.logger.log(
       `[CatalogRef] psid=${psid} opened catalog for product ${productCode} — referral handled`,
     );
+  }
+
+  /**
+   * "বিস্তারিত দেখুন" postback for merchants who redirected their storefront
+   * to their own website (Page.websiteUrl set) — there's no ChatCat-hosted
+   * product page to link to, so send the full description in-chat instead.
+   */
+  private async handleProductDetails(
+    page: any,
+    psid: string,
+    productCode: string,
+  ): Promise<void> {
+    const pageId = page.id as number;
+    const tok = page.pageToken as string;
+
+    const product = await this.prisma.product.findFirst({
+      where: { pageId, code: productCode, isActive: true },
+      select: {
+        code: true,
+        name: true,
+        price: true,
+        originalPrice: true,
+        stockQty: true,
+        description: true,
+        deliveryCharge: true,
+      },
+    });
+    if (!product) return;
+
+    const currency = page.currencySymbol || '৳';
+    const priceFormatted = Number(product.price).toLocaleString();
+    const offerLine =
+      product.originalPrice && Number(product.originalPrice) > Number(product.price)
+        ? ` (আগের দাম ${currency}${Number(product.originalPrice).toLocaleString()})`
+        : '';
+    const stockLine = product.stockQty > 0 ? '✅ Stock আছে' : '❌ Stock শেষ';
+    const deliveryLine =
+      product.deliveryCharge === 'FREE' ? '\n🚚 Home Delivery ফ্রি' : '';
+    const descLine = product.description ? `\n\n${product.description}` : '';
+
+    await this.messenger
+      .sendText(
+        tok,
+        psid,
+        `🛍️ ${product.name || product.code}\n💰 ${currency}${priceFormatted}${offerLine}\n${stockLine}${deliveryLine}${descLine}`,
+      )
+      .catch((err) =>
+        this.logger.error(`[ProductDetails] sendText failed psid=${psid}: ${err}`),
+      );
   }
 
   // ── Message router ─────────────────────────────────────────────────────────
@@ -2050,6 +2109,12 @@ export class WebhookService implements OnModuleDestroy {
       logoUrl = 'https://images.unsplash.com/photo-1557821552-17105176677c?q=80&w=1000&auto=format&fit=crop';
     }
 
+    // Merchant has redirected their storefront to their own website
+    // (Page.websiteUrl set) — there's no ChatCat-hosted product page to send
+    // them to, so "বিস্তারিত দেখুন" should send the description in-chat
+    // instead of linking back to our catalog.
+    const usesOwnWebsite = !!String(page.websiteUrl || '').trim();
+
     try {
       if (products.length > 0) {
         // Individual product cards (max 10 for Messenger)
@@ -2058,11 +2123,17 @@ export class WebhookService implements OnModuleDestroy {
           image_url: getFullImageUrl(p.imageUrl) || logoUrl,
           subtitle: p.description ? p.description.slice(0, 80) : `Code: ${p.code}`,
           buttons: [
-            {
-              type: 'web_url' as const,
-              url: `${base}/catalog/${encodeURIComponent(slug)}/product/${encodeURIComponent(p.code)}`,
-              title: 'বিস্তারিত দেখুন',
-            },
+            usesOwnWebsite
+              ? {
+                  type: 'postback' as const,
+                  title: 'বিস্তারিত দেখুন',
+                  payload: `DETAILS_${p.code}`,
+                }
+              : {
+                  type: 'web_url' as const,
+                  url: `${base}/catalog/${encodeURIComponent(slug)}/product/${encodeURIComponent(p.code)}`,
+                  title: 'বিস্তারিত দেখুন',
+                },
             {
               type: 'postback' as const,
               title: 'Order করব',
