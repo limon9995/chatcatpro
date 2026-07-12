@@ -632,6 +632,19 @@ export class ClientDashboardService {
         body.visionSearchable !== undefined
           ? Boolean(body.visionSearchable)
           : undefined,
+      fbPostUrl: body.fbPostUrl || undefined,
+      productType: body.productType || undefined,
+      unit: body.unit || undefined,
+      orderEnabled:
+        body.orderEnabled !== undefined ? Boolean(body.orderEnabled) : undefined,
+      deliveryCharge: body.deliveryCharge || undefined,
+      originalPrice:
+        body.originalPrice !== undefined &&
+        body.originalPrice !== null &&
+        body.originalPrice !== ''
+          ? Number(body.originalPrice)
+          : undefined,
+      pricingPolicyOverride: body.pricingPolicyOverride || undefined,
     });
   }
   async updateProduct(pageId: number, code: string, body: any) {
@@ -692,6 +705,31 @@ export class ClientDashboardService {
       visionSearchable:
         body?.visionSearchable !== undefined
           ? Boolean(body.visionSearchable)
+          : undefined,
+      // V23/V24 fields — previously missing from this mapping, so the
+      // dashboard's PATCH (which goes through /client-dashboard, not
+      // /products) silently dropped them: the API returned 200 but
+      // originalPrice/deliveryCharge/fbPostUrl never reached the DB.
+      fbPostUrl:
+        body?.fbPostUrl !== undefined ? String(body.fbPostUrl || '') : undefined,
+      unit: body?.unit !== undefined ? String(body.unit || '') || null : undefined,
+      orderEnabled:
+        body?.orderEnabled !== undefined ? Boolean(body.orderEnabled) : undefined,
+      deliveryCharge:
+        body?.deliveryCharge !== undefined
+          ? String(body.deliveryCharge)
+          : undefined,
+      originalPrice:
+        body?.originalPrice !== undefined
+          ? body.originalPrice === null || body.originalPrice === ''
+            ? null
+            : Number(body.originalPrice)
+          : undefined,
+      pricingPolicyOverride:
+        body?.pricingPolicyOverride !== undefined
+          ? body.pricingPolicyOverride
+            ? String(body.pricingPolicyOverride)
+            : null
           : undefined,
     });
   }
