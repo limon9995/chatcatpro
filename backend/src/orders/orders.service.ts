@@ -470,6 +470,11 @@ export class OrdersService {
       productName?: string;
     }[];
     paymentMode: string;
+    // V24: Restaurant mode — computed server-side by the catalog controller
+    deliveryLat?: number;
+    deliveryLng?: number;
+    deliveryFee?: number;
+    deliveryDistanceKm?: number;
   }) {
     const psid = `WEB-${data.phone.replace(/\D/g, '')}`;
     const paymentStatus =
@@ -486,6 +491,10 @@ export class OrdersService {
         source: 'WEBSITE',
         orderNote: data.orderNote ?? null,
         paymentStatus,
+        deliveryLat: data.deliveryLat ?? null,
+        deliveryLng: data.deliveryLng ?? null,
+        deliveryFee: data.deliveryFee ?? null,
+        deliveryDistanceKm: data.deliveryDistanceKm ?? null,
         items: {
           create: data.items.map((it) => ({
             productCode: it.productCode,

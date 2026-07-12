@@ -7,6 +7,11 @@ import { BotIntentService } from '../bot/bot-intent.service';
 import { ConversationContextService } from '../conversation-context/conversation-context.service';
 import { DraftOrderHandler } from '../webhook/handlers/draft-order.handler';
 import { CrmService } from '../crm/crm.service';
+import {
+  formatSlabsBn,
+  isRestaurantReady,
+  parseSlabs,
+} from '../common/restaurant-delivery';
 
 @Injectable()
 export class IgWebhookService {
@@ -366,7 +371,9 @@ export class IgWebhookService {
     switch (intent) {
       case 'price': return `• ${label} — ${product.price}৳ 🏷️`;
       case 'stock': return `• ${label} — ${product.stockQty > 0 ? `${product.stockQty}টি stock ✅` : 'stock নেই ❌'}`;
-      case 'delivery': return `• ঢাকার ভেতরে ${page.deliveryFeeInsideDhaka ?? 80}৳, বাইরে ${page.deliveryFeeOutsideDhaka ?? 120}৳ 🚚`;
+      case 'delivery': return isRestaurantReady(page)
+        ? `• ডেলিভারি চার্জ দূরত্ব অনুযায়ী: ${formatSlabsBn(parseSlabs(page.deliverySlabsJson))} 🛵`
+        : `• ঢাকার ভেতরে ${page.deliveryFeeInsideDhaka ?? 80}৳, বাইরে ${page.deliveryFeeOutsideDhaka ?? 120}৳ 🚚`;
       case 'description': return product.description ? `• ${label}: ${product.description}` : null;
       default: return null;
     }
@@ -380,7 +387,9 @@ export class IgWebhookService {
       case 'stock': return (product.stockQty > 0
         ? `${label} এ ${product.stockQty} টি stock আছে ✅`
         : `${label} বর্তমানে stock এ নেই ❌`) + inboxCta;
-      case 'delivery': return `ঢাকার ভেতরে ডেলিভারি ${page.deliveryFeeInsideDhaka ?? 80}৳, বাইরে ${page.deliveryFeeOutsideDhaka ?? 120}৳ 🚚${inboxCta}`;
+      case 'delivery': return isRestaurantReady(page)
+        ? `ডেলিভারি চার্জ দূরত্ব অনুযায়ী: ${formatSlabsBn(parseSlabs(page.deliverySlabsJson))} 🛵${inboxCta}`
+        : `ঢাকার ভেতরে ডেলিভারি ${page.deliveryFeeInsideDhaka ?? 80}৳, বাইরে ${page.deliveryFeeOutsideDhaka ?? 120}৳ 🚚${inboxCta}`;
       case 'description': return product.description ? `${product.description}${inboxCta}` : null;
       default: return null;
     }

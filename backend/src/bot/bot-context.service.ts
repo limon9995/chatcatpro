@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { BotKnowledgeService } from '../bot-knowledge/bot-knowledge.service';
+import { isRestaurantReady, parseSlabs } from '../common/restaurant-delivery';
 
 export interface BusinessProduct {
   code: string;
@@ -32,6 +33,10 @@ export interface BusinessContext {
   businessName: string | null;
   deliveryInsideFee: number;
   deliveryOutsideFee: number;
+  // V24: Restaurant mode — when true, inside/outside Dhaka fees don't apply;
+  // the bot quotes distance-slab rates and shares the website link instead
+  restaurantMode: boolean;
+  deliverySlabs: { maxKm: number; fee: number }[];
   deliveryTime: string;
   deliveryTimeInside: string;
   deliveryTimeOutside: string;
@@ -77,6 +82,10 @@ export class BotContextService {
           dualPhotoMode: true,
           dualWearingProductId: true,
           dualHoldingProductId: true,
+          restaurantModeEnabled: true,
+          restaurantLat: true,
+          restaurantLng: true,
+          deliverySlabsJson: true,
         },
       }),
       this.prisma.product.findMany({
@@ -141,6 +150,8 @@ export class BotContextService {
       businessName: page?.businessName ?? null,
       deliveryInsideFee: (page as any)?.deliveryFeeInsideDhaka ?? 80,
       deliveryOutsideFee: (page as any)?.deliveryFeeOutsideDhaka ?? 130,
+      restaurantMode: isRestaurantReady(page as any),
+      deliverySlabs: parseSlabs((page as any)?.deliverySlabsJson),
       deliveryTime: (page as any)?.deliveryTimeText ?? '',
       deliveryTimeInside: (page as any)?.deliveryTimeInsideDhaka ?? '',
       deliveryTimeOutside: (page as any)?.deliveryTimeOutsideDhaka ?? '',

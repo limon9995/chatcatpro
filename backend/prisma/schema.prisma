@@ -143,6 +143,14 @@ model Page {
   webOrderEnabled Boolean @default(false) // merchant can enable direct web checkout from catalog
   websiteEnabled  Boolean @default(true)  // admin can disable the public catalog website (bot still works)
 
+  // V24: Restaurant mode — self-delivery within a short radius, map-pin checkout,
+  // distance-slab delivery fees. When ready (flag + pin + slabs), inside/outside
+  // Dhaka fees stop applying to this page everywhere (catalog, bot, quick replies).
+  restaurantModeEnabled Boolean @default(false)
+  restaurantLat         Float? // restaurant location pin
+  restaurantLng         Float?
+  deliverySlabsJson     String? // JSON [{maxKm, fee}] sorted ascending; beyond last slab = no delivery
+
   callConfirmModeOn       Boolean @default(false)
   callConfirmModeAllowed  Boolean @default(true)
   callMode                String  @default("MANUAL")
@@ -389,6 +397,12 @@ model Order {
   negotiationRequested Boolean @default(false)
   customerOfferedPrice Float?
   orderNote            String?
+
+  // V24: Restaurant mode — exact customer map pin + distance-slab fee
+  deliveryLat        Float?
+  deliveryLng        Float?
+  deliveryFee        Float?
+  deliveryDistanceKm Float?
 
   callStatus     String    @default("NONE")
   callRetryCount Int       @default(0)

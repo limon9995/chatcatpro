@@ -40,6 +40,12 @@ export class PageService {
       deliveryTimeInsideDhaka: page.deliveryTimeInsideDhaka || '',
       deliveryTimeOutsideDhaka: page.deliveryTimeOutsideDhaka || '',
       paymentMode: page.paymentMode || 'cod',
+      // V24: Restaurant mode — used by bot replies to swap Dhaka-zone fees
+      // for distance-slab rates
+      restaurantModeEnabled: Boolean(page.restaurantModeEnabled),
+      restaurantLat: page.restaurantLat ?? null,
+      restaurantLng: page.restaurantLng ?? null,
+      deliverySlabsJson: page.deliverySlabsJson ?? null,
       advanceAmount: Number(page.advanceAmount ?? 0) || 0,
       codEnabled: page.codEnabled !== false,
       advanceThresholdAmount: Number(page.advanceThresholdAmount ?? 0) || 0,

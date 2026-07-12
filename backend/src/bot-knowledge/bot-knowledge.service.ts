@@ -5,6 +5,11 @@ import { PageService } from '../page/page.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConversationContextService } from '../conversation-context/conversation-context.service';
 import { AgentBehaviorConfig } from '../agents/agent-behavior-config.interface';
+import {
+  formatSlabsBn,
+  isRestaurantReady,
+  parseSlabs,
+} from '../common/restaurant-delivery';
 
 @Injectable()
 export class BotKnowledgeService {
@@ -651,6 +656,11 @@ export class BotKnowledgeService {
     );
 
     if (question.key === 'delivery_fee') {
+      // V24: Restaurant pages quote distance-slab rates, never Dhaka zones
+      if (isRestaurantReady(settings)) {
+        return `ডেলিভারি চার্জ দূরত্ব অনুযায়ী: ${formatSlabsBn(parseSlabs(settings.deliverySlabsJson), settings.currencySymbol || '৳')}। Exact charge জানতে আমাদের website-এ ম্যাপে location pin করুন 🛵`;
+      }
+
       const area = this.detectArea(
         normalizedMessage,
         cfg?.areaRules || {

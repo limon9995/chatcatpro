@@ -21,6 +21,7 @@ import { CourierService } from '../../courier/courier.service';
 import { TelegramNotificationService } from '../../telegram/telegram-notification.service';
 import { OrderOwnerMailerService } from '../../orders/order-owner-mailer.service';
 import { AgentCoreFieldDef } from '../../agents/agent-behavior-config.interface';
+import { isRestaurantReady } from '../../common/restaurant-delivery';
 
 // Verbatim defaults — reproduces today's exact name/phone/address prompts.
 // Used whenever an agent type has no AgentBehaviorConfig.coreFields override
@@ -716,14 +717,22 @@ export class DraftOrderHandler {
     return `📋 নিচের ফর্মটি **copy** করে পূরণ করুন:\n\n${formLines}\n\n💡 অথবা এক এক করে পাঠান — প্রথমে ${f[0]?.label ?? 'নাম'} বলুন।`;
   }
 
-  buildSummary(draft: DraftSession, page: any): string {
-    const sym = page.currencySymbol || '৳';
-    const isOut = !this.isInsideDhaka(draft.address || '', page);
-    const fee = Number(
+  // V24: Restaurant pages use distance-slab fees (exact fee needs a website
+  // map pin) — inside/outside Dhaka rates must never be applied to them.
+  private zoneDeliveryFee(address: string, page: any): number {
+    if (isRestaurantReady(page)) return 0;
+    const isOut = !this.isInsideDhaka(address || '', page);
+    return Number(
       isOut
         ? (page.deliveryFeeOutsideDhaka ?? 120)
         : (page.deliveryFeeInsideDhaka ?? 80),
     );
+  }
+
+  buildSummary(draft: DraftSession, page: any): string {
+    const sym = page.currencySymbol || '৳';
+    const isRestaurant = isRestaurantReady(page);
+    const fee = this.zoneDeliveryFee(draft.address || '', page);
     let subtotal = 0;
     const lines = draft.items.map((i) => {
       const t = i.unitPrice * i.qty;
@@ -748,8 +757,12 @@ export class DraftOrderHandler {
       '📦 *Order Summary*',
       ...lines,
       ...(cfLines.length ? cfLines : []),
-      `🚚 Delivery: ${sym}${fee}`,
-      `💰 Total: ${sym}${subtotal + fee}`,
+      isRestaurant
+        ? `🛵 Delivery: দূরত্ব অনুযায়ী (delivery-র সময় জানানো হবে)`
+        : `🚚 Delivery: ${sym}${fee}`,
+      isRestaurant
+        ? `💰 Total: ${sym}${subtotal} + delivery charge`
+        : `💰 Total: ${sym}${subtotal + fee}`,
       '',
       `👤 Name:    ${draft.customerName ?? '—'}`,
       `📞 Phone:   ${draft.phone ?? '—'}`,
@@ -1155,12 +1168,7 @@ export class DraftOrderHandler {
 
   calcAdvanceAmount(draft: DraftSession, page: any): number {
     const sym = page.currencySymbol || '৳';
-    const isOut = !this.isInsideDhaka(draft.address || '', page);
-    const fee = Number(
-      isOut
-        ? (page.deliveryFeeOutsideDhaka ?? 120)
-        : (page.deliveryFeeInsideDhaka ?? 80),
-    );
+    const fee = this.zoneDeliveryFee(draft.address || '', page);
     const subtotal = draft.items.reduce(
       (s: number, i: any) => s + i.unitPrice * i.qty,
       0,
@@ -1202,12 +1210,7 @@ export class DraftOrderHandler {
   buildAdvancePrompt(page: any, draft: DraftSession): string {
     const sym = page.currencySymbol || '৳';
     const mode = (page.paymentMode as string) || 'cod';
-    const isOut = !this.isInsideDhaka(draft.address || '', page);
-    const fee = Number(
-      isOut
-        ? (page.deliveryFeeOutsideDhaka ?? 120)
-        : (page.deliveryFeeInsideDhaka ?? 80),
-    );
+    const fee = this.zoneDeliveryFee(draft.address || '', page);
     const subtotal = draft.items.reduce((s, i) => s + i.unitPrice * i.qty, 0);
 
     let amount: number;

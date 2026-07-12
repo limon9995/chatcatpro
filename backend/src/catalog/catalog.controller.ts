@@ -23,6 +23,14 @@ import { OrdersService } from '../orders/orders.service';
 import { PaymentVerifyService } from '../payment-verify/payment-verify.service';
 import { SmsGatewayService } from '../sms-gateway/sms-gateway.service';
 import { TelegramNotificationService } from '../telegram/telegram-notification.service';
+import {
+  haversineKm,
+  isRestaurantReady,
+  isValidLat,
+  isValidLng,
+  parseSlabs,
+  resolveDeliveryFee,
+} from '../common/restaurant-delivery';
 
 // ── Video URL helpers ─────────────────────────────────────────────────────────
 
@@ -215,6 +223,10 @@ export class CatalogController {
         advanceRocket: true,
         advancePaymentMessage: true,
         webOrderEnabled: true,
+        restaurantModeEnabled: true,
+        restaurantLat: true,
+        restaurantLng: true,
+        deliverySlabsJson: true,
       },
     });
     if (!page) {
@@ -273,6 +285,11 @@ export class CatalogController {
       advanceNagad: (page as any).advanceNagad ?? '',
       advanceRocket: (page as any).advanceRocket ?? '',
       advancePaymentMessage: (page as any).advancePaymentMessage ?? '',
+      // V24: Restaurant mode — map-pin checkout with distance-slab fee
+      restaurantMode: isRestaurantReady(page as any),
+      restaurantLat: (page as any).restaurantLat ?? null,
+      restaurantLng: (page as any).restaurantLng ?? null,
+      deliverySlabs: parseSlabs((page as any).deliverySlabsJson),
     };
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.send(
@@ -352,6 +369,10 @@ export class CatalogController {
         advancePaymentMessage: true,
         webOrderEnabled: true,
         smsGatewayEnabled: true,
+        restaurantModeEnabled: true,
+        restaurantLat: true,
+        restaurantLng: true,
+        deliverySlabsJson: true,
       },
     });
     if (!page) throw new NotFoundException('Page not found');
@@ -362,6 +383,37 @@ export class CatalogController {
     if (!phone?.trim()) throw new BadRequestException('ফোন নম্বর দিন');
     if (!address?.trim()) throw new BadRequestException('ঠিকানা দিন');
     if (!productCode) throw new BadRequestException('Product code required');
+
+    // V24: Restaurant mode — fee is ALWAYS recomputed here from the customer's
+    // map pin; anything fee-like sent by the client is ignored.
+    let restaurantDelivery: {
+      deliveryLat: number;
+      deliveryLng: number;
+      deliveryFee: number;
+      deliveryDistanceKm: number;
+    } | null = null;
+    if (isRestaurantReady(page)) {
+      const dLat = Number(body.deliveryLat);
+      const dLng = Number(body.deliveryLng);
+      if (!isValidLat(dLat) || !isValidLng(dLng))
+        throw new BadRequestException('ম্যাপে আপনার ডেলিভারি লোকেশন pin করুন');
+      const distanceKm =
+        Math.round(
+          haversineKm(page.restaurantLat!, page.restaurantLng!, dLat, dLng) *
+            100,
+        ) / 100;
+      const slab = resolveDeliveryFee(parseSlabs(page.deliverySlabsJson), distanceKm);
+      if (!slab)
+        throw new BadRequestException(
+          'দুঃখিত, আপনার লোকেশন আমাদের ডেলিভারি এলাকার বাইরে 😔',
+        );
+      restaurantDelivery = {
+        deliveryLat: dLat,
+        deliveryLng: dLng,
+        deliveryFee: slab.fee,
+        deliveryDistanceKm: distanceKm,
+      };
+    }
 
     const order = await this.ordersService.createWebOrder({
       pageIdRef: page.id,
@@ -376,6 +428,7 @@ export class CatalogController {
         productName: productName || undefined,
       }],
       paymentMode: page.paymentMode,
+      ...(restaurantDelivery ?? {}),
     });
 
     const requiresPayment = order.paymentStatus === 'pending_proof';
@@ -859,6 +912,12 @@ ${
 ${primaryImage ? `<meta name="twitter:image" content="${esc(primaryImage)}"/>` : ''}
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+${
+  page.webOrderEnabled && page.restaurantMode
+    ? `<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>`
+    : ''
+}
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -1273,6 +1332,12 @@ ${page.webOrderEnabled ? `
 .wo-addr-lbl-row{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:5px}
 .wo-addr-loading{font-size:10.5px;color:var(--muted);display:none}
 .wo-addr-loading.show{display:inline}
+#woMap{height:230px;border-radius:12px;border:1.5px solid var(--border);margin-bottom:8px;overflow:hidden;z-index:1}
+.wo-gps-btn{width:100%;padding:10px;border-radius:11px;border:1.5px solid var(--p);background:var(--p-light);color:var(--p-dark);font-size:13.5px;font-weight:700;cursor:pointer;font-family:inherit;margin-bottom:8px}
+.wo-gps-btn:disabled{opacity:.6;cursor:not-allowed}
+.wo-fee-box{font-size:13.5px;padding:11px 13px;border-radius:11px;border:1.5px solid var(--border);background:var(--bg);color:var(--sub);line-height:1.6;margin-bottom:4px}
+.wo-fee-box.ok{border-color:#a7f3d0;background:#ecfdf5;color:#065f46;font-weight:600}
+.wo-fee-box.bad{border-color:#fecaca;background:#fef2f2;color:#991b1b;font-weight:600}
 .wo-product-info{padding:12px 14px;background:var(--bg);border-radius:12px;border:1px solid var(--border);font-size:13.5px;color:var(--text)}
 .wo-product-info strong{color:var(--p);font-size:15px}
 .wo-btn{width:100%;padding:13px;border-radius:13px;border:none;background:linear-gradient(135deg,#059669,#047857);color:#fff;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 4px 18px rgba(5,150,105,.35)}
@@ -1338,13 +1403,21 @@ ${page.webOrderEnabled ? `
         </div>
         <div><div class="wo-lbl">আপনার নাম *</div><input class="wo-inp" id="woName" type="text" placeholder="পুরো নাম"></div>
         <div><div class="wo-lbl">ফোন নম্বর *</div><input class="wo-inp" id="woPhone" type="tel" placeholder="01XXXXXXXXX"></div>
-        <div class="wo-addr-lbl-row"><div class="wo-lbl" style="margin-bottom:0">ঠিকানা *</div><span class="wo-addr-loading" id="woGeoLoading">এলাকার তালিকা লোড হচ্ছে...</span></div>
+        ${
+          page.restaurantMode
+            ? `<div class="wo-addr-lbl-row"><div class="wo-lbl" style="margin-bottom:0">ডেলিভারি লোকেশন * (ম্যাপে pin করুন)</div></div>
+        <div id="woMap"></div>
+        <button type="button" class="wo-gps-btn" id="woGpsBtn" onclick="woUseGps()">📍 আমার লোকেশন ব্যবহার করুন (GPS)</button>
+        <div class="wo-fee-box" id="woFeeBox">ম্যাপে আপনার ডেলিভারি লোকেশন pin করুন — delivery charge দেখাবে</div>
+        <div><textarea class="wo-inp" id="woAddrDetail" rows="2" placeholder="বাসা/রোড/ফ্লোর — বিস্তারিত ঠিকানা"></textarea></div>`
+            : `<div class="wo-addr-lbl-row"><div class="wo-lbl" style="margin-bottom:0">ঠিকানা *</div><span class="wo-addr-loading" id="woGeoLoading">এলাকার তালিকা লোড হচ্ছে...</span></div>
         <div class="wo-row3">
           <div><select class="wo-inp" id="woDivision"><option value="">বিভাগ</option></select></div>
           <div><select class="wo-inp" id="woDistrict" disabled><option value="">জেলা</option></select></div>
           <div><select class="wo-inp" id="woUpazila" disabled><option value="">উপজেলা/থানা</option></select></div>
         </div>
-        <div><textarea class="wo-inp" id="woAddrDetail" rows="2" placeholder="বাসা/রোড/গ্রামের নাম, ল্যান্ডমার্ক (বিস্তারিত ঠিকানা)"></textarea></div>
+        <div><textarea class="wo-inp" id="woAddrDetail" rows="2" placeholder="বাসা/রোড/গ্রামের নাম, ল্যান্ডমার্ক (বিস্তারিত ঠিকানা)"></textarea></div>`
+        }
         <div><div class="wo-lbl">নোট (ঐচ্ছিক)</div><input class="wo-inp" id="woNote" type="text" placeholder="কোনো বিশেষ নির্দেশনা"></div>
         <div class="wo-err" id="woErr0"></div>
         <button class="wo-btn" id="woBtnSubmit" onclick="woSubmit()">অর্ডার দিন →</button>
@@ -1443,11 +1516,83 @@ var WO_BKASH = ${JSON.stringify(String(page.advanceBkash || ''))};
 var WO_NAGAD = ${JSON.stringify(String(page.advanceNagad || ''))};
 var WO_ROCKET = ${JSON.stringify(String((page as any).advanceRocket || ''))};
 var WO_ADV_MSG = ${JSON.stringify(String(page.advancePaymentMessage || ''))};
+var WO_RESTO = ${page.restaurantMode ? 1 : 0};
+var WO_RLAT = ${Number(page.restaurantLat) || 0};
+var WO_RLNG = ${Number(page.restaurantLng) || 0};
+var WO_SLABS = ${JSON.stringify(page.deliverySlabs || [])};
 var woOrderIdVal = null;
 var woPaymentUrl = null;
 
-function woOpen(){ document.getElementById('woModal').classList.add('open'); document.body.style.overflow='hidden'; woLoadGeo(); }
+function woOpen(){ document.getElementById('woModal').classList.add('open'); document.body.style.overflow='hidden'; if(WO_RESTO){ woInitMap(); } else { woLoadGeo(); } }
 function woClose(){ document.getElementById('woModal').classList.remove('open'); document.body.style.overflow=''; }
+
+// ── Restaurant mode: Leaflet map pin + distance-slab delivery fee ───────────
+// Client-side fee is a live preview only — the server recomputes from the
+// pinned coordinates and is authoritative.
+var woMap=null, woCustMarker=null, woLat=null, woLng=null, woFee=null;
+function woHaversineKm(lat1,lng1,lat2,lng2){
+  var R=6371, toRad=function(d){ return d*Math.PI/180; };
+  var dLat=toRad(lat2-lat1), dLng=toRad(lng2-lng1);
+  var a=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLng/2)*Math.sin(dLng/2);
+  return 2*R*Math.asin(Math.sqrt(a));
+}
+function woInitMap(){
+  if(woMap||!WO_RESTO||typeof L==='undefined') { if(woMap) setTimeout(function(){ woMap.invalidateSize(); },80); return; }
+  woMap=L.map('woMap').setView([WO_RLAT,WO_RLNG],15);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; OpenStreetMap'}).addTo(woMap);
+  var restoIcon=L.divIcon({className:'',html:'<div style="font-size:26px;line-height:1;filter:drop-shadow(0 2px 3px rgba(0,0,0,.4))">🏪</div>',iconSize:[26,26],iconAnchor:[13,24]});
+  L.marker([WO_RLAT,WO_RLNG],{icon:restoIcon,interactive:false}).addTo(woMap);
+  var maxKm=WO_SLABS.length?WO_SLABS[WO_SLABS.length-1].maxKm:0;
+  if(maxKm>0){ L.circle([WO_RLAT,WO_RLNG],{radius:maxKm*1000,color:'#059669',weight:1.5,fillOpacity:.06}).addTo(woMap); }
+  woMap.on('click',function(e){ woPlacePin(e.latlng.lat,e.latlng.lng); });
+  // The bottom-sheet just became visible — Leaflet measured a hidden container
+  setTimeout(function(){ woMap.invalidateSize(); },80);
+}
+function woPlacePin(lat,lng){
+  woLat=lat; woLng=lng;
+  if(!woCustMarker){
+    var pinIcon=L.divIcon({className:'',html:'<div style="font-size:30px;line-height:1;filter:drop-shadow(0 2px 3px rgba(0,0,0,.4))">📍</div>',iconSize:[30,30],iconAnchor:[15,28]});
+    woCustMarker=L.marker([lat,lng],{icon:pinIcon,draggable:true}).addTo(woMap);
+    woCustMarker.on('dragend',function(){ var ll=woCustMarker.getLatLng(); woLat=ll.lat; woLng=ll.lng; woRecalcFee(); });
+  } else { woCustMarker.setLatLng([lat,lng]); }
+  woRecalcFee();
+}
+function woRecalcFee(){
+  var box=document.getElementById('woFeeBox'); if(!box) return;
+  if(woLat===null){ box.className='wo-fee-box'; box.textContent='ম্যাপে আপনার ডেলিভারি লোকেশন pin করুন — delivery charge দেখাবে'; return; }
+  var km=Math.round(woHaversineKm(WO_RLAT,WO_RLNG,woLat,woLng)*100)/100;
+  var slab=null;
+  for(var i=0;i<WO_SLABS.length;i++){ if(km<=WO_SLABS[i].maxKm){ slab=WO_SLABS[i]; break; } }
+  if(!slab){
+    woFee=null;
+    box.className='wo-fee-box bad';
+    box.textContent='দুঃখিত, এই লোকেশন আমাদের ডেলিভারি এলাকার বাইরে ('+km+' km) 😔';
+    return;
+  }
+  woFee=slab.fee;
+  var qty=parseInt(document.getElementById('woQty').value)||1;
+  var total=WO_PRICE*qty+slab.fee;
+  box.className='wo-fee-box ok';
+  box.innerHTML='🛵 Delivery charge: <strong>'+WO_CURRENCY+slab.fee+'</strong> ('+km+' km)<br>মোট: <strong>'+WO_CURRENCY+total.toLocaleString()+'</strong> ('+WO_CURRENCY+WO_PRICE.toLocaleString()+' × '+qty+' + delivery)';
+}
+function woUseGps(){
+  var btn=document.getElementById('woGpsBtn');
+  if(!navigator.geolocation){ woSetErr('woErr0','আপনার browser-এ GPS support নেই — ম্যাপে ট্যাপ করে pin করুন'); return; }
+  btn.disabled=true; btn.textContent='লোকেশন খোঁজা হচ্ছে...';
+  navigator.geolocation.getCurrentPosition(function(pos){
+    btn.disabled=false; btn.textContent='📍 আমার লোকেশন ব্যবহার করুন (GPS)';
+    woSetErr('woErr0','');
+    woPlacePin(pos.coords.latitude,pos.coords.longitude);
+    woMap.setView([pos.coords.latitude,pos.coords.longitude],16);
+  },function(){
+    btn.disabled=false; btn.textContent='📍 আমার লোকেশন ব্যবহার করুন (GPS)';
+    woSetErr('woErr0','লোকেশন পাওয়া যায়নি — location permission দিন অথবা ম্যাপে ট্যাপ করে pin করুন');
+  },{enableHighAccuracy:true,timeout:10000});
+}
+if(WO_RESTO){
+  var woQtyEl=document.getElementById('woQty');
+  if(woQtyEl) woQtyEl.addEventListener('input',woRecalcFee);
+}
 
 // ── Division / District / Upazila cascading address selects ────────────────
 var woGeoData=null, woGeoLoaded=false, woGeoLoading=false;
@@ -1488,8 +1633,11 @@ function woOnDistrictChange(){
     var opt=document.createElement('option'); opt.value=u.id; opt.textContent=u.bn+' ('+u.name+')'; upaSel.appendChild(opt);
   });
 }
-document.getElementById('woDivision').addEventListener('change', woOnDivisionChange);
-document.getElementById('woDistrict').addEventListener('change', woOnDistrictChange);
+// Restaurant mode renders a map instead of these selects — guard so the
+// missing elements don't throw and kill the whole inline script.
+var woDivEl=document.getElementById('woDivision'), woDistEl=document.getElementById('woDistrict');
+if(woDivEl) woDivEl.addEventListener('change', woOnDivisionChange);
+if(woDistEl) woDistEl.addEventListener('change', woOnDistrictChange);
 
 function woGeoLabel(selId, dataKey){
   var sel=document.getElementById(selId);
@@ -1541,19 +1689,28 @@ async function woSubmit(){
   if(phoneDigits.length<10||phoneDigits.length>12){woSetErr('woErr0','সঠিক ফোন নম্বর দিন (যেমন: 01XXXXXXXXX)');return;}
   var normPhone=phoneDigits.length===12&&phoneDigits.startsWith('88')?phoneDigits.slice(2):phoneDigits;
   if(normPhone.length!==11||!normPhone.startsWith('0')){woSetErr('woErr0','সঠিক বাংলাদেশি ফোন নম্বর দিন (01XXXXXXXXX)');return;}
-  var divLabel=woGeoLabel('woDivision','divisions');
-  var distLabel=woGeoLabel('woDistrict','districts');
-  var upaLabel=woGeoLabel('woUpazila','upazilas');
-  if(!divLabel){woSetErr('woErr0','বিভাগ বেছে নিন');return;}
-  if(!distLabel){woSetErr('woErr0','জেলা বেছে নিন');return;}
-  if(!upaLabel){woSetErr('woErr0','উপজেলা/থানা বেছে নিন');return;}
-  if(!addrDetail){woSetErr('woErr0','বিস্তারিত ঠিকানা দিন (বাসা/রোড/গ্রাম)');return;}
-  var addr=addrDetail+', '+upaLabel+', '+distLabel+', '+divLabel;
+  var addr;
+  if(WO_RESTO){
+    if(woLat===null||woLng===null){woSetErr('woErr0','ম্যাপে আপনার ডেলিভারি লোকেশন pin করুন');return;}
+    if(woFee===null){woSetErr('woErr0','দুঃখিত, আপনার লোকেশন ডেলিভারি এলাকার বাইরে — কাছের কোনো ঠিকানা দিন');return;}
+    if(!addrDetail){woSetErr('woErr0','বিস্তারিত ঠিকানা দিন (বাসা/রোড/ফ্লোর)');return;}
+    addr=addrDetail;
+  } else {
+    var divLabel=woGeoLabel('woDivision','divisions');
+    var distLabel=woGeoLabel('woDistrict','districts');
+    var upaLabel=woGeoLabel('woUpazila','upazilas');
+    if(!divLabel){woSetErr('woErr0','বিভাগ বেছে নিন');return;}
+    if(!distLabel){woSetErr('woErr0','জেলা বেছে নিন');return;}
+    if(!upaLabel){woSetErr('woErr0','উপজেলা/থানা বেছে নিন');return;}
+    if(!addrDetail){woSetErr('woErr0','বিস্তারিত ঠিকানা দিন (বাসা/রোড/গ্রাম)');return;}
+    addr=addrDetail+', '+upaLabel+', '+distLabel+', '+divLabel;
+  }
   woSetErr('woErr0','');
   var btn=document.getElementById('woBtnSubmit');
   btn.disabled=true; btn.textContent='পাঠানো হচ্ছে...';
   try {
     var body={customerName:name,phone:phone,address:addr,productCode:WO_CODE,qty:qty,price:WO_PRICE,productName:WO_NAME,orderNote:note};
+    if(WO_RESTO){ body.deliveryLat=woLat; body.deliveryLng=woLng; }
     var r=await fetch('/catalog/'+WO_PAGE_ID+'/web-order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     var d=await r.json();
     if(!r.ok) throw new Error(d.message||'Error');

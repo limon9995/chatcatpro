@@ -24,6 +24,15 @@ import { OrderNotificationService } from '../orders/order-notification.service';
 import { TelegramService } from '../common/telegram.service';
 import { TelegramNotificationService } from '../telegram/telegram-notification.service';
 import { AdminService } from '../admin/admin.service';
+import {
+  haversineKm,
+  isRestaurantReady,
+  isValidLat,
+  isValidLng,
+  MAX_DELIVERY_SLABS,
+  parseSlabs,
+  resolveDeliveryFee,
+} from '../common/restaurant-delivery';
 
 @Injectable()
 export class ClientDashboardService {
@@ -228,6 +237,47 @@ export class ClientDashboardService {
       ? String(body.source).toUpperCase()
       : 'MANUAL';
 
+    // V24: Restaurant mode — owner may pin the customer's location; fee is
+    // computed server-side from the page's slabs. No pin → fee-less order
+    // (pickup / phone orders stay allowed).
+    let restaurantDelivery: {
+      deliveryLat: number;
+      deliveryLng: number;
+      deliveryFee: number;
+      deliveryDistanceKm: number;
+    } | null = null;
+    const dLat = Number(body?.deliveryLat);
+    const dLng = Number(body?.deliveryLng);
+    if (
+      body?.deliveryLat != null &&
+      body?.deliveryLng != null &&
+      isValidLat(dLat) &&
+      isValidLng(dLng)
+    ) {
+      const page: any = await this.pageService.getById(pageId);
+      if (isRestaurantReady(page)) {
+        const distanceKm =
+          Math.round(
+            haversineKm(page.restaurantLat, page.restaurantLng, dLat, dLng) *
+              100,
+          ) / 100;
+        const slab = resolveDeliveryFee(
+          parseSlabs(page.deliverySlabsJson),
+          distanceKm,
+        );
+        if (!slab)
+          throw new BadRequestException(
+            'লোকেশনটা ডেলিভারি এলাকার বাইরে — শেষ slab-এর দূরত্বের মধ্যে pin করুন',
+          );
+        restaurantDelivery = {
+          deliveryLat: dLat,
+          deliveryLng: dLng,
+          deliveryFee: slab.fee,
+          deliveryDistanceKm: distanceKm,
+        };
+      }
+    }
+
     const order = await this.prisma.order.create({
       data: {
         pageIdRef: pageId,
@@ -238,6 +288,7 @@ export class ClientDashboardService {
         orderNote: body?.orderNote || '',
         status: 'RECEIVED',
         source,
+        ...(restaurantDelivery ?? {}),
       },
     });
 
@@ -1279,6 +1330,11 @@ Return ONLY valid JSON (no markdown):
       codEnabled: page.codEnabled !== false,
       advanceThresholdAmount: page.advanceThresholdAmount ?? 0,
       webOrderEnabled: Boolean(page.webOrderEnabled),
+      // V24: Restaurant mode — slabs returned as a parsed array, never raw JSON
+      restaurantModeEnabled: Boolean(page.restaurantModeEnabled),
+      restaurantLat: page.restaurantLat ?? null,
+      restaurantLng: page.restaurantLng ?? null,
+      deliverySlabs: parseSlabs(page.deliverySlabsJson),
       catalogMessengerUrl: page.catalogMessengerUrl ?? '',
       catalogSlug: page.catalogSlug ?? '',
       customDomain: page.customDomain ?? '',
@@ -1452,6 +1508,95 @@ Return ONLY valid JSON (no markdown):
       }
       pagePatch[k] = nextVal;
     }
+    // V24: Restaurant mode fields — explicit sanitization (never through the
+    // generic whitelist: coordinates and slabs need validation, and the flag
+    // must not turn on while the page is unconfigured)
+    if (
+      'restaurantModeEnabled' in pageFields ||
+      'restaurantLat' in pageFields ||
+      'restaurantLng' in pageFields ||
+      'deliverySlabs' in pageFields
+    ) {
+      if ('restaurantLat' in pageFields) {
+        const v =
+          pageFields.restaurantLat === null ||
+          pageFields.restaurantLat === undefined ||
+          pageFields.restaurantLat === ''
+            ? null
+            : Number(pageFields.restaurantLat);
+        if (v !== null && !isValidLat(v))
+          throw new BadRequestException('Invalid restaurant latitude');
+        pagePatch.restaurantLat = v;
+      }
+      if ('restaurantLng' in pageFields) {
+        const v =
+          pageFields.restaurantLng === null ||
+          pageFields.restaurantLng === undefined ||
+          pageFields.restaurantLng === ''
+            ? null
+            : Number(pageFields.restaurantLng);
+        if (v !== null && !isValidLng(v))
+          throw new BadRequestException('Invalid restaurant longitude');
+        pagePatch.restaurantLng = v;
+      }
+      if ('deliverySlabs' in pageFields) {
+        const raw = pageFields.deliverySlabs;
+        if (!Array.isArray(raw))
+          throw new BadRequestException('deliverySlabs must be an array');
+        if (raw.length > MAX_DELIVERY_SLABS)
+          throw new BadRequestException(
+            `সর্বোচ্চ ${MAX_DELIVERY_SLABS}টা delivery slab দেওয়া যাবে`,
+          );
+        const slabs = raw.map((s: any) => ({
+          maxKm: Number(s?.maxKm),
+          fee: Number(s?.fee),
+        }));
+        for (const s of slabs) {
+          if (!Number.isFinite(s.maxKm) || s.maxKm <= 0 || s.maxKm > 100)
+            throw new BadRequestException('Slab-এর দূরত্ব (KM) সঠিক নয়');
+          if (!Number.isFinite(s.fee) || s.fee < 0)
+            throw new BadRequestException('Slab-এর delivery fee সঠিক নয়');
+        }
+        slabs.sort((a, b) => a.maxKm - b.maxKm);
+        for (let i = 1; i < slabs.length; i++) {
+          if (slabs[i].maxKm === slabs[i - 1].maxKm)
+            throw new BadRequestException(
+              'একই দূরত্বের দুটো slab দেওয়া যাবে না',
+            );
+        }
+        pagePatch.deliverySlabsJson = slabs.length
+          ? JSON.stringify(slabs)
+          : null;
+      }
+      if ('restaurantModeEnabled' in pageFields) {
+        pagePatch.restaurantModeEnabled = Boolean(
+          pageFields.restaurantModeEnabled,
+        );
+      }
+      if (pagePatch.restaurantModeEnabled === true) {
+        const current: any = await this.pageService.getById(pageId);
+        const merged = {
+          restaurantModeEnabled: true,
+          restaurantLat:
+            'restaurantLat' in pagePatch
+              ? pagePatch.restaurantLat
+              : current.restaurantLat,
+          restaurantLng:
+            'restaurantLng' in pagePatch
+              ? pagePatch.restaurantLng
+              : current.restaurantLng,
+          deliverySlabsJson:
+            'deliverySlabsJson' in pagePatch
+              ? pagePatch.deliverySlabsJson
+              : current.deliverySlabsJson,
+        };
+        if (!isRestaurantReady(merged))
+          throw new BadRequestException(
+            'Restaurant mode চালু করতে ম্যাপে restaurant-এর location pin করুন এবং অন্তত একটা delivery fee slab দিন',
+          );
+      }
+    }
+
     // Slug uniqueness pre-check: if catalogSlug is being set, verify no other page owns it
     if (typeof pagePatch.catalogSlug === 'string' && pagePatch.catalogSlug) {
       const conflict = await this.prisma.page.findUnique({

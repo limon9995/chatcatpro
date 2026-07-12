@@ -3,6 +3,9 @@ import { CardHeader, EmptyState, Field, Spinner, StatusBadge } from '../componen
 import type { Theme } from '../components/ui';
 import { API_BASE, useApi } from '../hooks/useApi';
 import { useLanguage } from '../i18n';
+import LocationPickerMap from '../components/LocationPickerMap';
+import { previewDeliveryFee } from '../utils/geo';
+import type { DeliverySlab } from '../utils/geo';
 
 interface OrderItem { productCode: string; qty: number; unitPrice: number; }
 interface Order {
@@ -11,6 +14,8 @@ interface Order {
   negotiationRequested: boolean; customerOfferedPrice: number | null;
   orderNote: string | null; confirmedAt: string | null; createdAt: string;
   paymentStatus: string; transactionId: string | null; paymentScreenshotUrl: string | null;
+  deliveryLat?: number | null; deliveryLng?: number | null;
+  deliveryFee?: number | null; deliveryDistanceKm?: number | null;
   items: OrderItem[];
   courierShipment?: { status: string; courierName: string | null } | null;
   spamRisk?: string | null; spamScore?: number | null;
@@ -93,16 +98,26 @@ function SourceBadge({ source }: { source: string }) {
 interface ManualOrderForm {
   customerName: string; phone: string; address: string;
   orderNote: string; source: string;
+  deliveryLat?: number | null; deliveryLng?: number | null;
   items: { productCode: string; qty: number; unitPrice: number }[];
 }
 const EMPTY_FORM: ManualOrderForm = {
   customerName: '', phone: '', address: '', orderNote: '', source: 'WHATSAPP',
+  deliveryLat: null, deliveryLng: null,
   items: [{ productCode: '', qty: 1, unitPrice: 0 }],
 };
 
-function ManualOrderModal({ th, onClose, onSave, saving }: {
+// Restaurant config passed down when the page runs restaurant mode
+export interface RestaurantConfig {
+  restaurantLat: number;
+  restaurantLng: number;
+  deliverySlabs: DeliverySlab[];
+}
+
+function ManualOrderModal({ th, onClose, onSave, saving, restaurant }: {
   th: Theme; onClose: () => void;
   onSave: (form: ManualOrderForm) => void; saving: boolean;
+  restaurant?: RestaurantConfig | null;
 }) {
   const { copy } = useLanguage();
   const [form, setForm] = useState<ManualOrderForm>(EMPTY_FORM);
@@ -113,6 +128,11 @@ function ManualOrderModal({ th, onClose, onSave, saving }: {
   const addItem = () => setForm(f => ({ ...f, items: [...f.items, { productCode: '', qty: 1, unitPrice: 0 }] }));
   const removeItem = (i: number) => setForm(f => ({ ...f, items: f.items.filter((_, idx) => idx !== i) }));
   const total = form.items.reduce((s, i) => s + (Number(i.qty) || 0) * (Number(i.unitPrice) || 0), 0);
+  // Restaurant mode: live fee preview from the pinned customer location
+  // (display only — the server recomputes the fee on create)
+  const feePreview = restaurant && form.deliveryLat != null && form.deliveryLng != null
+    ? previewDeliveryFee(restaurant.deliverySlabs, restaurant.restaurantLat, restaurant.restaurantLng, form.deliveryLat, form.deliveryLng)
+    : null;
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
@@ -150,6 +170,38 @@ function ManualOrderModal({ th, onClose, onSave, saving }: {
         <Field th={th} label="Address">
           <input style={th.input} placeholder={copy('ঠিকানা', 'Address')} value={form.address} onChange={e => set('address', e.target.value)} />
         </Field>
+
+        {/* Restaurant mode: pin the customer's location → auto delivery fee */}
+        {restaurant && (
+          <div style={{ marginTop: 10 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: th.muted, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              📍 {copy('Customer-এর লোকেশন (auto delivery fee)', 'Customer Location (auto delivery fee)')}
+            </div>
+            <LocationPickerMap
+              lat={form.deliveryLat ?? null}
+              lng={form.deliveryLng ?? null}
+              onChange={(la, ln) => setForm(f => ({ ...f, deliveryLat: la, deliveryLng: ln }))}
+              height={200}
+              referencePin={{ lat: restaurant.restaurantLat, lng: restaurant.restaurantLng, emoji: '🏪' }}
+              radiusKm={restaurant.deliverySlabs.length ? [...restaurant.deliverySlabs].sort((a, b) => a.maxKm - b.maxKm).slice(-1)[0].maxKm : null}
+            />
+            {feePreview && (
+              feePreview.fee != null
+                ? <div style={{ marginTop: 8, padding: '8px 12px', borderRadius: 9, background: '#05966915', border: '1px solid #05966940', fontSize: 12.5, fontWeight: 700, color: '#059669' }}>
+                    🛵 {copy(`Delivery fee ৳${feePreview.fee} (${feePreview.distanceKm} km)`, `Delivery fee ৳${feePreview.fee} (${feePreview.distanceKm} km)`)}
+                  </div>
+                : <div style={{ marginTop: 8, padding: '8px 12px', borderRadius: 9, background: '#dc262615', border: '1px solid #dc262640', fontSize: 12.5, fontWeight: 700, color: '#dc2626' }}>
+                    ⚠️ {copy(`লোকেশনটা delivery এলাকার বাইরে (${feePreview.distanceKm} km)`, `Location is outside the delivery area (${feePreview.distanceKm} km)`)}
+                  </div>
+            )}
+            {form.deliveryLat == null && (
+              <div style={{ marginTop: 6, fontSize: 12, color: th.muted }}>
+                {copy('ম্যাপে pin করলে দূরত্ব মেপে delivery fee auto হিসাব হবে। Pin না করলে fee ছাড়াই order হবে (যেমন pickup)।', 'Pin on the map to auto-compute the delivery fee. Without a pin the order is created without a fee (e.g. pickup).')}
+              </div>
+            )}
+          </div>
+        )}
+
         <div style={{ marginTop: 10 }}>
           <Field th={th} label="Note (optional)">
             <input style={th.input} placeholder={copy('কোনো বিশেষ নোট...', 'Any special note...')} value={form.orderNote} onChange={e => set('orderNote', e.target.value)} />
@@ -177,14 +229,28 @@ function ManualOrderModal({ th, onClose, onSave, saving }: {
         </div>
 
         {/* Total */}
-        <div style={{ marginTop: 12, padding: '10px 14px', background: th.accentSoft, borderRadius: 10, display: 'flex', justifyContent: 'space-between', fontSize: 14, fontWeight: 700, color: th.accentText }}>
-          <span>Total</span>
-          <span>৳{total.toLocaleString()}</span>
+        <div style={{ marginTop: 12, padding: '10px 14px', background: th.accentSoft, borderRadius: 10, fontSize: 14, fontWeight: 700, color: th.accentText }}>
+          {feePreview?.fee != null && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, fontWeight: 600, marginBottom: 4 }}>
+              <span>{copy('Products', 'Products')}</span>
+              <span>৳{total.toLocaleString()}</span>
+            </div>
+          )}
+          {feePreview?.fee != null && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, fontWeight: 600, marginBottom: 4 }}>
+              <span>🛵 Delivery</span>
+              <span>৳{feePreview.fee.toLocaleString()}</span>
+            </div>
+          )}
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span>Total</span>
+            <span>৳{(total + (feePreview?.fee ?? 0)).toLocaleString()}</span>
+          </div>
         </div>
 
         {/* Buttons */}
         <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
-          <button style={th.btnPrimary} onClick={() => onSave(form)} disabled={saving}>
+          <button style={th.btnPrimary} onClick={() => onSave(form)} disabled={saving || (feePreview != null && feePreview.fee == null)}>
             {saving ? <><Spinner size={13}/> {copy('Saving...', 'Saving...')}</> : copy('✓ Order Create করুন', 'Create Order')}
           </button>
           <button style={th.btnGhost} onClick={onClose}>{copy('Cancel', 'Cancel')}</button>
@@ -432,6 +498,33 @@ export function OrdersPage({ th, pageId, onToast, preset }: {
   }, [openDropdown]);
 
   const BASE = `${API_BASE}/client-dashboard/${pageId}`;
+
+  // Restaurant config for the manual-order map picker — fetched lazily when
+  // the create modal first opens (settings payload is heavy)
+  const [restoCfg, setRestoCfg] = useState<RestaurantConfig | null>(null);
+  const [restoCfgLoaded, setRestoCfgLoaded] = useState(false);
+  useEffect(() => {
+    if (!showCreate || restoCfgLoaded) return;
+    setRestoCfgLoaded(true);
+    request<any>(`${BASE}/settings`)
+      .then(s => {
+        if (
+          s?.restaurantModeEnabled &&
+          typeof s.restaurantLat === 'number' &&
+          typeof s.restaurantLng === 'number' &&
+          Array.isArray(s.deliverySlabs) &&
+          s.deliverySlabs.length > 0
+        ) {
+          setRestoCfg({
+            restaurantLat: s.restaurantLat,
+            restaurantLng: s.restaurantLng,
+            deliverySlabs: s.deliverySlabs,
+          });
+        }
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showCreate, restoCfgLoaded]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -750,7 +843,7 @@ export function OrdersPage({ th, pageId, onToast, preset }: {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
       {/* Modals */}
-      {showCreate && <ManualOrderModal th={th} onClose={() => setShowCreate(false)} onSave={createManualOrder} saving={creating} />}
+      {showCreate && <ManualOrderModal th={th} onClose={() => setShowCreate(false)} onSave={createManualOrder} saving={creating} restaurant={restoCfg} />}
       {memoOrderId && <MemoModal th={th} orderId={memoOrderId} pageId={pageId} onClose={() => setMemoOrderId(null)} onSaved={load} />}
       {cancelModal && (
         <div style={{ position: 'fixed', inset: 0, background: '#0008', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -1653,14 +1746,39 @@ export function OrdersPage({ th, pageId, onToast, preset }: {
                                   <span style={{ fontWeight: 600 }}>৳{(i.unitPrice * i.qty).toLocaleString()}</span>
                                 </div>
                               ))}
+                              {o.deliveryFee != null && (
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4, color: '#059669', fontWeight: 600 }}>
+                                  <span>🛵 Delivery Fee</span>
+                                  <span>৳{o.deliveryFee.toLocaleString()}</span>
+                                </div>
+                              )}
                               <div style={{ borderTop: `1px solid ${th.border}`, paddingTop: 6, marginTop: 6, fontWeight: 700, display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                                <span>Total</span><span>৳{total.toLocaleString()}</span>
+                                <span>Total</span><span>৳{(total + (o.deliveryFee ?? 0)).toLocaleString()}</span>
                               </div>
                             </div>
                             <div>
                               <div style={{ fontSize: 11, fontWeight: 700, color: th.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Delivery</div>
                                 <div style={{ fontSize: 13, color: th.textSub, lineHeight: 1.7 }}>
                                 📍 {o.address || '—'}<br/>
+                                {o.deliveryLat != null && o.deliveryLng != null && (
+                                  <>
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 2 }}>
+                                      <span style={{ fontSize: 12, color: '#059669', fontWeight: 600 }}>
+                                        🛵 {o.deliveryDistanceKm != null ? `${o.deliveryDistanceKm} km` : ''}{o.deliveryFee != null ? ` · ৳${o.deliveryFee}` : ''}
+                                      </span>
+                                      <a
+                                        href={`https://www.google.com/maps/dir/?api=1&destination=${o.deliveryLat},${o.deliveryLng}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        onClick={(e) => e.stopPropagation()}
+                                        style={{ ...th.btnSmAccent, padding: '3px 8px', fontSize: 10.5, textDecoration: 'none' }}
+                                      >
+                                        {copy('🗺️ Navigate করুন', '🗺️ Navigate')}
+                                      </a>
+                                    </span>
+                                    <br/>
+                                  </>
+                                )}
                                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                                   <span>📞 {o.phone || '—'}</span>
                                   {o.phone && (

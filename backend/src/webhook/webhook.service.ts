@@ -36,6 +36,11 @@ import { UniversityBotService } from '../university/university-bot.service';
 import { TelegramNotificationService } from '../telegram/telegram-notification.service';
 import { CourierService } from '../courier/courier.service';
 import { normalizePhone } from '../crm/phone.util';
+import {
+  formatSlabsBn,
+  isRestaurantReady,
+  parseSlabs,
+} from '../common/restaurant-delivery';
 
 function getFullImageUrl(url?: string | null): string | undefined {
   if (!url) return undefined;
@@ -475,7 +480,9 @@ export class WebhookService implements OnModuleDestroy {
       case 'stock':
         return `• ${label} — ${product.stockQty > 0 ? `${product.stockQty}টি stock ✅` : 'stock নেই ❌'}`;
       case 'delivery':
-        return `• ঢাকার ভেতরে ${page.deliveryFeeInsideDhaka ?? 80}৳, বাইরে ${page.deliveryFeeOutsideDhaka ?? 120}৳ 🚚`;
+        return isRestaurantReady(page)
+          ? `• ডেলিভারি চার্জ দূরত্ব অনুযায়ী: ${formatSlabsBn(parseSlabs(page.deliverySlabsJson))} 🛵`
+          : `• ঢাকার ভেতরে ${page.deliveryFeeInsideDhaka ?? 80}৳, বাইরে ${page.deliveryFeeOutsideDhaka ?? 120}৳ 🚚`;
       case 'description':
         return product.description
           ? `• ${label}: ${product.description}`
@@ -504,7 +511,9 @@ export class WebhookService implements OnModuleDestroy {
             : `${label} বর্তমানে stock এ নেই ❌`) + inboxCta
         );
       case 'delivery':
-        return `ঢাকার ভেতরে ডেলিভারি ${page.deliveryFeeInsideDhaka ?? 80}৳, বাইরে ${page.deliveryFeeOutsideDhaka ?? 120}৳ 🚚${inboxCta}`;
+        return isRestaurantReady(page)
+          ? `ডেলিভারি চার্জ দূরত্ব অনুযায়ী: ${formatSlabsBn(parseSlabs(page.deliverySlabsJson))}। Exact charge জানতে আমাদের website-এ ম্যাপে location pin করুন: ${this.buildCatalogUrl(page)} 🛵`
+          : `ঢাকার ভেতরে ডেলিভারি ${page.deliveryFeeInsideDhaka ?? 80}৳, বাইরে ${page.deliveryFeeOutsideDhaka ?? 120}৳ 🚚${inboxCta}`;
       case 'description':
         return product.description ? `${product.description}${inboxCta}` : null;
       default:

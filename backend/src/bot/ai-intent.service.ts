@@ -7,6 +7,7 @@ import { GeminiKeyRotatorService } from '../common/gemini-key-rotator.service';
 import { BotKnowledgeService } from '../bot-knowledge/bot-knowledge.service';
 import { AgentBehaviorConfig } from '../agents/agent-behavior-config.interface';
 import { AiCallUsage, AiUsageService } from '../common/ai-usage.service';
+import { formatSlabsBn } from '../common/restaurant-delivery';
 
 export interface AiIntentResult {
   intent: string | null; // null = use keyword fallback
@@ -632,7 +633,13 @@ Rules:
         : '';
 
     // Delivery and payment context
-    const deliveryCtx = `\n\nDelivery:
+    // V24: Restaurant pages use distance-slab rates, not Dhaka zones
+    const deliveryCtx = context.restaurantMode
+      ? `\n\nDelivery (Restaurant — নিজস্ব ডেলিভারি):
+- দূরত্ব অনুযায়ী: ${formatSlabsBn(context.deliverySlabs, '৳')}
+- সময়: ${context.deliveryTime}
+- ঢাকার ভিতরে/বাইরে flat rate প্রযোজ্য না — exact charge website-এ ম্যাপে pin করলে দেখাবে`
+      : `\n\nDelivery:
 - ঢাকার ভিতরে: ৳${context.deliveryInsideFee}
 - ঢাকার বাইরে: ৳${context.deliveryOutsideFee}
 - সময়: ${context.deliveryTime}`;

@@ -13,6 +13,7 @@ import { estimateMonthlyCost, PricingCalcInput } from '../common/pricing-estimat
 import { MessengerService } from '../messenger/messenger.service';
 import { isInsideDhakaAddress } from '../webhook/handlers/dhaka-areas';
 import { AiUsageService } from '../common/ai-usage.service';
+import { formatSlabsBn } from '../common/restaurant-delivery';
 
 // Verbatim defaults — used whenever an agent type has no AgentBehaviorConfig
 // personaPrompt/toneRules override, so agentType='commerce' pages (the vast
@@ -467,7 +468,19 @@ export class SmartBotService {
         : '\n\n## Product Catalog\n(কোনো product নেই)';
 
     // Delivery & payment
-    const deliveryCtx = `\n\n## Delivery & Payment
+    // Restaurant mode: distance-slab self-delivery — inside/outside Dhaka
+    // rates never apply; exact fee needs the customer's map pin on the website.
+    const restaurantWebUrl = this.buildCatalogUrl(page);
+    const deliveryCtx = ctx.restaurantMode
+      ? `\n\n## Delivery & Payment (Restaurant — নিজস্ব ডেলিভারি)
+- আমরা restaurant/food business — নিজেরাই কাছাকাছি এলাকায় delivery করি।
+- Delivery fee দূরত্ব অনুযায়ী: ${formatSlabsBn(ctx.deliverySlabs, '৳')}
+- Delivery সময়: ${ctx.deliveryTime || '(সেট করা নেই)'}
+
+⚠️ ঢাকার ভিতরে/বাইরে flat rate এই page-এ প্রযোজ্য NA — কখনো "ঢাকার ভিতরে X টাকা, বাইরে Y টাকা" বলবে না।
+⚠️ Customer delivery fee জানতে চাইলে উপরের দূরত্ব-অনুযায়ী rate গুলো বলো, এবং বলো exact charge জানতে আমাদের website-এ ম্যাপে location pin করলেই দেখাবে: ${restaurantWebUrl}
+⚠️ Customer order করতে চাইলে website link দাও (${restaurantWebUrl}) — সেখানে ম্যাপে exact location pin করে order করলে delivery charge auto হিসাব হবে। Chat-এ address নিয়ে order নেওয়ার চেষ্টা করবে না, কারণ exact location ছাড়া delivery fee ঠিক করা যায় না।`
+      : `\n\n## Delivery & Payment
 - ঢাকার ভিতরে delivery fee: ৳${ctx.deliveryInsideFee}${ctx.deliveryTimeInside ? ` | সময়: ${ctx.deliveryTimeInside}` : ''}
 - ঢাকার বাইরে delivery fee: ৳${ctx.deliveryOutsideFee}${ctx.deliveryTimeOutside ? ` | সময়: ${ctx.deliveryTimeOutside}` : ''}
 - Delivery সময়: ${ctx.deliveryTime || (ctx.deliveryTimeInside || ctx.deliveryTimeOutside ? 'zone দেখো' : '(সেট করা নেই)')}
@@ -497,13 +510,17 @@ export class SmartBotService {
         ? `৳${paymentRules.insideDhakaAdvanceAmount}`
         : fixedAdv
           ? `৳${fixedAdv}`
-          : `delivery fee-র সমান (৳${ctx.deliveryInsideFee})`;
+          : ctx.restaurantMode
+            ? 'delivery fee-র সমান (দূরত্ব অনুযায়ী)'
+            : `delivery fee-র সমান (৳${ctx.deliveryInsideFee})`;
     const outsideAmtTxt =
       Number(paymentRules.outsideDhakaAdvanceAmount) > 0
         ? `৳${paymentRules.outsideDhakaAdvanceAmount}`
         : fixedAdv
           ? `৳${fixedAdv}`
-          : `delivery fee-র সমান (৳${ctx.deliveryOutsideFee})`;
+          : ctx.restaurantMode
+            ? 'delivery fee-র সমান (দূরত্ব অনুযায়ী)'
+            : `delivery fee-র সমান (৳${ctx.deliveryOutsideFee})`;
     const advThreshold = Number(page.advanceThresholdAmount) || 0;
 
     const codLine = codOn
