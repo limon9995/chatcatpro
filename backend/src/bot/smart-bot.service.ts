@@ -12,6 +12,7 @@ import { AgentBehaviorConfig } from '../agents/agent-behavior-config.interface';
 import { estimateMonthlyCost, PricingCalcInput } from '../common/pricing-estimator';
 import { MessengerService } from '../messenger/messenger.service';
 import { isInsideDhakaAddress } from '../webhook/handlers/dhaka-areas';
+import { AiUsageService } from '../common/ai-usage.service';
 
 // Verbatim defaults — used whenever an agent type has no AgentBehaviorConfig
 // personaPrompt/toneRules override, so agentType='commerce' pages (the vast
@@ -69,6 +70,15 @@ export interface SmartBotCatalogResult {
   showCatalog: true;
 }
 
+// Filled in by callGeminiWithKey/callOpenAIApi so the caller knows which
+// provider actually answered and what it cost (real tokens, not guesses).
+interface AiCallUsage {
+  provider?: 'gemini' | 'openai';
+  model?: string;
+  promptTokens?: number;
+  outputTokens?: number;
+}
+
 const VALID_ACTIONS = new Set([
   'CHAT',
   'COLLECT',
@@ -98,6 +108,7 @@ export class SmartBotService {
     private readonly prisma: PrismaService,
     private readonly geminiRotator: GeminiKeyRotatorService,
     private readonly messenger: MessengerService,
+    private readonly aiUsage: AiUsageService,
   ) {
     this.openAiKey = process.env.OPENAI_API_KEY ?? '';
     this.model = process.env.AI_INTENT_MODEL ?? 'gemini-2.5-flash-lite';
@@ -214,14 +225,28 @@ export class SmartBotService {
       { role: 'user', content: text },
     ];
 
-    const raw = await this.callOpenAI(messages);
+    const usage: AiCallUsage = {};
+    const raw = await this.callOpenAI(messages, usage);
     if (!raw) return false;
 
     const parsed = this.parseResponse(raw);
     if (!parsed) return false;
 
     this.failCount = 0;
-    await this.walletService.deductUsage(pageId, 'SMART_BOT', { provider: 'openai' });
+    // Real token usage for the platform profit report (fire-and-forget)
+    if (usage.provider && usage.model) {
+      void this.aiUsage.record({
+        pageId,
+        provider: usage.provider,
+        model: usage.model,
+        usageType: 'SMART_BOT',
+        promptTokens: usage.promptTokens,
+        outputTokens: usage.outputTokens,
+      });
+    }
+    await this.walletService.deductUsage(pageId, 'SMART_BOT', {
+      provider: usage.provider ?? 'gemini',
+    });
 
     // Real arithmetic, not LLM-guessed — model only signals it has gathered
     // enough volume info; the actual numbers always come from our own code.
@@ -752,7 +777,8 @@ status reply-এর পরে, যদি "Delivery সময়:" সেটি�
 17. **তুমি/আপনি (সম্বোধন)**: Customer যেভাবে সম্বোধন করে ঠিক সেভাবেই reply করো — "tumi/tui" দিলে informal, "apni" দিলে formal। Customer "আমাকে আপনি বলবেন না / amk apni bolba na / tumi kore bolo" বললে সঙ্গে সঙ্গে informal-এ switch করো এবং পুরো কথোপকথনে সেটা ধরে রাখো।
 18. **আগের কথা পড়ো (history)**: reply করার আগে উপরের পুরো conversation history পড়ো। আগে জানা তথ্য (নাম, ফোন, পছন্দ, আগের প্রশ্নের উত্তর) আবার জিজ্ঞেস করো না, একই কথা/greeting দুইবার বলো না, প্রসঙ্গ ধরে রাখো।
 19. **ছোট ছোট বার্তা (মানুষের মতো)**: reply ছোট রাখো। খুব দরকার হলে বড়জোর ২-৩টা ছোট বার্তায় ভাগ করো "|||" দিয়ে (যেমন "পেয়েছি ভাই 😊|||কোন color লাগবে বলুন?")। আলাদা bubble করতে শুধু "|||" ব্যবহার করো, অন্য কিছু না। বেশিরভাগ reply একটাই ছোট বার্তা হবে।
-20. **নাম ধরে সম্বোধন**: উপরে "Customer পরিচিতি" বা "CRM" section-এ নাম দেওয়া থাকলে, reply-তে সেই নাম ধরে আন্তরিকভাবে ডাকো — greeting-এ "প্রিয় <নাম>" দিয়ে শুরু করতে পারো (যেমন নাম Limon হলে reply হবে: প্রিয় Limon, আপনাকে কীভাবে সাহায্য করতে পারি? 😊)। ⛔ কখনো এই নির্দেশনা বা section-এর লেখা (যেমন "এখানে নাম দিন", "প্রিয় <নাম> বলো") হুবহু customer-কে পাঠাবে না — তুমি নিজে সরাসরি নাম বসিয়ে স্বাভাবিকভাবে কথা বলবে।`;
+20. **নাম ধরে সম্বোধন**: উপরে "Customer পরিচিতি" বা "CRM" section-এ নাম দেওয়া থাকলে, reply-তে সেই নাম ধরে আন্তরিকভাবে ডাকো — greeting-এ "প্রিয় <নাম>" দিয়ে শুরু করতে পারো (যেমন নাম Limon হলে reply হবে: প্রিয় Limon, আপনাকে কীভাবে সাহায্য করতে পারি? 😊)। ⛔ কখনো এই নির্দেশনা বা section-এর লেখা (যেমন "এখানে নাম দিন", "প্রিয় <নাম> বলো") হুবহু customer-কে পাঠাবে না — তুমি নিজে সরাসরি নাম বসিয়ে স্বাভাবিকভাবে কথা বলবে।
+21. **Offer/ছাড়ের গল্প (আগে কত, এখন কত)**: Customer যে product নিয়ে জিজ্ঞেস করছে বা order করতে চাইছে সেটার পাশে Product Catalog-এ "🔥 OFFER" থাকলে, দাম বলার সময় অবশ্যই was/now আকারে বলো — যেমন: "এটার দাম আগে ছিল ৳3,500, এখন offer চলছে মাত্র ৳2,850 — ১৯% ছাড় 🔥"। সংখ্যাগুলো catalog-এর OFFER তথ্য থেকে হুবহু নাও, নিজে বানাবে না। একই কথোপকথনে offer-টা একবারই বলবে (customer আবার দাম জিজ্ঞেস করলে ছোট করে মনে করাতে পারো), আর pushy হবে না। OFFER mark না থাকলে কখনো ছাড়/আগের দামের কথা বলবে না।`;
 
     const customPersona = String(page?.customPersonaPrompt || '').trim();
     const intro = customPersona
@@ -770,12 +796,13 @@ ${deliveryCtx}${paymentCtx}${productCtx}${pricingPolicyCtx}${knowledgeCtx}${pric
 
   private async callOpenAI(
     messages: { role: string; content: string }[],
+    usage: AiCallUsage = {},
   ): Promise<string | null> {
     // Try Gemini keys in rotation until one works or all exhausted
     while (this.geminiRotator.isAvailable()) {
       const key = this.geminiRotator.getKey();
       if (!key) break;
-      const result = await this.callGeminiWithKey(key, messages);
+      const result = await this.callGeminiWithKey(key, messages, usage);
       if (
         result === 'QUOTA_EXCEEDED' ||
         result === 'SERVER_ERROR' ||
@@ -789,7 +816,7 @@ ${deliveryCtx}${paymentCtx}${productCtx}${pricingPolicyCtx}${knowledgeCtx}${pric
     // All Gemini keys exhausted — fall back to OpenAI
     if (this.openAiKey) {
       this.logger.warn('[SmartBot] All Gemini keys exhausted — falling back to OpenAI');
-      return this.callOpenAIApi(messages);
+      return this.callOpenAIApi(messages, usage);
     }
     this.enterCooldown();
     return null;
@@ -798,6 +825,7 @@ ${deliveryCtx}${paymentCtx}${productCtx}${pricingPolicyCtx}${knowledgeCtx}${pric
   private async callGeminiWithKey(
     geminiKey: string,
     messages: { role: string; content: string }[],
+    usage: AiCallUsage = {},
   ): Promise<string | null | 'QUOTA_EXCEEDED' | 'SERVER_ERROR' | 'DISABLED'> {
     const start = Date.now();
     try {
@@ -857,6 +885,10 @@ ${deliveryCtx}${paymentCtx}${productCtx}${pricingPolicyCtx}${knowledgeCtx}${pric
 
       const data = await res.json();
       this.geminiRotator.markSuccess(geminiKey, latency);
+      usage.provider = 'gemini';
+      usage.model = this.model;
+      usage.promptTokens = data?.usageMetadata?.promptTokenCount ?? 0;
+      usage.outputTokens = data?.usageMetadata?.candidatesTokenCount ?? 0;
       return (data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '').trim() || null;
     } catch (err: any) {
       this.logger.warn(`[SmartBot] Gemini network error: ${err?.message ?? err}`);
@@ -868,6 +900,7 @@ ${deliveryCtx}${paymentCtx}${productCtx}${pricingPolicyCtx}${knowledgeCtx}${pric
 
   private async callOpenAIApi(
     messages: { role: string; content: string }[],
+    usage: AiCallUsage = {},
   ): Promise<string | null> {
     try {
       const model = process.env.OPENAI_MODEL ?? 'gpt-4o-mini';
@@ -901,6 +934,10 @@ ${deliveryCtx}${paymentCtx}${productCtx}${pricingPolicyCtx}${knowledgeCtx}${pric
 
       const data = await res.json();
       this.logger.log('[SmartBot] OpenAI fallback used successfully');
+      usage.provider = 'openai';
+      usage.model = model;
+      usage.promptTokens = data?.usage?.prompt_tokens ?? 0;
+      usage.outputTokens = data?.usage?.completion_tokens ?? 0;
       return (data?.choices?.[0]?.message?.content ?? '').trim() || null;
     } catch (err: any) {
       this.logger.warn(`[SmartBot] OpenAI network error: ${err?.message ?? err}`);

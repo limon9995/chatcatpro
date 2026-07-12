@@ -6,6 +6,7 @@ import { BusinessContext } from './bot-context.service';
 import { GeminiKeyRotatorService } from '../common/gemini-key-rotator.service';
 import { BotKnowledgeService } from '../bot-knowledge/bot-knowledge.service';
 import { AgentBehaviorConfig } from '../agents/agent-behavior-config.interface';
+import { AiCallUsage, AiUsageService } from '../common/ai-usage.service';
 
 export interface AiIntentResult {
   intent: string | null; // null = use keyword fallback
@@ -93,6 +94,7 @@ export class AiIntentService {
     private readonly apiKeysService: ApiKeysService,
     private readonly geminiRotator: GeminiKeyRotatorService,
     private readonly botKnowledge: BotKnowledgeService,
+    private readonly aiUsage: AiUsageService,
   ) {
     this.apiKey = apiKeysService.getSync('openaiApiKey');
     this.geminiApiKey = apiKeysService.getSync('geminiApiKey');
@@ -126,6 +128,19 @@ export class AiIntentService {
   isAvailable(): boolean {
     const hasKey = this.geminiRotator.isAvailable() || !!this.apiKey;
     return hasKey && Date.now() > this.cooldownUntil;
+  }
+
+  /** Fire-and-forget real token usage for the platform profit report. */
+  private recordAiUsage(pageId: number, usage: AiCallUsage): void {
+    if (!usage?.provider || !usage.model) return;
+    void this.aiUsage.record({
+      pageId,
+      provider: usage.provider,
+      model: usage.model,
+      usageType: 'AI_INTENT',
+      promptTokens: usage.promptTokens,
+      outputTokens: usage.outputTokens,
+    });
   }
 
   private async attemptOllama(
@@ -185,6 +200,7 @@ export class AiIntentService {
     messages: { role: string; content: string }[],
     maxTokens: number,
     temperature: number,
+    usage: AiCallUsage = {},
   ): Promise<string | null> {
     if (!this.apiKey) return null;
     try {
@@ -216,6 +232,10 @@ export class AiIntentService {
         return null;
       }
       const data = await res.json();
+      usage.provider = 'openai';
+      usage.model = this.model;
+      usage.promptTokens = data?.usage?.prompt_tokens ?? 0;
+      usage.outputTokens = data?.usage?.completion_tokens ?? 0;
       return (data?.choices?.[0]?.message?.content ?? '').trim() || null;
     } catch (err: any) {
       this.logger.warn(
@@ -230,6 +250,7 @@ export class AiIntentService {
     messages: { role: string; content: string }[],
     maxTokens: number,
     temperature: number,
+    usage: AiCallUsage = {},
   ): Promise<string | null> {
     // Try all available Gemini keys in rotation
     while (this.geminiRotator.isAvailable()) {
@@ -284,6 +305,10 @@ export class AiIntentService {
         }
         const data = await res.json();
         this.geminiRotator.markSuccess(key, latency);
+        usage.provider = 'gemini';
+        usage.model = this.model;
+        usage.promptTokens = data?.usageMetadata?.promptTokenCount ?? 0;
+        usage.outputTokens = data?.usageMetadata?.candidatesTokenCount ?? 0;
         return (data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '').trim() || null;
       } catch (err: any) {
         this.logger.warn(`[AiIntent] Gemini network error: ${err?.message ?? err}`);
@@ -307,8 +332,9 @@ export class AiIntentService {
       awaitingConfirm: boolean;
       context?: BusinessContext;
     },
-  ): Promise<{ raw: string; usedProvider: string } | null> {
+  ): Promise<{ raw: string; usedProvider: string; usage: AiCallUsage } | null> {
     const { localAiMode } = await this.globalSettings.get();
+    const usage: AiCallUsage = {};
 
     // Try Ollama for bot only when mode is 'all' (generate_only skips bot)
     if (localAiMode === 'all' && this.ollamaBaseUrl && ollamaCtx) {
@@ -320,7 +346,7 @@ export class AiIntentService {
       );
       if (ollamaRaw) {
         this.logger.log(`[AiIntent] ${label} — Ollama OK`);
-        return { raw: ollamaRaw, usedProvider: 'local' };
+        return { raw: ollamaRaw, usedProvider: 'local', usage };
       }
     }
 
@@ -330,8 +356,8 @@ export class AiIntentService {
         return null;
       }
       this.logger.log(`[AiIntent] ${label} — Gemini rotation (${this.model})`);
-      const geminiRaw = await this.attemptGemini(messages, maxTokens, temperature);
-      if (geminiRaw) return { raw: geminiRaw, usedProvider: 'gemini' };
+      const geminiRaw = await this.attemptGemini(messages, maxTokens, temperature, usage);
+      if (geminiRaw) return { raw: geminiRaw, usedProvider: 'gemini', usage };
       // All Gemini keys exhausted — fall through to OpenAI
       this.logger.warn(`[AiIntent] All Gemini keys exhausted — trying OpenAI fallback`);
     }
@@ -341,9 +367,9 @@ export class AiIntentService {
       return null;
     }
     this.logger.log(`[AiIntent] ${label} — OpenAI (${this.model})`);
-    const raw = await this.attemptOpenAI(messages, maxTokens, temperature);
+    const raw = await this.attemptOpenAI(messages, maxTokens, temperature, usage);
     if (!raw) return null;
-    return { raw, usedProvider: 'openai' };
+    return { raw, usedProvider: 'openai', usage };
   }
 
   async detectIntent(
@@ -439,6 +465,7 @@ export class AiIntentService {
       }
 
       await this.walletService.deductUsage(pageId, 'TEXT', { provider: resolved.usedProvider });
+      this.recordAiUsage(pageId, resolved.usage);
       this.logger.log(
         `[AiIntent] intent=${intent} reply="${reply?.slice(0, 60) ?? 'none'}"`,
       );
@@ -513,6 +540,7 @@ export class AiIntentService {
 
       this.failCount = 0;
       await this.walletService.deductUsage(pageId, 'TEXT', { provider: resolved.usedProvider });
+      this.recordAiUsage(pageId, resolved.usage);
       this.logger.log(`[AiIntent] draft action=${action}`);
       return {
         action: action as DraftStepReviewResult['action'],
@@ -584,11 +612,18 @@ Rules:
       : '';
 
     // Build product catalog context (max 25 products)
+    const offerNote = (p: any) => {
+      const orig = Number(p.originalPrice) || 0;
+      const price = Number(p.price) || 0;
+      if (!orig || orig <= price) return '';
+      const pct = Math.round((1 - price / orig) * 100);
+      return ` | 🔥 OFFER: আগের দাম ৳${orig}, এখন ৳${price} (${pct}% ছাড়) — দাম বলার সময় এই was/now গল্পটা বলো`;
+    };
     const productLines = context.products
       .slice(0, 25)
       .map(
         (p) =>
-          `- ${p.name}: ৳${p.price} | ${p.stockQty > 0 ? `${p.stockQty} পিস আছে` : 'Stock নেই'}`,
+          `- ${p.name}: ৳${p.price} | ${p.stockQty > 0 ? 'Stock আছে' : 'Stock নেই'}${offerNote(p)}`,
       )
       .join('\n');
     const productCtx =

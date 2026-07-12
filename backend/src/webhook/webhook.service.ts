@@ -2099,7 +2099,7 @@ export class WebhookService implements OnModuleDestroy {
     // Fetch top active products with stock
     const products = await this.prisma.product.findMany({
       where: { pageId: page.id, isActive: true, stockQty: { gt: 0 } },
-      select: { code: true, name: true, price: true, imageUrl: true, description: true },
+      select: { code: true, name: true, price: true, originalPrice: true, imageUrl: true, description: true },
       orderBy: { createdAt: 'desc' },
       take: 10,
     });
@@ -2118,10 +2118,22 @@ export class WebhookService implements OnModuleDestroy {
     try {
       if (products.length > 0) {
         // Individual product cards (max 10 for Messenger)
-        const elements = products.map((p) => ({
-          title: `${p.name || p.code} — ${sym}${Number(p.price).toLocaleString()}`,
-          image_url: getFullImageUrl(p.imageUrl) || logoUrl,
-          subtitle: p.description ? p.description.slice(0, 80) : `Code: ${p.code}`,
+        const elements = products.map((p) => {
+          const orig = Number(p.originalPrice) || 0;
+          const price = Number(p.price) || 0;
+          const hasOffer = orig > price && price > 0;
+          const pct = hasOffer ? Math.round((1 - price / orig) * 100) : 0;
+          // Messenger subtitle is ~80 chars — the offer line takes priority
+          // over the description, since the discount is what sells.
+          const subtitle = hasOffer
+            ? `🔥 আগের দাম ${sym}${orig.toLocaleString()} → এখন ${sym}${price.toLocaleString()} (${pct}% ছাড়)`
+            : p.description
+              ? p.description.slice(0, 80)
+              : `Code: ${p.code}`;
+          return {
+            title: `${p.name || p.code} — ${sym}${price.toLocaleString()}${hasOffer ? ' 🔥' : ''}`,
+            image_url: getFullImageUrl(p.imageUrl) || logoUrl,
+            subtitle,
           buttons: [
             usesOwnWebsite
               ? {
@@ -2140,7 +2152,8 @@ export class WebhookService implements OnModuleDestroy {
               payload: `ORDER_${p.code}`,
             },
           ],
-        }));
+          };
+        });
         await this.messenger.sendGenericTemplate(token, psid, elements);
       } else {
         // No products — send single catalog card

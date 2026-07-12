@@ -229,6 +229,7 @@ export class CatalogController {
         code: true,
         name: true,
         price: true,
+        originalPrice: true,
         stockQty: true,
         imageUrl: true,
         description: true,
@@ -676,6 +677,7 @@ export class CatalogController {
         code: true,
         name: true,
         price: true,
+        originalPrice: true,
         stockQty: true,
         imageUrl: true,
         description: true,
@@ -813,7 +815,11 @@ export class CatalogController {
     const selectText = encodeURIComponent(`SELECT_PRODUCT:${p.code}`);
     const priceFormatted = Number(p.price).toLocaleString('bn-BD');
     const productPublicUrl = `https://api.chatcat.pro/catalog/${esc(page.id)}/product/${esc(p.code)}`;
-    const productDesc = `মূল্য: ${currency}${Number(p.price).toLocaleString()} · ${inStock ? 'Stock আছে' : 'Stock নেই'} · ${esc(p.description || p.name || p.code)} — ${esc(page.name)}`;
+    const ogOfferBit =
+      Number(p.originalPrice) > Number(p.price) && Number(p.price) > 0
+        ? `🔥 ${Math.round((1 - Number(p.price) / Number(p.originalPrice)) * 100)}% ছাড় — আগের দাম ${currency}${Number(p.originalPrice).toLocaleString()} · `
+        : '';
+    const productDesc = `${ogOfferBit}মূল্য: ${currency}${Number(p.price).toLocaleString()} · ${inStock ? 'Stock আছে' : 'Stock নেই'} · ${esc(p.description || p.name || p.code)} — ${esc(page.name)}`;
     const mmeOrderUrl = `https://m.me/${esc(page.pageId)}?text=${orderText}`;
     // V21: WhatsApp share URL
     const waShareText = encodeURIComponent(
@@ -950,6 +956,9 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:var(--b
 /* Price block */
 .price-block{display:flex;align-items:center;gap:16px;padding:20px 24px;background:linear-gradient(135deg,var(--p-mid),color-mix(in srgb,var(--p) 8%,transparent));border-radius:16px;border:1.5px solid color-mix(in srgb,var(--p) 18%,transparent);margin-bottom:26px}
 .price-val{font-size:38px;font-weight:900;color:var(--p);letter-spacing:-1px;line-height:1}
+.price-offer{display:flex;flex-direction:column;gap:4px}
+.price-old{font-size:16px;font-weight:700;color:var(--muted);text-decoration:line-through}
+.off-badge{display:inline-block;align-self:flex-start;background:#ef4444;color:#fff;font-size:12px;font-weight:800;padding:3px 10px;border-radius:999px;margin-top:2px}
 .stock-pill{font-size:11.5px;font-weight:700;padding:5px 13px;border-radius:20px;letter-spacing:.03em;white-space:nowrap}
 .s-in{background:#dcfce7;color:#15803d;border:1px solid #bbf7d0}
 .s-out{background:#fee2e2;color:#dc2626;border:1px solid #fecaca}
@@ -1136,7 +1145,11 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:var(--b
         <div class="pname">${esc(p.name || p.code)}</div>
 
         <div class="price-block">
-          <div class="price-val">${currency}${Number(p.price).toLocaleString()}</div>
+          ${
+            Number(p.originalPrice) > Number(p.price) && Number(p.price) > 0
+              ? `<div class="price-offer"><span class="price-old">${currency}${Number(p.originalPrice).toLocaleString()}</span><div class="price-val">${currency}${Number(p.price).toLocaleString()}</div><span class="off-badge">-${Math.round((1 - Number(p.price) / Number(p.originalPrice)) * 100)}% ছাড়</span></div>`
+              : `<div class="price-val">${currency}${Number(p.price).toLocaleString()}</div>`
+          }
           <span class="stock-pill ${inStock ? 's-in' : 's-out'}">${inStock ? '✓ In Stock' : '✕ Stock Out'}</span>
           ${p.deliveryCharge === 'FREE' ? '<span class="stock-pill s-in">🚚 Free Delivery</span>' : ''}
         </div>
@@ -1667,6 +1680,14 @@ ${poweredByBadge()}
         const isFB = videoType === 'facebook';
         const inStock = p.stockQty > 0;
         const delay = Math.min(idx * 40, 400);
+        // V24 offer: strikethrough old price + % badge when originalPrice > price
+        const origPrice = Number(p.originalPrice) || 0;
+        const curPrice = Number(p.price) || 0;
+        const hasOffer = origPrice > curPrice && curPrice > 0;
+        const offPct = hasOffer ? Math.round((1 - curPrice / origPrice) * 100) : 0;
+        const priceBlock = hasOffer
+          ? `<div class="c-price-wrap"><span class="c-price-old">${currency}${origPrice.toLocaleString()}</span><div class="c-price">${currency}${curPrice.toLocaleString()} <span class="c-off-badge">-${offPct}%</span></div></div>`
+          : `<div class="c-price">${currency}${curPrice.toLocaleString()}</div>`;
 
         let topBlock = '';
         if (ytId) {
@@ -1692,7 +1713,7 @@ ${poweredByBadge()}
           <div class="c-name">${esc(p.name || p.code)}</div>
           ${p.description ? `<div class="c-desc">${esc(p.description)}</div>` : ''}
           <div class="c-footer">
-            <div class="c-price">${currency}${Number(p.price).toLocaleString()}</div>
+            ${priceBlock}
             <div class="c-order ${!inStock ? 'c-order-dis' : ''}">${inStock ? (selectionMode ? '✅ Select' : '💬 Order') : 'Out'}</div>
           </div>
         </div>
@@ -1866,6 +1887,8 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:radial-
 .c-price-wrap{display:flex;flex-direction:column;gap:3px}
 .c-price-lbl{font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
 .c-price{font-size:22px;font-weight:900;color:var(--p);letter-spacing:-.8px}
+.c-price-old{font-size:12.5px;font-weight:700;color:var(--muted);text-decoration:line-through}
+.c-off-badge{display:inline-block;background:#ef4444;color:#fff;font-size:10.5px;font-weight:800;padding:2px 7px;border-radius:999px;vertical-align:middle;letter-spacing:.02em}
 .c-order{background:linear-gradient(135deg,var(--p),var(--p2));color:#fff;font-size:11.5px;font-weight:800;padding:9px 14px;border-radius:999px;white-space:nowrap;transition:opacity .15s}
 .c-order:hover{opacity:.88}
 .c-order-dis{background:var(--border);color:var(--muted)}

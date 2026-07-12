@@ -72,7 +72,11 @@ export class TelegramService {
     }).catch(() => {});
   }
 
-  /** Register (or re-register) the admin bot's webhook for callback_query buttons. */
+  /**
+   * Register (or re-register) the admin bot's webhook.
+   * Subscribes to both callback_query (inline buttons) and message —
+   * message delivery powers the /users, /profit … admin commands.
+   */
   async setAdminWebhook(webhookUrl: string): Promise<{ ok: boolean; error?: string }> {
     const token = this.apiKeys.getSync('telegramBotToken');
     if (!token) return { ok: false, error: 'No admin telegramBotToken configured' };
@@ -80,7 +84,7 @@ export class TelegramService {
       const res = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: webhookUrl, allowed_updates: ['callback_query'] }),
+        body: JSON.stringify({ url: webhookUrl, allowed_updates: ['callback_query', 'message'] }),
         signal: AbortSignal.timeout(10_000),
       });
       const data: any = await res.json();
@@ -93,5 +97,10 @@ export class TelegramService {
   /** Current admin bot token — used to build/verify the secret webhook URL. */
   getAdminBotToken(): string {
     return this.apiKeys.getSync('telegramBotToken');
+  }
+
+  /** Configured admin chat id — the only chat allowed to run admin commands. */
+  getAdminChatId(): string {
+    return this.apiKeys.getSync('telegramChatId');
   }
 }

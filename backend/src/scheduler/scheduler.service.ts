@@ -13,6 +13,7 @@ import { UniversityCrawlerService } from '../university/university-crawler.servi
 import { MessengerService } from '../messenger/messenger.service';
 import { TelegramNotificationService } from '../telegram/telegram-notification.service';
 import { MailerService } from '../common/mailer.service';
+import { TelegramService as AdminTelegramService } from '../common/telegram.service';
 
 const BASE_FEE_BDT = 500;
 const LOW_BALANCE_THRESHOLD_BDT = 100;
@@ -36,7 +37,30 @@ export class SchedulerService {
     private readonly messenger: MessengerService,
     private readonly telegram: TelegramNotificationService,
     private readonly mailer: MailerService,
+    private readonly adminTelegram: AdminTelegramService,
   ) {}
+
+  // Daily platform profit summary to the admin Telegram — 15:00 UTC = 21:00 Dhaka
+  @Cron('0 0 15 * * *')
+  async sendDailyProfitSummary() {
+    try {
+      const month = new Date().toISOString().slice(0, 7);
+      const r = await this.admin.getRevenueReport(month);
+      const s = r.summary as any;
+      const fmt = (n: number) => `৳${Math.round(n).toLocaleString()}`;
+      await this.adminTelegram.sendMessage(
+        [
+          `📈 <b>দৈনিক Profit Summary — ${month}</b>`,
+          `💵 Revenue: <b>${fmt(s.totalRevenueBdt)}</b> | 📊 Usage billed: ${fmt(s.totalBilledBdt)}`,
+          `🤖 AI cost: ${fmt(s.combinedApiCostBdt)} (measured: $${s.measuredApiCostUsd.toFixed(4)})`,
+          `💰 <b>Net Profit: ${fmt(s.netProfitBdt)}</b> (margin ${s.profitMarginPct.toFixed(1)}%)`,
+          `বিস্তারিত দেখতে: /profit`,
+        ].join('\n'),
+      );
+    } catch (e: any) {
+      this.logger.error(`[Scheduler] Daily profit summary error: ${e.message}`);
+    }
+  }
 
   // Every 30 minutes — scrape notice page and auto-post new notices
   @Cron('0 */30 * * * *')

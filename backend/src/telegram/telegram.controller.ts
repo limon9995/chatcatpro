@@ -13,6 +13,16 @@ import { CourierService } from '../courier/courier.service';
 // Same circular-dependency situation as CourierService (OrdersModule imports
 // TelegramModule) — resolved lazily via ModuleRef.
 import { OrdersService } from '../orders/orders.service';
+// AdminModule imports TelegramModule too — also resolved via ModuleRef.
+import { AdminService } from '../admin/admin.service';
+
+/** Escape HTML for Telegram parse_mode: 'HTML' messages. */
+function tgEsc(s: any): string {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
 
 @Controller('telegram')
 export class TelegramController {
@@ -195,6 +205,18 @@ export class TelegramController {
     const expected = this.adminTelegram.getAdminBotToken();
     if (!expected || token !== expected) return { ok: true };
 
+    // ── Admin slash-commands (plain text messages to the admin bot) ────────
+    // The webhook secret in the URL proves the sender is Telegram; the chat id
+    // pin proves the human is the platform owner (anyone can message a bot).
+    const msg = update?.message;
+    if (msg?.text) {
+      const adminChatId = this.adminTelegram.getAdminChatId();
+      if (adminChatId && String(msg.chat?.id) === String(adminChatId)) {
+        await this.handleAdminCommand(String(msg.text).trim());
+      }
+      return { ok: true };
+    }
+
     const cbq = update?.callback_query;
     if (!cbq) return { ok: true };
     const callbackQueryId = cbq.id as string;
@@ -218,11 +240,275 @@ export class TelegramController {
       (action === 'approve' || action === 'reject')
     ) {
       await this.handleRechargeAction(id, action, callbackQueryId);
+    } else if (domain === 'adm' && action) {
+      await this.handleAdminInlineAction(action, id, callbackQueryId);
     } else {
       await this.adminTelegram.answerCallback(callbackQueryId, '❓ Unknown action');
     }
 
     return { ok: true };
+  }
+
+  // ── Admin Telegram command panel ─────────────────────────────────────────
+
+  private adminSvc(): AdminService {
+    return this.moduleRef.get(AdminService, { strict: false });
+  }
+
+  private async handleAdminCommand(text: string): Promise<void> {
+    const [cmdRaw, ...args] = text.split(/\s+/);
+    const cmd = cmdRaw.toLowerCase().replace(/@.*$/, ''); // strip @botname suffix
+    try {
+      switch (cmd) {
+        case '/start':
+        case '/help':
+          return await this.sendAdminHelp();
+        case '/overview':
+          return await this.cmdOverview();
+        case '/users':
+          return await this.cmdUsers(0);
+        case '/pages':
+          return await this.cmdPages(args.join(' '));
+        case '/recharges':
+          return await this.cmdRecharges();
+        case '/suspend':
+          return await this.cmdSetPageStatus(parseInt(args[0], 10), 'SUSPENDED');
+        case '/activate':
+          return await this.cmdSetPageStatus(parseInt(args[0], 10), 'ACTIVE');
+        case '/ban':
+          return await this.cmdSetUserActive(args[0], false);
+        case '/unban':
+          return await this.cmdSetUserActive(args[0], true);
+        case '/profit':
+          return await this.cmdProfit(args[0]);
+        default:
+          await this.adminTelegram.sendMessage(
+            '❓ অজানা command। সব command দেখতে /help পাঠান।',
+          );
+      }
+    } catch (err: any) {
+      await this.adminTelegram.sendMessage(`❌ Error: ${tgEsc(err?.message ?? err)}`);
+    }
+  }
+
+  private async sendAdminHelp(): Promise<void> {
+    await this.adminTelegram.sendMessage(
+      [
+        '🛠 <b>ChatCat Admin Panel</b>',
+        '',
+        '/overview — সিস্টেম overview (pages, orders, users)',
+        '/users — সব client-এর list',
+        '/pages <code>[search]</code> — page list (balance/status) + suspend button',
+        '/suspend <code>&lt;pageId&gt;</code> — page suspend (bot বন্ধ হবে)',
+        '/activate <code>&lt;pageId&gt;</code> — page আবার চালু',
+        '/ban <code>&lt;username&gt;</code> — user login বন্ধ',
+        '/unban <code>&lt;username&gt;</code> — user login চালু',
+        '/recharges — pending recharge request (approve/reject button সহ)',
+        '/profit <code>[YYYY-MM]</code> — revenue, real AI cost ও profit',
+      ].join('\n'),
+    );
+  }
+
+  private async cmdOverview(): Promise<void> {
+    const o = await this.adminSvc().overview();
+    await this.adminTelegram.sendMessage(
+      [
+        '📊 <b>System Overview</b>',
+        `📄 Pages: ${o.totalPages} (bot ON: ${o.pagesWithBot})`,
+        `👥 Users: ${o.totalUsers} (active: ${o.activeUsers})`,
+        `🛍 Products: ${o.totalProducts}`,
+        `🛒 Orders: ${o.totalOrders} (আজ: ${o.todayOrders})`,
+        `⏳ Pending: ${o.pendingOrders} | ✅ Confirmed: ${o.confirmedOrders}`,
+        `🔑 Pending page requests: ${o.pendingPageRequests}`,
+      ].join('\n'),
+    );
+  }
+
+  private async cmdUsers(offset: number): Promise<void> {
+    const all = await this.adminSvc().clients();
+    const PAGE = 10;
+    const slice = all.slice(offset, offset + PAGE);
+    if (!slice.length) {
+      await this.adminTelegram.sendMessage('কোনো user নেই।');
+      return;
+    }
+    const lines = slice.map((u: any, i: number) => {
+      const date = new Date(u.createdAt).toISOString().slice(0, 10);
+      return `${offset + i + 1}. ${u.isActive ? '✅' : '🚫'} <b>${tgEsc(u.name || u.username)}</b> (${tgEsc(u.username)})\n   📄 ${u.pageCount} page | 📅 ${date}`;
+    });
+    const header = `👥 <b>Users ${offset + 1}-${offset + slice.length}</b> / ${all.length}`;
+    const hasMore = offset + PAGE < all.length;
+    if (hasMore) {
+      await this.adminTelegram.sendMessageWithButtons(
+        `${header}\n\n${lines.join('\n')}`,
+        [[{ text: '▶️ Next 10', callback_data: `adm_users_${offset + PAGE}` }]],
+      );
+    } else {
+      await this.adminTelegram.sendMessage(`${header}\n\n${lines.join('\n')}`);
+    }
+  }
+
+  private async cmdPages(query: string): Promise<void> {
+    const all = await this.adminSvc().getAllPagesWallet();
+    const q = (query || '').toLowerCase();
+    const filtered = q
+      ? all.filter(
+          (p: any) =>
+            String(p.pageName || '').toLowerCase().includes(q) ||
+            String(p.owner?.username || '').toLowerCase().includes(q) ||
+            String(p.id) === q,
+        )
+      : all;
+    const slice = filtered.slice(0, 10);
+    if (!slice.length) {
+      await this.adminTelegram.sendMessage('কোনো page পাওয়া যায়নি।');
+      return;
+    }
+    const lines = slice.map((p: any) => {
+      const st = p.subscriptionStatus === 'ACTIVE' ? '✅' : '🚫';
+      return `${st} <b>#${p.id} ${tgEsc(p.pageName)}</b>\n   👤 ${tgEsc(p.owner?.username ?? '?')} | 💰 ৳${Math.round(p.walletBalanceBdt)} | ${p.subscriptionStatus}`;
+    });
+    const buttons = slice.map((p: any) =>
+      p.subscriptionStatus === 'ACTIVE'
+        ? [{ text: `🚫 Suspend #${p.id} ${String(p.pageName).slice(0, 20)}`, callback_data: `adm_suspend_${p.id}` }]
+        : [{ text: `✅ Activate #${p.id} ${String(p.pageName).slice(0, 20)}`, callback_data: `adm_activate_${p.id}` }],
+    );
+    await this.adminTelegram.sendMessageWithButtons(
+      `📄 <b>Pages${q ? ` — "${tgEsc(query)}"` : ''}</b> (${slice.length}/${filtered.length})\n\n${lines.join('\n')}`,
+      buttons,
+    );
+  }
+
+  private async cmdRecharges(): Promise<void> {
+    const pending = await this.adminSvc().getAllRechargeRequests('pending');
+    if (!pending.length) {
+      await this.adminTelegram.sendMessage('✅ কোনো pending recharge request নেই।');
+      return;
+    }
+    for (const r of pending.slice(0, 10)) {
+      await this.adminTelegram.sendMessageWithButtons(
+        [
+          `💰 <b>Recharge Request #${r.id}</b>`,
+          `🏪 ${tgEsc(r.page?.pageName ?? '?')} (page #${r.pageId})`,
+          `👤 ${tgEsc(r.page?.owner?.username ?? '?')}`,
+          `💵 ৳${r.amountBdt} | 📱 ${tgEsc(r.method)}`,
+          `🔖 TrxID: <code>${tgEsc(r.transactionId)}</code>`,
+        ].join('\n'),
+        [
+          [
+            { text: '✅ Approve', callback_data: `recharge_approve_${r.id}` },
+            { text: '❌ Reject', callback_data: `recharge_reject_${r.id}` },
+          ],
+        ],
+      );
+    }
+    if (pending.length > 10) {
+      await this.adminTelegram.sendMessage(`…আরো ${pending.length - 10}টা pending আছে।`);
+    }
+  }
+
+  private async cmdSetPageStatus(
+    pageId: number,
+    status: 'SUSPENDED' | 'ACTIVE',
+  ): Promise<void> {
+    if (!pageId || Number.isNaN(pageId)) {
+      await this.adminTelegram.sendMessage(
+        `⚠️ Page ID দিন — যেমন: <code>/${status === 'SUSPENDED' ? 'suspend' : 'activate'} 5</code>\nPage ID পেতে /pages পাঠান।`,
+      );
+      return;
+    }
+    await this.adminSvc().updatePageSubscription(pageId, { subscriptionStatus: status });
+    const page = await this.prisma.page.findUnique({
+      where: { id: pageId },
+      select: { pageName: true },
+    });
+    await this.adminTelegram.sendMessage(
+      status === 'SUSPENDED'
+        ? `🚫 Page #${pageId} <b>${tgEsc(page?.pageName ?? '')}</b> suspend করা হলো — bot বন্ধ।`
+        : `✅ Page #${pageId} <b>${tgEsc(page?.pageName ?? '')}</b> activate করা হলো — bot চালু।`,
+    );
+  }
+
+  private async cmdSetUserActive(username: string, isActive: boolean): Promise<void> {
+    if (!username) {
+      await this.adminTelegram.sendMessage(
+        `⚠️ Username দিন — যেমন: <code>/${isActive ? 'unban' : 'ban'} limon123</code>`,
+      );
+      return;
+    }
+    const user = await this.prisma.user.findUnique({ where: { username } });
+    if (!user) {
+      await this.adminTelegram.sendMessage(`❌ User "${tgEsc(username)}" পাওয়া যায়নি।`);
+      return;
+    }
+    await this.adminSvc().setUserAccountStatus(user.id, isActive);
+    await this.adminTelegram.sendMessage(
+      isActive
+        ? `✅ <b>${tgEsc(username)}</b> unban হলো — login করতে পারবে।`
+        : `🚫 <b>${tgEsc(username)}</b> ban হলো — login বন্ধ।`,
+    );
+  }
+
+  private async cmdProfit(month?: string): Promise<void> {
+    const m = month && /^\d{4}-\d{2}$/.test(month) ? month : new Date().toISOString().slice(0, 7);
+    const r = await this.adminSvc().getRevenueReport(m);
+    const s = r.summary;
+    const fmt = (n: number) => `৳${Math.round(n).toLocaleString()}`;
+    const topPages = r.perPage
+      .slice(0, 5)
+      .map(
+        (p: any, i: number) =>
+          `${i + 1}. ${tgEsc(p.pageName)} — recharge ${fmt(p.rechargedBdt)}, usage ${fmt(p.billedBdt)}`,
+      )
+      .join('\n');
+    const modelLines = (r.aiUsage?.byModel ?? [])
+      .slice(0, 5)
+      .map(
+        (u: any) =>
+          `• ${tgEsc(u.model)} (${u.usageType}): ${u.calls} call, ${((u.promptTokens + u.outputTokens) / 1000).toFixed(1)}K tokens = $${u.costUsd.toFixed(4)}`,
+      )
+      .join('\n');
+    await this.adminTelegram.sendMessage(
+      [
+        `📈 <b>Profit Report — ${m}</b>`,
+        '',
+        `💵 Revenue (recharge): <b>${fmt(s.totalRevenueBdt)}</b>`,
+        `📊 Usage billed: ${fmt(s.totalBilledBdt)}`,
+        `🤖 Real AI cost (measured tokens): <b>${fmt(s.measuredApiCostBdt)}</b> ($${s.measuredApiCostUsd.toFixed(4)}, ${s.measuredCalls} calls)`,
+        `🧮 Combined AI cost (measured + estimate): ${fmt(s.combinedApiCostBdt)}`,
+        `💰 <b>Net Profit: ${fmt(s.netProfitBdt)}</b> (margin ${s.profitMarginPct.toFixed(1)}%)`,
+        '',
+        modelLines ? `<b>Model খরচ:</b>\n${modelLines}\n` : '',
+        topPages ? `<b>Top pages:</b>\n${topPages}` : '',
+        '',
+        '<i>ℹ️ Gemini free-tier key ব্যবহার হলে আসল খরচ ৳0 পর্যন্ত হতে পারে — উপরের হিসাব official paid-rate ধরে।</i>',
+      ]
+        .filter((l) => l !== '')
+        .join('\n'),
+    );
+  }
+
+  private async handleAdminInlineAction(
+    action: string,
+    id: number,
+    callbackQueryId: string,
+  ): Promise<void> {
+    try {
+      if (action === 'suspend' && id) {
+        await this.adminTelegram.answerCallback(callbackQueryId, `🚫 Suspending #${id}…`);
+        await this.cmdSetPageStatus(id, 'SUSPENDED');
+      } else if (action === 'activate' && id) {
+        await this.adminTelegram.answerCallback(callbackQueryId, `✅ Activating #${id}…`);
+        await this.cmdSetPageStatus(id, 'ACTIVE');
+      } else if (action === 'users') {
+        await this.adminTelegram.answerCallback(callbackQueryId);
+        await this.cmdUsers(Number.isNaN(id) ? 0 : id);
+      } else {
+        await this.adminTelegram.answerCallback(callbackQueryId, '❓ Unknown action');
+      }
+    } catch (err: any) {
+      await this.adminTelegram.answerCallback(callbackQueryId, `❌ ${err?.message ?? 'Failed'}`);
+    }
   }
 
   /**

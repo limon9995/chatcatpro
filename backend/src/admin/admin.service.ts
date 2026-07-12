@@ -1696,7 +1696,7 @@ server {
   }
 
   async getRevenueReport(month?: string) {
-    const USD_TO_BDT = 130;
+    const USD_TO_BDT = Number(process.env.USD_TO_BDT) || 130;
 
     // Per-type real API cost in USD (per call)
     const PROVIDER_COST_USD: Record<string, Record<string, number>> = {
@@ -1717,7 +1717,7 @@ server {
       dateFilter = { createdAt: { gte: start, lt: end } };
     }
 
-    const [transactions, pages] = await Promise.all([
+    const [transactions, pages, aiUsageRows] = await Promise.all([
       this.prisma.walletTransaction.findMany({
         where: dateFilter,
         select: { pageId: true, type: true, amountBdt: true, provider: true, createdAt: true },
@@ -1732,6 +1732,14 @@ server {
           nextBillingDate: true,
           owner: { select: { username: true } },
         },
+      }),
+      // V26: real measured token usage (SMART_BOT + AI_INTENT capture it),
+      // priced with official provider rates at write time.
+      this.prisma.aiUsage.groupBy({
+        by: ['provider', 'model', 'usageType'],
+        where: dateFilter,
+        _sum: { promptTokens: true, outputTokens: true, costUsd: true },
+        _count: { _all: true },
       }),
     ]);
 
@@ -1813,6 +1821,37 @@ server {
       .sort((a, b) => b.month.localeCompare(a.month))
       .slice(0, 12);
 
+    // ── V26: measured (token-based) AI cost ────────────────────────────────
+    // SMART_BOT and AI_INTENT calls record real tokens in AiUsage. For those
+    // usage types the measured figure replaces the flat estimate; every other
+    // path keeps its estimate until it also captures tokens.
+    const measuredCostUsd = aiUsageRows.reduce((s, r) => s + (r._sum.costUsd ?? 0), 0);
+    const measuredCalls = aiUsageRows.reduce((s, r) => s + r._count._all, 0);
+    const measuredCostBdt = measuredCostUsd * USD_TO_BDT;
+    const measuredByModel = aiUsageRows
+      .map((r) => ({
+        provider: r.provider,
+        model: r.model,
+        usageType: r.usageType,
+        calls: r._count._all,
+        promptTokens: r._sum.promptTokens ?? 0,
+        outputTokens: r._sum.outputTokens ?? 0,
+        costUsd: r._sum.costUsd ?? 0,
+        costBdt: (r._sum.costUsd ?? 0) * USD_TO_BDT,
+      }))
+      .sort((a, b) => b.costUsd - a.costUsd);
+    // Usage types whose cost is now measured — SMART_BOT ledger rows and the
+    // ai-intent TEXT rows. Only drop their estimates when measurement exists,
+    // so historical months (pre-AiUsage) keep the old estimated totals.
+    const MEASURED_TYPES = new Set(['SMART_BOT', 'TEXT']);
+    const estimatedForMeasuredTypesBdt = Object.entries(usageMap)
+      .filter(([key]) => MEASURED_TYPES.has(key.split('|')[0]))
+      .reduce((s, [, v]) => s + v.costBdt, 0);
+    const combinedApiCostBdt =
+      measuredCalls > 0
+        ? totalApiCostBdt - estimatedForMeasuredTypesBdt + measuredCostBdt
+        : totalApiCostBdt;
+
     return {
       usdToBdt: USD_TO_BDT,
       summary: {
@@ -1820,9 +1859,14 @@ server {
         totalBilledBdt,
         totalApiCostBdt,
         totalApiCostUsd: totalApiCostBdt / USD_TO_BDT,
-        netProfitBdt: totalRevenueBdt - totalApiCostBdt,
-        profitMarginPct: totalRevenueBdt > 0 ? ((totalRevenueBdt - totalApiCostBdt) / totalRevenueBdt) * 100 : 0,
+        measuredApiCostBdt: measuredCostBdt,
+        measuredApiCostUsd: measuredCostUsd,
+        measuredCalls,
+        combinedApiCostBdt,
+        netProfitBdt: totalRevenueBdt - combinedApiCostBdt,
+        profitMarginPct: totalRevenueBdt > 0 ? ((totalRevenueBdt - combinedApiCostBdt) / totalRevenueBdt) * 100 : 0,
       },
+      aiUsage: { measuredCalls, measuredCostUsd, measuredCostBdt, byModel: measuredByModel },
       usageBreakdown,
       perPage,
       monthlyTrend,
