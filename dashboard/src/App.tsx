@@ -384,9 +384,12 @@ export function AppContent() {
           activePage={activePage}
           onSelectPage={(page) => setActivePage(page as MyPage)}
           onManagePages={() => {
-            // Already have an active page — don't leave the dashboard for
-            // the connect flow at all, just stay put.
-            if (myPages.some((p) => p.isActive)) return;
+            // Deliberate user action ("নতুন Page যোগ" / topbar Facebook Page
+            // button) — always open the connect screen so a second page (e.g.
+            // a restaurant) can be added. The old guard that skipped this when
+            // an active page existed left users stuck on "Redirecting…".
+            // Reload-loop safety lives in DashboardLayout: CONNECT_FB_PAGE is
+            // never persisted as the last nav.
             setScreen('connect-page');
           }}
           onLogout={handleLogout}

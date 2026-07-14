@@ -244,6 +244,9 @@ export function DashboardLayout({
 
   useEffect(() => {
     if (!activePage?.id) return;
+    // Never persist CONNECT_FB_PAGE — restoring it on reload would auto-fire
+    // the connect redirect and bounce the user out of the dashboard.
+    if (nav === 'CONNECT_FB_PAGE') return;
     localStorage.setItem(`dfbot_nav_${activePage.id}`, nav);
     localStorage.setItem(LAST_NAV_KEY, nav);
   }, [activePage?.id, nav]);
@@ -464,13 +467,21 @@ export function DashboardLayout({
   }, []);
 
   const openNavItem = useCallback((key: NavKey) => {
+    // "FB পেজ কানেক্ট / নতুন Page যোগ" means "leave for the connect screen" —
+    // go there directly instead of switching nav to the Redirecting… stub
+    // (which would also get persisted and re-trigger on reload).
+    if (key === 'CONNECT_FB_PAGE') {
+      setSidebarOpen(false);
+      onManagePages?.();
+      return;
+    }
     if (key === 'ORDERS') setOrdersPreset(null);
     if (key === 'PRINT') setPrintPreset(null);
     if (key === 'FOLLOWUP') setFollowUpPreset(null);
     if (key === 'ACCOUNTING') setAccountingPreset(null);
     setNav(key);
     setSidebarOpen(false); // close sidebar on mobile after navigation
-  }, []);
+  }, [onManagePages]);
 
   const renderPage = () => {
     // Settings tabs — nav key IS the tab key
