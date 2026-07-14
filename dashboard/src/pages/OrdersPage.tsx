@@ -7,7 +7,15 @@ import LocationPickerMap from '../components/LocationPickerMap';
 import { previewDeliveryFee } from '../utils/geo';
 import type { DeliverySlab } from '../utils/geo';
 
-interface OrderItem { productCode: string; qty: number; unitPrice: number; }
+interface OrderItem { productCode: string; qty: number; unitPrice: number; productName?: string | null; metaJson?: string | null; }
+
+/** "5 pcs" from an item's metaJson ({variantLabel, pieces}) — '' when absent */
+function itemVariantLabel(i: OrderItem): string {
+  try {
+    const meta = i.metaJson ? JSON.parse(i.metaJson) : null;
+    return meta?.variantLabel ? String(meta.variantLabel) : '';
+  } catch { return ''; }
+}
 interface Order {
   id: number; customerName: string | null; phone: string | null;
   address: string | null; status: string; source: string; callStatus: string;
@@ -1742,7 +1750,7 @@ export function OrdersPage({ th, pageId, onToast, preset }: {
                               <div style={{ fontSize: 11, fontWeight: 700, color: th.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Items</div>
                               {o.items.map((i, idx) => (
                                 <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
-                                  <span>{i.productCode} ×{i.qty}</span>
+                                  <span>{i.productCode}{itemVariantLabel(i) ? ` · ${itemVariantLabel(i)}` : ''} ×{i.qty}</span>
                                   <span style={{ fontWeight: 600 }}>৳{(i.unitPrice * i.qty).toLocaleString()}</span>
                                 </div>
                               ))}

@@ -21,6 +21,11 @@ export interface BusinessProduct {
   originalPrice?: number | null;
   // V24: per-product pricing-policy override (JSON string) — see resolveEffectivePricingPolicy.
   pricingPolicyOverride?: string | null;
+  // V25: size/portion pricing JSON [{label, price, pieces?}] — bot quotes
+  // per-size prices ("5 pcs ৳120 / 10 pcs ৳220") when present.
+  priceVariantsJson?: string | null;
+  // V25: false = BOM-tracked food item, stockQty is meaningless
+  trackStock?: boolean;
 }
 
 export interface DualProduct {
@@ -103,6 +108,8 @@ export class BotContextService {
           deliveryCharge: true,
           originalPrice: true,
           pricingPolicyOverride: true,
+          priceVariantsJson: true,
+          trackStock: true,
         },
         orderBy: { createdAt: 'desc' },
         take: 50,

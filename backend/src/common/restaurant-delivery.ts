@@ -104,6 +104,72 @@ export function isRestaurantReady(page: {
   );
 }
 
+// ── V25: Food size/portion price variants ────────────────────────────────────
+
+export interface PriceVariant {
+  label: string;
+  price: number;
+  /** Piece count for per-piece recipe scaling (e.g. "8 pcs" momo → 8) */
+  pieces?: number;
+}
+
+export const MAX_PRICE_VARIANTS = 12;
+
+/**
+ * Parse Product.priceVariantsJson safely: [{label, price, pieces?}].
+ * Drops invalid entries; [] on malformed input.
+ */
+export function parsePriceVariants(
+  json: string | null | undefined,
+): PriceVariant[] {
+  if (!json) return [];
+  let raw: unknown;
+  try {
+    raw = JSON.parse(json);
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((v: any) => {
+      const pieces = Number(v?.pieces);
+      return {
+        label: String(v?.label ?? '').trim(),
+        price: Number(v?.price),
+        ...(Number.isFinite(pieces) && pieces > 0
+          ? { pieces: Math.round(pieces) }
+          : {}),
+      };
+    })
+    .filter((v) => v.label.length > 0 && Number.isFinite(v.price) && v.price >= 0)
+    .slice(0, MAX_PRICE_VARIANTS);
+}
+
+/** Compact price text: single price or "৳120 – ৳220" range. */
+export function priceRangeText(
+  variants: PriceVariant[],
+  basePrice: number,
+  currencySymbol = '৳',
+): string {
+  if (!variants.length)
+    return `${currencySymbol}${Number(basePrice).toLocaleString()}`;
+  const prices = variants.map((v) => v.price);
+  const min = Math.min(...prices);
+  const max = Math.max(...prices);
+  if (min === max) return `${currencySymbol}${min.toLocaleString()}`;
+  return `${currencySymbol}${min.toLocaleString()} – ${currencySymbol}${max.toLocaleString()}`;
+}
+
+/** One-line variant summary for bot prompts: "5 pcs ৳120 / 10 pcs ৳220" */
+export function variantsSummaryText(
+  variants: PriceVariant[],
+  currencySymbol = '৳',
+): string {
+  return variants
+    .map((v) => `${v.label} ${currencySymbol}${v.price}`)
+    .join(' / ');
+}
+
 const BN_DIGITS = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
 
 function toBnNumber(n: number): string {

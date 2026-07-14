@@ -13,7 +13,11 @@ import { estimateMonthlyCost, PricingCalcInput } from '../common/pricing-estimat
 import { MessengerService } from '../messenger/messenger.service';
 import { isInsideDhakaAddress } from '../webhook/handlers/dhaka-areas';
 import { AiUsageService } from '../common/ai-usage.service';
-import { formatSlabsBn } from '../common/restaurant-delivery';
+import {
+  formatSlabsBn,
+  parsePriceVariants,
+  variantsSummaryText,
+} from '../common/restaurant-delivery';
 
 // Verbatim defaults — used whenever an agent type has no AgentBehaviorConfig
 // personaPrompt/toneRules override, so agentType='commerce' pages (the vast
@@ -434,18 +438,34 @@ export class SmartBotService {
       return ` | 🔥 OFFER: ৳${price} (আগের দাম ৳${orig}, ছাড় ${pct}%)`;
     };
 
+    // V25: size/portion pricing — "5 pcs ৳120 / 10 pcs ৳220" replaces the
+    // single price so the bot can answer "3ta momo koto?" correctly.
+    const priceText = (p: any, unitSuffix = '') => {
+      const variants = parsePriceVariants((p as any).priceVariantsJson);
+      if (variants.length)
+        return `${variantsSummaryText(variants, '৳')} (দাম size/পরিমাণ অনুযায়ী)`;
+      return `৳${p.price}${unitSuffix}`;
+    };
+    const categoryNote = (p: any) =>
+      (p as any).priceVariantsJson && (p as any).category
+        ? ` | Category: ${(p as any).category}`
+        : '';
+    // trackStock=false food items are always orderable while active
+    const stockText = (p: any, inText: string) =>
+      (p as any).trackStock === false || p.stockQty > 0 ? inText : 'Stock শেষ';
+
     const codedLines = codedProducts
       .slice(0, 30)
       .map((p) => {
         // V25: never expose the exact stock count to the AI's own output —
         // only in-stock/out-of-stock, so it physically can't leak a number
         // even if a customer asks "koto pis ase".
-        const stock = p.stockQty > 0 ? 'Stock আছে' : 'Stock শেষ';
+        const stock = stockText(p, 'Stock আছে');
         const deliveryNote =
           (p as any).deliveryCharge === 'FREE' ? ' | 🚚 Home Delivery FREE' : '';
         const desc = String((p as any).description || '').trim();
         const descLine = desc ? `\n    বিবরণ: ${desc}` : '';
-        return `[${p.code}] ${p.name ?? p.code} — ৳${p.price} | ${stock}${deliveryNote}${offerNote(p)}${descLine}`;
+        return `[${p.code}] ${p.name ?? p.code} — ${priceText(p)} | ${stock}${deliveryNote}${categoryNote(p)}${offerNote(p)}${descLine}`;
       })
       .join('\n');
 
@@ -453,12 +473,12 @@ export class SmartBotService {
       .map((p) => {
         const unit = (p as any).unit || 'pcs';
         // V25: never expose the exact stock count — see codedLines note above.
-        const stock = p.stockQty > 0 ? `Stock আছে (${unit})` : 'Stock শেষ';
+        const stock = stockText(p, `Stock আছে (${unit})`);
         const deliveryNote =
           (p as any).deliveryCharge === 'FREE' ? ' | 🚚 Home Delivery FREE' : '';
         const desc = String((p as any).description || '').trim();
         const descLine = desc ? `\n    বিবরণ: ${desc}` : '';
-        return `${p.name ?? p.code} — ৳${p.price}/${unit} | ${stock}${deliveryNote}${offerNote(p)}${descLine}`;
+        return `${p.name ?? p.code} — ${priceText(p, `/${unit}`)} | ${stock}${deliveryNote}${categoryNote(p)}${offerNote(p)}${descLine}`;
       })
       .join('\n');
 

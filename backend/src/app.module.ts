@@ -48,6 +48,7 @@ import { SmsGatewayModule } from './sms-gateway/sms-gateway.module';
 import { UniversityModule } from './university/university.module';
 import { TelegramModule } from './telegram/telegram.module';
 import { PublicOrderModule } from './public-order/public-order.module';
+import { RestaurantModule } from './restaurant/restaurant.module';
 
 @Module({
   imports: [
@@ -117,6 +118,7 @@ import { PublicOrderModule } from './public-order/public-order.module';
     UniversityModule,
     TelegramModule,
     PublicOrderModule,
+    RestaurantModule,
   ],
   controllers: [AppController],
   providers: [

@@ -27,6 +27,7 @@ const WalletPage      = safeLazy(() => import('./WalletPage') as any);
 const FraudCheckerPage = safeLazy(() => import('./FraudCheckerPage') as any);
 const AutoPostPage     = safeLazy(() => import('./AutoPostPage').then(m => ({ default: m.AutoPostPage })));
 const UniversityPage   = safeLazy(() => import('./UniversityPage').then(m => ({ default: m.UniversityPage })));
+const RestaurantPage   = safeLazy(() => import('./RestaurantPage').then(m => ({ default: m.RestaurantPage })));
 
 // ── Error boundary for individual pages ───────────────────────────────────────
 class PageErrorBoundary extends Component<{ children: any; name: string }, { error: any }> {
@@ -63,7 +64,7 @@ function ConnectFbPageRedirect({ onManagePages, muted }: { onManagePages?: () =>
 // ── Types ─────────────────────────────────────────────────────────────────────
 type NavKey = 'OVERVIEW' | 'AGENT_TASKS' | 'ORDERS' | 'PRODUCTS' | 'ACCOUNTING' |
   'BOT_KNOWLEDGE' | 'PRINT' | 'MEMO_TEMPLATE' | 'CRM' | 'COURIER' |
-  'BROADCAST' | 'FOLLOWUP' | 'CATALOG' | 'FRAUD_CHECKER' | 'AUTO_POST' | 'UNIVERSITY' |
+  'BROADCAST' | 'FOLLOWUP' | 'CATALOG' | 'RESTAURANT' | 'FRAUD_CHECKER' | 'AUTO_POST' | 'UNIVERSITY' |
   'WALLET' | 'CONNECT_FB_PAGE' |
   'SETTINGS_BUSINESS' | 'SETTINGS_DELIVERY' | 'SETTINGS_BOT' |
   'SETTINGS_KNOWLEDGE' | 'SETTINGS_CALL' | 'SETTINGS_VOICE' | 'SETTINGS_TELEGRAM';
@@ -88,6 +89,7 @@ const NAV: NavItem[] = [
   // ── Store ─────────────────────────────────────────────────────────────────
   { key: 'PRODUCTS',           bn: 'প্রোডান্ট',           en: 'Products',            icon: '🏷', group: 'store' },
   { key: 'CATALOG',            bn: 'ওয়েবসাইট',            en: 'Website',             icon: '🌐', group: 'store' },
+  { key: 'RESTAURANT',         bn: 'রেস্টুরেন্ট',          en: 'Restaurant',          icon: '🍕', group: 'store' },
   { key: 'ACCOUNTING',         bn: 'হিসাব',               en: 'Accounting',          icon: '💼', group: 'store' },
   // ── Bot & Customers ──────────────────────────────────────────────────
   { key: 'BOT_KNOWLEDGE',      bn: 'বট নলেজ',            en: 'Bot Knowledge',       icon: '🧠', group: 'bot' },
@@ -417,7 +419,7 @@ export function DashboardLayout({
   // University mode: hide e-commerce nav; Business mode: hide university nav
   const UNIVERSITY_ONLY_KEYS = new Set(['UNIVERSITY']);
   const BUSINESS_ONLY_KEYS = new Set([
-    'ORDERS', 'COURIER', 'PRINT', 'PRODUCTS', 'CATALOG', 'ACCOUNTING', 'MEMO_TEMPLATE',
+    'ORDERS', 'COURIER', 'PRINT', 'PRODUCTS', 'CATALOG', 'RESTAURANT', 'ACCOUNTING', 'MEMO_TEMPLATE',
     'AUTO_POST', 'FOLLOWUP', 'FRAUD_CHECKER', 'BOT_KNOWLEDGE',
     'SETTINGS_DELIVERY', 'SETTINGS_CALL', 'SETTINGS_VOICE', 'SETTINGS_KNOWLEDGE',
   ]);
@@ -552,6 +554,13 @@ export function DashboardLayout({
         <PageErrorBoundary name="CatalogPage">
           <Suspense fallback={pageFallback}>
             <CatalogPage th={th} pageId={pageId} onToast={showToast} />
+          </Suspense>
+        </PageErrorBoundary>
+      );
+      case 'RESTAURANT':  return (
+        <PageErrorBoundary name="RestaurantPage">
+          <Suspense fallback={pageFallback}>
+            <RestaurantPage th={th} pageId={pageId} onToast={showToast} />
           </Suspense>
         </PageErrorBoundary>
       );

@@ -163,7 +163,7 @@ function LizaAvatar({ size }: { size: number }) {
 type NavKey =
   | 'OVERVIEW' | 'AGENT_TASKS' | 'ORDERS' | 'PRODUCTS' | 'ACCOUNTING'
   | 'ANALYTICS' | 'BOT_KNOWLEDGE' | 'PRINT' | 'MEMO_TEMPLATE' | 'CRM'
-  | 'COURIER' | 'BROADCAST' | 'FOLLOWUP' | 'CATALOG' | 'FRAUD_CHECKER'
+  | 'COURIER' | 'BROADCAST' | 'FOLLOWUP' | 'CATALOG' | 'RESTAURANT' | 'FRAUD_CHECKER'
   | 'AUTO_POST' | 'UNIVERSITY' | 'WALLET' | 'CONNECT_FB_PAGE'
   | 'SETTINGS_BUSINESS' | 'SETTINGS_DELIVERY' | 'SETTINGS_BOT'
   | 'SETTINGS_KNOWLEDGE' | 'SETTINGS_CALL' | 'SETTINGS_VOICE' | 'SETTINGS_TELEGRAM';
@@ -187,6 +187,7 @@ const PAGE_LABELS: Record<NavKey, string> = {
   PRINT: 'প্রিন্ট',
   PRODUCTS: 'প্রোডাক্ট',
   CATALOG: 'ক্যাটালগ',
+  RESTAURANT: 'রেস্টুরেন্ট',
   ACCOUNTING: 'হিসাব',
   ANALYTICS: 'অ্যানালিটিক্স',
   BOT_KNOWLEDGE: 'বট নলেজ',
@@ -266,6 +267,13 @@ const PAGE_SUGGESTIONS: Record<NavKey, string[]> = {
     'Catalog link কোথায় পাব?',
     'Customer catalog থেকে order দিতে পারে?',
     'Catalog customize করা যায়?',
+  ],
+  RESTAURANT: [
+    'Menu scan কীভাবে কাজ করে?',
+    'Ingredient inventory কীভাবে set করব?',
+    'Recipe set করলে কী হয়?',
+    'Delivery fee slab কীভাবে দেব?',
+    'Customer map-এ pin করে কীভাবে order করে?',
   ],
   ACCOUNTING: [
     'মোট profit কীভাবে দেখব?',

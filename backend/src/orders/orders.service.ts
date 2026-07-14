@@ -131,6 +131,76 @@ export class OrdersService {
     });
   }
 
+  // ── V25: Restaurant BOM — ingredient usage per recipe ──────────────────────
+  // sign = -1 deducts (confirm), +1 restores (cancel). Same math both ways so
+  // cancel always credits back exactly what confirm consumed. Negative stock
+  // is allowed on deduct — a stale ingredient count must never block a real
+  // food order; the panel's low-stock badge surfaces the problem instead.
+  private async applyIngredientUsage(
+    tx: any,
+    order: { pageIdRef: number; items?: any[] },
+    sign: 1 | -1,
+  ): Promise<boolean> {
+    let touched = false;
+    for (const item of order.items || []) {
+      const product = await tx.product.findFirst({
+        where: { pageId: order.pageIdRef, code: item.productCode },
+        select: { id: true },
+      });
+      if (!product) continue;
+      let meta: any = null;
+      try {
+        meta = item.metaJson ? JSON.parse(item.metaJson) : null;
+      } catch {
+        meta = null;
+      }
+      const variantLabel: string | null = meta?.variantLabel ?? null;
+      const pieces = Number(meta?.pieces) > 0 ? Number(meta.pieces) : 1;
+      const rows = await tx.recipeItem.findMany({
+        where: {
+          productId: product.id,
+          OR: [{ variantLabel: null }, { variantLabel }],
+        },
+      });
+      for (const row of rows) {
+        const amount =
+          row.per === 'piece'
+            ? row.qty * pieces * item.qty
+            : row.qty * item.qty;
+        if (!amount) continue;
+        await tx.ingredient.update({
+          where: { id: row.ingredientId },
+          data: { stockQty: { increment: sign * amount } },
+        });
+        touched = true;
+      }
+    }
+    // Per-ORDER packaging (e.g. 1 carry bag) — once, regardless of items
+    const page = await tx.page.findUnique({
+      where: { id: order.pageIdRef },
+      select: { orderPackagingJson: true },
+    });
+    try {
+      const packaging = JSON.parse(page?.orderPackagingJson || '[]');
+      if (Array.isArray(packaging)) {
+        for (const p of packaging) {
+          const ingredientId = Number(p?.ingredientId);
+          const qty = Number(p?.qty);
+          if (!Number.isFinite(ingredientId) || !(qty > 0)) continue;
+          // updateMany: skip silently if the ingredient was deleted meanwhile
+          const res = await tx.ingredient.updateMany({
+            where: { id: ingredientId, pageId: order.pageIdRef },
+            data: { stockQty: { increment: sign * qty } },
+          });
+          if (res.count > 0) touched = true;
+        }
+      }
+    } catch {
+      /* malformed packaging JSON — ignore */
+    }
+    return touched;
+  }
+
   // ── Confirm (page-scoped, with stock deduction) ────────────────────────────
   async confirmByAgent(id: number, pageId?: number) {
     const order = await this.findOrFail(id, pageId);
@@ -156,6 +226,9 @@ export class OrdersService {
             throw new BadRequestException(
               `Product not found: ${item.productCode}`,
             );
+          // V25: trackStock=false (restaurant food) — item stock is not
+          // tracked; the BOM ingredient deduction below is the real inventory.
+          if (product.trackStock === false) continue;
           if (product.stockQty < item.qty) {
             throw new BadRequestException(
               `Not enough stock for ${item.productCode}. Available: ${product.stockQty}`,
@@ -167,9 +240,19 @@ export class OrdersService {
           });
         }
       }
+      // V25: BOM ingredient deduction (recipes + per-order packaging)
+      let ingredientsDeducted = (order as any).ingredientsDeducted === true;
+      if (!ingredientsDeducted) {
+        ingredientsDeducted = await this.applyIngredientUsage(tx, order, -1);
+      }
       await tx.order.update({
         where: { id },
-        data: { status: 'CONFIRMED', confirmedAt: new Date(), stockDecremented: true },
+        data: {
+          status: 'CONFIRMED',
+          confirmedAt: new Date(),
+          stockDecremented: true,
+          ingredientsDeducted,
+        },
       });
     });
 
@@ -194,17 +277,27 @@ export class OrdersService {
       // never sent through confirmByAgent).
       if (order.stockDecremented) {
         for (const item of order.items || []) {
+          // trackStock=false products were never decremented at confirm
           await tx.product.updateMany({
-            where: { pageId: order.pageIdRef, code: item.productCode },
+            where: {
+              pageId: order.pageIdRef,
+              code: item.productCode,
+              trackStock: true,
+            },
             data: { stockQty: { increment: item.qty } },
           });
         }
+      }
+      // V25: restore BOM ingredients exactly as deducted
+      if ((order as any).ingredientsDeducted) {
+        await this.applyIngredientUsage(tx, order, 1);
       }
       return tx.order.update({
         where: { id },
         data: {
           status: 'CANCELLED',
           stockDecremented: false,
+          ingredientsDeducted: false,
           ...(cancelNote !== undefined ? { cancelNote } : {}),
         },
       });
@@ -468,6 +561,7 @@ export class OrdersService {
       qty: number;
       unitPrice: number;
       productName?: string;
+      metaJson?: string | null;
     }[];
     paymentMode: string;
     // V24: Restaurant mode — computed server-side by the catalog controller
@@ -501,6 +595,7 @@ export class OrdersService {
             qty: it.qty,
             unitPrice: it.unitPrice,
             productName: it.productName ?? null,
+            metaJson: it.metaJson ?? null,
           })),
         },
       },
@@ -511,16 +606,26 @@ export class OrdersService {
   async confirmWebOrderPayment(orderId: number, pageIdRef: number) {
     const order = await this.prisma.order.findFirst({
       where: { id: orderId, pageIdRef },
+      include: { items: true },
     });
     if (!order) throw new NotFoundException('Order not found');
-    return this.prisma.order.update({
-      where: { id: orderId },
-      data: {
-        paymentStatus: 'advance_paid',
-        paymentVerifyStatus: 'verified',
-        status: 'CONFIRMED',
-        confirmedAt: new Date(),
-      },
+    return this.prisma.$transaction(async (tx) => {
+      // V25: BOM ingredient deduction — this path confirms without going
+      // through confirmByAgent, so restaurant recipes must deduct here too.
+      let ingredientsDeducted = (order as any).ingredientsDeducted === true;
+      if (!ingredientsDeducted) {
+        ingredientsDeducted = await this.applyIngredientUsage(tx, order, -1);
+      }
+      return tx.order.update({
+        where: { id: orderId },
+        data: {
+          paymentStatus: 'advance_paid',
+          paymentVerifyStatus: 'verified',
+          status: 'CONFIRMED',
+          confirmedAt: new Date(),
+          ingredientsDeducted,
+        },
+      });
     });
   }
 

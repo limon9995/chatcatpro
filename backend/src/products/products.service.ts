@@ -302,6 +302,9 @@ export class ProductsService {
     // V24: discount (only shown when > price) and per-product policy override
     originalPrice?: number | null;
     pricingPolicyOverride?: string | null;
+    // V25: Restaurant food — size/portion pricing + BOM stock mode
+    priceVariantsJson?: string | null;
+    trackStock?: boolean;
   }) {
     const eid = await this.effectiveId(data.pageId);
     const isSimple = data.productType === 'SIMPLE';
@@ -344,6 +347,8 @@ export class ProductsService {
         deliveryCharge: normalizeDeliveryCharge(data.deliveryCharge),
         originalPrice: data.originalPrice ?? null,
         pricingPolicyOverride: data.pricingPolicyOverride ?? null,
+        priceVariantsJson: data.priceVariantsJson ?? null,
+        trackStock: data.trackStock ?? true,
       },
     });
     await this.setSidecarMetaForProduct(eid, created.code, {
@@ -417,6 +422,9 @@ export class ProductsService {
       // V24: discount (only shown when > price) and per-product policy override
       originalPrice?: number | null;
       pricingPolicyOverride?: string | null;
+      // V25: Restaurant food — size/portion pricing + BOM stock mode
+      priceVariantsJson?: string | null;
+      trackStock?: boolean;
     },
   ) {
     const code = codeRaw.startsWith('SP-') ? codeRaw : normalizeProductCode(codeRaw);
@@ -466,6 +474,10 @@ export class ProductsService {
       payload.originalPrice = data.originalPrice;
     if (data.pricingPolicyOverride !== undefined)
       payload.pricingPolicyOverride = data.pricingPolicyOverride || null;
+    if (data.priceVariantsJson !== undefined)
+      payload.priceVariantsJson = data.priceVariantsJson || null;
+    if (typeof data.trackStock === 'boolean')
+      payload.trackStock = data.trackStock;
     const eid = await this.effectiveId(pageId);
     const sidecarOnlyUpdate =
       data.referenceImagesJson !== undefined ||

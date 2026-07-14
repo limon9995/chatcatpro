@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Spinner, Toggle } from '../components/ui';
 import type { Theme } from '../components/ui';
-import LocationPickerMap from '../components/LocationPickerMap';
 import { API_BASE, useApi } from '../hooks/useApi';
 import { useLanguage } from '../i18n';
 import { DHAKA_ZONES } from '../data/dhaka-areas';
@@ -1832,118 +1831,22 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
           </div>
         </Section>
 
-        {/* V24: Restaurant Delivery — self-delivery within a radius, distance-slab fee */}
+        {/* V25: Restaurant settings moved to the dedicated 🍕 Restaurant panel */}
         <Section
-          title={copy('🍕 Restaurant Delivery — নিজস্ব ডেলিভারি', '🍕 Restaurant Delivery — Self Delivery')}
+          title={copy('🍕 Restaurant Mode', '🍕 Restaurant Mode')}
           desc={copy(
-            'Restaurant/food business-দের জন্য। ম্যাপে আপনার restaurant-এর location pin করুন এবং দূরত্ব অনুযায়ী delivery fee দিন। Customer website-এ order করার সময় ম্যাপে exact location pin করবে — দূরত্ব মেপে auto delivery charge হবে। চালু থাকলে ঢাকার ভেতরে/বাইরে fee এই page-এ apply হবে না।',
-            'For restaurants/food businesses. Pin your restaurant on the map and set distance-based delivery fees. Customers pin their exact location at checkout — the fee is computed automatically. While ON, inside/outside Dhaka fees do not apply to this page.',
+            'Restaurant/food business-এর সব setting এখন আলাদা "🍕 Restaurant" panel-এ — menu, ingredient inventory, delivery fee, order নেওয়া সব ওখানে।',
+            'All restaurant settings now live in the dedicated "🍕 Restaurant" panel — menu, ingredient inventory, delivery fees, take-order.',
           )}
         >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0' }}>
-            <div>
-              <div style={{ fontWeight: 700, fontSize: 14 }}>{copy('Restaurant Mode', 'Restaurant Mode')}</div>
-              <div style={{ fontSize: 12.5, color: th.muted, marginTop: 2 }}>{copy('Map pin checkout + দূরত্ব অনুযায়ী delivery fee', 'Map-pin checkout + distance-based delivery fee')}</div>
-            </div>
-            <button
-              onClick={() => setS(p => ({ ...p, restaurantModeEnabled: !p.restaurantModeEnabled }))}
-              style={{
-                padding: '8px 18px', borderRadius: 10, border: 'none', cursor: 'pointer',
-                fontWeight: 800, fontSize: 13, fontFamily: 'inherit',
-                background: s.restaurantModeEnabled ? '#059669' : th.border,
-                color: s.restaurantModeEnabled ? '#fff' : th.muted,
-                transition: 'all .15s',
-              }}
-            >
-              {s.restaurantModeEnabled ? '✅ চালু' : '⏸ বন্ধ'}
-            </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '6px 0' }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: s.restaurantModeEnabled ? '#059669' : th.muted }}>
+              {s.restaurantModeEnabled ? copy('✅ চালু আছে', '✅ Enabled') : copy('⏸ বন্ধ আছে', '⏸ Off')}
+            </span>
+            <span style={{ fontSize: 12.5, color: th.muted }}>
+              → {copy('বাম পাশের menu থেকে "🍕 রেস্টুরেন্ট" খুলুন', 'Open "🍕 Restaurant" from the left menu')}
+            </span>
           </div>
-
-          {s.restaurantModeEnabled && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 18, marginTop: 8 }}>
-              <div>
-                <Label text={copy('🏪 Restaurant-এর Location', 'Restaurant Location')} hint={copy('ম্যাপে ক্লিক করে বা GPS দিয়ে আপনার restaurant-এর জায়গা pin করুন', 'Click the map or use GPS to pin your restaurant')}/>
-                <LocationPickerMap
-                  lat={s.restaurantLat}
-                  lng={s.restaurantLng}
-                  onChange={(la, ln) => setS(p => ({ ...p, restaurantLat: la, restaurantLng: ln }))}
-                  markerEmoji="🏪"
-                  radiusKm={s.deliverySlabs.length ? s.deliverySlabs[s.deliverySlabs.length - 1].maxKm : null}
-                />
-                {s.restaurantLat == null && (
-                  <div style={{ fontSize: 12.5, color: '#d97706', marginTop: 6, fontWeight: 600 }}>
-                    ⚠️ {copy('Restaurant-এর location pin করা হয়নি — save করার আগে pin করুন', 'Restaurant location not pinned yet — pin it before saving')}
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <Label text={copy('🛵 Delivery Fee — দূরত্ব অনুযায়ী', 'Delivery Fee — by distance')} hint={copy('যেমন: ১ km পর্যন্ত ৳৩০, ১.৫ km পর্যন্ত ৳৫০। শেষ slab-এর বাইরে delivery হবে না।', 'e.g. up to 1 km = ৳30, up to 1.5 km = ৳50. No delivery beyond the last slab.')}/>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {s.deliverySlabs.map((slab, i) => (
-                    <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                      <span style={{ fontSize: 12.5, color: th.muted, minWidth: 52 }}>{copy('পর্যন্ত', 'Up to')}</span>
-                      <input
-                        style={{ ...inp, width: 90 }} type="number" min={0.1} step={0.1}
-                        value={Number.isFinite(slab.maxKm) ? slab.maxKm : ''}
-                        onChange={e => setS(p => {
-                          const slabs = p.deliverySlabs.map((x, j) => j === i ? { ...x, maxKm: Number(e.target.value) } : x);
-                          return { ...p, deliverySlabs: slabs };
-                        })}
-                      />
-                      <span style={{ fontSize: 12.5, color: th.muted }}>km →</span>
-                      <input
-                        style={{ ...inp, width: 90 }} type="number" min={0}
-                        value={Number.isFinite(slab.fee) ? slab.fee : ''}
-                        onChange={e => setS(p => {
-                          const slabs = p.deliverySlabs.map((x, j) => j === i ? { ...x, fee: Number(e.target.value) } : x);
-                          return { ...p, deliverySlabs: slabs };
-                        })}
-                      />
-                      <span style={{ fontSize: 12.5, color: th.muted }}>{s.currencySymbol || '৳'}</span>
-                      <button
-                        onClick={() => setS(p => ({ ...p, deliverySlabs: p.deliverySlabs.filter((_, j) => j !== i) }))}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626', fontSize: 17, lineHeight: 1, padding: '0 4px' }}
-                        title={copy('মুছুন', 'Remove')}
-                      >×</button>
-                    </div>
-                  ))}
-                  {s.deliverySlabs.length < 10 && (
-                    <button
-                      onClick={() => setS(p => {
-                        const last = p.deliverySlabs[p.deliverySlabs.length - 1];
-                        const nextKm = last ? Math.round((last.maxKm + 0.5) * 10) / 10 : 1;
-                        const nextFee = last ? last.fee + 10 : 30;
-                        return { ...p, deliverySlabs: [...p.deliverySlabs, { maxKm: nextKm, fee: nextFee }] };
-                      })}
-                      style={{ ...th.btnGhost, fontSize: 12.5, alignSelf: 'flex-start' }}
-                    >
-                      + {copy('Slab যোগ করুন', 'Add slab')}
-                    </button>
-                  )}
-                  {s.deliverySlabs.length === 0 && (
-                    <div style={{ fontSize: 12.5, color: '#d97706', fontWeight: 600 }}>
-                      ⚠️ {copy('অন্তত একটা delivery fee slab যোগ করুন', 'Add at least one delivery fee slab')}
-                    </div>
-                  )}
-                  {(() => {
-                    const kms = s.deliverySlabs.map(x => x.maxKm);
-                    const hasDup = new Set(kms).size !== kms.length;
-                    return hasDup ? (
-                      <div style={{ fontSize: 12.5, color: '#dc2626', fontWeight: 600 }}>
-                        ⚠️ {copy('একই দূরত্বের দুটো slab আছে — ঠিক করুন', 'Two slabs have the same distance — fix it')}
-                      </div>
-                    ) : null;
-                  })()}
-                  {s.deliverySlabs.length > 0 && (
-                    <div style={{ fontSize: 12, color: th.muted }}>
-                      {copy(`শেষ slab-এর (${[...s.deliverySlabs].sort((a, b) => a.maxKm - b.maxKm).slice(-1)[0]?.maxKm} km) বাইরে customer order করতে পারবে না।`, `Customers beyond the last slab (${[...s.deliverySlabs].sort((a, b) => a.maxKm - b.maxKm).slice(-1)[0]?.maxKm} km) cannot order.`)}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
         </Section>
 
         {/* SMS Gateway Setup */}
@@ -2208,10 +2111,8 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
           advancePaymentMessage: s.advancePaymentMessage,
           codEnabled: s.codEnabled, advanceThresholdAmount: s.advanceThresholdAmount,
           webOrderEnabled: s.webOrderEnabled,
-          restaurantModeEnabled: s.restaurantModeEnabled,
-          restaurantLat: s.restaurantLat,
-          restaurantLng: s.restaurantLng,
-          deliverySlabs: s.deliverySlabs,
+          // restaurant fields are managed by the 🍕 Restaurant panel — not sent
+          // from here so a stale Settings tab can never clobber panel edits
         })} saving={saving}/>
       </div>
     </div>

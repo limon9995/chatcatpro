@@ -28,7 +28,10 @@ import {
   isRestaurantReady,
   isValidLat,
   isValidLng,
+  parsePriceVariants,
   parseSlabs,
+  priceRangeText,
+  PriceVariant,
   resolveDeliveryFee,
 } from '../common/restaurant-delivery';
 
@@ -248,6 +251,9 @@ export class CatalogController {
         videoUrl: true,
         variantOptions: true,
         deliveryCharge: true,
+        category: true,
+        priceVariantsJson: true,
+        trackStock: true,
       },
     });
     if (!product) {
@@ -384,6 +390,36 @@ export class CatalogController {
     if (!address?.trim()) throw new BadRequestException('ঠিকানা দিন');
     if (!productCode) throw new BadRequestException('Product code required');
 
+    // V25: Server-authoritative pricing. The client's `price` is only a
+    // display value — the real unit price comes from the product row, and for
+    // size/portion products from the chosen variant.
+    const product = await this.prisma.product.findFirst({
+      where: {
+        pageId: page.id,
+        code: String(productCode).toUpperCase(),
+        isActive: true,
+      },
+      select: { price: true, name: true, priceVariantsJson: true },
+    });
+    if (!product) throw new BadRequestException('Product পাওয়া যায়নি');
+    const priceVariants = parsePriceVariants(product.priceVariantsJson);
+    let unitPrice = Number(product.price) || Number(price) || 0;
+    let itemMetaJson: string | null = null;
+    let itemName = productName || product.name || undefined;
+    if (priceVariants.length > 0) {
+      const chosen = priceVariants.find(
+        (v) => v.label === String(body.variantLabel ?? '').trim(),
+      );
+      if (!chosen)
+        throw new BadRequestException('সাইজ/পরিমাণ বেছে নিন');
+      unitPrice = chosen.price;
+      itemMetaJson = JSON.stringify({
+        variantLabel: chosen.label,
+        ...(chosen.pieces ? { pieces: chosen.pieces } : {}),
+      });
+      itemName = `${product.name || productCode} (${chosen.label})`;
+    }
+
     // V24: Restaurant mode — fee is ALWAYS recomputed here from the customer's
     // map pin; anything fee-like sent by the client is ignored.
     let restaurantDelivery: {
@@ -424,8 +460,9 @@ export class CatalogController {
       items: [{
         productCode: String(productCode).toUpperCase(),
         qty: Math.max(1, Number(qty) || 1),
-        unitPrice: Number(price) || 0,
-        productName: productName || undefined,
+        unitPrice,
+        productName: itemName,
+        metaJson: itemMetaJson,
       }],
       paymentMode: page.paymentMode,
       ...(restaurantDelivery ?? {}),
@@ -697,6 +734,7 @@ export class CatalogController {
         customDomain: true,
         websiteUrl: true,
         websiteEnabled: true,
+        restaurantModeEnabled: true,
         owner: { select: { isActive: true } },
       },
     });
@@ -708,14 +746,18 @@ export class CatalogController {
       pageId: page.id,
       isActive: true,
       catalogVisible: true,
-      stockQty: { gt: 0 },
+      // trackStock=false (restaurant food) — BOM ingredients are the real
+      // stock, so item stockQty must not hide the dish from the menu
+      AND: [{ OR: [{ stockQty: { gt: 0 } }, { trackStock: false }] }],
     };
     if (search?.trim()) {
-      where.OR = [
-        { name: { contains: search } },
-        { code: { contains: search.toUpperCase() } },
-        { description: { contains: search } },
-      ];
+      where.AND.push({
+        OR: [
+          { name: { contains: search } },
+          { code: { contains: search.toUpperCase() } },
+          { description: { contains: search } },
+        ],
+      });
     }
     const filteredCodes = this.normalizeCodeList(codeFilterRaw);
     if (filteredCodes.length > 0) {
@@ -737,6 +779,9 @@ export class CatalogController {
         videoUrl: true,
         productViews: true,
         deliveryCharge: true,
+        category: true,
+        priceVariantsJson: true,
+        trackStock: true,
       },
     });
     // Fall back to the first Reference Image when no main Image URL is set —
@@ -749,6 +794,7 @@ export class CatalogController {
     const products = productsWithRefs.map((p: any) => ({
       ...p,
       imageUrl: p.imageUrl || this.parseReferenceImages(p.referenceImagesJson)[0] || null,
+      priceVariants: parsePriceVariants(p.priceVariantsJson),
     }));
 
     return {
@@ -772,6 +818,7 @@ export class CatalogController {
         catalogViews: page.catalogViews ?? 0,
         customDomain: page.customDomain || null,
         websiteUrl: page.websiteUrl || null,
+        restaurantMode: Boolean((page as any).restaurantModeEnabled),
       },
       products,
       total: products.length,
@@ -786,7 +833,12 @@ export class CatalogController {
   ): string {
     const primary = esc(page.primaryColor);
     const currency = esc(page.currency);
-    const inStock = p.stockQty > 0;
+    // trackStock=false (restaurant food) — BOM ingredients are the inventory,
+    // the item itself is always orderable while active
+    const inStock = p.trackStock === false ? true : p.stockQty > 0;
+    const foodVariants = parsePriceVariants(p.priceVariantsJson);
+    const hasFoodVariants = foodVariants.length > 0;
+    const qtyMax = p.trackStock === false ? 99 : p.stockQty;
     const selectionMode = Boolean(opts?.selectionMode);
     const shortlistCodes = opts?.shortlistCodes || [];
     const shortlistQuery = shortlistCodes.length
@@ -1205,13 +1257,27 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:var(--b
 
         <div class="price-block">
           ${
-            Number(p.originalPrice) > Number(p.price) && Number(p.price) > 0
-              ? `<div class="price-offer"><span class="price-old">${currency}${Number(p.originalPrice).toLocaleString()}</span><div class="price-val">${currency}${Number(p.price).toLocaleString()}</div><span class="off-badge">-${Math.round((1 - Number(p.price) / Number(p.originalPrice)) * 100)}% ছাড়</span></div>`
-              : `<div class="price-val">${currency}${Number(p.price).toLocaleString()}</div>`
+            hasFoodVariants
+              ? `<div class="price-val" id="pvPrice">${priceRangeText(foodVariants, p.price, currency)}</div>`
+              : Number(p.originalPrice) > Number(p.price) && Number(p.price) > 0
+                ? `<div class="price-offer"><span class="price-old">${currency}${Number(p.originalPrice).toLocaleString()}</span><div class="price-val">${currency}${Number(p.price).toLocaleString()}</div><span class="off-badge">-${Math.round((1 - Number(p.price) / Number(p.originalPrice)) * 100)}% ছাড়</span></div>`
+                : `<div class="price-val">${currency}${Number(p.price).toLocaleString()}</div>`
           }
           <span class="stock-pill ${inStock ? 's-in' : 's-out'}">${inStock ? '✓ In Stock' : '✕ Stock Out'}</span>
           ${p.deliveryCharge === 'FREE' ? '<span class="stock-pill s-in">🚚 Free Delivery</span>' : ''}
+          ${p.category && hasFoodVariants ? `<span class="stock-pill s-in" style="background:var(--p-light);color:var(--p-dark);border-color:var(--p-mid)">🍽️ ${esc(p.category)}</span>` : ''}
         </div>
+
+        ${
+          hasFoodVariants
+            ? `<div class="var-group">
+            <div class="var-label">সাইজ/পরিমাণ বেছে নিন</div>
+            <div class="var-chips" id="pvChips">
+              ${foodVariants.map((v, i) => `<button class="chip pv-chip${i === 0 ? ' active' : ''}" data-label="${esc(v.label)}" data-price="${v.price}" onclick="pvSelect(this)">${esc(v.label)} — ${currency}${v.price.toLocaleString()}</button>`).join('')}
+            </div>
+          </div><div class="divider"></div>`
+            : ''
+        }
 
         ${variantHtml ? `${variantHtml}<div class="divider"></div>` : ''}
 
@@ -1379,8 +1445,17 @@ ${page.webOrderEnabled ? `
       <div class="wo-step active" id="woStep0">
         <div class="wo-product-info">
           <strong>${esc(p.name || p.code)}</strong><br>
-          <span style="font-size:13px;color:var(--sub)">${esc(p.code)} · ${esc(page.currency)}${Number(p.price).toLocaleString('bn-BD')}</span>
+          <span style="font-size:13px;color:var(--sub)">${esc(p.code)} · <span id="woInfoPrice">${
+            hasFoodVariants
+              ? `${esc(page.currency)}${foodVariants[0].price.toLocaleString()} (${esc(foodVariants[0].label)})`
+              : `${esc(page.currency)}${Number(p.price).toLocaleString('bn-BD')}`
+          }</span></span>
         </div>
+        ${
+          hasFoodVariants
+            ? `<div><div class="wo-lbl">সাইজ/পরিমাণ *</div><select class="wo-inp" id="woSizeSel" onchange="woSizeChange()">${foodVariants.map((v, i) => `<option value="${esc(v.label)}" data-price="${v.price}"${i === 0 ? ' selected' : ''}>${esc(v.label)} — ${currency}${v.price.toLocaleString()}</option>`).join('')}</select></div>`
+            : ''
+        }
         ${(() => {
           let varSelects = '';
           try {
@@ -1398,8 +1473,8 @@ ${page.webOrderEnabled ? `
           return varSelects;
         })()}
         <div class="wo-row2">
-          <div><div class="wo-lbl">পরিমাণ (Qty)</div><input class="wo-inp" id="woQty" type="number" min="1" max="${p.stockQty}" value="1"></div>
-          <div style="display:flex;align-items:flex-end"><div style="font-size:13px;color:var(--sub);padding-bottom:12px">max ${p.stockQty}</div></div>
+          <div><div class="wo-lbl">পরিমাণ (Qty)</div><input class="wo-inp" id="woQty" type="number" min="1" max="${qtyMax}" value="1"></div>
+          <div style="display:flex;align-items:flex-end"><div style="font-size:13px;color:var(--sub);padding-bottom:12px">${p.trackStock === false ? '' : `max ${p.stockQty}`}</div></div>
         </div>
         <div><div class="wo-lbl">আপনার নাম *</div><input class="wo-inp" id="woName" type="text" placeholder="পুরো নাম"></div>
         <div><div class="wo-lbl">ফোন নম্বর *</div><input class="wo-inp" id="woPhone" type="tel" placeholder="01XXXXXXXXX"></div>
@@ -1520,8 +1595,30 @@ var WO_RESTO = ${page.restaurantMode ? 1 : 0};
 var WO_RLAT = ${Number(page.restaurantLat) || 0};
 var WO_RLNG = ${Number(page.restaurantLng) || 0};
 var WO_SLABS = ${JSON.stringify(page.deliverySlabs || [])};
+var WO_VARIANTS = ${JSON.stringify(foodVariants)};
+var woVarLabel = WO_VARIANTS.length ? WO_VARIANTS[0].label : null;
 var woOrderIdVal = null;
 var woPaymentUrl = null;
+
+// ── Size/portion price variants — server re-validates the chosen label ──────
+function woApplyVariant(label){
+  var v = null;
+  for (var i = 0; i < WO_VARIANTS.length; i++) { if (WO_VARIANTS[i].label === label) { v = WO_VARIANTS[i]; break; } }
+  if (!v) return;
+  woVarLabel = v.label;
+  WO_PRICE = v.price;
+  var pv = document.getElementById('pvPrice');
+  if (pv) pv.textContent = WO_CURRENCY + v.price.toLocaleString();
+  var info = document.getElementById('woInfoPrice');
+  if (info) info.textContent = WO_CURRENCY + v.price.toLocaleString() + ' (' + v.label + ')';
+  // keep page chips + modal select in sync
+  document.querySelectorAll('.pv-chip').forEach(function(c){ c.classList.toggle('active', c.getAttribute('data-label') === v.label); });
+  var sel = document.getElementById('woSizeSel');
+  if (sel && sel.value !== v.label) sel.value = v.label;
+  if (typeof woRecalcFee === 'function') woRecalcFee();
+}
+function pvSelect(btn){ woApplyVariant(btn.getAttribute('data-label')); }
+function woSizeChange(){ var sel = document.getElementById('woSizeSel'); if (sel) woApplyVariant(sel.value); }
 
 function woOpen(){ document.getElementById('woModal').classList.add('open'); document.body.style.overflow='hidden'; if(WO_RESTO){ woInitMap(); } else { woLoadGeo(); } }
 function woClose(){ document.getElementById('woModal').classList.remove('open'); document.body.style.overflow=''; }
@@ -1711,6 +1808,7 @@ async function woSubmit(){
   try {
     var body={customerName:name,phone:phone,address:addr,productCode:WO_CODE,qty:qty,price:WO_PRICE,productName:WO_NAME,orderNote:note};
     if(WO_RESTO){ body.deliveryLat=woLat; body.deliveryLng=woLng; }
+    if(WO_VARIANTS.length){ body.variantLabel=woVarLabel; }
     var r=await fetch('/catalog/'+WO_PAGE_ID+'/web-order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     var d=await r.json();
     if(!r.ok) throw new Error(d.message||'Error');
@@ -1829,22 +1927,42 @@ ${poweredByBadge()}
       ? `?select=1&codes=${encodeURIComponent(shortlistCodes.join(','))}`
       : '?select=1';
 
+    // V25: Restaurant pages get burgerbhai-style category tabs (Momo's (6) …)
+    const restaurantTabs = Boolean(page.restaurantMode);
+    const categoryCounts = new Map<string, number>();
+    if (restaurantTabs) {
+      for (const p of products) {
+        const c = String(p.category || '').trim();
+        if (!c) continue;
+        categoryCounts.set(c, (categoryCounts.get(c) || 0) + 1);
+      }
+    }
+    const categoryTabs = [...categoryCounts.entries()].sort((a, b) =>
+      a[0].localeCompare(b[0]),
+    );
+
     const cards = products
       .map((p: any, idx: number) => {
         const videoType = detectVideoType(p.videoUrl || '');
         const ytId =
           videoType === 'youtube' ? extractYouTubeId(p.videoUrl) : null;
         const isFB = videoType === 'facebook';
-        const inStock = p.stockQty > 0;
+        const inStock = p.trackStock === false ? true : p.stockQty > 0;
         const delay = Math.min(idx * 40, 400);
+        // V25: size/portion pricing → show range ("৳120 – ৳220") on the card
+        const cardVariants: PriceVariant[] = Array.isArray(p.priceVariants)
+          ? p.priceVariants
+          : [];
         // V24 offer: strikethrough old price + % badge when originalPrice > price
         const origPrice = Number(p.originalPrice) || 0;
         const curPrice = Number(p.price) || 0;
         const hasOffer = origPrice > curPrice && curPrice > 0;
         const offPct = hasOffer ? Math.round((1 - curPrice / origPrice) * 100) : 0;
-        const priceBlock = hasOffer
-          ? `<div class="c-price-wrap"><span class="c-price-old">${currency}${origPrice.toLocaleString()}</span><div class="c-price">${currency}${curPrice.toLocaleString()} <span class="c-off-badge">-${offPct}%</span></div></div>`
-          : `<div class="c-price">${currency}${curPrice.toLocaleString()}</div>`;
+        const priceBlock = cardVariants.length
+          ? `<div class="c-price" style="font-size:17px">${priceRangeText(cardVariants, curPrice, currency)}</div>`
+          : hasOffer
+            ? `<div class="c-price-wrap"><span class="c-price-old">${currency}${origPrice.toLocaleString()}</span><div class="c-price">${currency}${curPrice.toLocaleString()} <span class="c-off-badge">-${offPct}%</span></div></div>`
+            : `<div class="c-price">${currency}${curPrice.toLocaleString()}</div>`;
 
         let topBlock = '';
         if (ytId) {
@@ -1859,7 +1977,7 @@ ${poweredByBadge()}
         }
 
         return `
-      <a class="card" href="/catalog/${esc(page.id)}/product/${esc(p.code)}${selectionMode ? shortlistQuery : ''}" style="animation-delay:${delay}ms" id="p-${esc(p.id)}" data-price="${Number(p.price) || 0}" data-custom-index="${idx}" data-new-index="${idx}" data-product-id="${esc(p.id)}" data-name="${esc((p.name || p.code || '').toLowerCase())}" data-code="${esc((p.code || '').toLowerCase())}" data-desc="${esc((p.description || '').toLowerCase().slice(0, 300))}">
+      <a class="card" href="/catalog/${esc(page.id)}/product/${esc(p.code)}${selectionMode ? shortlistQuery : ''}" style="animation-delay:${delay}ms" id="p-${esc(p.id)}" data-price="${Number(p.price) || 0}" data-custom-index="${idx}" data-new-index="${idx}" data-product-id="${esc(p.id)}" data-name="${esc((p.name || p.code || '').toLowerCase())}" data-code="${esc((p.code || '').toLowerCase())}" data-desc="${esc((p.description || '').toLowerCase().slice(0, 300))}" data-category="${esc(String(p.category || '').toLowerCase())}">
         <div class="c-media">
           ${topBlock}
           ${!inStock ? '<div class="c-out-badge">Stock Out</div>' : p.deliveryCharge === 'FREE' ? '<div class="c-free-badge">🚚 Free Delivery</div>' : ''}
@@ -2269,6 +2387,16 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:radial-
   </div>
 </div>
 
+${
+  restaurantTabs && categoryTabs.length > 0
+    ? `<div class="filters">
+  <div class="filters-inner" id="categoryBar">
+    <button type="button" class="filter-btn active" data-cat="">🍽️ সব (${products.length})</button>
+    ${categoryTabs.map(([cat, count]) => `<button type="button" class="filter-btn" data-cat="${esc(cat.toLowerCase())}">${esc(cat)} (${count})</button>`).join('\n    ')}
+  </div>
+</div>`
+    : ''
+}
 <div class="filters">
   <div class="filters-inner" id="filterBar">
     <button type="button" class="filter-btn active" data-sort="all">All</button>
@@ -2325,6 +2453,7 @@ ${poweredByBadge()}
 
   var allCards = Array.from(grid.querySelectorAll('.card'));
   var sortMode = 'all';
+  var currentCat = '';
   var currentQuery = (searchBox ? searchBox.value : '').toLowerCase().trim();
 
   /* ── normalize text for matching ── */
@@ -2362,6 +2491,7 @@ ${poweredByBadge()}
     var visible = [];
     allCards.forEach(function(c){
       var show = matches(c, q);
+      if(show && currentCat){ show = (c.dataset.category || '') === currentCat; }
       c.style.display = show ? '' : 'none';
       if(show) visible.push(c);
     });
@@ -2420,13 +2550,24 @@ ${poweredByBadge()}
     }
   }
 
-  /* ── filter buttons ── */
-  var buttons = Array.from(document.querySelectorAll('.filter-btn'));
+  /* ── sort buttons (scoped to #filterBar — category bar has its own state) ── */
+  var buttons = Array.from(document.querySelectorAll('#filterBar .filter-btn'));
   buttons.forEach(function(btn){
     btn.addEventListener('click', function(){
       buttons.forEach(function(b){ b.classList.remove('active'); });
       btn.classList.add('active');
       sortMode = btn.dataset.sort || 'all';
+      apply();
+    });
+  });
+
+  /* ── V25: restaurant category tabs ── */
+  var catButtons = Array.from(document.querySelectorAll('#categoryBar .filter-btn'));
+  catButtons.forEach(function(btn){
+    btn.addEventListener('click', function(){
+      catButtons.forEach(function(b){ b.classList.remove('active'); });
+      btn.classList.add('active');
+      currentCat = btn.dataset.cat || '';
       apply();
     });
   });

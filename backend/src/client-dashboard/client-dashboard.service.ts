@@ -30,6 +30,7 @@ import {
   isValidLat,
   isValidLng,
   MAX_DELIVERY_SLABS,
+  parsePriceVariants,
   parseSlabs,
   resolveDeliveryFee,
 } from '../common/restaurant-delivery';
@@ -296,12 +297,39 @@ export class ClientDashboardService {
     const items: any[] = Array.isArray(body?.items) ? body.items : [];
     for (const item of items) {
       if (!item?.productCode) continue;
+      const code = String(item.productCode).toUpperCase();
+      // V25: size/portion variant — server resolves the variant's price and
+      // stores the choice structurally; a client-sent unitPrice on a variant
+      // product is ignored.
+      let unitPrice = Number(item.unitPrice) || 0;
+      let metaJson: string | null = null;
+      let productName: string | null = null;
+      if (item.variantLabel) {
+        const product = await this.prisma.product.findFirst({
+          where: { pageId, code },
+          select: { name: true, priceVariantsJson: true },
+        });
+        const variants = parsePriceVariants(product?.priceVariantsJson);
+        const chosen = variants.find(
+          (v) => v.label === String(item.variantLabel).trim(),
+        );
+        if (chosen) {
+          unitPrice = chosen.price;
+          metaJson = JSON.stringify({
+            variantLabel: chosen.label,
+            ...(chosen.pieces ? { pieces: chosen.pieces } : {}),
+          });
+          productName = product?.name ? `${product.name} (${chosen.label})` : null;
+        }
+      }
       await this.prisma.orderItem.create({
         data: {
           orderId: order.id,
-          productCode: String(item.productCode),
+          productCode: code,
           qty: Number(item.qty) || 1,
-          unitPrice: Number(item.unitPrice) || 0,
+          unitPrice,
+          productName,
+          metaJson,
         },
       });
     }

@@ -290,4 +290,136 @@ Rules:
       rawDescription: reason,
     };
   }
+
+  // ── V25: Restaurant menu-photo import ───────────────────────────────────────
+
+  private buildMenuPrompt(): string {
+    return `You are reading a RESTAURANT MENU photo from Bangladesh (text may be Bengali, English, or Banglish — handle all).
+Extract EVERY food/drink item you can read with its price(s).
+Respond ONLY with a valid JSON object (no markdown, no explanation).
+
+Required JSON format:
+{
+  "dishes": [
+    {
+      "name": "<dish name exactly as written, keep the original language>",
+      "category": "<menu section heading this item appears under (e.g. 'Burger', 'Momo', 'Drinks', 'Rice'); if no heading, infer a short 1-2 word food category>",
+      "description": "<short description printed under the item, or null>",
+      "variants": [
+        { "label": "<size/portion label, e.g. '5 pcs', 'Regular', 'Mini', 'Full', 'Half'>", "price": <number>, "pieces": <integer piece count if the label states pieces (e.g. '5 pcs' → 5), else null> }
+      ]
+    }
+  ]
+}
+
+Rules:
+- A dish with a single price gets ONE variant: {"label": "Regular", "price": <number>, "pieces": null}
+- Prices: numbers only — strip currency symbols (৳, Tk, TK, BDT, /-) and thousands separators. Convert Bengali digits (০১২৩৪৫৬৭৮৯) to numbers.
+- If an item has multiple printed prices (e.g. "6 pcs 120 / 12 pcs 220" or "S 80 M 120 L 160"), create one variant per price with the printed label.
+- SKIP items whose price is unreadable or missing — do not invent prices.
+- Do not merge different dishes; each menu line item is its own dish.
+- Keep combos/set menus as single dishes with their printed price.`;
+  }
+
+  /**
+   * Extract dishes from restaurant menu photo(s). Returns [] dishes on
+   * unreadable input. `usage` carries Gemini token counts for metering.
+   */
+  async extractMenuItems(imageUrls: string[]): Promise<{
+    dishes: {
+      name: string;
+      category: string | null;
+      description: string | null;
+      variants: { label: string; price: number; pieces: number | null }[];
+    }[];
+    usage: { model: string; promptTokens: number; outputTokens: number };
+  }> {
+    const apiKey = this.getKey();
+    if (!apiKey) throw new Error('GEMINI_API_KEY not configured');
+    const urls = imageUrls.slice(0, 5);
+    const dataUrls = await Promise.all(urls.map((u) => this.toBase64DataUrl(u)));
+    const imageParts = dataUrls.map((dataUrl) => {
+      const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+      return {
+        inlineData: {
+          mimeType: match?.[1] ?? 'image/jpeg',
+          data: match?.[2] ?? dataUrl,
+        },
+      };
+    });
+
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent?key=${apiKey}`;
+    const t0 = Date.now();
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [
+          { role: 'user', parts: [{ text: this.buildMenuPrompt() }, ...imageParts] },
+        ],
+        generationConfig: {
+          // see callAPIWithKey note — thinking silently eats the token budget
+          thinkingConfig: { thinkingBudget: 0 },
+          // menus can be long — give plenty of room for a big dish list
+          maxOutputTokens: 8000,
+          responseMimeType: 'application/json',
+        },
+      }),
+      signal: AbortSignal.timeout(60_000),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      this.rotator.markError(apiKey, response.status, errText.slice(0, 100));
+      throw new Error(
+        `Gemini menu-scan error ${response.status}: ${errText.slice(0, 200)}`,
+      );
+    }
+    this.rotator.markSuccess(apiKey, Date.now() - t0);
+
+    const data = await response.json();
+    const content: string =
+      data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+    this.logger.log(
+      `[GeminiVision] Menu scan (${urls.length} imgs): ${content.slice(0, 200)}`,
+    );
+
+    let dishes: any[] = [];
+    try {
+      const parsed = JSON.parse(this.extractJson(content));
+      dishes = Array.isArray(parsed?.dishes) ? parsed.dishes : [];
+    } catch {
+      dishes = [];
+    }
+    // Defensive coercion — never trust model output shapes
+    const clean = dishes
+      .map((d: any) => {
+        const variants = (Array.isArray(d?.variants) ? d.variants : [])
+          .map((v: any) => ({
+            label: String(v?.label ?? 'Regular').trim() || 'Regular',
+            price: Number(v?.price),
+            pieces:
+              Number.isFinite(Number(v?.pieces)) && Number(v.pieces) > 0
+                ? Math.round(Number(v.pieces))
+                : null,
+          }))
+          .filter((v: any) => Number.isFinite(v.price) && v.price > 0);
+        return {
+          name: String(d?.name ?? '').trim(),
+          category: d?.category ? String(d.category).trim() : null,
+          description: d?.description ? String(d.description).trim() : null,
+          variants,
+        };
+      })
+      .filter((d) => d.name.length > 0 && d.variants.length > 0);
+
+    return {
+      dishes: clean,
+      usage: {
+        model: this.model,
+        promptTokens: Number(data?.usageMetadata?.promptTokenCount) || 0,
+        outputTokens: Number(data?.usageMetadata?.candidatesTokenCount) || 0,
+      },
+    };
+  }
 }

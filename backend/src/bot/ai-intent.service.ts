@@ -7,7 +7,11 @@ import { GeminiKeyRotatorService } from '../common/gemini-key-rotator.service';
 import { BotKnowledgeService } from '../bot-knowledge/bot-knowledge.service';
 import { AgentBehaviorConfig } from '../agents/agent-behavior-config.interface';
 import { AiCallUsage, AiUsageService } from '../common/ai-usage.service';
-import { formatSlabsBn } from '../common/restaurant-delivery';
+import {
+  formatSlabsBn,
+  parsePriceVariants,
+  variantsSummaryText,
+} from '../common/restaurant-delivery';
 
 export interface AiIntentResult {
   intent: string | null; // null = use keyword fallback
@@ -622,10 +626,15 @@ Rules:
     };
     const productLines = context.products
       .slice(0, 25)
-      .map(
-        (p) =>
-          `- ${p.name}: ৳${p.price} | ${p.stockQty > 0 ? 'Stock আছে' : 'Stock নেই'}${offerNote(p)}`,
-      )
+      .map((p) => {
+        // V25: size/portion prices when present ("5 pcs ৳120 / 10 pcs ৳220")
+        const variants = parsePriceVariants((p as any).priceVariantsJson);
+        const priceTxt = variants.length
+          ? variantsSummaryText(variants, '৳')
+          : `৳${p.price}`;
+        const inStock = (p as any).trackStock === false || p.stockQty > 0;
+        return `- ${p.name}: ${priceTxt} | ${inStock ? 'Stock আছে' : 'Stock নেই'}${offerNote(p)}`;
+      })
       .join('\n');
     const productCtx =
       context.products.length > 0

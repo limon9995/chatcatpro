@@ -150,6 +150,9 @@ model Page {
   restaurantLat         Float? // restaurant location pin
   restaurantLng         Float?
   deliverySlabsJson     String? // JSON [{maxKm, fee}] sorted ascending; beyond last slab = no delivery
+  // V25: per-ORDER packaging consumed once per order regardless of items,
+  // e.g. 1 carry bag: [{ingredientId, qty}]
+  orderPackagingJson    String?
 
   callConfirmModeOn       Boolean @default(false)
   callConfirmModeAllowed  Boolean @default(true)
@@ -264,6 +267,7 @@ model Page {
 
   orders               Order[]
   products             Product[]
+  ingredients          Ingredient[]
   conversationSessions ConversationSession[]
   callAttempts         CallAttempt[]
   memoTemplate         MemoTemplate?
@@ -370,10 +374,20 @@ model Product {
   // behavior, unchanged for every existing product).
   pricingPolicyOverride String?
 
+  // V25: Restaurant/food — size/portion pricing. Each variant has its own
+  // absolute price: [{label:"5 pcs", price:120, pieces?:5}]. `price` stays the
+  // default/min price (display fallback + sorting). `pieces` feeds per-piece
+  // recipe scaling (momo: 1 patty per piece).
+  priceVariantsJson String?
+  // V25: false = stockQty ignored for catalog visibility and confirm-time
+  // stock checks — BOM ingredient inventory is the real stock for food items.
+  trackStock        Boolean @default(true)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   orderItems    OrderItem[]
+  recipeItems   RecipeItem[]
   dualWearingPages Page[] @relation("DualWearing")
   dualHoldingPages Page[] @relation("DualHolding")
   liveSessionsWorn LiveSession[] @relation("SessionWorn")
@@ -381,6 +395,48 @@ model Product {
 
   @@unique([pageId, code])
   @@index([pageId])
+}
+
+// V25: Restaurant BOM inventory — raw materials incl. packaging (bun, chicken
+// in grams, sauces, box, spoon, wrapping paper, carry bag). Deducted
+// automatically from product recipes when an order is confirmed.
+model Ingredient {
+  id          Int     @id @default(autoincrement())
+  pageId      Int
+  page        Page    @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  name        String
+  unit        String  @default("pcs") // gm | pcs | ml | kg | liter
+  stockQty    Float   @default(0)
+  minStock    Float   @default(0) // low-stock warning threshold
+  costPerUnit Float   @default(0) // optional, future costing
+  isActive    Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  recipeItems RecipeItem[]
+
+  @@unique([pageId, name])
+  @@index([pageId])
+}
+
+// V25: One recipe row = "this product consumes qty of this ingredient".
+// per="item"  → qty × OrderItem.qty (box per burger)
+// per="piece" → qty × variant pieces × OrderItem.qty (patty per momo piece)
+// variantLabel null = applies to all variants; set = only that size/variant
+// (BBQ sauce only in the BBQ variant).
+model RecipeItem {
+  id           Int        @id @default(autoincrement())
+  productId    Int
+  product      Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  ingredientId Int
+  ingredient   Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+  qty          Float
+  per          String     @default("item") // "item" | "piece"
+  variantLabel String?
+
+  @@index([productId])
+  @@index([ingredientId])
 }
 
 model Order {
@@ -431,6 +487,9 @@ model Order {
   // items — lets cancelOrder restore stock safely without over-crediting
   // orders that were cancelled before stock was ever reserved.
   stockDecremented Boolean @default(false)
+  // V25: same flag for BOM ingredient deduction (restaurant recipes +
+  // per-order packaging) — cancel restores exactly what was deducted.
+  ingredientsDeducted Boolean @default(false)
 
   // Spam/Fraud check result
   spamRisk        String   @default("unknown")

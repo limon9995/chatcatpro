@@ -17,6 +17,6 @@ import { GeminiVisionProvider } from './providers/gemini.vision.provider';
     GeminiVisionProvider,
     VisionAnalysisService,
   ],
-  exports: [VisionAnalysisService],
+  exports: [VisionAnalysisService, GeminiVisionProvider],
 })
 export class VisionAnalysisModule {}
