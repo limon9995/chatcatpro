@@ -312,7 +312,11 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
 
   const goToDashboardForPage = (page: ConnectedPage) => {
     localStorage.setItem('dfbot_active_page', String(page.id));
-    onConnected();
+    // Hard navigation: boots the app straight into the dashboard for this
+    // page and clears the stale ?mode=connect-page from the URL. The old
+    // soft path (onConnected → loadMyPages) re-evaluated screen logic that
+    // could bounce right back to this screen.
+    window.location.href = `/?mode=dashboard&page=${page.id}`;
   };
 
   const inp: React.CSSProperties = {
@@ -325,11 +329,11 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
   const tutorialYtId = extractYouTubeId(pageConnectTutorialUrl);
 
   return (
-    <div style={{ minHeight: '100vh', background: bg, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', gap: 24, padding: '40px 20px', fontFamily: "'Inter', system-ui, sans-serif", flexWrap: 'wrap' }}>
-      <div style={{ width: 500, flexShrink: 0, background: panel, border: `1px solid ${border}`, borderRadius: 22, padding: 38, boxShadow: dark ? '0 8px 48px rgba(0,0,0,0.5)' : '0 8px 40px rgba(99,102,241,0.1)' }}>
+    <div style={{ minHeight: '100vh', background: bg, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', gap: 24, padding: 'clamp(14px, 4vw, 40px) clamp(10px, 3vw, 20px)', fontFamily: "'Inter', system-ui, sans-serif", flexWrap: 'wrap' }}>
+      <div style={{ width: 'min(500px, 100%)', boxSizing: 'border-box', background: panel, border: `1px solid ${border}`, borderRadius: 22, padding: 'clamp(16px, 4.5vw, 38px)', boxShadow: dark ? '0 8px 48px rgba(0,0,0,0.5)' : '0 8px 40px rgba(99,102,241,0.1)' }}>
 
         {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 22 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 22, flexWrap: 'wrap', gap: 10 }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
               <div style={{ width: 38, height: 38, borderRadius: 10, background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>🤖</div>
@@ -450,26 +454,39 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
                 'No Developer Account needed. Just add the profile/Gmail below as a moderator on your Facebook Page — this is the simplest and safest method.',
               )}
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <code style={{ flex: 1, background: dark ? 'rgba(0,0,0,0.2)' : '#fff', padding: '8px 12px', borderRadius: 8, fontSize: 12, color: text, wordBreak: 'break-all', fontFamily: 'monospace', border: `1px solid ${border}` }}>
-                  {moderatorAccess.fbProfileLink || copy('(এখনো সেট করা হয়নি)', '(not set yet)')}
-                </code>
-                <button onClick={() => copyToClipboard('profile', moderatorAccess.fbProfileLink || '')} disabled={!moderatorAccess.fbProfileLink}
-                  style={{ border: `1px solid rgba(99,102,241,0.4)`, borderRadius: 7, padding: '6px 12px', background: 'rgba(99,102,241,0.1)', color: '#6366f1', cursor: moderatorAccess.fbProfileLink ? 'pointer' : 'default', fontSize: 11, fontWeight: 700, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
-                  {copiedField === 'profile' ? copy('✓ Copied', '✓ Copied') : copy('Copy', 'Copy')}
-                </button>
+            {moderatorAccess.fbProfileLink || moderatorAccess.email ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {moderatorAccess.fbProfileLink && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <code style={{ flex: 1, minWidth: 0, background: dark ? 'rgba(0,0,0,0.2)' : '#fff', padding: '8px 12px', borderRadius: 8, fontSize: 12, color: text, wordBreak: 'break-all', fontFamily: 'monospace', border: `1px solid ${border}` }}>
+                      {moderatorAccess.fbProfileLink}
+                    </code>
+                    <button onClick={() => copyToClipboard('profile', moderatorAccess.fbProfileLink || '')}
+                      style={{ border: `1px solid rgba(99,102,241,0.4)`, borderRadius: 7, padding: '6px 12px', background: 'rgba(99,102,241,0.1)', color: '#6366f1', cursor: 'pointer', fontSize: 11, fontWeight: 700, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                      {copiedField === 'profile' ? copy('✓ Copied', '✓ Copied') : copy('Copy', 'Copy')}
+                    </button>
+                  </div>
+                )}
+                {moderatorAccess.email && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <code style={{ flex: 1, minWidth: 0, background: dark ? 'rgba(0,0,0,0.2)' : '#fff', padding: '8px 12px', borderRadius: 8, fontSize: 12, color: text, wordBreak: 'break-all', fontFamily: 'monospace', border: `1px solid ${border}` }}>
+                      {moderatorAccess.email}
+                    </code>
+                    <button onClick={() => copyToClipboard('email', moderatorAccess.email || '')}
+                      style={{ border: `1px solid rgba(99,102,241,0.4)`, borderRadius: 7, padding: '6px 12px', background: 'rgba(99,102,241,0.1)', color: '#6366f1', cursor: 'pointer', fontSize: 11, fontWeight: 700, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                      {copiedField === 'email' ? copy('✓ Copied', '✓ Copied') : copy('Copy', 'Copy')}
+                    </button>
+                  </div>
+                )}
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <code style={{ flex: 1, background: dark ? 'rgba(0,0,0,0.2)' : '#fff', padding: '8px 12px', borderRadius: 8, fontSize: 12, color: text, wordBreak: 'break-all', fontFamily: 'monospace', border: `1px solid ${border}` }}>
-                  {moderatorAccess.email || copy('(এখনো সেট করা হয়নি)', '(not set yet)')}
-                </code>
-                <button onClick={() => copyToClipboard('email', moderatorAccess.email || '')} disabled={!moderatorAccess.email}
-                  style={{ border: `1px solid rgba(99,102,241,0.4)`, borderRadius: 7, padding: '6px 12px', background: 'rgba(99,102,241,0.1)', color: '#6366f1', cursor: moderatorAccess.email ? 'pointer' : 'default', fontSize: 11, fontWeight: 700, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
-                  {copiedField === 'email' ? copy('✓ Copied', '✓ Copied') : copy('Copy', 'Copy')}
-                </button>
+            ) : (
+              <div style={{ fontSize: 12, color: '#b45309', background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 8, padding: '9px 12px', lineHeight: 1.6 }}>
+                ⚠️ {copy(
+                  'Admin এখনো moderator profile/Gmail সেট করেনি। আপনি নিচের form-এ page link দিয়ে request পাঠান — admin approve করলেই connect হয়ে যাবে। (Admin: Admin Panel → Settings → Moderator Access-এ profile link ও Gmail সেট করুন)',
+                  'The admin has not set the moderator profile/Gmail yet. Submit your page link in the form below — it connects once the admin approves. (Admin: set these in Admin Panel → Settings → Moderator Access)',
+                )}
               </div>
-            </div>
+            )}
             <div style={{ fontSize: 11.5, color: muted, lineHeight: 1.7 }}>
               → {copy(
                 'আপনার Page → Settings → Page access/Page roles → Add People → উপরের profile link বা Gmail দিয়ে moderator হিসেবে add করুন।',
@@ -939,7 +956,7 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
       </div>
 
       {/* ── Tutorial Sidebar ── */}
-      <div style={{ width: 300, flexShrink: 0, background: panel, border: `1px solid ${border}`, borderRadius: 22, padding: 24, boxShadow: dark ? '0 8px 48px rgba(0,0,0,0.5)' : '0 8px 40px rgba(99,102,241,0.1)' }}>
+      <div style={{ width: 'min(300px, 100%)', boxSizing: 'border-box', flexShrink: 0, background: panel, border: `1px solid ${border}`, borderRadius: 22, padding: 'clamp(16px, 4vw, 24px)', boxShadow: dark ? '0 8px 48px rgba(0,0,0,0.5)' : '0 8px 40px rgba(99,102,241,0.1)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
           <div style={{ width: 32, height: 32, borderRadius: 9, background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>🎬</div>
           <div>

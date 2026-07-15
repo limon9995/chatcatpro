@@ -214,6 +214,9 @@ export function AppContent() {
         }
       }
     } catch {
+      // Transient failure (network hiccup, brief 5xx) must not kick a
+      // working session out to the connect screen.
+      if (activePage) return;
       setMyPages([]);
       setActivePage(null);
       setScreen('connect-page');
