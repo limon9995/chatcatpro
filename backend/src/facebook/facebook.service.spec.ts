@@ -297,7 +297,7 @@ describe('FacebookService — admin moderator-access approval', () => {
     );
   });
 
-  it('returns no_match when none of the admin\'s pages correspond to the request', async () => {
+  it('falls back to a manual picker when none of the admin\'s pages match the request URL', async () => {
     prisma.pageRequest.findUnique.mockResolvedValue({
       id: 6,
       userId: 'user-1',
@@ -306,10 +306,28 @@ describe('FacebookService — admin moderator-access approval', () => {
       user: { name: 'Limon', email: '' },
     });
 
-    const result = await service.approvePageRequestViaFacebookLogin(6, [
+    // URL vanity rarely equals the page NAME — instead of dead-ending on
+    // no_match, every page from the login is offered so the admin can pick.
+    const result: any = await service.approvePageRequestViaFacebookLogin(6, [
       { pageId: '111', pageName: 'Other Page A', pageToken: 'tok' },
       { pageId: '222', pageName: 'Other Page B', pageToken: 'tok2' },
     ]);
+
+    expect(result.status).toBe('ambiguous');
+    expect(result.candidates).toHaveLength(2);
+    expect(result.requestedUrl).toBe('https://facebook.com/myshop');
+  });
+
+  it('returns no_match only when Facebook returned zero manageable pages', async () => {
+    prisma.pageRequest.findUnique.mockResolvedValue({
+      id: 6,
+      userId: 'user-1',
+      pageUrl: 'https://facebook.com/myshop',
+      status: 'pending',
+      user: { name: 'Limon', email: '' },
+    });
+
+    const result = await service.approvePageRequestViaFacebookLogin(6, []);
 
     expect(result).toEqual({ status: 'no_match' });
   });

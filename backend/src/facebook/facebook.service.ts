@@ -720,14 +720,32 @@ export class FacebookService {
     if (pages.length === 1) return pages;
 
     const ref = this.parsePageReference(pageUrl);
-    if (!ref) return [];
+    if (!ref) return pages; // can't parse the URL — let the admin pick manually
 
     if (/^\d+$/.test(ref)) {
       const byId = pages.filter((p) => p.pageId === ref);
       if (byId.length) return byId;
     }
 
-    return pages.filter((p) => p.pageName.toLowerCase() === ref.toLowerCase());
+    // URL vanity ("BurgerBhaiDhaka") vs page NAME ("Burger Bhai Dhaka") never
+    // matched with a raw === compare. Normalize both (drop spaces/punctuation,
+    // keep Bengali letters) before comparing, then try containment.
+    const norm = (s: string) =>
+      s.toLowerCase().replace(/[^a-z0-9ঀ-৿]/g, '');
+    const nRef = norm(ref);
+    if (nRef) {
+      const exact = pages.filter((p) => norm(p.pageName) === nRef);
+      if (exact.length) return exact;
+      const partial = pages.filter((p) => {
+        const nName = norm(p.pageName);
+        return nName.includes(nRef) || nRef.includes(nName);
+      });
+      if (partial.length) return partial;
+    }
+
+    // No confident match — surface every page this Facebook login can manage
+    // so the admin picks the right one, instead of dead-ending on an error.
+    return pages;
   }
 
   private async finalizeApproval(
@@ -762,7 +780,7 @@ export class FacebookService {
   ): Promise<
     | { status: 'connected'; pageName: string }
     | { status: 'no_match' }
-    | { status: 'ambiguous'; resultId: string; candidates: FacebookPageInfo[] }
+    | { status: 'ambiguous'; resultId: string; candidates: FacebookPageInfo[]; requestedUrl?: string }
   > {
     const req = await this.prisma.pageRequest.findUnique({
       where: { id: pageRequestId },
@@ -773,6 +791,8 @@ export class FacebookService {
 
     const matches = this.matchCandidatePages(req.pageUrl, pages);
 
+    // Only possible when Facebook returned zero manageable pages — the admin
+    // skipped page selection during login or has no access to any page.
     if (matches.length === 0) return { status: 'no_match' };
     if (matches.length === 1) return this.finalizeApproval(req, matches[0]);
 
@@ -783,7 +803,7 @@ export class FacebookService {
       createdAt: Date.now(),
     });
     this.cleanupPendingApprovals();
-    return { status: 'ambiguous', resultId, candidates: matches };
+    return { status: 'ambiguous', resultId, candidates: matches, requestedUrl: req.pageUrl };
   }
 
   async finalizeAmbiguousApproval(

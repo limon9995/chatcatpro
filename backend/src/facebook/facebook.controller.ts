@@ -75,7 +75,7 @@ export class FacebookController {
     result:
       | { status: 'connected'; pageName: string }
       | { status: 'no_match' }
-      | { status: 'ambiguous'; resultId: string; candidates: { pageId: string; pageName: string }[] },
+      | { status: 'ambiguous'; resultId: string; candidates: { pageId: string; pageName: string }[]; requestedUrl?: string },
   ): string {
     const escape = (s: string) =>
       s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
@@ -97,7 +97,12 @@ button{width:100%;padding:12px;border-radius:10px;border:none;background:#6366f1
     if (result.status === 'no_match') {
       return page(
         'No match found',
-        `<h2>❌ No matching Facebook Page found</h2><p>Confirm you were added as moderator and try the Telegram link again.</p>`,
+        `<h2>❌ Facebook কোনো Page দেয়নি</h2>
+<p style="line-height:1.7">Facebook login-এ আপনার manage/moderate করা কোনো page পাওয়া যায়নি। সাধারণত ২টা কারণে হয়:</p>
+<p style="text-align:left;line-height:1.9;font-size:14px">
+১. Login-এর সময় Facebook যে page-গুলোর permission চেয়েছিল, সেখানে <b>নতুন page-টা select করা হয়নি</b> — Telegram link-এ আবার গিয়ে login করুন এবং <b>সব page select</b> করুন।<br>
+২. এই Facebook account-টা এখনো ওই page-এর <b>moderator/admin না</b> — client-কে বলুন page-এ moderator access দিতে, তারপর আবার চেষ্টা করুন।
+</p>`,
       );
     }
 
@@ -111,7 +116,8 @@ button{width:100%;padding:12px;border-radius:10px;border:none;background:#6366f1
       .join('');
     return page(
       'Choose a page',
-      `<h2>Multiple pages found</h2><p>Choose which page to connect:</p>${buttons}`,
+      `<h2>কোন Page connect করবেন?</h2>
+<p style="line-height:1.7">এই Facebook account-এ নিচের page-গুলো পাওয়া গেছে${result.requestedUrl ? ` — request করা হয়েছিল: <b>${escape(result.requestedUrl)}</b>` : ''}। সঠিক page-টা বেছে নিন:</p>${buttons}`,
     );
   }
 
