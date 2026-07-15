@@ -436,7 +436,15 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {hasActivePage && !showAddPageForm && !hasPendingRequest ? (
             <button
-              onClick={() => setShowAddPageForm(true)}
+              onClick={() => {
+                // Fresh request for the next page — clear any previous
+                // submission state so the form actually appears.
+                setReqSubmitted(false);
+                setReqPageUrl('');
+                setReqFbProfile('');
+                setReqNote('');
+                setShowAddPageForm(true);
+              }}
               style={{ width: '100%', padding: '12px', borderRadius: 12, border: `1px dashed rgba(99,102,241,0.4)`, background: 'transparent', color: '#6366f1', fontWeight: 700, fontSize: 13.5, cursor: 'pointer', fontFamily: 'inherit' }}
             >
               ➕ {copy('আরেকটি Facebook Page যোগ করুন', 'Add Another Facebook Page')}
@@ -524,7 +532,10 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
             </div>
           )}
 
-          {!reqSubmitted && !myRequests.some(r => r.status === 'pending' || r.status === 'approved') ? (
+          {/* Only an in-flight (pending / just-submitted) request hides the
+              form — an APPROVED history must not block requesting the NEXT
+              page (e.g. adding a second restaurant page). */}
+          {!reqSubmitted && !hasPendingRequest ? (
             <>
               <div>
                 <label style={{ fontSize: 12, color: muted, fontWeight: 600, display: 'block', marginBottom: 5 }}>
