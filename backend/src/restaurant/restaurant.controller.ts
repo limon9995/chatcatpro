@@ -108,6 +108,17 @@ export class RestaurantController {
     return this.svc.scanMenu(this.pid(r, p), b?.imageUrls ?? []);
   }
 
+  // ── Menu photos shown/sent to customers ─────────────────────────────────────
+  @Get(':pageId/menu-images')
+  getMenuImages(@Param('pageId') p: string, @Req() r: any) {
+    return this.svc.getMenuImages(this.pid(r, p));
+  }
+
+  @Put(':pageId/menu-images')
+  setMenuImages(@Param('pageId') p: string, @Body() b: any, @Req() r: any) {
+    return this.svc.setMenuImages(this.pid(r, p), b?.urls ?? []);
+  }
+
   @Post(':pageId/products/bulk')
   bulkCreate(@Param('pageId') p: string, @Body() b: any, @Req() r: any) {
     return this.svc.bulkCreateProducts(this.pid(r, p), b?.dishes ?? []);

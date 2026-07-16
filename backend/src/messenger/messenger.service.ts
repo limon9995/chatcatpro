@@ -229,6 +229,41 @@ export class MessengerService {
     }
   }
 
+  /** Send a single image attachment (e.g. the restaurant's menu photo). */
+  async sendImage(
+    encryptedToken: string,
+    psid: string,
+    imageUrl: string,
+  ): Promise<void> {
+    if (!encryptedToken || !psid || !imageUrl) return;
+    const rawToken = this.encryption.decrypt(encryptedToken);
+    const url = `https://graph.facebook.com/v20.0/me/messages?access_token=${encodeURIComponent(rawToken)}`;
+    const body = JSON.stringify({
+      recipient: { id: psid },
+      message: {
+        attachment: {
+          type: 'image',
+          payload: { url: imageUrl, is_reusable: true },
+        },
+      },
+    });
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+      });
+      if (!res.ok) {
+        const errText = await res.text().catch(() => '');
+        this.logger.error(
+          `[Messenger] sendImage failed status=${res.status} psid=${psid} body=${errText.slice(0, 150)}`,
+        );
+      }
+    } catch (err) {
+      this.logger.error(`[Messenger] sendImage network error psid=${psid}: ${err}`);
+    }
+  }
+
   async sendGenericTemplate(
     encryptedToken: string,
     psid: string,

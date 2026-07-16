@@ -272,6 +272,18 @@ export class RestaurantService {
 
     const { dishes, usage } = await this.geminiVision.extractMenuItems(imageUrls);
 
+    // Keep the menu photos on the page — the bot sends them to customers who
+    // ask what's available (latest scan wins).
+    const relative = imageUrls.map((u) =>
+      String(u).replace(/^https?:\/\/[^/]+/, ''),
+    );
+    void this.prisma.page
+      .update({
+        where: { id: pageId },
+        data: { menuImagesJson: JSON.stringify(relative.slice(0, 5)) },
+      })
+      .catch(() => {});
+
     // Meter: one ADMIN_VISION deduction per image + token-level cost record
     for (let i = 0; i < imageUrls.length; i++) {
       void this.walletService.deductUsage(pageId, 'ADMIN_VISION', {
@@ -291,6 +303,34 @@ export class RestaurantService {
       `[Restaurant] Menu scan page=${pageId} imgs=${imageUrls.length} dishes=${dishes.length}`,
     );
     return { dishes };
+  }
+
+  // ── Menu photos shown/sent to customers ─────────────────────────────────────
+
+  async getMenuImages(pageId: number): Promise<string[]> {
+    const page = await this.prisma.page.findUnique({
+      where: { id: pageId },
+      select: { menuImagesJson: true },
+    });
+    try {
+      const raw = JSON.parse(page?.menuImagesJson || '[]');
+      return Array.isArray(raw) ? raw.filter((u) => typeof u === 'string') : [];
+    } catch {
+      return [];
+    }
+  }
+
+  async setMenuImages(pageId: number, urls: string[]) {
+    if (!Array.isArray(urls)) throw new BadRequestException('urls must be an array');
+    const clean = urls
+      .map((u) => String(u).replace(/^https?:\/\/[^/]+/, ''))
+      .filter((u) => /^\/storage\/products\//.test(u))
+      .slice(0, 5);
+    await this.prisma.page.update({
+      where: { id: pageId },
+      data: { menuImagesJson: clean.length ? JSON.stringify(clean) : null },
+    });
+    return clean;
   }
 
   // ── Bulk create from reviewed dishes ────────────────────────────────────────

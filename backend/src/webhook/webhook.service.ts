@@ -37,9 +37,16 @@ import { TelegramNotificationService } from '../telegram/telegram-notification.s
 import { CourierService } from '../courier/courier.service';
 import { normalizePhone } from '../crm/phone.util';
 import {
+  findMapsShortLink,
   formatSlabsBn,
+  haversineKm,
   isRestaurantReady,
+  parseMapsPoint,
+  parsePriceVariants,
   parseSlabs,
+  priceRangeText,
+  resolveDeliveryFee,
+  resolveMapsShortLink,
 } from '../common/restaurant-delivery';
 
 function getFullImageUrl(url?: string | null): string | undefined {
@@ -781,6 +788,24 @@ export class WebhookService implements OnModuleDestroy {
       return;
     }
 
+    // ── Messenger location share → restaurant delivery fee ────────────────
+    const locationAttachment = message.attachments?.find(
+      (a: any) =>
+        a.type === 'location' &&
+        (a.payload?.coordinates?.lat !== undefined ||
+          a.payload?.coordinates?.latitude !== undefined),
+    );
+    if (locationAttachment && isRestaurantReady(page)) {
+      const coords = locationAttachment.payload.coordinates;
+      await this.replyRestaurantLocationFee(
+        page,
+        psid,
+        Number(coords.lat ?? coords.latitude),
+        Number(coords.long ?? coords.longitude ?? coords.lng),
+      );
+      return;
+    }
+
     // ── Audio (voice message) → Whisper STT ───────────────────────────────
     const audioAttachment = message.attachments?.find(
       (a: any) => a.type === 'audio' && a.payload?.url,
@@ -811,6 +836,20 @@ export class WebhookService implements OnModuleDestroy {
     let text = (message.text || '').trim();
     if (!text && isLikeSticker) text = '👍';
     if (!text) return;
+
+    // ── Restaurant: customer pasted a Google Maps link / raw coordinates ──
+    // Understand it directly and quote the exact delivery fee.
+    if (isRestaurantReady(page)) {
+      let point = parseMapsPoint(text);
+      if (!point) {
+        const shortLink = findMapsShortLink(text);
+        if (shortLink) point = await resolveMapsShortLink(shortLink);
+      }
+      if (point) {
+        await this.replyRestaurantLocationFee(page, psid, point.lat, point.lng);
+        return;
+      }
+    }
 
     // Auto-expire drafts older than 24 hours
     let draft = await this.ctx.getActiveDraft(pageId, psid);
@@ -2094,6 +2133,39 @@ export class WebhookService implements OnModuleDestroy {
     return `${base}/catalog/${encodeURIComponent(String(slug))}`;
   }
 
+  // V25: customer shared their location (Messenger location attachment, a
+  // Google Maps link, or raw coordinates) — measure against the restaurant
+  // pin and quote the exact delivery fee.
+  private async replyRestaurantLocationFee(
+    page: any,
+    psid: string,
+    lat: number,
+    lng: number,
+  ): Promise<void> {
+    const token = page.pageToken as string;
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+    const distanceKm =
+      Math.round(
+        haversineKm(page.restaurantLat, page.restaurantLng, lat, lng) * 100,
+      ) / 100;
+    const slab = resolveDeliveryFee(parseSlabs(page.deliverySlabsJson), distanceKm);
+    const sym = page.currencySymbol || '৳';
+    const orderUrl = this.buildCatalogUrl(page);
+    if (!slab) {
+      await this.safeSend(
+        token,
+        psid,
+        `📍 আপনার লোকেশন পেয়েছি — দূরত্ব ${distanceKm} km।\nদুঃখিত, এটা আমাদের ডেলিভারি এলাকার একটু বাইরে 😔 (আমরা সর্বোচ্চ ${parseSlabs(page.deliverySlabsJson).slice(-1)[0]?.maxKm ?? 0} km পর্যন্ত ডেলিভারি করি)`,
+      );
+      return;
+    }
+    await this.safeSend(
+      token,
+      psid,
+      `📍 আপনার লোকেশন পেয়েছি!\n🛵 দূরত্ব: ${distanceKm} km\n💰 Delivery charge: ${sym}${slab.fee}\n\nOrder করতে আমাদের website-এ যান — ম্যাপে এই লোকেশনটাই pin করে দিন:\n${orderUrl} 🍽️`,
+    );
+  }
+
   private async sendCatalogFallback(
     token: string,
     psid: string,
@@ -2105,10 +2177,28 @@ export class WebhookService implements OnModuleDestroy {
     const base = (process.env.CATALOG_BASE_URL || 'https://chatcat.pro').replace(/\/$/, '');
     const slug = page.catalogSlug || String(page.id);
 
-    // Fetch top active products with stock
+    // Restaurant: lead with the actual menu photo(s) — that's what a food
+    // customer wants to see first.
+    try {
+      const menuImages: string[] = JSON.parse((page as any).menuImagesJson || '[]');
+      if (Array.isArray(menuImages) && menuImages.length) {
+        for (const u of menuImages.slice(0, 3)) {
+          const full = getFullImageUrl(u);
+          if (full) await this.messenger.sendImage(token, psid, full);
+        }
+      }
+    } catch { /* no menu images */ }
+
+    // Fetch top active products with stock — trackStock=false food items are
+    // always available (BOM is their real inventory), stockQty is meaningless
     const products = await this.prisma.product.findMany({
-      where: { pageId: page.id, isActive: true, stockQty: { gt: 0 } },
-      select: { code: true, name: true, price: true, originalPrice: true, imageUrl: true, description: true },
+      where: {
+        pageId: page.id,
+        isActive: true,
+        catalogVisible: true,
+        OR: [{ stockQty: { gt: 0 } }, { trackStock: false }],
+      },
+      select: { code: true, name: true, price: true, originalPrice: true, imageUrl: true, description: true, category: true, priceVariantsJson: true },
       orderBy: { createdAt: 'desc' },
       take: 10,
     });
@@ -2132,15 +2222,23 @@ export class WebhookService implements OnModuleDestroy {
           const price = Number(p.price) || 0;
           const hasOffer = orig > price && price > 0;
           const pct = hasOffer ? Math.round((1 - price / orig) * 100) : 0;
+          // V25: size/portion pricing → show the range ("৳120 – ৳220")
+          const variants = parsePriceVariants((p as any).priceVariantsJson);
+          const priceTxt = variants.length
+            ? priceRangeText(variants, price, sym)
+            : `${sym}${price.toLocaleString()}`;
           // Messenger subtitle is ~80 chars — the offer line takes priority
-          // over the description, since the discount is what sells.
+          // over the description, since the discount is what sells. Never
+          // show internal product codes to customers.
           const subtitle = hasOffer
             ? `🔥 আগের দাম ${sym}${orig.toLocaleString()} → এখন ${sym}${price.toLocaleString()} (${pct}% ছাড়)`
-            : p.description
-              ? p.description.slice(0, 80)
-              : `Code: ${p.code}`;
+            : variants.length
+              ? variants.map((v) => `${v.label} ${sym}${v.price}`).join(' / ').slice(0, 80)
+              : p.description
+                ? p.description.slice(0, 80)
+                : (p as any).category || '';
           return {
-            title: `${p.name || p.code} — ${sym}${price.toLocaleString()}${hasOffer ? ' 🔥' : ''}`,
+            title: `${p.name || p.code} — ${priceTxt}${hasOffer ? ' 🔥' : ''}`,
             image_url: getFullImageUrl(p.imageUrl) || logoUrl,
             subtitle,
           buttons: [
@@ -2188,7 +2286,7 @@ export class WebhookService implements OnModuleDestroy {
     await this.safeSend(
       token,
       psid,
-      `🛍️ ${businessName}-এর সব product দেখুন:\n${catalogUrl}\n\nপছন্দের product-এর code বা product page থেকে সরাসরি order করুন 💖`,
+      `🛍️ ${businessName}-এর সব product দেখুন:\n${catalogUrl}\n\nপছন্দের item-এ ক্লিক করে সরাসরি order করুন 💖`,
     );
   }
 

@@ -494,6 +494,10 @@ export function RestaurantPage({ th, pageId, onToast }: {
   const [newIng, setNewIng] = useState({ name: '', unit: 'pcs', stockQty: 0, minStock: 0 });
   const [packaging, setPackaging] = useState<{ ingredientId: number; qty: number }[]>([]);
   const [packSaving, setPackSaving] = useState(false);
+  const [invRecipeCode, setInvRecipeCode] = useState('');
+
+  // menu photos (sent to customers in Messenger)
+  const [menuImages, setMenuImages] = useState<string[]>([]);
 
   // delivery
   const [delivery, setDelivery] = useState<{ lat: number | null; lng: number | null; slabs: DeliverySlab[] }>({ lat: null, lng: null, slabs: [] });
@@ -511,12 +515,13 @@ export function RestaurantPage({ th, pageId, onToast }: {
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [s, prods, ings, cats, pack] = await Promise.all([
+      const [s, prods, ings, cats, pack, mImgs] = await Promise.all([
         request<any>(`${BASE}/settings`),
         request<FoodProduct[]>(`${BASE}/products`).catch(() => []),
         request<Ingredient[]>(`${RBASE}/ingredients`).catch(() => []),
         request<string[]>(`${RBASE}/categories`).catch(() => []),
         request<any[]>(`${RBASE}/packaging`).catch(() => []),
+        request<string[]>(`${RBASE}/menu-images`).catch(() => []),
       ]);
       setSettings({
         restaurantModeEnabled: Boolean(s?.restaurantModeEnabled),
@@ -530,6 +535,7 @@ export function RestaurantPage({ th, pageId, onToast }: {
       setIngredients(Array.isArray(ings) ? ings : []);
       setCategories(Array.isArray(cats) ? (cats as string[]) : []);
       setPackaging((Array.isArray(pack) ? pack : []).map((p: any) => ({ ingredientId: p.ingredientId, qty: p.qty })));
+      setMenuImages(Array.isArray(mImgs) ? (mImgs as string[]) : []);
     } catch (e: any) { onToast(e.message, 'error'); }
     finally { setLoading(false); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -704,6 +710,30 @@ export function RestaurantPage({ th, pageId, onToast }: {
 
       {/* ── MENU ── */}
       {tab === 'MENU' && (
+        <>
+        {menuImages.length > 0 && (
+          <div style={{ ...th.card }}>
+            <CardHeader th={th} title={copy('📖 Menu-র ছবি (customer-দের পাঠানো হয়)', '📖 Menu photos (sent to customers)')}
+              sub={copy('Messenger-এ কেউ "কি কি আছে" জিজ্ঞেস করলে bot এই ছবিগুলোই পাঠায়। Menu Scan করলেই auto আপডেট হয়।', 'When someone asks what\'s available in Messenger, the bot sends these. Auto-updated on Menu Scan.')} />
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              {menuImages.map((u, i) => (
+                <div key={i} style={{ position: 'relative' }}>
+                  <img src={u.startsWith('http') ? u : `${API_BASE}${u}`} alt="menu" style={{ width: 90, height: 90, objectFit: 'cover', borderRadius: 10, border: `1px solid ${th.border}` }} />
+                  <button
+                    onClick={async () => {
+                      const next = menuImages.filter((_, j) => j !== i);
+                      try {
+                        await request(`${RBASE}/menu-images`, { method: 'PUT', body: JSON.stringify({ urls: next }) });
+                        setMenuImages(next);
+                      } catch (e: any) { onToast(e.message, 'error'); }
+                    }}
+                    style={{ position: 'absolute', top: -6, right: -6, width: 20, height: 20, borderRadius: 10, border: 'none', background: '#dc2626', color: '#fff', fontSize: 11, cursor: 'pointer', lineHeight: 1 }}
+                  >×</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         <div style={{ ...th.card }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, marginBottom: 14 }}>
             <div style={{ fontWeight: 700, fontSize: 14.5 }}>{copy(`খাবারের তালিকা (${products.length})`, `Menu items (${products.length})`)}</div>
@@ -750,6 +780,7 @@ export function RestaurantPage({ th, pageId, onToast }: {
             </div>
           )}
         </div>
+        </>
       )}
 
       {/* ── INVENTORY ── */}
@@ -805,8 +836,31 @@ export function RestaurantPage({ th, pageId, onToast }: {
                 ))}
               </div>
             )}
+          </div>
+
+          {/* Recipe editor — which ingredients go into each dish */}
+          <div style={{ ...th.card }}>
+            <CardHeader th={th} title={copy('🧾 Recipe — কোন খাবারে কী কী লাগে', '🧾 Recipes — what goes into each dish')}
+              sub={copy('খাবার বেছে নিয়ে ingredient ও পরিমাণ set করুন — order confirm হলে ঠিক এই হিসাবেই stock থেকে বাদ যাবে', 'Pick a dish and set its ingredients & quantities — stock deducts exactly by this on confirm')} />
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <select style={{ ...th.input, padding: '9px 12px', maxWidth: 320 }} value={invRecipeCode}
+                onChange={e => setInvRecipeCode(e.target.value)}>
+                <option value="">-- {copy('খাবার বেছে নিন', 'pick a dish')} --</option>
+                {products.filter(p => p.isActive).map(p => <option key={p.code} value={p.code}>{p.name || p.code}</option>)}
+              </select>
+              <button
+                style={{ ...th.btnPrimary, fontSize: 12.5 }}
+                disabled={!invRecipeCode}
+                onClick={() => {
+                  const p = products.find(x => x.code === invRecipeCode);
+                  if (p) setRecipeFor(p);
+                }}
+              >
+                🧾 {copy('Recipe খুলুন / Edit করুন', 'Open / edit recipe')}
+              </button>
+            </div>
             <div style={{ fontSize: 12, color: th.muted, marginTop: 10 }}>
-              💡 {copy('প্রতিটা খাবারের recipe set করতে Menu tab-এ গিয়ে "🧾 Recipe" চাপুন।', 'Set each item\'s recipe from the Menu tab → "🧾 Recipe".')}
+              💡 {copy('Menu tab-এর প্রতিটা খাবারের পাশে "🧾 Recipe" button থেকেও একই editor খোলে।', 'The same editor opens from the "🧾 Recipe" button beside each item in the Menu tab.')}
             </div>
           </div>
 

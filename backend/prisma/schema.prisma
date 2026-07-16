@@ -153,6 +153,9 @@ model Page {
   // V25: per-ORDER packaging consumed once per order regardless of items,
   // e.g. 1 carry bag: [{ingredientId, qty}]
   orderPackagingJson    String?
+  // V25: physical menu photos (/storage/ URLs) — auto-saved on menu scan;
+  // sent to customers in Messenger when they ask what's available
+  menuImagesJson        String?
 
   callConfirmModeOn       Boolean @default(false)
   callConfirmModeAllowed  Boolean @default(true)

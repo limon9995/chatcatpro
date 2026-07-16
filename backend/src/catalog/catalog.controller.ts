@@ -28,11 +28,13 @@ import {
   isRestaurantReady,
   isValidLat,
   isValidLng,
+  parseMapsPoint,
   parsePriceVariants,
   parseSlabs,
   priceRangeText,
   PriceVariant,
   resolveDeliveryFee,
+  resolveMapsShortLink,
 } from '../common/restaurant-delivery';
 
 // ── Video URL helpers ─────────────────────────────────────────────────────────
@@ -354,6 +356,21 @@ export class CatalogController {
     }
     res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
     res.json(CatalogController.bdGeoCache);
+  }
+
+  // Resolve a Google Maps link (incl. maps.app.goo.gl short links, which the
+  // browser can't follow due to CORS) or raw coordinates into {lat, lng} for
+  // the restaurant checkout's paste-location fallback.
+  @Get('maps-resolve')
+  async mapsResolve(@Query('u') u: string) {
+    const input = String(u || '').trim();
+    if (!input) throw new BadRequestException('u required');
+    const point = parseMapsPoint(input) || (await resolveMapsShortLink(input));
+    if (!point)
+      throw new BadRequestException(
+        'লোকেশন পড়া যায়নি — Google Maps-এর share link বা "23.79, 90.41" ফরম্যাটে দিন',
+      );
+    return point;
   }
 
   // ── Web Order Endpoints ────────────────────────────────────────────────────
@@ -735,6 +752,8 @@ export class CatalogController {
         websiteUrl: true,
         websiteEnabled: true,
         restaurantModeEnabled: true,
+        menuImagesJson: true,
+        businessInfo: true,
         owner: { select: { isActive: true } },
       },
     });
@@ -806,7 +825,12 @@ export class CatalogController {
         address: page.businessAddress || '',
         logoUrl: page.logoUrl || '',
         currency: page.currencySymbol || '৳',
-        primaryColor: page.primaryColor || '#5b63f5',
+        // Restaurant pages default to a warm food-brand orange; the
+        // merchant's own primaryColor always wins when set.
+        primaryColor:
+          page.primaryColor ||
+          ((page as any).restaurantModeEnabled ? '#ea580c' : '#5b63f5'),
+        tagline: String((page as any).businessInfo || '').split('\n')[0]?.slice(0, 90) || '',
         footerText: page.memoFooterText || '',
         messengerUrl: page.catalogMessengerUrl || `https://m.me/${page.pageId}`,
         whatsappUrl: buildWhatsAppUrl(page.businessPhone),
@@ -819,6 +843,14 @@ export class CatalogController {
         customDomain: page.customDomain || null,
         websiteUrl: page.websiteUrl || null,
         restaurantMode: Boolean((page as any).restaurantModeEnabled),
+        menuImages: (() => {
+          try {
+            const raw = JSON.parse((page as any).menuImagesJson || '[]');
+            return Array.isArray(raw) ? raw.filter((u: any) => typeof u === 'string') : [];
+          } catch {
+            return [];
+          }
+        })(),
       },
       products,
       total: products.length,
@@ -1483,6 +1515,10 @@ ${page.webOrderEnabled ? `
             ? `<div class="wo-addr-lbl-row"><div class="wo-lbl" style="margin-bottom:0">ডেলিভারি লোকেশন * (ম্যাপে pin করুন)</div></div>
         <div id="woMap"></div>
         <button type="button" class="wo-gps-btn" id="woGpsBtn" onclick="woUseGps()">📍 আমার লোকেশন ব্যবহার করুন (GPS)</button>
+        <div style="display:flex;gap:6px;margin-top:6px">
+          <input class="wo-inp" id="woMapsLink" type="text" style="flex:1" placeholder="অথবা Google Maps link / 23.79, 90.41 paste করুন">
+          <button type="button" class="wo-gps-btn" style="width:auto;padding:0 14px;margin:0" id="woMapsLinkBtn" onclick="woPasteLocation()">✔</button>
+        </div>
         <div class="wo-fee-box" id="woFeeBox">ম্যাপে আপনার ডেলিভারি লোকেশন pin করুন — delivery charge দেখাবে</div>
         <div><textarea class="wo-inp" id="woAddrDetail" rows="2" placeholder="বাসা/রোড/ফ্লোর — বিস্তারিত ঠিকানা"></textarea></div>`
             : `<div class="wo-addr-lbl-row"><div class="wo-lbl" style="margin-bottom:0">ঠিকানা *</div><span class="wo-addr-loading" id="woGeoLoading">এলাকার তালিকা লোড হচ্ছে...</span></div>
@@ -1674,7 +1710,7 @@ function woRecalcFee(){
 }
 function woUseGps(){
   var btn=document.getElementById('woGpsBtn');
-  if(!navigator.geolocation){ woSetErr('woErr0','আপনার browser-এ GPS support নেই — ম্যাপে ট্যাপ করে pin করুন'); return; }
+  if(!navigator.geolocation){ woSetErr('woErr0','আপনার browser-এ GPS support নেই — Google Maps link paste করুন বা ম্যাপে ট্যাপ করে pin করুন'); return; }
   btn.disabled=true; btn.textContent='লোকেশন খোঁজা হচ্ছে...';
   navigator.geolocation.getCurrentPosition(function(pos){
     btn.disabled=false; btn.textContent='📍 আমার লোকেশন ব্যবহার করুন (GPS)';
@@ -1683,8 +1719,30 @@ function woUseGps(){
     woMap.setView([pos.coords.latitude,pos.coords.longitude],16);
   },function(){
     btn.disabled=false; btn.textContent='📍 আমার লোকেশন ব্যবহার করুন (GPS)';
-    woSetErr('woErr0','লোকেশন পাওয়া যায়নি — location permission দিন অথবা ম্যাপে ট্যাপ করে pin করুন');
+    // Messenger/Facebook-এর ভেতরের browser প্রায়ই GPS permission-ই চায় না
+    woSetErr('woErr0','লোকেশন পাওয়া যায়নি। Messenger-এর ভেতরের browser-এ GPS প্রায়ই কাজ করে না — নিচের ঘরে Google Maps link paste করুন, ম্যাপে ট্যাপ করুন, অথবা Chrome-এ খুলুন (⋯ menu → Open in browser)');
   },{enableHighAccuracy:true,timeout:10000});
+}
+// Paste fallback: Google Maps link (short link resolved server-side) or raw
+// "lat, lng" — for in-app browsers where the GPS prompt never appears.
+function woPasteLocation(){
+  var inp=document.getElementById('woMapsLink');
+  var btn=document.getElementById('woMapsLinkBtn');
+  var v=(inp&&inp.value||'').trim();
+  if(!v){ woSetErr('woErr0','Google Maps link বা coordinates দিন'); return; }
+  woSetErr('woErr0','');
+  // quick client-side parse: @lat,lng / q=lat,lng / raw pair
+  var m=v.match(/@(-?\\d{1,3}\\.\\d+),(-?\\d{1,3}\\.\\d+)/)||v.match(/[?&](?:q|ll|query|destination)=(-?\\d{1,3}\\.\\d+)(?:%2C|,)(-?\\d{1,3}\\.\\d+)/i)||v.match(/(-?\\d{1,3}\\.\\d{3,})\\s*[,;\\s]\\s*(-?\\d{1,3}\\.\\d{3,})/);
+  if(m){ var la=parseFloat(m[1]),ln=parseFloat(m[2]); if(isFinite(la)&&isFinite(ln)){ woPlacePin(la,ln); woMap.setView([la,ln],16); return; } }
+  btn.disabled=true; btn.textContent='...';
+  fetch('/catalog/maps-resolve?u='+encodeURIComponent(v)).then(function(r){ return r.json(); }).then(function(d){
+    btn.disabled=false; btn.textContent='✔';
+    if(d&&isFinite(d.lat)&&isFinite(d.lng)){ woPlacePin(d.lat,d.lng); woMap.setView([d.lat,d.lng],16); }
+    else { woSetErr('woErr0',(d&&d.message)||'লোকেশন পড়া যায়নি — Google Maps-এর share link দিন'); }
+  }).catch(function(){
+    btn.disabled=false; btn.textContent='✔';
+    woSetErr('woErr0','লোকেশন পড়া যায়নি — Google Maps-এর share link দিন');
+  });
 }
 if(WO_RESTO){
   var woQtyEl=document.getElementById('woQty');
@@ -1971,9 +2029,9 @@ ${poweredByBadge()}
           const fbUrl = encodeURIComponent(p.videoUrl);
           topBlock = `<div class="c-video fb"><iframe src="https://www.facebook.com/plugins/video.php?href=${fbUrl}&width=500&show_text=false&appId" frameborder="0" allowfullscreen scrolling="no" allow="autoplay;clipboard-write;encrypted-media;picture-in-picture;web-share" loading="lazy"></iframe></div>`;
         } else if (p.imageUrl) {
-          topBlock = `<div class="c-img"><img src="${esc(p.imageUrl)}" alt="${esc(p.name || p.code)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=c-ph>🛍️</div>'"/></div>`;
+          topBlock = `<div class="c-img"><img src="${esc(p.imageUrl)}" alt="${esc(p.name || p.code)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=c-ph>${restaurantTabs ? '🍽️' : '🛍️'}</div>'"/></div>`;
         } else {
-          topBlock = `<div class="c-ph">🛍️</div>`;
+          topBlock = `<div class="c-ph">${restaurantTabs ? '🍽️' : '🛍️'}</div>`;
         }
 
         return `
@@ -1989,7 +2047,7 @@ ${poweredByBadge()}
           ${p.description ? `<div class="c-desc">${esc(p.description)}</div>` : ''}
           <div class="c-footer">
             ${priceBlock}
-            <div class="c-order ${!inStock ? 'c-order-dis' : ''}">${inStock ? (selectionMode ? '✅ Select' : '💬 Order') : 'Out'}</div>
+            <div class="c-order ${!inStock ? 'c-order-dis' : ''}">${inStock ? (selectionMode ? '✅ Select' : restaurantTabs ? '🛒 Order' : '💬 Order') : 'Out'}</div>
           </div>
         </div>
       </a>`;
@@ -2074,6 +2132,18 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:radial-
 .hero-card::before{content:'';position:absolute;width:340px;height:340px;border-radius:50%;right:-110px;top:-160px;background:radial-gradient(circle,rgba(255,255,255,.28),transparent 70%)}
 .hero-card::after{content:'';position:absolute;width:240px;height:240px;border-radius:50%;left:-60px;bottom:-120px;background:radial-gradient(circle,rgba(255,255,255,.14),transparent 72%)}
 .hero-search{position:relative;z-index:2;margin-bottom:12px}
+/* ── V25: Restaurant hero ── */
+.resto-hero{position:relative;z-index:2;display:grid;grid-template-columns:minmax(0,1.6fr) minmax(150px,.7fr);gap:16px;align-items:center;margin-bottom:14px}
+.resto-kicker{display:inline-flex;align-items:center;gap:7px;padding:6px 12px;border-radius:999px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.2);font-size:10.5px;font-weight:800;letter-spacing:.1em}
+.resto-title{margin-top:10px;font-size:30px;line-height:1.05;font-weight:900;letter-spacing:-1px;text-shadow:0 2px 12px rgba(0,0,0,.18)}
+.resto-sub{margin-top:8px;font-size:13.5px;line-height:1.65;color:rgba(255,255,255,.88);max-width:52ch}
+.resto-pills{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.resto-pill{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:999px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.18);font-size:11.5px;font-weight:700}
+.resto-hero-img{position:relative;display:block;border-radius:16px;overflow:hidden;border:2px solid rgba(255,255,255,.35);box-shadow:0 14px 34px rgba(0,0,0,.25);transform:rotate(2deg);transition:transform .2s}
+.resto-hero-img:hover{transform:rotate(0deg) scale(1.02)}
+.resto-hero-img img{display:block;width:100%;height:150px;object-fit:cover}
+.resto-menu-tag{position:absolute;bottom:8px;left:8px;padding:4px 10px;border-radius:8px;background:rgba(0,0,0,.55);color:#fff;font-size:11px;font-weight:800}
+@media(max-width:700px){.resto-hero{grid-template-columns:1fr}.resto-hero-img{display:none}.resto-title{font-size:24px}}
 .hero-grid{position:relative;z-index:1;display:grid;grid-template-columns:minmax(0,1.7fr) minmax(240px,.8fr);gap:10px;align-items:center}
 .hero-copy{padding:0}
 .hero-kicker{display:inline-flex;align-items:center;gap:8px;padding:6px 11px;border-radius:999px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.16);font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
@@ -2358,6 +2428,23 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:radial-
 <script>document.addEventListener('DOMContentLoaded',function(){var b=document.getElementById('dkBtn');if(b)b.textContent=document.documentElement.dataset.dark==='1'?'☀️':'🌙'});</script>
   <div class="hero-wrap">
     <div class="hero-card">
+      ${
+        restaurantTabs
+          ? `<div class="resto-hero">
+        <div class="resto-hero-copy">
+          <div class="resto-kicker">🍽️ RESTAURANT &nbsp;·&nbsp; ONLINE ORDER</div>
+          <div class="resto-title">${esc(page.name)}</div>
+          <div class="resto-sub">${esc(page.tagline || 'গরম গরম খাবার — ম্যাপে লোকেশন দিন, আমরাই পৌঁছে দেব 🛵')}</div>
+          <div class="resto-pills">
+            <span class="resto-pill">⚡ Fresh &amp; Hot</span>
+            <span class="resto-pill">🛵 Home Delivery</span>
+            <span class="resto-pill">📍 Live Location Order</span>
+          </div>
+        </div>
+        ${page.menuImages && page.menuImages.length ? `<a class="resto-hero-img" href="${esc(page.menuImages[0])}" target="_blank" rel="noopener" title="Full menu দেখুন"><img src="${esc(page.menuImages[0])}" alt="Menu" loading="lazy"/><span class="resto-menu-tag">📖 Menu</span></a>` : ''}
+      </div>`
+          : ''
+      }
       <div class="hero-search">
         <div class="search-strip">
           <div class="search-inner">
@@ -2410,8 +2497,8 @@ ${
 <div class="grid-wrap">
   <div class="section-head">
     <div>
-      <div class="section-kicker">Featured Products</div>
-      <div class="section-title">${search ? 'Search Result' : 'Shop The Collection'}</div>
+      <div class="section-kicker">${restaurantTabs ? "Today's Menu" : 'Featured Products'}</div>
+      <div class="section-title">${search ? 'Search Result' : restaurantTabs ? '🍽️ আমাদের Menu' : 'Shop The Collection'}</div>
       <div class="section-text">${search ? 'আপনার search অনুযায়ী filtered product দেখানো হচ্ছে।' : 'স্টোরের available product গুলো browse করুন, detail page খুলে order complete করুন।'}</div>
     </div>
   </div>

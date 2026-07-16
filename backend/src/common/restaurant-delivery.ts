@@ -170,6 +170,91 @@ export function variantsSummaryText(
     .join(' / ');
 }
 
+// ── V25: Google Maps link / coordinate parsing ───────────────────────────────
+// Customers paste a Google Maps link or raw coordinates (in Messenger chat or
+// at checkout when the in-app browser blocks GPS) — extract the point so the
+// delivery fee can be computed.
+
+/** {lat, lng} from a Google Maps URL or raw "23.79, 90.41" text; null if none. */
+export function parseMapsPoint(
+  text: string,
+): { lat: number; lng: number } | null {
+  const s = String(text || '').trim();
+  if (!s) return null;
+  const tryPair = (a: string, b: string) => {
+    const lat = Number(a);
+    const lng = Number(b);
+    return isValidLat(lat) && isValidLng(lng) && (lat !== 0 || lng !== 0)
+      ? { lat, lng }
+      : null;
+  };
+  // /maps/.../@23.79,90.41,17z
+  const at = s.match(/@(-?\d{1,3}\.\d+),(-?\d{1,3}\.\d+)/);
+  if (at) {
+    const p = tryPair(at[1], at[2]);
+    if (p) return p;
+  }
+  // ?q= / ?ll= / ?query= / ?destination= / !3dLAT!4dLNG
+  const q = s.match(
+    /(?:[?&](?:q|ll|query|destination)=|!3d)(-?\d{1,3}\.\d+)(?:%2C|,|!4d)(-?\d{1,3}\.\d+)/i,
+  );
+  if (q) {
+    const p = tryPair(q[1], q[2]);
+    if (p) return p;
+  }
+  // raw "23.79, 90.41" (or space-separated) — require decimals so plain
+  // numbers in normal sentences never match
+  const raw = s.match(/(-?\d{1,3}\.\d{3,})\s*[,;\s]\s*(-?\d{1,3}\.\d{3,})/);
+  if (raw) {
+    const p = tryPair(raw[1], raw[2]);
+    if (p) return p;
+  }
+  return null;
+}
+
+const MAPS_SHORT_HOSTS = ['maps.app.goo.gl', 'goo.gl', 'g.co'];
+
+/** First Google-Maps-ish short link in the text, or null. */
+export function findMapsShortLink(text: string): string | null {
+  const m = String(text || '').match(/https?:\/\/[^\s]+/g);
+  for (const url of m || []) {
+    try {
+      const host = new URL(url).hostname.toLowerCase();
+      if (MAPS_SHORT_HOSTS.some((h) => host === h || host.endsWith(`.${h}`)))
+        return url;
+    } catch {
+      /* not a URL */
+    }
+  }
+  return null;
+}
+
+/**
+ * Follow a maps short link server-side (browsers can't — CORS) and parse the
+ * destination URL for coordinates. Returns null on any failure.
+ */
+export async function resolveMapsShortLink(
+  url: string,
+): Promise<{ lat: number; lng: number } | null> {
+  if (!findMapsShortLink(url)) return null; // whitelist only
+  try {
+    const res = await fetch(url, {
+      method: 'GET',
+      redirect: 'follow',
+      signal: AbortSignal.timeout(8000),
+    });
+    const point = parseMapsPoint(res.url || '');
+    if (point) return point;
+    // Some share pages embed the point in the HTML instead of the final URL
+    const body = await res.text();
+    const at = body.match(/@(-?\d{1,3}\.\d+),(-?\d{1,3}\.\d+)/);
+    if (at) return parseMapsPoint(`@${at[1]},${at[2]}`);
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 const BN_DIGITS = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
 
 function toBnNumber(n: number): string {
