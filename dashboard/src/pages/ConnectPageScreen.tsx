@@ -168,6 +168,10 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
   const [reqBusy, setReqBusy] = useState(false);
   const [reqSubmitted, setReqSubmitted] = useState(false);
   const [myRequests, setMyRequests] = useState<PageRequest[]>([]);
+  // Inline edit of a PENDING request (fix a typo so auto-match works)
+  const [editingReqId, setEditingReqId] = useState<number | null>(null);
+  const [editReqUrl, setEditReqUrl] = useState('');
+  const [editReqBusy, setEditReqBusy] = useState(false);
   const [moderatorAccess, setModeratorAccess] = useState<ModeratorAccessInfo>({});
   const [copiedField, setCopiedField] = useState<'profile' | 'email' | ''>('');
   // Customers who already have an active page shouldn't see the "connect a
@@ -513,9 +517,9 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
                 const statusLabel = r.status === 'approved' ? copy('✅ Approved', '✅ Approved') : r.status === 'rejected' ? copy('❌ Rejected', '❌ Rejected') : copy('⏳ Pending — Admin review করছে', '⏳ Pending — awaiting admin review');
                 return (
                   <div key={r.id} style={{ border: `1px solid ${border}`, borderRadius: 10, padding: '10px 13px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                      <div style={{ fontSize: 12.5, fontWeight: 700, color: text }}>{r.pageUrl}</div>
-                      <span style={{ fontSize: 11, fontWeight: 800, color: statusColor }}>{statusLabel}</span>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4, gap: 8, flexWrap: 'wrap' }}>
+                      <div style={{ fontSize: 12.5, fontWeight: 700, color: text, wordBreak: 'break-all' }}>{r.pageUrl}</div>
+                      <span style={{ fontSize: 11, fontWeight: 800, color: statusColor, whiteSpace: 'nowrap' }}>{statusLabel}</span>
                     </div>
                     {r.adminNote && (
                       <div style={{ fontSize: 11.5, color: muted, marginTop: 3 }}>💬 {r.adminNote}</div>
@@ -523,6 +527,57 @@ export function ConnectPageScreen({ dark, userId: _userId, onConnected, onLogout
                     {r.status === 'approved' && (
                       <div style={{ marginTop: 6, padding: '8px 10px', background: 'rgba(34,197,94,0.08)', borderRadius: 8, fontSize: 12, color: '#16a34a', fontWeight: 600 }}>
                         🎉 {copy('আপনার page connect হয়ে গেছে! উপরের "Active Pages" এ দেখুন।', 'Your page is connected! Check "Active Pages" above.')}
+                      </div>
+                    )}
+                    {r.status === 'pending' && editingReqId !== r.id && (
+                      <button
+                        onClick={() => { setEditingReqId(r.id); setEditReqUrl(r.pageUrl); }}
+                        style={{ marginTop: 6, border: `1px solid rgba(99,102,241,0.35)`, borderRadius: 7, padding: '5px 12px', background: 'rgba(99,102,241,0.08)', color: '#6366f1', cursor: 'pointer', fontSize: 11.5, fontWeight: 700, fontFamily: 'inherit' }}
+                      >
+                        ✏️ {copy('Page link/নাম ঠিক করুন', 'Edit page link/name')}
+                      </button>
+                    )}
+                    {r.status === 'pending' && editingReqId === r.id && (
+                      <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 7 }}>
+                        <input
+                          style={inp}
+                          value={editReqUrl}
+                          onChange={e => setEditReqUrl(e.target.value)}
+                          placeholder={copy('Page-এর exact নাম বা link (যেমন: Mis Happy)', 'Exact page name or link (e.g. Mis Happy)')}
+                        />
+                        <div style={{ fontSize: 11, color: muted, lineHeight: 1.6 }}>
+                          💡 {copy('Facebook-এ page-এর নাম যেভাবে লেখা, ঠিক সেভাবে দিন — তাহলে approve-এর সময় auto-match হবে।', 'Type the page name exactly as it appears on Facebook — then approval auto-matches.')}
+                        </div>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <button
+                            disabled={editReqBusy}
+                            onClick={async () => {
+                              if (!editReqUrl.trim()) { setError(copy('Page link/নাম দিন', 'Enter the page link/name')); return; }
+                              setEditReqBusy(true); setError('');
+                              try {
+                                await request(`${API_BASE}/facebook/page-request/${r.id}`, {
+                                  method: 'PATCH',
+                                  body: JSON.stringify({ pageUrl: editReqUrl.trim() }),
+                                });
+                                setEditingReqId(null);
+                                refreshRequestsAndPages();
+                              } catch (e: any) {
+                                setError(e?.message || copy('Update করা যায়নি', 'Update failed'));
+                              } finally {
+                                setEditReqBusy(false);
+                              }
+                            }}
+                            style={{ border: 'none', borderRadius: 8, padding: '8px 16px', background: editReqBusy ? 'rgba(99,102,241,0.5)' : '#6366f1', color: '#fff', cursor: editReqBusy ? 'default' : 'pointer', fontSize: 12, fontWeight: 800, fontFamily: 'inherit' }}
+                          >
+                            {editReqBusy ? copy('Saving...', 'Saving...') : copy('✓ Save', '✓ Save')}
+                          </button>
+                          <button
+                            onClick={() => setEditingReqId(null)}
+                            style={{ border: `1px solid ${border}`, borderRadius: 8, padding: '8px 14px', background: 'transparent', color: muted, cursor: 'pointer', fontSize: 12, fontWeight: 700, fontFamily: 'inherit' }}
+                          >
+                            {copy('Cancel', 'Cancel')}
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>

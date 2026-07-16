@@ -709,6 +709,54 @@ export class FacebookService {
     });
   }
 
+  // Client fixes a typo in their own PENDING request (e.g. "Miss happy" →
+  // "Mis Happy") so the approve flow can auto-match the page name exactly.
+  async updatePageRequest(
+    userId: string,
+    id: number,
+    body: { pageUrl?: string; fbProfile?: string; note?: string },
+  ) {
+    const req = await this.prisma.pageRequest.findFirst({
+      where: { id, userId },
+    });
+    if (!req) throw new BadRequestException('Request not found');
+    if (req.status !== 'pending')
+      throw new BadRequestException('শুধু pending request edit করা যায়');
+
+    const url = String(body.pageUrl ?? req.pageUrl).trim();
+    if (!url) throw new BadRequestException('Facebook page link দিন');
+
+    const updated = await this.prisma.pageRequest.update({
+      where: { id: req.id },
+      data: {
+        pageUrl: url,
+        fbProfile:
+          body.fbProfile !== undefined
+            ? String(body.fbProfile).trim() || null
+            : req.fbProfile,
+        note:
+          body.note !== undefined
+            ? String(body.note).trim() || null
+            : req.note,
+      },
+    });
+    this.logger.log(`[PageRequest] #${req.id} edited by user ${userId}: ${url}`);
+
+    // Fresh notification with the approve button so the admin always has a
+    // working link for the corrected request.
+    void this.telegram.sendMessageWithButtons(
+      `✏️ <b>Page Request Updated</b> #${req.id}\n` +
+        `🔗 নতুন Page URL: ${url}\n` +
+        `🕐 সময়: ${new Date().toLocaleString('bn-BD', { timeZone: 'Asia/Dhaka' })}`,
+      [[
+        { text: '🔗 Login with Facebook & Approve', url: this.getAdminApproveUrl(req.id) },
+        { text: '❌ Reject', callback_data: `pagereq_reject_${req.id}` },
+      ]],
+    );
+
+    return { success: true, request: updated };
+  }
+
   getModeratorAccessInfo(): { fbProfileLink: string; email: string } {
     return readModeratorAccessConfig();
   }
