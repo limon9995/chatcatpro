@@ -376,6 +376,13 @@ export class RestaurantService {
         // no need to force a size selection at checkout.
         const isSinglePlain =
           variants.length === 1 && !variants[0].pieces;
+        // Optional per-dish photo uploaded during review — only our own
+        // /storage/products/ uploads are accepted
+        const rawImg = String(d?.imageUrl ?? '').trim();
+        const imageUrl =
+          rawImg && /^(https?:\/\/[^/]+)?\/storage\/products\//.test(rawImg)
+            ? rawImg
+            : undefined;
         await this.productsService.create({
           pageId,
           productType: 'SIMPLE',
@@ -384,6 +391,7 @@ export class RestaurantService {
           description: d?.description ? String(d.description).trim() : undefined,
           category: d?.category ? String(d.category).trim() : null,
           unit: 'piece',
+          imageUrl,
           priceVariantsJson: isSinglePlain ? null : JSON.stringify(variants),
           trackStock: false,
           catalogVisible: true,

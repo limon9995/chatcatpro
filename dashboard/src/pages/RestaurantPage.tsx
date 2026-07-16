@@ -24,6 +24,7 @@ interface RecipeRow { ingredientId: number; qty: number; per: 'item' | 'piece'; 
 interface ScanDish {
   name: string; category: string | null; description: string | null;
   variants: { label: string; price: number; pieces: number | null }[];
+  imageUrl?: string | null;
   _checked?: boolean;
 }
 interface RestoSettings {
@@ -152,6 +153,7 @@ function FoodFormModal({ th, pageId, product, categories, cur, onClose, onSaved,
           name: form.name.trim(),
           category: form.category.trim() || null,
           description: form.description || null,
+          imageUrl: form.imageUrl || null,
           variants: variants.length
             ? variants
             : [{ label: 'Regular', price: Number(form.singlePrice), pieces: null }],
@@ -160,14 +162,6 @@ function FoodFormModal({ th, pageId, product, categories, cur, onClose, onSaved,
           method: 'POST', body: JSON.stringify({ dishes: [dish] }),
         });
         if (res?.failed?.length) throw new Error(res.failed[0]?.reason || 'Failed');
-        // attach image after create (bulk endpoint doesn't take images)
-        if (form.imageUrl && res?.created?.length) {
-          const created = await request<FoodProduct[]>(`${BASE}/products`);
-          const mine = (created || []).find(p => p.name === dish.name && !p.imageUrl);
-          if (mine) await request(`${RBASE}/products/${mine.code}/food`, {
-            method: 'PATCH', body: JSON.stringify({ imageUrl: form.imageUrl }),
-          });
-        }
       }
       onToast(copy('✅ সেভ হয়েছে', '✅ Saved'), 'success');
       onSaved(); onClose();
@@ -254,6 +248,25 @@ function MenuScanModal({ th, pageId, cur, onClose, onDone, onToast }: {
   const [busy, setBusy] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
   const [dishes, setDishes] = useState<ScanDish[]>([]);
+  const [uploadingIdx, setUploadingIdx] = useState<number | null>(null);
+
+  // Per-dish photo during review — the image lands on the product at create
+  // time, so it shows on the website + Messenger cards immediately.
+  const uploadDishPhoto = async (i: number, file: File) => {
+    setUploadingIdx(i);
+    try {
+      const token = localStorage.getItem('dfbot_token') || '';
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch(`${BASE}/products/upload-image`, {
+        method: 'POST', headers: token ? { Authorization: `Bearer ${token}` } : undefined, body: fd,
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      setDishes(ds => ds.map((d, j) => j === i ? { ...d, imageUrl: data.url } : d));
+    } catch (e: any) { onToast(e.message || 'Upload failed', 'error'); }
+    finally { setUploadingIdx(null); }
+  };
 
   const scan = async () => {
     if (!files.length) return onToast(copy('Menu-র ছবি বেছে নিন', 'Pick menu photo(s)'), 'error');
@@ -285,6 +298,7 @@ function MenuScanModal({ th, pageId, cur, onClose, onDone, onToast }: {
   };
 
   const createAll = async () => {
+    if (uploadingIdx !== null) return onToast(copy('ছবি upload হচ্ছে — একটু অপেক্ষা করুন', 'Photo uploading — wait a moment'), 'error');
     const chosen = dishes.filter(d => d._checked && d.name.trim() && d.variants.length);
     if (!chosen.length) return onToast(copy('কিছু select করুন', 'Select at least one'), 'error');
     setBusy(true);
@@ -308,7 +322,7 @@ function MenuScanModal({ th, pageId, cur, onClose, onDone, onToast }: {
         <CardHeader th={th} title={copy('📷 Menu Scan — AI দিয়ে সব খাবার Add', '📷 Menu Scan — AI import')}
           sub={step === 'upload'
             ? copy('Menu-র পরিষ্কার ছবি দিন (সর্বোচ্চ ৫টা) — AI নাম/দাম/size পড়ে নেবে', 'Upload clear menu photos (max 5) — AI reads names/prices/sizes')
-            : copy('AI যা পড়েছে check করুন — ভুল থাকলে ঠিক করুন, তারপর Add চাপুন', 'Review what AI read — fix mistakes, then Add')} />
+            : copy('AI যা পড়েছে check করুন — 📷 ঘরে খাবারের ছবি দিন (website/card-এ দেখাবে), ভুল ঠিক করুন, তারপর Add চাপুন', 'Review what AI read — add a 📷 photo per dish (shows on the website/cards), fix mistakes, then Add')} />
 
         {step === 'upload' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -344,8 +358,18 @@ function MenuScanModal({ th, pageId, cur, onClose, onDone, onToast }: {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: '52vh', overflowY: 'auto', paddingRight: 4 }}>
               {dishes.map((d, i) => (
                 <div key={i} style={{ padding: '10px 12px', borderRadius: 10, border: `1px solid ${d._checked ? th.accent : th.border}`, opacity: d._checked ? 1 : 0.55 }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '24px 1fr 150px', gap: 8, alignItems: 'center', marginBottom: 6 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '24px 44px 1fr 150px', gap: 8, alignItems: 'center', marginBottom: 6 }}>
                     <input type="checkbox" checked={!!d._checked} onChange={e => setDish(i, { _checked: e.target.checked })} />
+                    <label title={copy('খাবারের ছবি দিন — website ও Messenger card-এ দেখাবে', 'Add a photo — shows on the website & Messenger cards')}
+                      style={{ width: 44, height: 44, borderRadius: 9, border: `1.5px dashed ${d.imageUrl ? th.accent : th.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', overflow: 'hidden', background: th.accentSoft }}>
+                      {uploadingIdx === i
+                        ? <Spinner size={14} />
+                        : d.imageUrl
+                          ? <img src={d.imageUrl.startsWith('http') ? d.imageUrl : `${API_BASE}${d.imageUrl}`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          : <span style={{ fontSize: 17 }}>📷</span>}
+                      <input type="file" accept="image/*" style={{ display: 'none' }}
+                        onChange={e => { const f = e.target.files?.[0]; if (f) uploadDishPhoto(i, f); e.target.value = ''; }} />
+                    </label>
                     <input style={{ ...th.input, padding: '7px 10px', fontWeight: 700 }} value={d.name}
                       onChange={e => setDish(i, { name: e.target.value })} />
                     <input style={{ ...th.input, padding: '7px 10px' }} placeholder="Category" value={d.category || ''}
