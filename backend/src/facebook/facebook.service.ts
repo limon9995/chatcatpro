@@ -201,21 +201,13 @@ export class FacebookService {
       select: { id: true, ownerId: true, verifyToken: true },
     });
 
-    // ── Check pagesLimit from subscription ──────────────────────────────────
-    // Only block new page connections; allow reconnecting an already-owned page
+    // Page count is deliberately UNLIMITED for every account: each page has
+    // its own wallet, so billing is naturally per-page. Legacy per-plan
+    // pagesLimit enforcement (old starter/pro rows) blocked users whose
+    // subscription still pointed at a deactivated plan — removed. Ensure the
+    // subscription exists so downstream billing keeps working.
     if (!existing || existing.ownerId !== userId) {
-      const sub = await this.billing.getOrCreateSubscription(userId);
-      const plan = (sub as any).plan;
-      if (plan && plan.pagesLimit !== -1) {
-        const pageCount = await this.prisma.page.count({
-          where: { ownerId: userId, NOT: { pageToken: '' } },
-        });
-        if (pageCount >= plan.pagesLimit) {
-          throw new ForbiddenException(
-            `আপনার ${plan.displayName} plan-এ সর্বোচ্চ ${plan.pagesLimit}টি page সংযুক্ত করা যাবে। আরও page যোগ করতে plan upgrade করুন।`,
-          );
-        }
-      }
+      await this.billing.getOrCreateSubscription(userId);
     }
 
     if (existing?.ownerId && existing.ownerId !== userId) {
