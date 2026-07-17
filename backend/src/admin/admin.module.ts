@@ -7,9 +7,10 @@ import { AuthModule } from '../auth/auth.module';
 import { CommonModule } from '../common/common.module';
 import { FacebookModule } from '../facebook/facebook.module';
 import { TelegramModule } from '../telegram/telegram.module';
+import { WhatsappModule } from '../whatsapp/whatsapp.module';
 
 @Module({
-  imports: [PrismaModule, BotKnowledgeModule, AuthModule, CommonModule, FacebookModule, TelegramModule],
+  imports: [PrismaModule, BotKnowledgeModule, AuthModule, CommonModule, FacebookModule, TelegramModule, WhatsappModule],
   controllers: [AdminController],
   providers: [AdminService],
   exports: [AdminService],

@@ -14,6 +14,7 @@ import { BotKnowledgeService } from '../bot-knowledge/bot-knowledge.service';
 import { EncryptionService } from '../common/encryption.service';
 import { FacebookService } from '../facebook/facebook.service';
 import { TelegramNotificationService } from '../telegram/telegram-notification.service';
+import { WaConnectRequestService } from '../whatsapp/wa-connect-request.service';
 import { AgentBehaviorConfig } from '../agents/agent-behavior-config.interface';
 
 export interface CallServerConfig {
@@ -91,6 +92,7 @@ export class AdminService {
     private readonly encryption: EncryptionService,
     private readonly facebook: FacebookService,
     private readonly telegram: TelegramNotificationService,
+    private readonly waConnectRequests: WaConnectRequestService,
   ) {}
 
   async overview() {
@@ -1229,6 +1231,23 @@ export class AdminService {
       data: { status: 'rejected', adminNote: adminNote?.trim() || null },
     });
     return { success: true };
+  }
+
+  // ── WhatsApp Connection Requests ────────────────────────────────────────
+
+  getWaConnectRequests(status?: string) {
+    return this.waConnectRequests.list(status);
+  }
+
+  finalizeWaConnectRequest(
+    id: number,
+    body: { waPhoneNumberId: string; waToken: string; waVerifyToken?: string; adminNote?: string },
+  ) {
+    return this.waConnectRequests.finalize(id, body);
+  }
+
+  rejectWaConnectRequest(id: number, adminNote?: string) {
+    return this.waConnectRequests.reject(id, adminNote);
   }
 
   // ── Bot Agent Catalog ───────────────────────────────────────────────────

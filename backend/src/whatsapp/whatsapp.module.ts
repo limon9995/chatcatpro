@@ -19,7 +19,16 @@ import { WaMessengerModule } from './wa-messenger.module';
 import { WaWebhookController } from './wa-webhook.controller';
 import { WaWebhookService } from './wa-webhook.service';
 import { WaMessengerService } from './wa-messenger.service';
+import { WaConnectRequestController } from './wa-connect-request.controller';
+import { WaConnectRequestService } from './wa-connect-request.service';
 import { DraftOrderHandler } from '../webhook/handlers/draft-order.handler';
+import { AuthModule } from '../auth/auth.module';
+import { SmartBotService } from '../bot/smart-bot.service';
+import { MessengerModule } from '../messenger/messenger.module';
+import { OcrModule } from '../ocr/ocr.module';
+import { OcrQueueModule } from '../ocr-queue/ocr-queue.module';
+import { VisionAnalysisModule } from '../vision-analysis/vision-analysis.module';
+import { ProductMatchModule } from '../product-match/product-match.module';
 
 @Module({
   imports: [
@@ -40,12 +49,15 @@ import { DraftOrderHandler } from '../webhook/handlers/draft-order.handler';
     SmsGatewayModule,
     OrdersModule,
     WaMessengerModule,
+    AuthModule,
+    MessengerModule,
+    OcrModule,
+    OcrQueueModule,
+    VisionAnalysisModule,
+    ProductMatchModule,
   ],
-  controllers: [WaWebhookController],
-  providers: [
-    WaWebhookService,
-    DraftOrderHandler,
-  ],
-  exports: [WaMessengerModule],
+  controllers: [WaWebhookController, WaConnectRequestController],
+  providers: [WaWebhookService, DraftOrderHandler, WaConnectRequestService, SmartBotService],
+  exports: [WaMessengerModule, WaConnectRequestService],
 })
 export class WhatsappModule {}

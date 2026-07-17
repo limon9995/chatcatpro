@@ -7,6 +7,15 @@ import { BotIntentService } from '../bot/bot-intent.service';
 import { ConversationContextService } from '../conversation-context/conversation-context.service';
 import { DraftOrderHandler } from '../webhook/handlers/draft-order.handler';
 import { CrmService } from '../crm/crm.service';
+import { SmartBotService } from '../bot/smart-bot.service';
+import { BillingService } from '../billing/billing.service';
+import { WalletService } from '../wallet/wallet.service';
+import { OcrService } from '../ocr/ocr.service';
+import { OcrQueueService } from '../ocr-queue/ocr-queue.service';
+import { VisionAnalysisService } from '../vision-analysis/vision-analysis.service';
+import { ProductMatchService } from '../product-match/product-match.service';
+import { WhisperService } from '../whisper/whisper.service';
+import { extractTransactionId } from '../common/payment-ocr.util';
 
 @Injectable()
 export class WaWebhookService {
@@ -21,6 +30,14 @@ export class WaWebhookService {
     private readonly ctx: ConversationContextService,
     private readonly draftHandler: DraftOrderHandler,
     private readonly crm: CrmService,
+    private readonly smartBot: SmartBotService,
+    private readonly billing: BillingService,
+    private readonly walletService: WalletService,
+    private readonly ocr: OcrService,
+    private readonly ocrQueue: OcrQueueService,
+    private readonly visionAnalysis: VisionAnalysisService,
+    private readonly productMatch: ProductMatchService,
+    private readonly whisper: WhisperService,
   ) {}
 
   // ── Entry point ─────────────────────────────────────────────────────────────
@@ -138,17 +155,41 @@ export class WaWebhookService {
     const agentHandling = await this.ctx.isAgentHandling(pageId, waId);
     if (agentHandling) return;
 
+    // ── Interactive list reply (customer tapped a catalog row) ────────────────
+    if (msg.type === 'interactive') {
+      const listReplyId: string | undefined = msg.interactive?.list_reply?.id;
+      if (listReplyId?.startsWith('product_')) {
+        const code = listReplyId.slice('product_'.length);
+        await this.processMessage(page, waId, { type: 'text', text: { body: code } });
+      }
+      return;
+    }
+
     // ── Image message ──────────────────────────────────────────────────────────
     if (msg.type === 'image') {
       if (!page.automationOn) return;
-      await safeSend('📸 ছবি পেয়েছি! Product code দিলে আরও দ্রুত সাহায্য করতে পারব 💖');
+      const mediaId: string | undefined = msg.image?.id;
+      if (!mediaId) {
+        await safeSend('📸 ছবি পেয়েছি! Product code দিলে আরও দ্রুত সাহায্য করতে পারব 💖');
+        return;
+      }
+      const accepted = await this.ocrQueue.add(() =>
+        this.handleImageMessage(page, waId, mediaId, safeSend),
+      );
+      if (!accepted) void this.handleImageMessage(page, waId, mediaId, safeSend).catch(() => {});
       return;
     }
 
     // ── Audio message ──────────────────────────────────────────────────────────
     if (msg.type === 'audio') {
       if (!page.automationOn) return;
-      await safeSend('🎤 ভয়েস মেসেজ পেয়েছি! Text-এ লিখলে আরও ভালো সাহায্য করতে পারব 💖');
+      const mediaId: string | undefined = msg.audio?.id;
+      if (!mediaId) {
+        await safeSend('🎤 ভয়েস মেসেজ পেয়েছি! Text-এ লিখলে আরও ভালো সাহায্য করতে পারব 💖');
+        return;
+      }
+      const accepted = await this.ocrQueue.add(() => this.handleAudioMessage(page, waId, mediaId));
+      if (!accepted) void this.handleAudioMessage(page, waId, mediaId).catch(() => {});
       return;
     }
 
@@ -171,6 +212,27 @@ export class WaWebhookService {
         await this.ctx.clearDraft(pageId, waId);
         draft = null;
       }
+    }
+
+    // ── SMART BOT — AI brain (mirrors Facebook's SmartBotService wiring) ──────
+    // Falls through to the deterministic keyword pipeline below if the AI is
+    // unavailable/declines, so WA never goes silent when SmartBot is off/down.
+    if (page.smartBotOn) {
+      const aiAllowed = await this.isAiAllowedForPage(page.ownerId);
+      if (aiAllowed && this.smartBot.isAvailable()) {
+        const result = await this.smartBot.handle(page, waId, text, draft, this.draftHandler);
+        if (result !== false) {
+          if (typeof result === 'object' && result.showCatalog) {
+            await this.sendCatalogList(page, waId, phoneNumberId, rawToken, result.reply);
+          } else {
+            const replyText = typeof result === 'string' ? result : result.reply;
+            await safeSend(replyText);
+          }
+          return;
+        }
+      }
+      // AI unavailable/declined this message — fall through to the
+      // deterministic pipeline below instead of leaving the customer unanswered.
     }
 
     const awaitingConfirm =
@@ -338,6 +400,181 @@ export class WaWebhookService {
     this.logger.debug(`[WA] No reply for waId=${waId} text="${text.slice(0, 60)}"`);
   }
 
+  // ── Billing gate (mirrors WebhookService.isAiAllowedForPage) ─────────────────
+
+  private async isAiAllowedForPage(ownerId: string | null): Promise<boolean> {
+    if (!ownerId) return true;
+    try {
+      const sub = await this.billing.getOrCreateSubscription(ownerId);
+      return this.billing.canTakeOrders(sub);
+    } catch {
+      return true;
+    }
+  }
+
+  // ── Catalog list (WhatsApp's carousel analog) ─────────────────────────────────
+
+  private async sendCatalogList(
+    page: any,
+    waId: string,
+    phoneNumberId: string,
+    rawToken: string,
+    leadIn: string,
+  ): Promise<void> {
+    const pageId = page.id as number;
+    const products = await this.prisma.product.findMany({
+      where: { pageId, isActive: true, stockQty: { gt: 0 } },
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+    });
+
+    if (!products.length) {
+      await this.waMessenger.sendText(phoneNumberId, rawToken, waId, leadIn || 'আমাদের প্রোডাক্ট এখনো যোগ করা হয়নি।');
+      return;
+    }
+
+    const sym = page.currencySymbol || '৳';
+    const rows = products.map((p) => ({
+      id: `product_${p.code}`,
+      title: (p.name || p.code).slice(0, 24),
+      description: `${p.code} — ${p.price}${sym}`.slice(0, 72),
+    }));
+
+    await this.waMessenger.sendInteractiveList(
+      phoneNumberId,
+      rawToken,
+      waId,
+      leadIn?.trim() || 'আমাদের প্রোডাক্টগুলো দেখুন 💖',
+      'Catalog দেখুন',
+      [{ title: 'Products', rows }],
+    );
+  }
+
+  // ── Image handler: payment screenshot OR product vision-match ────────────────
+
+  private async handleImageMessage(
+    page: any,
+    waId: string,
+    mediaId: string,
+    safeSend: (t: string) => Promise<void>,
+  ): Promise<void> {
+    const pageId = page.id as number;
+    const rawToken = this.encryption.decrypt(page.waToken as string);
+    const fallback = '📸 ছবি পেয়েছি! Product code দিলে আরও দ্রুত সাহায্য করতে পারব 💖';
+
+    const media = await this.waMessenger.downloadMediaToStorage(mediaId, rawToken, pageId);
+    if (!media) {
+      await safeSend(fallback);
+      return;
+    }
+
+    const draft = await this.ctx.getActiveDraft(pageId, waId);
+
+    // ── Payment screenshot (customer is at the advance-payment step) ────────
+    if (draft?.currentStep === 'advance_payment') {
+      try {
+        const rawText = await this.ocr.extractTextFromImageUrl(media.url);
+        const txnId = extractTransactionId(rawText);
+
+        if (txnId) {
+          draft.paymentProof = txnId;
+          draft.paymentScreenshotUrl = media.url;
+          draft.currentStep = 'confirm';
+          await this.ctx.saveDraft(pageId, waId, draft);
+          const summary = this.draftHandler.buildSummary(draft, page);
+          await safeSend(`✅ Payment পাওয়া গেছে! Transaction ID: *${txnId}*\n\n${summary}`);
+        } else {
+          draft.paymentScreenshotUrl = media.url;
+          await this.ctx.saveDraft(pageId, waId, draft);
+          await safeSend(
+            '📷 Screenshot পেয়েছি, কিন্তু Transaction ID পড়া যাচ্ছে না।\n\nTransaction ID টা লিখে পাঠান, অথবা শেষের ৪টি সংখ্যা দিন 💖',
+          );
+        }
+      } catch (err) {
+        this.logger.error(`[WA][PaymentOCR] Failed page=${page.pageId} waId=${waId}: ${err}`);
+        draft.paymentScreenshotUrl = media.url;
+        await this.ctx.saveDraft(pageId, waId, draft);
+        await safeSend('📷 Screenshot পেয়েছি 💖 Transaction ID টাও লিখে পাঠান (অথবা শেষের ৪টি সংখ্যা)।');
+      }
+      return;
+    }
+
+    // ── Product photo (vision match against catalog) ────────────────────────
+    if (!page.infoModeOn) {
+      await safeSend(fallback);
+      return;
+    }
+    if (!(await this.walletService.canProcessAi(pageId))) {
+      await safeSend(fallback);
+      return;
+    }
+
+    try {
+      const attrs = await this.visionAnalysis.analyze(media.url);
+      await this.walletService.deductUsage(pageId, attrs.usedApi ? 'IMAGE' : 'IMAGE_LOCAL');
+
+      const matches = await this.productMatch.findMatches(pageId, attrs, 8);
+      if (!matches.length) {
+        await safeSend(fallback);
+        return;
+      }
+
+      const codes = matches.map((m) => m.productCode);
+      const found = await this.prisma.product.findMany({
+        where: { pageId, code: { in: codes } },
+      });
+      if (!found.length) {
+        await safeSend(fallback);
+        return;
+      }
+
+      const newDraft = this.draftHandler.emptyDraft('WHATSAPP');
+      newDraft.pendingMultiPreview = codes;
+      await this.ctx.saveDraft(pageId, waId, newDraft);
+      await this.sendMultiProductPreview(page, waId, safeSend, codes);
+    } catch (err) {
+      this.logger.error(`[WA][VisionRecog] Failed page=${page.pageId} waId=${waId}: ${err}`);
+      await safeSend(fallback);
+    }
+  }
+
+  // ── Audio handler: Whisper transcription ──────────────────────────────────────
+
+  private async handleAudioMessage(page: any, waId: string, mediaId: string): Promise<void> {
+    const pageId = page.id as number;
+    const phoneNumberId = page.waPhoneNumberId as string;
+    const rawToken = this.encryption.decrypt(page.waToken as string);
+    const safeSend = async (text: string) => {
+      if (!text) return;
+      try {
+        await this.waMessenger.sendText(phoneNumberId, rawToken, waId, text);
+      } catch (err) {
+        this.logger.error(`[WA] safeSend waId=${waId}: ${err}`);
+      }
+    };
+
+    if (!(await this.walletService.canProcessAi(pageId)) || !this.whisper.isAvailable()) {
+      await safeSend('🎤 ভয়েস মেসেজ পেয়েছি! Text-এ লিখলে আরও ভালো সাহায্য করতে পারব 💖');
+      return;
+    }
+
+    const media = await this.waMessenger.downloadMediaToStorage(mediaId, rawToken, pageId);
+    if (!media) {
+      await safeSend('🎤 ভয়েস মেসেজ পেয়েছি! Text-এ লিখলে আরও ভালো সাহায্য করতে পারব 💖');
+      return;
+    }
+
+    const transcribed = await this.whisper.transcribe(media.url);
+    if (!transcribed) {
+      await safeSend('দুঃখিত, আপনার voice message বুঝতে পারিনি। Text-এ লিখে জানান 💖');
+      return;
+    }
+
+    await this.walletService.deductUsage(pageId, 'VOICE');
+    this.logger.log(`[WA][Whisper] Routing transcribed text: "${transcribed.slice(0, 80)}"`);
+    await this.processMessage(page, waId, { type: 'text', text: { body: transcribed } });
+  }
+
   // ── Multi-product preview helpers ────────────────────────────────────────────
 
   private async sendMultiProductPreview(
@@ -351,7 +588,7 @@ export class WaWebhookService {
     });
     if (!products.length) return;
 
-    const sym = (page as any).currencySymbol || '৳';
+    const sym = page.currencySymbol || '৳';
     const lines = codes
       .map((c) => products.find((p) => p.code === c))
       .filter(Boolean)

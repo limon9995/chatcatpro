@@ -258,6 +258,11 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
   // WhatsApp settings state
   const [waToken, setWaToken] = useState('');
   const [waSaving, setWaSaving] = useState(false);
+  const [waManualSetup, setWaManualSetup] = useState(false);
+  const [waRequests, setWaRequests] = useState<{ id: number; phoneNumber: string; status: string; note?: string; adminNote?: string; createdAt: string }[]>([]);
+  const [waReqPhone, setWaReqPhone] = useState('');
+  const [waReqNote, setWaReqNote] = useState('');
+  const [waReqBusy, setWaReqBusy] = useState(false);
   // Instagram settings state
   const [igToken, setIgToken] = useState('');
   const [igSaving, setIgSaving] = useState(false);
@@ -455,6 +460,30 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
       load();
     } catch (e: any) { onToast(e.message, 'error'); }
     finally { setWaSaving(false); }
+  };
+
+  const loadWaRequests = useCallback(async () => {
+    try {
+      const all = await request<any[]>(`${API_BASE}/whatsapp/connect-request/my`);
+      setWaRequests((all || []).filter(r => r.pageId === pageId));
+    } catch { /* ignore */ }
+  }, [pageId]);
+
+  useEffect(() => { loadWaRequests(); }, [loadWaRequests]);
+
+  const submitWaConnectRequest = async () => {
+    if (!waReqPhone.trim()) { onToast(copy('WhatsApp নম্বর দিন', 'Enter a WhatsApp number'), 'error'); return; }
+    setWaReqBusy(true);
+    try {
+      await request(`${API_BASE}/whatsapp/connect-request`, {
+        method: 'POST',
+        body: JSON.stringify({ pageId, phoneNumber: waReqPhone.trim(), note: waReqNote.trim() || undefined }),
+      });
+      onToast(copy('✅ Request পাঠানো হয়েছে — শীঘ্রই connect করে দেওয়া হবে', '✅ Request sent — we\'ll connect it shortly'));
+      setWaReqPhone(''); setWaReqNote('');
+      loadWaRequests();
+    } catch (e: any) { onToast(e.message, 'error'); }
+    finally { setWaReqBusy(false); }
   };
 
   const saveTelegram = async () => {
@@ -943,6 +972,66 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
 
         {/* ── WhatsApp Connection ── */}
         <Section title="📱 WhatsApp Connection" desc="WhatsApp Business API দিয়ে automation চালু করুন — bot একইভাবে কাজ করবে">
+          {!s.waTokenSet && (() => {
+            const pending = waRequests.find(r => r.status === 'pending');
+            const latest = waRequests[0];
+            return (
+              <div style={{ padding: 14, borderRadius: 12, background: th.surface, border: `1px solid ${th.border}`, marginBottom: 16 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>
+                  {copy('✨ WhatsApp Automation চালু করতে চান?', '✨ Want WhatsApp automation?')}
+                </div>
+                <div style={{ fontSize: 12, color: th.muted, marginBottom: 12, lineHeight: 1.6 }}>
+                  {copy('শুধু আপনার WhatsApp Business নম্বরটা দিন — বাকি সব (Meta setup, token) আমরা করে দিচ্ছি। আপনাকে কিছু করা লাগবে না, শুধু নম্বর verify করার সময় একটা OTP call/SMS আসবে।', 'Just give us your WhatsApp Business number — we handle all the Meta setup and tokens. You only need to confirm an OTP call/SMS when the number is verified.')}
+                </div>
+
+                {pending ? (
+                  <div style={{ fontSize: 12.5, padding: '8px 10px', borderRadius: 8, background: th.bg, border: `1px solid ${th.border}` }}>
+                    ⏳ {copy(`Request pending: ${pending.phoneNumber} — admin শীঘ্রই connect করে দেবে।`, `Request pending: ${pending.phoneNumber} — admin will connect it shortly.`)}
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {latest?.status === 'rejected' && (
+                      <div style={{ fontSize: 12, color: '#ef4444' }}>
+                        ❌ {copy('আগের request reject হয়েছে', 'Previous request was rejected')}{latest.adminNote ? `: ${latest.adminNote}` : ''}
+                      </div>
+                    )}
+                    <input
+                      style={{ ...inp }}
+                      placeholder={copy('WhatsApp নম্বর (যেমন 01712345678)', 'WhatsApp number (e.g. 01712345678)')}
+                      value={waReqPhone}
+                      onChange={e => setWaReqPhone(e.target.value)}
+                    />
+                    <input
+                      style={{ ...inp }}
+                      placeholder={copy('নোট (optional)', 'Note (optional)')}
+                      value={waReqNote}
+                      onChange={e => setWaReqNote(e.target.value)}
+                    />
+                    <button
+                      onClick={submitWaConnectRequest}
+                      disabled={waReqBusy}
+                      style={{ ...th.btnPrimary, opacity: waReqBusy ? 0.6 : 1, alignSelf: 'flex-start' }}
+                    >
+                      {waReqBusy ? <><Spinner size={13} /> {copy('পাঠানো হচ্ছে...', 'Sending...')}</> : copy('📲 Request পাঠান', '📲 Send request')}
+                    </button>
+                  </div>
+                )}
+
+                <details style={{ marginTop: 12 }}>
+                  <summary style={{ fontSize: 11.5, color: th.muted, cursor: 'pointer', userSelect: 'none' }}>
+                    {copy('নিজে setup করতে চান? (Advanced)', 'Want to set it up yourself? (Advanced)')}
+                  </summary>
+                  <button
+                    onClick={() => setWaManualSetup(true)}
+                    style={{ ...th.btnGhost, fontSize: 11.5, marginTop: 8 }}
+                  >
+                    {copy('Manual token entry দেখান', 'Show manual token entry')}
+                  </button>
+                </details>
+              </div>
+            );
+          })()}
+          {(s.waTokenSet || waManualSetup) && <>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
             <div>
               <div style={{ fontSize: 13, fontWeight: 700 }}>WhatsApp Automation</div>
@@ -1073,6 +1162,7 @@ export function SettingsPage({ th, pageId, tab, onToast, autoOpenReconnect, user
               {waSaving ? <><Spinner size={13} /> Saving...</> : '💾 WhatsApp Save করুন'}
             </button>
           </div></>}
+          </>}
         </Section>
 
 

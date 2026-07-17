@@ -447,6 +447,28 @@ export class AdminController {
     return this.svc.rejectPageRequest(id, b?.adminNote);
   }
 
+  // ── WhatsApp Connection Requests ─────────────────────────────────────────
+
+  @Get('wa-connect-requests')
+  getWaConnectRequests(@Query('status') status?: string) {
+    return this.svc.getWaConnectRequests(status);
+  }
+
+  @Post('wa-connect-requests/:id/finalize')
+  finalizeWaConnectRequest(@Param('id', ParseIntPipe) id: number, @Body() b: any) {
+    return this.svc.finalizeWaConnectRequest(id, {
+      waPhoneNumberId: String(b?.waPhoneNumberId || ''),
+      waToken: String(b?.waToken || ''),
+      waVerifyToken: b?.waVerifyToken ? String(b.waVerifyToken) : undefined,
+      adminNote: b?.adminNote ? String(b.adminNote) : undefined,
+    });
+  }
+
+  @Post('wa-connect-requests/:id/reject')
+  rejectWaConnectRequest(@Param('id', ParseIntPipe) id: number, @Body() b: any) {
+    return this.svc.rejectWaConnectRequest(id, b?.adminNote);
+  }
+
   // ── Bot Agent Catalog ────────────────────────────────────────────────────
 
   @Get('bot-agents')
