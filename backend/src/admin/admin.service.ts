@@ -1801,6 +1801,11 @@ server {
     const monthMap: Record<string, { revenueBdt: number; apiCostBdt: number }> = {};
 
     for (const tx of transactions) {
+      // Manual balance corrections are neither revenue nor customer usage —
+      // counting their negative legs as "billed usage" (or positive legs as
+      // recharge) would distort the report.
+      if (tx.type === 'ADMIN_ADJUSTMENT') continue;
+
       const monthKey = tx.createdAt.toISOString().slice(0, 7);
       if (!monthMap[monthKey]) monthMap[monthKey] = { revenueBdt: 0, apiCostBdt: 0 };
       if (!pageMap[tx.pageId]) pageMap[tx.pageId] = { rechargedBdt: 0, billedBdt: 0, apiCostBdt: 0, apiCallCount: 0 };
