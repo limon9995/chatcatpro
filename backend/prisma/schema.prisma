@@ -83,6 +83,8 @@ model Page {
   linkedPages  Page[] @relation("LinkedPages")
 
   isActive                  Boolean @default(true)
+  // Admin-owned test page — excluded from the profit/revenue report
+  isTestPage                Boolean @default(false)
   automationOn              Boolean @default(false)
   automationAllowed         Boolean @default(true)
   ocrOn                     Boolean @default(false)

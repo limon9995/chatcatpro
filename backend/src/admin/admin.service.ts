@@ -1063,10 +1063,25 @@ export class AdminService {
         walletBalanceBdt: true,
         subscriptionStatus: true,
         nextBillingDate: true,
+        isTestPage: true,
         owner: { select: { id: true, username: true, name: true } },
       },
       orderBy: { walletBalanceBdt: 'asc' },
     });
+  }
+
+  /** Mark/unmark an admin-owned test page — excluded from the profit report. */
+  async setPageTestFlag(pageId: number, isTest: boolean) {
+    const page = await this.prisma.page.findUnique({
+      where: { id: pageId },
+      select: { id: true },
+    });
+    if (!page) throw new NotFoundException('Page not found');
+    await this.prisma.page.update({
+      where: { id: pageId },
+      data: { isTestPage: isTest },
+    });
+    return { success: true, pageId, isTestPage: isTest };
   }
 
   async getAllRechargeRequests(status?: string) {
@@ -1736,27 +1751,36 @@ server {
       dateFilter = { createdAt: { gte: start, lt: end } };
     }
 
-    const [transactions, pages, aiUsageRows] = await Promise.all([
+    // Admin-owned test pages are excluded from the report entirely — their
+    // recharges aren't real revenue and their AI usage isn't customer cost.
+    const pages = await this.prisma.page.findMany({
+      select: {
+        id: true,
+        pageName: true,
+        walletBalanceBdt: true,
+        subscriptionStatus: true,
+        nextBillingDate: true,
+        isTestPage: true,
+        owner: { select: { username: true } },
+      },
+    });
+    const testPageIds = pages.filter((p) => p.isTestPage).map((p) => p.id);
+
+    const [transactions, aiUsageRows] = await Promise.all([
       this.prisma.walletTransaction.findMany({
-        where: dateFilter,
+        where: { ...dateFilter, pageId: { notIn: testPageIds } },
         select: { pageId: true, type: true, amountBdt: true, provider: true, createdAt: true },
         orderBy: { createdAt: 'desc' },
       }),
-      this.prisma.page.findMany({
-        select: {
-          id: true,
-          pageName: true,
-          walletBalanceBdt: true,
-          subscriptionStatus: true,
-          nextBillingDate: true,
-          owner: { select: { username: true } },
-        },
-      }),
       // V26: real measured token usage (SMART_BOT + AI_INTENT capture it),
-      // priced with official provider rates at write time.
+      // priced with official provider rates at write time. Rows with a null
+      // pageId (platform-level calls) are kept.
       this.prisma.aiUsage.groupBy({
         by: ['provider', 'model', 'usageType'],
-        where: dateFilter,
+        where: {
+          ...dateFilter,
+          OR: [{ pageId: null }, { pageId: { notIn: testPageIds } }],
+        },
         _sum: { promptTokens: true, outputTokens: true, costUsd: true },
         _count: { _all: true },
       }),

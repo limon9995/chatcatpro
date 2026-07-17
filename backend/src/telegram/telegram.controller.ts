@@ -424,6 +424,8 @@ export class TelegramController {
           return await this.cmdSetUserActive(args[0], true);
         case '/profit':
           return await this.cmdProfit(args[0]);
+        case '/testpage':
+          return await this.cmdToggleTestPage(parseInt(args[0], 10));
         case '/balance':
           return await this.cmdBalanceHelp();
         case '/addbalance':
@@ -461,7 +463,8 @@ export class TelegramController {
         '/pagerequests — pending page connect request (approve/reject সহ)',
         '/addbalance <code>&lt;pageId&gt; &lt;amount&gt; [note]</code> — wallet-এ টাকা যোগ',
         '/cutbalance <code>&lt;pageId&gt; &lt;amount&gt; [note]</code> — wallet থেকে টাকা কাটা',
-        '/profit <code>[YYYY-MM]</code> — revenue, real AI cost ও profit',
+        '/profit <code>[YYYY-MM]</code> — revenue, real AI cost ও profit (test page বাদে)',
+        '/testpage <code>&lt;pageId&gt;</code> — নিজের test page মার্ক/আনমার্ক (profit হিসাবের বাইরে থাকবে)',
       ].join('\n'),
       ADMIN_KEYBOARD,
     );
@@ -507,6 +510,30 @@ export class TelegramController {
       sign > 0
         ? `✅ Page #${pageId} <b>${tgEsc(page?.pageName ?? '')}</b>-এ ৳${fmtBdt(amount)} যোগ হলো।\n💰 নতুন balance: ৳${newBalance}`
         : `✅ Page #${pageId} <b>${tgEsc(page?.pageName ?? '')}</b> থেকে ৳${fmtBdt(amount)} কাটা হলো।\n💰 নতুন balance: ৳${newBalance}`,
+    );
+  }
+
+  private async cmdToggleTestPage(pageId: number): Promise<void> {
+    if (!pageId || Number.isNaN(pageId)) {
+      await this.adminTelegram.sendMessage(
+        '⚠️ Page ID দিন — যেমন: <code>/testpage 5</code>\nPage ID পেতে /pages পাঠান।',
+      );
+      return;
+    }
+    const page = await this.prisma.page.findUnique({
+      where: { id: pageId },
+      select: { pageName: true, isTestPage: true },
+    });
+    if (!page) {
+      await this.adminTelegram.sendMessage(`❌ Page #${pageId} পাওয়া যায়নি।`);
+      return;
+    }
+    const next = !page.isTestPage;
+    await this.adminSvc().setPageTestFlag(pageId, next);
+    await this.adminTelegram.sendMessage(
+      next
+        ? `🧪 Page #${pageId} <b>${tgEsc(page.pageName)}</b> এখন <b>test page</b> — profit হিসাবের বাইরে থাকবে।`
+        : `✅ Page #${pageId} <b>${tgEsc(page.pageName)}</b> আর test page নয় — profit হিসাবে ধরা হবে।`,
     );
   }
 
@@ -605,7 +632,8 @@ export class TelegramController {
     }
     const lines = slice.map((p: any) => {
       const st = p.subscriptionStatus === 'ACTIVE' ? '✅' : '🚫';
-      return `${st} <b>#${p.id} ${tgEsc(p.pageName)}</b>\n   👤 ${tgEsc(p.owner?.username ?? '?')} | 💰 ৳${Math.round(p.walletBalanceBdt)} | ${p.subscriptionStatus}`;
+      const test = p.isTestPage ? ' 🧪test' : '';
+      return `${st} <b>#${p.id} ${tgEsc(p.pageName)}</b>${test}\n   👤 ${tgEsc(p.owner?.username ?? '?')} | 💰 ৳${Math.round(p.walletBalanceBdt)} | ${p.subscriptionStatus}`;
     });
     const buttons = slice.map((p: any) =>
       p.subscriptionStatus === 'ACTIVE'
@@ -744,6 +772,7 @@ export class TelegramController {
         modelLines ? `<b>Model খরচ:</b>\n${modelLines}\n` : '',
         topPages ? `<b>Top pages:</b>\n${topPages}` : '',
         '',
+        '<i>🧪 Test page-গুলো (নিজের page) এই হিসাবের বাইরে — মার্ক করতে /testpage &lt;pageId&gt;</i>',
         '<i>ℹ️ Gemini free-tier key ব্যবহার হলে আসল খরচ ৳0 পর্যন্ত হতে পারে — উপরের হিসাব official paid-rate ধরে।</i>',
       ]
         .filter((l) => l !== '')
