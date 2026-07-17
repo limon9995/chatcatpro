@@ -13,11 +13,14 @@ export class TelegramService {
     if (!token || !chatId) return;
 
     try {
-      const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML' }),
-      });
+      const res = await fetch(
+        `https://api.telegram.org/bot${token}/sendMessage`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML' }),
+        },
+      );
       if (!res.ok) {
         const err = await res.text();
         this.logger.warn(`[Telegram] Send failed: ${err}`);
@@ -33,30 +36,82 @@ export class TelegramService {
    */
   async sendMessageWithButtons(
     text: string,
-    buttons: Array<Array<{ text: string; callback_data?: string; url?: string }>>,
+    buttons: Array<
+      Array<{ text: string; callback_data?: string; url?: string }>
+    >,
   ): Promise<void> {
     const token = this.apiKeys.getSync('telegramBotToken');
     const chatId = this.apiKeys.getSync('telegramChatId');
     if (!token || !chatId) return;
 
     try {
-      const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chat_id: chatId,
-          text,
-          parse_mode: 'HTML',
-          reply_markup: { inline_keyboard: buttons },
-        }),
-        signal: AbortSignal.timeout(10_000),
-      });
+      const res = await fetch(
+        `https://api.telegram.org/bot${token}/sendMessage`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text,
+            parse_mode: 'HTML',
+            reply_markup: { inline_keyboard: buttons },
+          }),
+          signal: AbortSignal.timeout(10_000),
+        },
+      );
       if (!res.ok) {
         const err = await res.text();
         this.logger.warn(`[Telegram] sendMessageWithButtons failed: ${err}`);
       }
     } catch (e) {
-      this.logger.warn(`[Telegram] sendMessageWithButtons error: ${(e as Error).message}`);
+      this.logger.warn(
+        `[Telegram] sendMessageWithButtons error: ${(e as Error).message}`,
+      );
+    }
+  }
+
+  /**
+   * Send an admin-bot message attaching a persistent reply keyboard — the
+   * button menu pinned under Telegram's text input. Button presses arrive
+   * back as plain text messages, which handleAdminCommand maps to commands.
+   */
+  async sendMessageWithKeyboard(
+    text: string,
+    keyboard: string[][],
+  ): Promise<void> {
+    const token = this.apiKeys.getSync('telegramBotToken');
+    const chatId = this.apiKeys.getSync('telegramChatId');
+    if (!token || !chatId) return;
+
+    try {
+      const res = await fetch(
+        `https://api.telegram.org/bot${token}/sendMessage`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text,
+            parse_mode: 'HTML',
+            reply_markup: {
+              keyboard: keyboard.map((row) =>
+                row.map((label) => ({ text: label })),
+              ),
+              resize_keyboard: true,
+              is_persistent: true,
+            },
+          }),
+          signal: AbortSignal.timeout(10_000),
+        },
+      );
+      if (!res.ok) {
+        const err = await res.text();
+        this.logger.warn(`[Telegram] sendMessageWithKeyboard failed: ${err}`);
+      }
+    } catch (e) {
+      this.logger.warn(
+        `[Telegram] sendMessageWithKeyboard error: ${(e as Error).message}`,
+      );
     }
   }
 
@@ -67,7 +122,10 @@ export class TelegramService {
     await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ callback_query_id: callbackQueryId, text: text ?? '' }),
+      body: JSON.stringify({
+        callback_query_id: callbackQueryId,
+        text: text ?? '',
+      }),
       signal: AbortSignal.timeout(5_000),
     }).catch(() => {});
   }
@@ -77,16 +135,25 @@ export class TelegramService {
    * Subscribes to both callback_query (inline buttons) and message —
    * message delivery powers the /users, /profit … admin commands.
    */
-  async setAdminWebhook(webhookUrl: string): Promise<{ ok: boolean; error?: string }> {
+  async setAdminWebhook(
+    webhookUrl: string,
+  ): Promise<{ ok: boolean; error?: string }> {
     const token = this.apiKeys.getSync('telegramBotToken');
-    if (!token) return { ok: false, error: 'No admin telegramBotToken configured' };
+    if (!token)
+      return { ok: false, error: 'No admin telegramBotToken configured' };
     try {
-      const res = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: webhookUrl, allowed_updates: ['callback_query', 'message'] }),
-        signal: AbortSignal.timeout(10_000),
-      });
+      const res = await fetch(
+        `https://api.telegram.org/bot${token}/setWebhook`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            url: webhookUrl,
+            allowed_updates: ['callback_query', 'message'],
+          }),
+          signal: AbortSignal.timeout(10_000),
+        },
+      );
       const data: any = await res.json();
       return data.ok ? { ok: true } : { ok: false, error: data.description };
     } catch (e: any) {

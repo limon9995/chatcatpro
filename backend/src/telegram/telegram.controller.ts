@@ -24,6 +24,63 @@ function tgEsc(s: any): string {
     .replace(/>/g, '&gt;');
 }
 
+// ── Persistent reply keyboards (the button menu pinned under the chat input) ──
+// A pressed button arrives back as a plain text message equal to its label, so
+// each label maps to the slash-command it triggers. Keyboard layout and the
+// label→command map are derived from the same source to guarantee exact match.
+
+const ADMIN_BUTTONS: Array<Array<{ label: string; cmd: string }>> = [
+  [
+    { label: '📊 Overview', cmd: '/overview' },
+    { label: '👥 Users', cmd: '/users' },
+  ],
+  [
+    { label: '📄 Pages', cmd: '/pages' },
+    { label: '💳 Recharges', cmd: '/recharges' },
+  ],
+  [
+    { label: '🔑 Page Requests', cmd: '/pagerequests' },
+    { label: '📈 Profit', cmd: '/profit' },
+  ],
+  [
+    { label: '💰 Balance +/-', cmd: '/balance' },
+    { label: '❓ Help', cmd: '/help' },
+  ],
+];
+const ADMIN_KEYBOARD: string[][] = ADMIN_BUTTONS.map((r) =>
+  r.map((b) => b.label),
+);
+const ADMIN_BUTTON_COMMANDS: Record<string, string> = Object.fromEntries(
+  ADMIN_BUTTONS.flat().map((b) => [b.label, b.cmd]),
+);
+
+const MERCHANT_BUTTONS: Array<Array<{ label: string; cmd: string }>> = [
+  [
+    { label: '🛒 আজকের অর্ডার', cmd: '/today' },
+    { label: '⏳ পেন্ডিং অর্ডার', cmd: '/pending' },
+  ],
+  [
+    { label: '💳 পেমেন্ট চেক', cmd: '/payments' },
+    { label: '📊 রিপোর্ট', cmd: '/report' },
+  ],
+  [
+    { label: '💰 ব্যালেন্স', cmd: '/balance' },
+    { label: '🛍 প্রোডাক্ট', cmd: '/products' },
+  ],
+  [{ label: '❓ সাহায্য', cmd: '/help' }],
+];
+const MERCHANT_KEYBOARD: string[][] = MERCHANT_BUTTONS.map((r) =>
+  r.map((b) => b.label),
+);
+const MERCHANT_BUTTON_COMMANDS: Record<string, string> = Object.fromEntries(
+  MERCHANT_BUTTONS.flat().map((b) => [b.label, b.cmd]),
+);
+
+/** Format a BDT amount — whole numbers stay whole, fractions keep 2 digits. */
+function fmtBdt(n: number): string {
+  return Number.isInteger(n) ? String(n) : n.toFixed(2);
+}
+
 @Controller('telegram')
 export class TelegramController {
   constructor(
@@ -67,7 +124,7 @@ export class TelegramController {
         `https://api.telegram.org/bot${token}/getUpdates?limit=10`,
         { signal: AbortSignal.timeout(8_000) },
       );
-      const data = (await res.json()) as any;
+      const data = await res.json();
       if (!data.ok) {
         return {
           ok: false,
@@ -113,12 +170,17 @@ export class TelegramController {
    */
   @Post('setup-webhook')
   @UseGuards(AuthGuard)
-  async setupWebhook(@Body() body: { token: string; pageId: number; baseUrl?: string }) {
+  async setupWebhook(
+    @Body() body: { token: string; pageId: number; baseUrl?: string },
+  ) {
     if (!body?.token || !body?.pageId) {
       return { ok: false, error: 'token and pageId required' };
     }
     const encryptedToken = this.encryption.encrypt(body.token.trim());
-    const baseUrl = (body.baseUrl ?? 'https://api.chatcat.pro').replace(/\/$/, '');
+    const baseUrl = (body.baseUrl ?? 'https://api.chatcat.pro').replace(
+      /\/$/,
+      '',
+    );
     const webhookUrl = `${baseUrl}/telegram/callback/${encodeURIComponent(encryptedToken)}`;
     return this.telegram.setWebhook(body.token.trim(), webhookUrl);
   }
@@ -133,8 +195,12 @@ export class TelegramController {
   @UseGuards(AuthGuard)
   async setupAdminWebhook(@Body() body: { baseUrl?: string }) {
     const token = this.adminTelegram.getAdminBotToken();
-    if (!token) return { ok: false, error: 'No admin telegramBotToken configured' };
-    const baseUrl = (body?.baseUrl ?? 'https://api.chatcat.pro').replace(/\/$/, '');
+    if (!token)
+      return { ok: false, error: 'No admin telegramBotToken configured' };
+    const baseUrl = (body?.baseUrl ?? 'https://api.chatcat.pro').replace(
+      /\/$/,
+      '',
+    );
     const webhookUrl = `${baseUrl}/telegram/admin-callback/${encodeURIComponent(token)}`;
     return this.adminTelegram.setAdminWebhook(webhookUrl);
   }
@@ -149,6 +215,37 @@ export class TelegramController {
     @Param('encryptedToken') encryptedToken: string,
     @Body() update: any,
   ) {
+    // ── Merchant text commands (permanent keyboard buttons arrive as text) ──
+    // The webhook secret in the URL proves the sender is Telegram; the chat id
+    // pin proves the human is the page's merchant (anyone can message a bot).
+    const msg = update?.message;
+    if (msg?.text) {
+      const page = await this.prisma.page.findFirst({
+        where: { telegramBotToken: encryptedToken },
+        select: {
+          id: true,
+          pageName: true,
+          telegramChatId: true,
+          telegramBotToken: true,
+        },
+      });
+      if (
+        page?.telegramBotToken &&
+        page.telegramChatId &&
+        String(msg.chat?.id) === String(page.telegramChatId)
+      ) {
+        const token = this.encryption.decrypt(page.telegramBotToken);
+        await this.handleMerchantCommand(
+          page.id,
+          page.pageName,
+          token,
+          page.telegramChatId,
+          String(msg.text).trim(),
+        );
+      }
+      return { ok: true };
+    }
+
     // Handle callback_query (button press)
     const cbq = update?.callback_query;
     if (!cbq) return { ok: true };
@@ -173,17 +270,53 @@ export class TelegramController {
 
     if (action === 'advrefund' && orderId) {
       const subAction = parts[1]; // 'confirm' or 'skip'
-      await this.handleAdvanceRefund(page.id, orderId, subAction, token, callbackQueryId, page.telegramChatId ?? '');
+      await this.handleAdvanceRefund(
+        page.id,
+        orderId,
+        subAction,
+        token,
+        callbackQueryId,
+        page.telegramChatId ?? '',
+      );
     } else if (action === 'confirm' && orderId) {
-      await this.handleConfirm(page.id, orderId, token, callbackQueryId, page.telegramChatId ?? '');
+      await this.handleConfirm(
+        page.id,
+        orderId,
+        token,
+        callbackQueryId,
+        page.telegramChatId ?? '',
+      );
     } else if (action === 'courier' && orderId) {
-      await this.handleCourierBook(page.id, orderId, token, callbackQueryId, page.telegramChatId ?? '');
+      await this.handleCourierBook(
+        page.id,
+        orderId,
+        token,
+        callbackQueryId,
+        page.telegramChatId ?? '',
+      );
     } else if ((action === 'payok' || action === 'payfail') && orderId) {
-      await this.handlePaymentVerify(page.id, orderId, action === 'payok', token, callbackQueryId, page.telegramChatId ?? '');
+      await this.handlePaymentVerify(
+        page.id,
+        orderId,
+        action === 'payok',
+        token,
+        callbackQueryId,
+        page.telegramChatId ?? '',
+      );
     } else if (action === 'fraud' && orderId) {
-      await this.handleFraud(page.id, orderId, token, callbackQueryId, page.telegramChatId ?? '');
+      await this.handleFraud(
+        page.id,
+        orderId,
+        token,
+        callbackQueryId,
+        page.telegramChatId ?? '',
+      );
     } else {
-      await this.telegram.answerCallback(token, callbackQueryId, '❓ Unknown action');
+      await this.telegram.answerCallback(
+        token,
+        callbackQueryId,
+        '❓ Unknown action',
+      );
     }
 
     return { ok: true };
@@ -243,7 +376,10 @@ export class TelegramController {
     } else if (domain === 'adm' && action) {
       await this.handleAdminInlineAction(action, id, callbackQueryId);
     } else {
-      await this.adminTelegram.answerCallback(callbackQueryId, '❓ Unknown action');
+      await this.adminTelegram.answerCallback(
+        callbackQueryId,
+        '❓ Unknown action',
+      );
     }
 
     return { ok: true };
@@ -256,7 +392,9 @@ export class TelegramController {
   }
 
   private async handleAdminCommand(text: string): Promise<void> {
-    const [cmdRaw, ...args] = text.split(/\s+/);
+    // Permanent-keyboard buttons come back as their label text — map to command.
+    const mapped = ADMIN_BUTTON_COMMANDS[text] ?? text;
+    const [cmdRaw, ...args] = mapped.split(/\s+/);
     const cmd = cmdRaw.toLowerCase().replace(/@.*$/, ''); // strip @botname suffix
     try {
       switch (cmd) {
@@ -271,8 +409,13 @@ export class TelegramController {
           return await this.cmdPages(args.join(' '));
         case '/recharges':
           return await this.cmdRecharges();
+        case '/pagerequests':
+          return await this.cmdPageRequests();
         case '/suspend':
-          return await this.cmdSetPageStatus(parseInt(args[0], 10), 'SUSPENDED');
+          return await this.cmdSetPageStatus(
+            parseInt(args[0], 10),
+            'SUSPENDED',
+          );
         case '/activate':
           return await this.cmdSetPageStatus(parseInt(args[0], 10), 'ACTIVE');
         case '/ban':
@@ -281,20 +424,31 @@ export class TelegramController {
           return await this.cmdSetUserActive(args[0], true);
         case '/profit':
           return await this.cmdProfit(args[0]);
+        case '/balance':
+          return await this.cmdBalanceHelp();
+        case '/addbalance':
+          return await this.cmdAdjustBalance(args, 1);
+        case '/cutbalance':
+          return await this.cmdAdjustBalance(args, -1);
         default:
-          await this.adminTelegram.sendMessage(
-            '❓ অজানা command। সব command দেখতে /help পাঠান।',
+          await this.adminTelegram.sendMessageWithKeyboard(
+            '❓ অজানা command। নিচের বাটন ব্যবহার করুন বা /help পাঠান।',
+            ADMIN_KEYBOARD,
           );
       }
     } catch (err: any) {
-      await this.adminTelegram.sendMessage(`❌ Error: ${tgEsc(err?.message ?? err)}`);
+      await this.adminTelegram.sendMessage(
+        `❌ Error: ${tgEsc(err?.message ?? err)}`,
+      );
     }
   }
 
   private async sendAdminHelp(): Promise<void> {
-    await this.adminTelegram.sendMessage(
+    await this.adminTelegram.sendMessageWithKeyboard(
       [
         '🛠 <b>ChatCat Admin Panel</b>',
+        '',
+        'নিচের permanent বাটন থেকে এক চাপে সব কাজ করা যায়। Command-ও চলে:',
         '',
         '/overview — সিস্টেম overview (pages, orders, users)',
         '/users — সব client-এর list',
@@ -304,9 +458,90 @@ export class TelegramController {
         '/ban <code>&lt;username&gt;</code> — user login বন্ধ',
         '/unban <code>&lt;username&gt;</code> — user login চালু',
         '/recharges — pending recharge request (approve/reject button সহ)',
+        '/pagerequests — pending page connect request (approve/reject সহ)',
+        '/addbalance <code>&lt;pageId&gt; &lt;amount&gt; [note]</code> — wallet-এ টাকা যোগ',
+        '/cutbalance <code>&lt;pageId&gt; &lt;amount&gt; [note]</code> — wallet থেকে টাকা কাটা',
         '/profit <code>[YYYY-MM]</code> — revenue, real AI cost ও profit',
       ].join('\n'),
+      ADMIN_KEYBOARD,
     );
+  }
+
+  private async cmdBalanceHelp(): Promise<void> {
+    await this.adminTelegram.sendMessage(
+      [
+        '💰 <b>Balance Add / Cut</b>',
+        '',
+        'যোগ করতে: <code>/addbalance 5 500 bonus</code>',
+        'কাটতে: <code>/cutbalance 5 200 correction</code>',
+        '(প্রথমে pageId, তারপর amount, শেষে optional note)',
+        '',
+        'Page ID পেতে /pages পাঠান।',
+      ].join('\n'),
+    );
+  }
+
+  private async cmdAdjustBalance(args: string[], sign: 1 | -1): Promise<void> {
+    const pageId = parseInt(args[0], 10);
+    const amount = Math.abs(parseFloat(args[1]));
+    if (!pageId || Number.isNaN(pageId) || !amount || Number.isNaN(amount)) {
+      await this.adminTelegram.sendMessage(
+        `⚠️ ফরম্যাট: <code>/${sign > 0 ? 'addbalance' : 'cutbalance'} &lt;pageId&gt; &lt;amount&gt; [note]</code>\nPage ID পেতে /pages পাঠান।`,
+      );
+      return;
+    }
+    const note = args.slice(2).join(' ');
+    await this.adminSvc().adjustPageWallet(
+      pageId,
+      sign * amount,
+      note ? `${note} (via Telegram)` : 'Manual adjustment via Telegram',
+    );
+    const page = await this.prisma.page.findUnique({
+      where: { id: pageId },
+      select: { pageName: true, walletBalanceBdt: true },
+    });
+    const newBalance = fmtBdt(
+      Math.round((page?.walletBalanceBdt ?? 0) * 100) / 100,
+    );
+    await this.adminTelegram.sendMessage(
+      sign > 0
+        ? `✅ Page #${pageId} <b>${tgEsc(page?.pageName ?? '')}</b>-এ ৳${fmtBdt(amount)} যোগ হলো।\n💰 নতুন balance: ৳${newBalance}`
+        : `✅ Page #${pageId} <b>${tgEsc(page?.pageName ?? '')}</b> থেকে ৳${fmtBdt(amount)} কাটা হলো।\n💰 নতুন balance: ৳${newBalance}`,
+    );
+  }
+
+  private async cmdPageRequests(): Promise<void> {
+    const pending = await this.adminSvc().getPageRequests('pending');
+    if (!pending.length) {
+      await this.adminTelegram.sendMessage('✅ কোনো pending page request নেই।');
+      return;
+    }
+    for (const r of pending.slice(0, 10)) {
+      const approveUrl = this.adminSvc().getPageRequestApproveUrl(r.id).url;
+      await this.adminTelegram.sendMessageWithButtons(
+        [
+          `🔑 <b>Page Request #${r.id}</b>`,
+          `👤 ${tgEsc(r.user?.name || r.user?.username || '?')} (${tgEsc(r.user?.email ?? '')})`,
+          `🔗 ${tgEsc(r.pageUrl)}`,
+          r.fbProfile ? `👤 FB Profile: ${tgEsc(r.fbProfile)}` : '',
+          r.note ? `📝 ${tgEsc(r.note)}` : '',
+          `🕐 ${new Date(r.createdAt).toLocaleString('bn-BD', { timeZone: 'Asia/Dhaka' })}`,
+        ]
+          .filter(Boolean)
+          .join('\n'),
+        [
+          [
+            { text: '🔗 Login with Facebook & Approve', url: approveUrl },
+            { text: '❌ Reject', callback_data: `pagereq_reject_${r.id}` },
+          ],
+        ],
+      );
+    }
+    if (pending.length > 10) {
+      await this.adminTelegram.sendMessage(
+        `…আরো ${pending.length - 10}টা pending আছে।`,
+      );
+    }
   }
 
   private async cmdOverview(): Promise<void> {
@@ -354,8 +589,12 @@ export class TelegramController {
     const filtered = q
       ? all.filter(
           (p: any) =>
-            String(p.pageName || '').toLowerCase().includes(q) ||
-            String(p.owner?.username || '').toLowerCase().includes(q) ||
+            String(p.pageName || '')
+              .toLowerCase()
+              .includes(q) ||
+            String(p.owner?.username || '')
+              .toLowerCase()
+              .includes(q) ||
             String(p.id) === q,
         )
       : all;
@@ -370,8 +609,18 @@ export class TelegramController {
     });
     const buttons = slice.map((p: any) =>
       p.subscriptionStatus === 'ACTIVE'
-        ? [{ text: `🚫 Suspend #${p.id} ${String(p.pageName).slice(0, 20)}`, callback_data: `adm_suspend_${p.id}` }]
-        : [{ text: `✅ Activate #${p.id} ${String(p.pageName).slice(0, 20)}`, callback_data: `adm_activate_${p.id}` }],
+        ? [
+            {
+              text: `🚫 Suspend #${p.id} ${String(p.pageName).slice(0, 20)}`,
+              callback_data: `adm_suspend_${p.id}`,
+            },
+          ]
+        : [
+            {
+              text: `✅ Activate #${p.id} ${String(p.pageName).slice(0, 20)}`,
+              callback_data: `adm_activate_${p.id}`,
+            },
+          ],
     );
     await this.adminTelegram.sendMessageWithButtons(
       `📄 <b>Pages${q ? ` — "${tgEsc(query)}"` : ''}</b> (${slice.length}/${filtered.length})\n\n${lines.join('\n')}`,
@@ -382,7 +631,9 @@ export class TelegramController {
   private async cmdRecharges(): Promise<void> {
     const pending = await this.adminSvc().getAllRechargeRequests('pending');
     if (!pending.length) {
-      await this.adminTelegram.sendMessage('✅ কোনো pending recharge request নেই।');
+      await this.adminTelegram.sendMessage(
+        '✅ কোনো pending recharge request নেই।',
+      );
       return;
     }
     for (const r of pending.slice(0, 10)) {
@@ -403,7 +654,9 @@ export class TelegramController {
       );
     }
     if (pending.length > 10) {
-      await this.adminTelegram.sendMessage(`…আরো ${pending.length - 10}টা pending আছে।`);
+      await this.adminTelegram.sendMessage(
+        `…আরো ${pending.length - 10}টা pending আছে।`,
+      );
     }
   }
 
@@ -417,7 +670,9 @@ export class TelegramController {
       );
       return;
     }
-    await this.adminSvc().updatePageSubscription(pageId, { subscriptionStatus: status });
+    await this.adminSvc().updatePageSubscription(pageId, {
+      subscriptionStatus: status,
+    });
     const page = await this.prisma.page.findUnique({
       where: { id: pageId },
       select: { pageName: true },
@@ -429,7 +684,10 @@ export class TelegramController {
     );
   }
 
-  private async cmdSetUserActive(username: string, isActive: boolean): Promise<void> {
+  private async cmdSetUserActive(
+    username: string,
+    isActive: boolean,
+  ): Promise<void> {
     if (!username) {
       await this.adminTelegram.sendMessage(
         `⚠️ Username দিন — যেমন: <code>/${isActive ? 'unban' : 'ban'} limon123</code>`,
@@ -438,7 +696,9 @@ export class TelegramController {
     }
     const user = await this.prisma.user.findUnique({ where: { username } });
     if (!user) {
-      await this.adminTelegram.sendMessage(`❌ User "${tgEsc(username)}" পাওয়া যায়নি।`);
+      await this.adminTelegram.sendMessage(
+        `❌ User "${tgEsc(username)}" পাওয়া যায়নি।`,
+      );
       return;
     }
     await this.adminSvc().setUserAccountStatus(user.id, isActive);
@@ -450,7 +710,10 @@ export class TelegramController {
   }
 
   private async cmdProfit(month?: string): Promise<void> {
-    const m = month && /^\d{4}-\d{2}$/.test(month) ? month : new Date().toISOString().slice(0, 7);
+    const m =
+      month && /^\d{4}-\d{2}$/.test(month)
+        ? month
+        : new Date().toISOString().slice(0, 7);
     const r = await this.adminSvc().getRevenueReport(m);
     const s = r.summary;
     const fmt = (n: number) => `৳${Math.round(n).toLocaleString()}`;
@@ -495,19 +758,31 @@ export class TelegramController {
   ): Promise<void> {
     try {
       if (action === 'suspend' && id) {
-        await this.adminTelegram.answerCallback(callbackQueryId, `🚫 Suspending #${id}…`);
+        await this.adminTelegram.answerCallback(
+          callbackQueryId,
+          `🚫 Suspending #${id}…`,
+        );
         await this.cmdSetPageStatus(id, 'SUSPENDED');
       } else if (action === 'activate' && id) {
-        await this.adminTelegram.answerCallback(callbackQueryId, `✅ Activating #${id}…`);
+        await this.adminTelegram.answerCallback(
+          callbackQueryId,
+          `✅ Activating #${id}…`,
+        );
         await this.cmdSetPageStatus(id, 'ACTIVE');
       } else if (action === 'users') {
         await this.adminTelegram.answerCallback(callbackQueryId);
         await this.cmdUsers(Number.isNaN(id) ? 0 : id);
       } else {
-        await this.adminTelegram.answerCallback(callbackQueryId, '❓ Unknown action');
+        await this.adminTelegram.answerCallback(
+          callbackQueryId,
+          '❓ Unknown action',
+        );
       }
     } catch (err: any) {
-      await this.adminTelegram.answerCallback(callbackQueryId, `❌ ${err?.message ?? 'Failed'}`);
+      await this.adminTelegram.answerCallback(
+        callbackQueryId,
+        `❌ ${err?.message ?? 'Failed'}`,
+      );
     }
   }
 
@@ -527,7 +802,10 @@ export class TelegramController {
       where: { id },
     });
     if (!req) {
-      await this.adminTelegram.answerCallback(callbackQueryId, '❌ Request not found');
+      await this.adminTelegram.answerCallback(
+        callbackQueryId,
+        '❌ Request not found',
+      );
       return;
     }
     if (req.status !== 'pending') {
@@ -598,17 +876,352 @@ export class TelegramController {
   ) {
     const req = await this.prisma.pageRequest.findUnique({ where: { id } });
     if (!req) {
-      await this.adminTelegram.answerCallback(callbackQueryId, '❌ Request not found');
+      await this.adminTelegram.answerCallback(
+        callbackQueryId,
+        '❌ Request not found',
+      );
       return;
     }
     if (req.status !== 'pending') {
-      await this.adminTelegram.answerCallback(callbackQueryId, `⏭️ Already ${req.status}`);
+      await this.adminTelegram.answerCallback(
+        callbackQueryId,
+        `⏭️ Already ${req.status}`,
+      );
       return;
     }
-    await this.prisma.pageRequest.update({ where: { id }, data: { status: 'rejected' } });
+    await this.prisma.pageRequest.update({
+      where: { id },
+      data: { status: 'rejected' },
+    });
     await this.adminTelegram.answerCallback(callbackQueryId, '❌ Rejected!');
     await this.adminTelegram.sendMessage(
       `❌ Page Request #${id} — rejected (via Telegram button)`,
+    );
+  }
+
+  // ── Merchant Telegram command panel (per-page bot) ────────────────────────
+
+  /** Start of "today" in Asia/Dhaka (fixed UTC+6, no DST). */
+  private dhakaDayStart(): Date {
+    const OFFSET = 6 * 60 * 60 * 1000;
+    return new Date(
+      Math.floor((Date.now() + OFFSET) / 86_400_000) * 86_400_000 - OFFSET,
+    );
+  }
+
+  /** Start of the current month in Asia/Dhaka. */
+  private dhakaMonthStart(): Date {
+    const OFFSET = 6 * 60 * 60 * 1000;
+    const dhakaNow = new Date(Date.now() + OFFSET);
+    return new Date(
+      Date.UTC(dhakaNow.getUTCFullYear(), dhakaNow.getUTCMonth(), 1) - OFFSET,
+    );
+  }
+
+  private orderTotal(o: {
+    items: Array<{ unitPrice: number; qty: number }>;
+    deliveryFee?: number | null;
+  }): number {
+    const items = (o.items || []).reduce((s, i) => s + i.unitPrice * i.qty, 0);
+    return items + (o.deliveryFee ?? 0);
+  }
+
+  private async handleMerchantCommand(
+    pageId: number,
+    pageName: string | null,
+    token: string,
+    chatId: string,
+    textRaw: string,
+  ): Promise<void> {
+    // Permanent-keyboard buttons come back as their label text — map to command.
+    const mapped = MERCHANT_BUTTON_COMMANDS[textRaw] ?? textRaw;
+    const [cmdRaw] = mapped.split(/\s+/);
+    const cmd = cmdRaw.toLowerCase().replace(/@.*$/, ''); // strip @botname suffix
+    try {
+      switch (cmd) {
+        case '/start':
+        case '/help':
+          return await this.sendMerchantHelp(token, chatId, pageName);
+        case '/today':
+          return await this.merchantToday(pageId, token, chatId);
+        case '/pending':
+          return await this.merchantPending(pageId, token, chatId);
+        case '/payments':
+          return await this.merchantPayments(pageId, token, chatId);
+        case '/report':
+          return await this.merchantReport(pageId, token, chatId);
+        case '/balance':
+          return await this.merchantBalance(pageId, token, chatId);
+        case '/products':
+          return await this.merchantProducts(pageId, token, chatId);
+        default:
+          await this.telegram.sendRawWithKeyboard(
+            token,
+            chatId,
+            '❓ বুঝতে পারিনি — নিচের বাটন ব্যবহার করুন বা /help পাঠান।',
+            MERCHANT_KEYBOARD,
+          );
+      }
+    } catch (err: any) {
+      await this.telegram.sendRaw(
+        token,
+        chatId,
+        `❌ Error: ${tgEsc(err?.message ?? err)}`,
+      );
+    }
+  }
+
+  private async sendMerchantHelp(
+    token: string,
+    chatId: string,
+    pageName: string | null,
+  ): Promise<void> {
+    await this.telegram.sendRawWithKeyboard(
+      token,
+      chatId,
+      [
+        `🛍 <b>${tgEsc(pageName || 'ChatCat')} — Control Panel</b>`,
+        '',
+        'নিচের permanent বাটন থেকে এক চাপে সব কাজ করুন:',
+        '',
+        '🛒 আজকের অর্ডার — আজ কী কী অর্ডার এলো',
+        '⏳ পেন্ডিং অর্ডার — confirm-এর অপেক্ষায় (Confirm/Courier বাটনসহ)',
+        '💳 পেমেন্ট চেক — advance payment approve/reject',
+        '📊 রিপোর্ট — আজ ও এই মাসের sales summary',
+        '💰 ব্যালেন্স — wallet balance ও শেষ লেনদেন',
+        '🛍 প্রোডাক্ট — প্রোডাক্ট list ও stock',
+      ].join('\n'),
+      MERCHANT_KEYBOARD,
+    );
+  }
+
+  private merchantStatusEmoji(status: string): string {
+    if (status === 'CONFIRMED') return '✅';
+    if (status === 'CANCELLED') return '❌';
+    if (status === 'DELIVERED') return '📦';
+    if (status === 'ISSUE') return '⚠️';
+    return '⏳';
+  }
+
+  private async merchantToday(
+    pageId: number,
+    token: string,
+    chatId: string,
+  ): Promise<void> {
+    const orders = await this.prisma.order.findMany({
+      where: { pageIdRef: pageId, createdAt: { gte: this.dhakaDayStart() } },
+      include: { items: true },
+      orderBy: { id: 'desc' },
+      take: 20,
+    });
+    if (!orders.length) {
+      await this.telegram.sendRaw(
+        token,
+        chatId,
+        '🛒 আজ এখনো কোনো অর্ডার আসেনি।',
+      );
+      return;
+    }
+    const lines = orders.map((o) => {
+      const total = Math.round(this.orderTotal(o));
+      return `${this.merchantStatusEmoji(o.status)} <b>#${o.id}</b> ${tgEsc(o.customerName || '-')} — ৳${total} (${o.status})`;
+    });
+    await this.telegram.sendRaw(
+      token,
+      chatId,
+      `🛒 <b>আজকের অর্ডার (${orders.length})</b>\n\n${lines.join('\n')}\n\nConfirm/Courier করতে "⏳ পেন্ডিং অর্ডার" চাপুন।`,
+    );
+  }
+
+  private async merchantPending(
+    pageId: number,
+    token: string,
+    chatId: string,
+  ): Promise<void> {
+    const orders = await this.prisma.order.findMany({
+      where: { pageIdRef: pageId, status: { in: ['RECEIVED', 'PENDING'] } },
+      include: { items: true },
+      orderBy: { id: 'desc' },
+      take: 10,
+    });
+    if (!orders.length) {
+      await this.telegram.sendRaw(token, chatId, '✅ কোনো পেন্ডিং অর্ডার নেই।');
+      return;
+    }
+    const lines = orders.map((o) => {
+      const itemsTxt = o.items
+        .map((i) => `${tgEsc(i.productName || i.productCode)}×${i.qty}`)
+        .join(', ');
+      return `⏳ <b>#${o.id}</b> ${tgEsc(o.customerName || '-')} | 📞 ${tgEsc(o.phone ?? '-')}\n   ${itemsTxt || '-'} — ৳${Math.round(this.orderTotal(o))}`;
+    });
+    // Reuses the existing confirm_/courier_ callback handlers.
+    const buttons = orders.map((o) => [
+      { text: `✅ Confirm #${o.id}`, callback_data: `confirm_${o.id}` },
+      { text: `🚚 Courier #${o.id}`, callback_data: `courier_${o.id}` },
+    ]);
+    await this.telegram.sendRawWithButtons(
+      token,
+      chatId,
+      `⏳ <b>পেন্ডিং অর্ডার (${orders.length})</b>\n\n${lines.join('\n')}`,
+      buttons,
+    );
+  }
+
+  private async merchantPayments(
+    pageId: number,
+    token: string,
+    chatId: string,
+  ): Promise<void> {
+    const orders = await this.prisma.order.findMany({
+      where: {
+        pageIdRef: pageId,
+        paymentStatus: 'advance_paid',
+        paymentVerifyStatus: 'pending_review',
+      },
+      select: {
+        id: true,
+        customerName: true,
+        phone: true,
+        transactionId: true,
+      },
+      orderBy: { id: 'desc' },
+      take: 10,
+    });
+    if (!orders.length) {
+      await this.telegram.sendRaw(
+        token,
+        chatId,
+        '✅ কোনো payment check করার বাকি নেই।',
+      );
+      return;
+    }
+    const lines = orders.map(
+      (o) =>
+        `💳 <b>#${o.id}</b> ${tgEsc(o.customerName || '-')} | 📞 ${tgEsc(o.phone ?? '-')}\n   TrxID: <code>${tgEsc(o.transactionId ?? '-')}</code>`,
+    );
+    // Reuses the existing payok_/payfail_ callback handlers.
+    const buttons = orders.map((o) => [
+      { text: `✅ Approve #${o.id}`, callback_data: `payok_${o.id}` },
+      { text: `❌ Reject #${o.id}`, callback_data: `payfail_${o.id}` },
+    ]);
+    await this.telegram.sendRawWithButtons(
+      token,
+      chatId,
+      `💳 <b>Payment Check (${orders.length})</b>\n\n${lines.join('\n')}`,
+      buttons,
+    );
+  }
+
+  private async merchantReport(
+    pageId: number,
+    token: string,
+    chatId: string,
+  ): Promise<void> {
+    const dayStart = this.dhakaDayStart();
+    const orders = await this.prisma.order.findMany({
+      where: { pageIdRef: pageId, createdAt: { gte: this.dhakaMonthStart() } },
+      include: { items: true },
+    });
+    const calc = (list: typeof orders) => ({
+      total: list.length,
+      confirmed: list.filter(
+        (o) => o.status === 'CONFIRMED' || o.status === 'DELIVERED',
+      ).length,
+      pending: list.filter((o) => ['RECEIVED', 'PENDING'].includes(o.status))
+        .length,
+      cancelled: list.filter((o) => o.status === 'CANCELLED').length,
+      revenue: Math.round(
+        list
+          .filter((o) => o.status !== 'CANCELLED')
+          .reduce((s, o) => s + this.orderTotal(o), 0),
+      ),
+    });
+    const today = calc(orders.filter((o) => o.createdAt >= dayStart));
+    const month = calc(orders);
+    const section = (title: string, s: ReturnType<typeof calc>) =>
+      [
+        `<b>${title}</b>`,
+        `🛒 অর্ডার: ${s.total} | ✅ Confirmed: ${s.confirmed}`,
+        `⏳ Pending: ${s.pending} | ❌ Cancelled: ${s.cancelled}`,
+        `💵 Sales (cancel বাদে): ৳${s.revenue.toLocaleString()}`,
+      ].join('\n');
+    await this.telegram.sendRaw(
+      token,
+      chatId,
+      `📊 <b>Sales Report</b>\n\n${section('আজ', today)}\n\n${section('এই মাস', month)}`,
+    );
+  }
+
+  private async merchantBalance(
+    pageId: number,
+    token: string,
+    chatId: string,
+  ): Promise<void> {
+    const [page, txs] = await Promise.all([
+      this.prisma.page.findUnique({
+        where: { id: pageId },
+        select: { walletBalanceBdt: true, subscriptionStatus: true },
+      }),
+      this.prisma.walletTransaction.findMany({
+        where: { pageId },
+        orderBy: { id: 'desc' },
+        take: 5,
+      }),
+    ]);
+    const balance = Math.round((page?.walletBalanceBdt ?? 0) * 100) / 100;
+    const st =
+      page?.subscriptionStatus === 'ACTIVE'
+        ? '✅ ACTIVE'
+        : `🚫 ${page?.subscriptionStatus ?? '?'}`;
+    const txLines = txs.map((t) => {
+      const amt = Math.round(Math.abs(t.amountBdt) * 100) / 100;
+      return `${t.amountBdt >= 0 ? '➕' : '➖'} ৳${fmtBdt(amt)} — ${tgEsc(t.description || t.type)}`;
+    });
+    await this.telegram.sendRaw(
+      token,
+      chatId,
+      [
+        '💰 <b>Wallet</b>',
+        `Balance: <b>৳${fmtBdt(balance)}</b>`,
+        `Status: ${st}`,
+        '',
+        txLines.length
+          ? `<b>শেষ ${txLines.length}টি লেনদেন:</b>\n${txLines.join('\n')}`
+          : 'কোনো লেনদেন নেই।',
+      ].join('\n'),
+    );
+  }
+
+  private async merchantProducts(
+    pageId: number,
+    token: string,
+    chatId: string,
+  ): Promise<void> {
+    const [products, totalCount] = await Promise.all([
+      this.prisma.product.findMany({
+        where: { pageId, isActive: true },
+        select: { code: true, name: true, price: true, stockQty: true },
+        orderBy: { id: 'desc' },
+        take: 15,
+      }),
+      this.prisma.product.count({ where: { pageId } }),
+    ]);
+    if (!products.length) {
+      await this.telegram.sendRaw(
+        token,
+        chatId,
+        '🛍 কোনো প্রোডাক্ট নেই। Dashboard থেকে প্রোডাক্ট যোগ করুন।',
+      );
+      return;
+    }
+    const lines = products.map(
+      (p) =>
+        `• <code>${tgEsc(p.code)}</code> ${tgEsc(p.name || '-')} — ৳${fmtBdt(p.price)} | Stock: ${p.stockQty}`,
+    );
+    await this.telegram.sendRaw(
+      token,
+      chatId,
+      `🛍 <b>প্রোডাক্ট (${products.length}/${totalCount})</b>\n\n${lines.join('\n')}`,
     );
   }
 
@@ -624,15 +1237,27 @@ export class TelegramController {
       include: { items: true },
     });
     if (!order) {
-      await this.telegram.answerCallback(token, callbackQueryId, '❌ Order not found');
+      await this.telegram.answerCallback(
+        token,
+        callbackQueryId,
+        '❌ Order not found',
+      );
       return;
     }
     if (order.status === 'CONFIRMED') {
-      await this.telegram.answerCallback(token, callbackQueryId, '✅ Already confirmed');
+      await this.telegram.answerCallback(
+        token,
+        callbackQueryId,
+        '✅ Already confirmed',
+      );
       return;
     }
     if (order.status === 'CANCELLED') {
-      await this.telegram.answerCallback(token, callbackQueryId, '❌ Order is cancelled');
+      await this.telegram.answerCallback(
+        token,
+        callbackQueryId,
+        '❌ Order is cancelled',
+      );
       return;
     }
 
@@ -641,7 +1266,11 @@ export class TelegramController {
       data: { status: 'CONFIRMED', confirmedAt: new Date() },
     });
 
-    await this.telegram.answerCallback(token, callbackQueryId, '✅ Order confirmed!');
+    await this.telegram.answerCallback(
+      token,
+      callbackQueryId,
+      '✅ Order confirmed!',
+    );
     await this.telegram.sendRaw(
       token,
       chatId,
@@ -667,11 +1296,19 @@ export class TelegramController {
       include: { items: true },
     });
     if (!order) {
-      await this.telegram.answerCallback(token, callbackQueryId, '❌ Order not found');
+      await this.telegram.answerCallback(
+        token,
+        callbackQueryId,
+        '❌ Order not found',
+      );
       return;
     }
     if (order.status === 'CANCELLED') {
-      await this.telegram.answerCallback(token, callbackQueryId, '❌ Order is cancelled');
+      await this.telegram.answerCallback(
+        token,
+        callbackQueryId,
+        '❌ Order is cancelled',
+      );
       return;
     }
     const existing = await this.prisma.courierShipment.findUnique({
@@ -745,21 +1382,40 @@ export class TelegramController {
       where: { id: returnId, pageId },
       include: {
         order: {
-          select: { id: true, customerPsid: true, customerName: true, phone: true, pageIdRef: true, page: { select: { pageToken: true, currencySymbol: true } } },
+          select: {
+            id: true,
+            customerPsid: true,
+            customerName: true,
+            phone: true,
+            pageIdRef: true,
+            page: { select: { pageToken: true, currencySymbol: true } },
+          },
         },
       },
     });
 
     if (!returnEntry) {
-      await this.telegram.answerCallback(token, callbackQueryId, '❌ Return entry not found');
+      await this.telegram.answerCallback(
+        token,
+        callbackQueryId,
+        '❌ Return entry not found',
+      );
       return;
     }
     if (returnEntry.refundStatus === 'given') {
-      await this.telegram.answerCallback(token, callbackQueryId, '✅ Already refunded');
+      await this.telegram.answerCallback(
+        token,
+        callbackQueryId,
+        '✅ Already refunded',
+      );
       return;
     }
     if (returnEntry.refundStatus === 'not_applicable') {
-      await this.telegram.answerCallback(token, callbackQueryId, '⏭️ Already skipped');
+      await this.telegram.answerCallback(
+        token,
+        callbackQueryId,
+        '⏭️ Already skipped',
+      );
       return;
     }
 
@@ -772,7 +1428,11 @@ export class TelegramController {
         data: { refundStatus: 'not_applicable' },
       });
       await this.telegram.answerCallback(token, callbackQueryId, '⏭️ Skipped');
-      await this.telegram.sendRaw(token, chatId, `⏭️ Advance refund for Order #${returnEntry.orderId} marked as N/A`);
+      await this.telegram.sendRaw(
+        token,
+        chatId,
+        `⏭️ Advance refund for Order #${returnEntry.orderId} marked as N/A`,
+      );
       return;
     }
 
@@ -795,7 +1455,11 @@ export class TelegramController {
       await this.messenger.sendText(pageToken, psid, msg, 'ACCOUNT_UPDATE');
     }
 
-    await this.telegram.answerCallback(token, callbackQueryId, `✅ Refund confirmed! ${sym}${amount}`);
+    await this.telegram.answerCallback(
+      token,
+      callbackQueryId,
+      `✅ Refund confirmed! ${sym}${amount}`,
+    );
     await this.telegram.sendRaw(
       token,
       chatId,
@@ -832,19 +1496,35 @@ export class TelegramController {
       },
     });
     if (!order) {
-      await this.telegram.answerCallback(token, callbackQueryId, '❌ Order not found');
+      await this.telegram.answerCallback(
+        token,
+        callbackQueryId,
+        '❌ Order not found',
+      );
       return;
     }
     if (order.paymentStatus !== 'advance_paid') {
-      await this.telegram.answerCallback(token, callbackQueryId, '⚠️ এই order-এ কোনো advance payment নেই');
+      await this.telegram.answerCallback(
+        token,
+        callbackQueryId,
+        '⚠️ এই order-এ কোনো advance payment নেই',
+      );
       return;
     }
     if (order.paymentVerifyStatus === 'verified') {
-      await this.telegram.answerCallback(token, callbackQueryId, '✅ Already approved');
+      await this.telegram.answerCallback(
+        token,
+        callbackQueryId,
+        '✅ Already approved',
+      );
       return;
     }
     if (!approve && order.paymentVerifyStatus === 'verify_failed') {
-      await this.telegram.answerCallback(token, callbackQueryId, '❌ Already rejected');
+      await this.telegram.answerCallback(
+        token,
+        callbackQueryId,
+        '❌ Already rejected',
+      );
       return;
     }
 
@@ -856,9 +1536,17 @@ export class TelegramController {
         // customer (order_confirmed template) and sends the merchant a
         // Telegram summary — no extra sends needed here.
         await orders.verifyPayment(orderId, 'verified', pageId);
-        await this.telegram.answerCallback(token, callbackQueryId, '✅ Payment approved!');
+        await this.telegram.answerCallback(
+          token,
+          callbackQueryId,
+          '✅ Payment approved!',
+        );
       } catch (err: any) {
-        await this.telegram.answerCallback(token, callbackQueryId, `❌ ${err?.message ?? 'Failed'}`);
+        await this.telegram.answerCallback(
+          token,
+          callbackQueryId,
+          `❌ ${err?.message ?? 'Failed'}`,
+        );
       }
       return;
     }
@@ -866,10 +1554,18 @@ export class TelegramController {
     try {
       await orders.verifyPayment(orderId, 'verify_failed', pageId);
     } catch (err: any) {
-      await this.telegram.answerCallback(token, callbackQueryId, `❌ ${err?.message ?? 'Failed'}`);
+      await this.telegram.answerCallback(
+        token,
+        callbackQueryId,
+        `❌ ${err?.message ?? 'Failed'}`,
+      );
       return;
     }
-    await this.telegram.answerCallback(token, callbackQueryId, '❌ Payment rejected');
+    await this.telegram.answerCallback(
+      token,
+      callbackQueryId,
+      '❌ Payment rejected',
+    );
     await this.telegram.sendRaw(
       token,
       chatId,
@@ -879,7 +1575,12 @@ export class TelegramController {
     if (order.customerPsid && order.page?.pageToken) {
       const msg = `দুঃখিত, আপনার অর্ডার #${orderId}-এর payment টি আমরা verify করতে পারিনি 😔 অনুগ্রহ করে Transaction ID টি আবার check করে পাঠান, অথবা payment-এর screenshot দিন 💖`;
       await this.messenger
-        .sendText(order.page.pageToken, order.customerPsid, msg, 'ACCOUNT_UPDATE')
+        .sendText(
+          order.page.pageToken,
+          order.customerPsid,
+          msg,
+          'ACCOUNT_UPDATE',
+        )
         .catch(() => {});
     }
   }
@@ -893,14 +1594,34 @@ export class TelegramController {
   ) {
     const order = await this.prisma.order.findFirst({
       where: { id: orderId, pageIdRef: pageId },
-      select: { id: true, customerName: true, phone: true, spamRisk: true, spamScore: true, spamTotalOrders: true, spamDelivered: true, spamCancelled: true },
+      select: {
+        id: true,
+        customerName: true,
+        phone: true,
+        spamRisk: true,
+        spamScore: true,
+        spamTotalOrders: true,
+        spamDelivered: true,
+        spamCancelled: true,
+      },
     });
     if (!order) {
-      await this.telegram.answerCallback(token, callbackQueryId, '❌ Order not found');
+      await this.telegram.answerCallback(
+        token,
+        callbackQueryId,
+        '❌ Order not found',
+      );
       return;
     }
 
-    const riskEmoji = order.spamRisk === 'high' ? '🔴' : order.spamRisk === 'medium' ? '🟡' : order.spamRisk === 'low' ? '🟢' : '⚪';
+    const riskEmoji =
+      order.spamRisk === 'high'
+        ? '🔴'
+        : order.spamRisk === 'medium'
+          ? '🟡'
+          : order.spamRisk === 'low'
+            ? '🟢'
+            : '⚪';
     const total = order.spamTotalOrders ?? 0;
     const delivered = order.spamDelivered ?? 0;
     const cancelled = order.spamCancelled ?? 0;
@@ -914,7 +1635,11 @@ export class TelegramController {
         : `📊 No order history found`,
     ].join('\n');
 
-    await this.telegram.answerCallback(token, callbackQueryId, `${riskEmoji} Risk: ${order.spamRisk ?? 'unknown'}`);
+    await this.telegram.answerCallback(
+      token,
+      callbackQueryId,
+      `${riskEmoji} Risk: ${order.spamRisk ?? 'unknown'}`,
+    );
     await this.telegram.sendRaw(token, chatId, msg);
   }
 }
