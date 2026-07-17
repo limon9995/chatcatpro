@@ -9,6 +9,9 @@ import {
   VisionAttributes,
 } from '../vision-analysis.interface';
 
+// Keep in sync with restaurant.service.ts's VALID_UNITS
+const MENU_SCAN_VALID_UNITS = ['gm', 'kg', 'pcs', 'ml', 'liter'];
+
 @Injectable()
 export class GeminiVisionProvider implements VisionAnalysisProvider {
   private readonly logger = new Logger(GeminiVisionProvider.name);
@@ -34,7 +37,10 @@ Examples: ["${prefix}-001"] or ["${prefix}-023", "XY-456"] or []
 Respond with ONLY the JSON array — no other text, no markdown.`;
   }
 
-  async extractProductCodes(imageUrl: string, prefix: string): Promise<string[]> {
+  async extractProductCodes(
+    imageUrl: string,
+    prefix: string,
+  ): Promise<string[]> {
     const apiKey = this.getKey();
     if (!apiKey) throw new Error('GEMINI_API_KEY not configured');
     const dataUrl = await this.toBase64DataUrl(imageUrl);
@@ -58,14 +64,19 @@ Respond with ONLY the JSON array — no other text, no markdown.`;
         ],
         // thinkingBudget: 0 — see note in callAPIWithKey; without it, "thinking"
         // tokens can silently eat the whole budget and truncate the output.
-        generationConfig: { thinkingConfig: { thinkingBudget: 0 }, maxOutputTokens: 200 },
+        generationConfig: {
+          thinkingConfig: { thinkingBudget: 0 },
+          maxOutputTokens: 200,
+        },
       }),
       signal: AbortSignal.timeout(20_000),
     });
     if (!response.ok) {
       const err = await response.text().catch(() => String(response.status));
       this.rotator.markError(apiKey, response.status, err.slice(0, 100));
-      throw new Error(`Gemini extractCodes error ${response.status}: ${err.slice(0, 100)}`);
+      throw new Error(
+        `Gemini extractCodes error ${response.status}: ${err.slice(0, 100)}`,
+      );
     }
     this.rotator.markSuccess(apiKey, Date.now() - t0);
     const resp = await response.json();
@@ -73,7 +84,9 @@ Respond with ONLY the JSON array — no other text, no markdown.`;
       resp?.candidates?.[0]?.content?.parts?.[0]?.text ?? '[]';
     try {
       const arr = JSON.parse(this.extractJson(content));
-      return Array.isArray(arr) ? arr.filter((c: any) => typeof c === 'string') : [];
+      return Array.isArray(arr)
+        ? arr.filter((c: any) => typeof c === 'string')
+        : [];
     } catch {
       return [];
     }
@@ -141,7 +154,8 @@ Rules:
       rawDescription: parsed.rawDescription ?? content,
       visibleText: parsed.visibleText ?? null,
       nameGuess: parsed.nameGuess ?? null,
-      priceGuess: typeof parsed.priceGuess === 'number' ? parsed.priceGuess : null,
+      priceGuess:
+        typeof parsed.priceGuess === 'number' ? parsed.priceGuess : null,
       sizeGuess: parsed.sizeGuess ?? null,
     };
   }
@@ -191,7 +205,8 @@ Rules:
         return await this.callAPIWithKey(imageUrls);
       } catch (err: any) {
         lastError = err;
-        if (!err.message?.includes('429') && !err.message?.includes('quota')) break;
+        if (!err.message?.includes('429') && !err.message?.includes('quota'))
+          break;
         // 429 — rotator already marked this key; try next
       }
     }
@@ -258,7 +273,9 @@ Rules:
 
   async analyze(imageUrl: string): Promise<VisionAttributes> {
     if (!this.getKey()) {
-      this.logger.warn('[GeminiVision] No Gemini key available — returning zero confidence');
+      this.logger.warn(
+        '[GeminiVision] No Gemini key available — returning zero confidence',
+      );
       return this.emptyResult('GEMINI_API_KEY not configured');
     }
     // Let errors propagate so callers can fall back to another provider
@@ -267,7 +284,9 @@ Rules:
 
   async analyzeMultiple(imageUrls: string[]): Promise<VisionAttributes> {
     if (!this.getKey()) {
-      this.logger.warn('[GeminiVision] No Gemini key available — returning zero confidence');
+      this.logger.warn(
+        '[GeminiVision] No Gemini key available — returning zero confidence',
+      );
       return this.emptyResult('GEMINI_API_KEY not configured');
     }
     if (!imageUrls.length) return this.emptyResult('No images provided');
@@ -307,6 +326,9 @@ Required JSON format:
       "description": "<short description printed under the item, or null>",
       "variants": [
         { "label": "<size/portion label, e.g. '5 pcs', 'Regular', 'Mini', 'Full', 'Half'>", "price": <number>, "pieces": <integer piece count if the label states pieces (e.g. '5 pcs' → 5), else null> }
+      ],
+      "ingredients": [
+        { "name": "<generic, common ingredient this dish is typically made of, e.g. 'Bun', 'Chicken Patty', 'Burger Sauce'>", "qty": <typical quantity as a number>, "unit": "<one of: pcs, gm, kg, ml, liter>" }
       ]
     }
   ]
@@ -318,7 +340,8 @@ Rules:
 - If an item has multiple printed prices (e.g. "6 pcs 120 / 12 pcs 220" or "S 80 M 120 L 160"), create one variant per price with the printed label.
 - SKIP items whose price is unreadable or missing — do not invent prices.
 - Do not merge different dishes; each menu line item is its own dish.
-- Keep combos/set menus as single dishes with their printed price.`;
+- Keep combos/set menus as single dishes with their printed price.
+- "ingredients" is a best-guess starter recipe for kitchen stock tracking, based on common preparation of that dish in Bangladesh — 2 to 6 rows, generic names (not brand names). Leave it an empty array [] when you genuinely can't guess (e.g. a bottled drink, an unfamiliar dish name).`;
   }
 
   /**
@@ -331,13 +354,16 @@ Rules:
       category: string | null;
       description: string | null;
       variants: { label: string; price: number; pieces: number | null }[];
+      ingredients: { name: string; qty: number; unit: string }[];
     }[];
     usage: { model: string; promptTokens: number; outputTokens: number };
   }> {
     const apiKey = this.getKey();
     if (!apiKey) throw new Error('GEMINI_API_KEY not configured');
     const urls = imageUrls.slice(0, 5);
-    const dataUrls = await Promise.all(urls.map((u) => this.toBase64DataUrl(u)));
+    const dataUrls = await Promise.all(
+      urls.map((u) => this.toBase64DataUrl(u)),
+    );
     const imageParts = dataUrls.map((dataUrl) => {
       const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
       return {
@@ -355,7 +381,10 @@ Rules:
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [
-          { role: 'user', parts: [{ text: this.buildMenuPrompt() }, ...imageParts] },
+          {
+            role: 'user',
+            parts: [{ text: this.buildMenuPrompt() }, ...imageParts],
+          },
         ],
         generationConfig: {
           // see callAPIWithKey note — thinking silently eats the token budget
@@ -404,11 +433,30 @@ Rules:
                 : null,
           }))
           .filter((v: any) => Number.isFinite(v.price) && v.price > 0);
+        const ingredients = (Array.isArray(d?.ingredients) ? d.ingredients : [])
+          .map((i: any) => ({
+            name: String(i?.name ?? '')
+              .trim()
+              .slice(0, 80),
+            qty: Number(i?.qty),
+            unit: String(i?.unit ?? '')
+              .trim()
+              .toLowerCase(),
+          }))
+          .filter(
+            (i: any) =>
+              i.name.length > 0 &&
+              Number.isFinite(i.qty) &&
+              i.qty > 0 &&
+              MENU_SCAN_VALID_UNITS.includes(i.unit),
+          )
+          .slice(0, 8);
         return {
           name: String(d?.name ?? '').trim(),
           category: d?.category ? String(d.category).trim() : null,
           description: d?.description ? String(d.description).trim() : null,
           variants,
+          ingredients,
         };
       })
       .filter((d) => d.name.length > 0 && d.variants.length > 0);

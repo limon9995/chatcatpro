@@ -26,11 +26,12 @@ model User {
   // Google OAuth login — nullable, existing username/password users unaffected
   googleId String? @unique
 
-  pages         Page[]
-  sessions      Session[]
-  subscriptions Subscription[]
-  pageRequests  PageRequest[]
-  agentRequests AgentRequest[]
+  pages             Page[]
+  sessions          Session[]
+  subscriptions     Subscription[]
+  pageRequests      PageRequest[]
+  agentRequests     AgentRequest[]
+  waConnectRequests WaConnectRequest[]
 
   @@index([username])
   @@index([email])
@@ -156,6 +157,9 @@ model Page {
   // V25: physical menu photos (/storage/ URLs) — auto-saved on menu scan;
   // sent to customers in Messenger when they ask what's available
   menuImagesJson        String?
+  // V26: business hours — JSON [{day:0-6, open:"HH:mm", close:"HH:mm", closed:boolean}]
+  // (Asia/Dhaka time); drives the open/closed badge on the catalog page
+  businessHoursJson     String?
 
   callConfirmModeOn       Boolean @default(false)
   callConfirmModeAllowed  Boolean @default(true)
@@ -275,6 +279,7 @@ model Page {
   callAttempts         CallAttempt[]
   memoTemplate         MemoTemplate?
   pageRequests         PageRequest[]
+  waConnectRequests    WaConnectRequest[] // requests to enable WhatsApp on this page
 
   // V5 Accounting
   collections     Collection[]
@@ -385,6 +390,9 @@ model Product {
   // V25: false = stockQty ignored for catalog visibility and confirm-time
   // stock checks — BOM ingredient inventory is the real stock for food items.
   trackStock        Boolean @default(true)
+
+  // V26: merchant-curated highlight badge shown on the catalog card
+  isFeatured Boolean @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -980,6 +988,29 @@ model PageRequest {
   updatedAt       DateTime @updatedAt
 
   @@index([userId])
+  @@index([status])
+}
+
+// Zero-touch WhatsApp connection request — client picks which of their
+// existing pages should get WhatsApp automation and submits the business
+// phone number; admin registers the number under the agency's own Meta
+// Business Portfolio (keeps the app on Standard Access, no App Review needed)
+// and pastes the resulting waPhoneNumberId/waToken back via finalize.
+model WaConnectRequest {
+  id          Int      @id @default(autoincrement())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pageId      Int      // existing Page this request enables WhatsApp on
+  page        Page     @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  phoneNumber String   // WhatsApp business phone number submitted by client
+  note        String?  // Optional note from client
+  status      String   @default("pending") // pending | approved | rejected
+  adminNote   String?  // Admin's response note
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+  @@index([pageId])
   @@index([status])
 }
 

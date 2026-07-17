@@ -13,6 +13,8 @@ import {
   MAX_PRICE_VARIANTS,
   parsePriceVariants,
   PriceVariant,
+  parseBusinessHours,
+  BusinessHoursRow,
 } from '../common/restaurant-delivery';
 
 const VALID_UNITS = ['gm', 'kg', 'pcs', 'ml', 'liter'];
@@ -22,6 +24,7 @@ export interface MenuDish {
   category: string | null;
   description: string | null;
   variants: { label: string; price: number; pieces: number | null }[];
+  ingredients?: { name: string; qty: number; unit: string }[];
 }
 
 @Injectable()
@@ -54,14 +57,19 @@ export class RestaurantService {
       out.name = name.slice(0, 80);
     }
     if ('unit' in body) {
-      const unit = String(body.unit ?? 'pcs').trim().toLowerCase();
+      const unit = String(body.unit ?? 'pcs')
+        .trim()
+        .toLowerCase();
       if (!VALID_UNITS.includes(unit))
-        throw new BadRequestException(`Unit হতে হবে: ${VALID_UNITS.join(', ')}`);
+        throw new BadRequestException(
+          `Unit হতে হবে: ${VALID_UNITS.join(', ')}`,
+        );
       out.unit = unit;
     }
     if ('stockQty' in body) {
       const v = Number(body.stockQty);
-      if (!Number.isFinite(v)) throw new BadRequestException('Stock সংখ্যা দিন');
+      if (!Number.isFinite(v))
+        throw new BadRequestException('Stock সংখ্যা দিন');
       out.stockQty = v;
     }
     if ('minStock' in body) {
@@ -152,11 +160,18 @@ export class RestaurantService {
   async setRecipe(
     pageId: number,
     code: string,
-    rows: { ingredientId: number; qty: number; per?: string; variantLabel?: string | null }[],
+    rows: {
+      ingredientId: number;
+      qty: number;
+      per?: string;
+      variantLabel?: string | null;
+    }[],
   ) {
     const product = await this.findProduct(pageId, code);
-    if (!Array.isArray(rows)) throw new BadRequestException('rows must be an array');
-    if (rows.length > 40) throw new BadRequestException('সর্বোচ্চ ৪০টা recipe row');
+    if (!Array.isArray(rows))
+      throw new BadRequestException('rows must be an array');
+    if (rows.length > 40)
+      throw new BadRequestException('সর্বোচ্চ ৪০টা recipe row');
 
     const variantLabels = new Set(
       parsePriceVariants(product.priceVariantsJson).map((v) => v.label),
@@ -172,7 +187,9 @@ export class RestaurantService {
       const ingredientId = Number(r.ingredientId);
       const qty = Number(r.qty);
       const per = r.per === 'piece' ? 'piece' : 'item';
-      const variantLabel = r.variantLabel ? String(r.variantLabel).trim() : null;
+      const variantLabel = r.variantLabel
+        ? String(r.variantLabel).trim()
+        : null;
       if (!ownedIds.has(ingredientId))
         throw new BadRequestException('Invalid ingredient in recipe');
       if (!Number.isFinite(qty) || qty <= 0)
@@ -205,8 +222,16 @@ export class RestaurantService {
       const raw = JSON.parse(page?.orderPackagingJson || '[]');
       if (Array.isArray(raw))
         rows = raw
-          .map((r: any) => ({ ingredientId: Number(r?.ingredientId), qty: Number(r?.qty) }))
-          .filter((r) => Number.isFinite(r.ingredientId) && Number.isFinite(r.qty) && r.qty > 0);
+          .map((r: any) => ({
+            ingredientId: Number(r?.ingredientId),
+            qty: Number(r?.qty),
+          }))
+          .filter(
+            (r) =>
+              Number.isFinite(r.ingredientId) &&
+              Number.isFinite(r.qty) &&
+              r.qty > 0,
+          );
     } catch {
       rows = [];
     }
@@ -227,8 +252,10 @@ export class RestaurantService {
     pageId: number,
     rows: { ingredientId: number; qty: number }[],
   ) {
-    if (!Array.isArray(rows)) throw new BadRequestException('rows must be an array');
-    if (rows.length > 10) throw new BadRequestException('সর্বোচ্চ ১০টা packaging row');
+    if (!Array.isArray(rows))
+      throw new BadRequestException('rows must be an array');
+    if (rows.length > 10)
+      throw new BadRequestException('সর্বোচ্চ ১০টা packaging row');
     const ids = [...new Set(rows.map((r) => Number(r.ingredientId)))];
     const owned = await this.prisma.ingredient.findMany({
       where: { id: { in: ids }, pageId },
@@ -253,7 +280,10 @@ export class RestaurantService {
 
   // ── Menu photo AI import ────────────────────────────────────────────────────
 
-  async scanMenu(pageId: number, imageUrls: string[]): Promise<{ dishes: MenuDish[] }> {
+  async scanMenu(
+    pageId: number,
+    imageUrls: string[],
+  ): Promise<{ dishes: MenuDish[] }> {
     if (!Array.isArray(imageUrls) || imageUrls.length === 0)
       throw new BadRequestException('Menu-র ছবি দিন');
     if (imageUrls.length > 5)
@@ -261,7 +291,9 @@ export class RestaurantService {
     // Only our own /storage/ uploads — never fetch arbitrary URLs on behalf of a client
     for (const u of imageUrls) {
       if (!/^(https?:\/\/[^/]+)?\/storage\/products\//.test(String(u)))
-        throw new BadRequestException('Invalid image URL — আগে ছবি upload করুন');
+        throw new BadRequestException(
+          'Invalid image URL — আগে ছবি upload করুন',
+        );
     }
 
     const canProcess = await this.walletService.canProcessAi(pageId);
@@ -270,7 +302,8 @@ export class RestaurantService {
         'Wallet balance নেই — menu scan করতে balance যোগ করুন',
       );
 
-    const { dishes, usage } = await this.geminiVision.extractMenuItems(imageUrls);
+    const { dishes, usage } =
+      await this.geminiVision.extractMenuItems(imageUrls);
 
     // Keep the menu photos on the page — the bot sends them to customers who
     // ask what's available (latest scan wins).
@@ -321,7 +354,8 @@ export class RestaurantService {
   }
 
   async setMenuImages(pageId: number, urls: string[]) {
-    if (!Array.isArray(urls)) throw new BadRequestException('urls must be an array');
+    if (!Array.isArray(urls))
+      throw new BadRequestException('urls must be an array');
     const clean = urls
       .map((u) => String(u).replace(/^https?:\/\/[^/]+/, ''))
       .filter((u) => /^\/storage\/products\//.test(u))
@@ -329,6 +363,32 @@ export class RestaurantService {
     await this.prisma.page.update({
       where: { id: pageId },
       data: { menuImagesJson: clean.length ? JSON.stringify(clean) : null },
+    });
+    return clean;
+  }
+
+  // ── Business hours ────────────────────────────────────────────────────────
+
+  async getHours(pageId: number): Promise<BusinessHoursRow[]> {
+    const page = await this.prisma.page.findUnique({
+      where: { id: pageId },
+      select: { businessHoursJson: true },
+    });
+    if (!page?.businessHoursJson) return [];
+    try {
+      return parseBusinessHours(JSON.parse(page.businessHoursJson));
+    } catch {
+      return [];
+    }
+  }
+
+  async setHours(pageId: number, rows: any[]) {
+    if (!Array.isArray(rows))
+      throw new BadRequestException('rows must be an array');
+    const clean = parseBusinessHours(rows);
+    await this.prisma.page.update({
+      where: { id: pageId },
+      data: { businessHoursJson: JSON.stringify(clean) },
     });
     return clean;
   }
@@ -351,11 +411,68 @@ export class RestaurantService {
     if (!variants.length)
       throw new BadRequestException('প্রতিটা item-এ অন্তত একটা price দিন');
     if (variants.length > MAX_PRICE_VARIANTS)
-      throw new BadRequestException(`সর্বোচ্চ ${MAX_PRICE_VARIANTS}টা size/price`);
+      throw new BadRequestException(
+        `সর্বোচ্চ ${MAX_PRICE_VARIANTS}টা size/price`,
+      );
     const labels = new Set(variants.map((v) => v.label));
     if (labels.size !== variants.length)
       throw new BadRequestException('একই label-এর দুটো size দেওয়া যাবে না');
     return variants;
+  }
+
+  /**
+   * Find-or-create ingredients by name (case-insensitive, per page) and wire
+   * them as a starter recipe for a freshly created dish — so the merchant
+   * opens the Recipe editor to a pre-filled, already-editable list instead of
+   * an empty one. Best-effort: never throws (a bad suggestion shouldn't fail
+   * the dish creation it's attached to).
+   */
+  private async applySuggestedRecipe(
+    pageId: number,
+    productId: number,
+    ingredients: { name: string; qty: number; unit: string }[],
+    ingredientCache: Map<string, number>,
+  ) {
+    if (!ingredients?.length) return;
+    try {
+      const rows: {
+        productId: number;
+        ingredientId: number;
+        qty: number;
+        per: string;
+      }[] = [];
+      for (const ing of ingredients) {
+        const key = ing.name.toLowerCase();
+        let ingredientId = ingredientCache.get(key);
+        if (!ingredientId) {
+          const existing = await this.prisma.ingredient.findFirst({
+            where: { pageId, name: { equals: ing.name, mode: 'insensitive' } },
+            select: { id: true },
+          });
+          if (existing) {
+            ingredientId = existing.id;
+          } else {
+            const createdIng = await this.prisma.ingredient.create({
+              data: {
+                pageId,
+                name: ing.name,
+                unit: ing.unit,
+                stockQty: 0,
+                minStock: 0,
+              },
+            });
+            ingredientId = createdIng.id;
+          }
+          ingredientCache.set(key, ingredientId);
+        }
+        rows.push({ productId, ingredientId, qty: ing.qty, per: 'item' });
+      }
+      if (rows.length) await this.prisma.recipeItem.createMany({ data: rows });
+    } catch (err: any) {
+      this.logger.warn(
+        `[Restaurant] Suggested recipe skipped: ${err?.message}`,
+      );
+    }
   }
 
   async bulkCreateProducts(pageId: number, dishes: any[]) {
@@ -366,6 +483,7 @@ export class RestaurantService {
 
     const created: string[] = [];
     const failed: { name: string; reason: string }[] = [];
+    const ingredientCache = new Map<string, number>();
     for (const d of dishes) {
       const name = String(d?.name ?? '').trim();
       try {
@@ -374,8 +492,7 @@ export class RestaurantService {
         const minPrice = Math.min(...variants.map((v) => v.price));
         // Single "Regular" variant with no pieces = plain single-price dish —
         // no need to force a size selection at checkout.
-        const isSinglePlain =
-          variants.length === 1 && !variants[0].pieces;
+        const isSinglePlain = variants.length === 1 && !variants[0].pieces;
         // Optional per-dish photo uploaded during review — only our own
         // /storage/products/ uploads are accepted
         const rawImg = String(d?.imageUrl ?? '').trim();
@@ -383,12 +500,14 @@ export class RestaurantService {
           rawImg && /^(https?:\/\/[^/]+)?\/storage\/products\//.test(rawImg)
             ? rawImg
             : undefined;
-        await this.productsService.create({
+        const newProduct = await this.productsService.create({
           pageId,
           productType: 'SIMPLE',
           name,
           price: minPrice,
-          description: d?.description ? String(d.description).trim() : undefined,
+          description: d?.description
+            ? String(d.description).trim()
+            : undefined,
           category: d?.category ? String(d.category).trim() : null,
           unit: 'piece',
           imageUrl,
@@ -396,12 +515,30 @@ export class RestaurantService {
           trackStock: false,
           catalogVisible: true,
         });
+        const suggestedIngredients = (
+          Array.isArray(d?.ingredients) ? d.ingredients : []
+        )
+          .map((i: any) => ({
+            name: String(i?.name ?? '').trim(),
+            qty: Number(i?.qty),
+            unit: String(i?.unit ?? '').trim(),
+          }))
+          .filter((i: any) => i.name && Number.isFinite(i.qty) && i.qty > 0);
+        await this.applySuggestedRecipe(
+          pageId,
+          newProduct.id,
+          suggestedIngredients,
+          ingredientCache,
+        );
         created.push(name);
         // SIMPLE auto-codes use a ms timestamp suffix — space out so two
         // dishes created in the same millisecond can't collide.
         await new Promise((r) => setTimeout(r, 2));
       } catch (err: any) {
-        failed.push({ name: name || '(নামহীন)', reason: err?.message || 'error' });
+        failed.push({
+          name: name || '(নামহীন)',
+          reason: err?.message || 'error',
+        });
       }
     }
     return { createdCount: created.length, created, failed };
@@ -412,20 +549,45 @@ export class RestaurantService {
   async updateFoodProduct(pageId: number, code: string, body: any) {
     const patch: any = {};
     if ('name' in body) patch.name = String(body.name ?? '').trim();
-    if ('description' in body) patch.description = String(body.description ?? '');
+    if ('description' in body)
+      patch.description = String(body.description ?? '');
     if ('category' in body)
       patch.category = body.category ? String(body.category).trim() : null;
     if ('imageUrl' in body) patch.imageUrl = String(body.imageUrl ?? '');
     if ('isActive' in body) patch.isActive = Boolean(body.isActive);
-    if ('catalogVisible' in body) patch.catalogVisible = Boolean(body.catalogVisible);
+    if ('isFeatured' in body) patch.isFeatured = Boolean(body.isFeatured);
+    if ('catalogVisible' in body)
+      patch.catalogVisible = Boolean(body.catalogVisible);
     if ('trackStock' in body) patch.trackStock = Boolean(body.trackStock);
+    if ('referenceImagesJson' in body) {
+      if (!body.referenceImagesJson) {
+        patch.referenceImagesJson = null;
+      } else {
+        try {
+          const arr = JSON.parse(body.referenceImagesJson);
+          const clean = (Array.isArray(arr) ? arr : [])
+            .map((u: any) => String(u).replace(/^https?:\/\/[^/]+/, ''))
+            .filter((u: string) => /^\/storage\/products\//.test(u))
+            .slice(0, 8);
+          patch.referenceImagesJson = clean.length
+            ? JSON.stringify(clean)
+            : null;
+        } catch {
+          throw new BadRequestException('Invalid referenceImagesJson');
+        }
+      }
+    }
     if ('price' in body) {
       const p = Number(body.price);
-      if (!Number.isFinite(p) || p < 0) throw new BadRequestException('দাম সঠিক নয়');
+      if (!Number.isFinite(p) || p < 0)
+        throw new BadRequestException('দাম সঠিক নয়');
       patch.price = p;
     }
     if ('priceVariants' in body) {
-      if (body.priceVariants === null || (Array.isArray(body.priceVariants) && body.priceVariants.length === 0)) {
+      if (
+        body.priceVariants === null ||
+        (Array.isArray(body.priceVariants) && body.priceVariants.length === 0)
+      ) {
         patch.priceVariantsJson = null;
       } else {
         const variants = this.validateVariants(body.priceVariants);

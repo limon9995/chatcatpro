@@ -136,8 +136,19 @@ export default function LocationPickerMap({
     }
     setGpsBusy(true);
     setGpsError('');
+    // Watchdog: some browsers/WebViews never fire either native callback even
+    // with {timeout} set, leaving the button stuck on "খোঁজা হচ্ছে..." forever.
+    let done = false;
+    const watchdog = setTimeout(() => {
+      if (done) return;
+      done = true;
+      setGpsBusy(false);
+      setGpsError('লোকেশন পেতে বেশি সময় লাগছে — ম্যাপে ক্লিক করে pin করুন');
+    }, 12000);
     navigator.geolocation.getCurrentPosition(
       (pos) => {
+        if (done) return;
+        done = true; clearTimeout(watchdog);
         setGpsBusy(false);
         const { latitude, longitude } = pos.coords;
         mapRef.current?.setView([latitude, longitude], 16);
@@ -145,6 +156,8 @@ export default function LocationPickerMap({
         onChangeRef.current(latitude, longitude);
       },
       () => {
+        if (done) return;
+        done = true; clearTimeout(watchdog);
         setGpsBusy(false);
         setGpsError('লোকেশন পাওয়া যায়নি — location permission দিন অথবা ম্যাপে ক্লিক করুন');
       },

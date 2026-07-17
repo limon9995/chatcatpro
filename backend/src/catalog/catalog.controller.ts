@@ -35,6 +35,8 @@ import {
   PriceVariant,
   resolveDeliveryFee,
   resolveMapsShortLink,
+  parseBusinessHours,
+  isOpenNow,
 } from '../common/restaurant-delivery';
 
 // ── Video URL helpers ─────────────────────────────────────────────────────────
@@ -268,7 +270,10 @@ export class CatalogController {
 
     // V21: Increment product view counter — fire-and-forget
     void this.prisma.product
-      .update({ where: { id: product.id }, data: { productViews: { increment: 1 } } })
+      .update({
+        where: { id: product.id },
+        data: { productViews: { increment: 1 } },
+      })
       .catch(() => {});
 
     const pageInfo = {
@@ -318,26 +323,59 @@ export class CatalogController {
     @Query('codes') codes?: string,
     @Query('select') select?: string,
   ) {
-    const domain = (host || '').toLowerCase().replace(/^https?:\/\//, '').replace(/\/$/, '').split('/')[0];
-    if (!domain) { res.status(400).send('<h2>Bad Request</h2>'); return; }
+    const domain = (host || '')
+      .toLowerCase()
+      .replace(/^https?:\/\//, '')
+      .replace(/\/$/, '')
+      .split('/')[0];
+    if (!domain) {
+      res.status(400).send('<h2>Bad Request</h2>');
+      return;
+    }
 
     const page = await this.prisma.page.findFirst({
       where: { customDomain: domain, isActive: true },
       select: { id: true },
     });
-    if (!page) { res.status(404).send('<html><body style="font-family:sans-serif;padding:40px"><h2>Website not found</h2><p>No website is configured for this domain.</p></body></html>'); return; }
+    if (!page) {
+      res
+        .status(404)
+        .send(
+          '<html><body style="font-family:sans-serif;padding:40px"><h2>Website not found</h2><p>No website is configured for this domain.</p></body></html>',
+        );
+      return;
+    }
 
     // If path includes /product/:code, serve product page
     const productMatch = (path || '').match(/\/product\/([A-Z0-9]+)/i);
     if (productMatch) {
-      return this.getProductHtml(String(page.id), productMatch[1], res, select, codes);
+      return this.getProductHtml(
+        String(page.id),
+        productMatch[1],
+        res,
+        select,
+        codes,
+      );
     }
 
     const data = await this.buildData(String(page.id), q, codes);
-    if ('error' in data) { res.status(404).send('<h2>Not found</h2>'); return; }
-    void this.prisma.page.update({ where: { id: page.id }, data: { catalogViews: { increment: 1 } } }).catch(() => {});
+    if ('error' in data) {
+      res.status(404).send('<h2>Not found</h2>');
+      return;
+    }
+    void this.prisma.page
+      .update({
+        where: { id: page.id },
+        data: { catalogViews: { increment: 1 } },
+      })
+      .catch(() => {});
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.send(this.buildHtml(data, q || '', { selectionMode: select === '1', shortlistCodes: this.normalizeCodeList(codes) }));
+    res.send(
+      this.buildHtml(data, q || '', {
+        selectionMode: select === '1',
+        shortlistCodes: this.normalizeCodeList(codes),
+      }),
+    );
   }
 
   // Static Bangladesh division/district/upazila reference data for the
@@ -376,10 +414,7 @@ export class CatalogController {
   // ── Web Order Endpoints ────────────────────────────────────────────────────
 
   @Post(':pageId/web-order')
-  async createWebOrder(
-    @Param('pageId') pid: string,
-    @Body() body: any,
-  ) {
+  async createWebOrder(@Param('pageId') pid: string, @Body() body: any) {
     const page = await this.prisma.page.findFirst({
       where: pageWhere(pid),
       select: {
@@ -399,9 +434,21 @@ export class CatalogController {
       },
     });
     if (!page) throw new NotFoundException('Page not found');
-    if (!page.webOrderEnabled) throw new BadRequestException('Web ordering is not enabled for this page');
+    if (!page.webOrderEnabled)
+      throw new BadRequestException(
+        'Web ordering is not enabled for this page',
+      );
 
-    const { customerName, phone, address, productCode, qty, price, productName, orderNote } = body;
+    const {
+      customerName,
+      phone,
+      address,
+      productCode,
+      qty,
+      price,
+      productName,
+      orderNote,
+    } = body;
     if (!customerName?.trim()) throw new BadRequestException('নাম দিন');
     if (!phone?.trim()) throw new BadRequestException('ফোন নম্বর দিন');
     if (!address?.trim()) throw new BadRequestException('ঠিকানা দিন');
@@ -427,8 +474,7 @@ export class CatalogController {
       const chosen = priceVariants.find(
         (v) => v.label === String(body.variantLabel ?? '').trim(),
       );
-      if (!chosen)
-        throw new BadRequestException('সাইজ/পরিমাণ বেছে নিন');
+      if (!chosen) throw new BadRequestException('সাইজ/পরিমাণ বেছে নিন');
       unitPrice = chosen.price;
       itemMetaJson = JSON.stringify({
         variantLabel: chosen.label,
@@ -455,7 +501,10 @@ export class CatalogController {
           haversineKm(page.restaurantLat!, page.restaurantLng!, dLat, dLng) *
             100,
         ) / 100;
-      const slab = resolveDeliveryFee(parseSlabs(page.deliverySlabsJson), distanceKm);
+      const slab = resolveDeliveryFee(
+        parseSlabs(page.deliverySlabsJson),
+        distanceKm,
+      );
       if (!slab)
         throw new BadRequestException(
           'দুঃখিত, আপনার লোকেশন আমাদের ডেলিভারি এলাকার বাইরে 😔',
@@ -474,13 +523,15 @@ export class CatalogController {
       phone: String(phone).trim(),
       address: String(address).trim(),
       orderNote: orderNote?.trim() || undefined,
-      items: [{
-        productCode: String(productCode).toUpperCase(),
-        qty: Math.max(1, Number(qty) || 1),
-        unitPrice,
-        productName: itemName,
-        metaJson: itemMetaJson,
-      }],
+      items: [
+        {
+          productCode: String(productCode).toUpperCase(),
+          qty: Math.max(1, Number(qty) || 1),
+          unitPrice,
+          productName: itemName,
+          metaJson: itemMetaJson,
+        },
+      ],
       paymentMode: page.paymentMode,
       ...(restaurantDelivery ?? {}),
     });
@@ -495,7 +546,9 @@ export class CatalogController {
     if (credential?.type === 'gateway') {
       const { randomUUID } = require('crypto') as typeof import('crypto');
       const sessionToken = randomUUID();
-      const apiBase = process.env.API_BASE_URL || `http://localhost:${process.env.PORT || 3000}`;
+      const apiBase =
+        process.env.API_BASE_URL ||
+        `http://localhost:${process.env.PORT || 3000}`;
       await this.prisma.pendingPayment.create({
         data: {
           pageId: page.id,
@@ -515,7 +568,12 @@ export class CatalogController {
         page.advanceAmount || 0,
         apiBase,
       );
-      return { orderId: order.id, paymentRequired: true, method: 'gateway', paymentUrl };
+      return {
+        orderId: order.id,
+        paymentRequired: true,
+        method: 'gateway',
+        paymentUrl,
+      };
     }
 
     if (credential?.type === 'direct') {
@@ -566,15 +624,22 @@ export class CatalogController {
       select: { id: true, advanceAmount: true },
     });
     if (!page) throw new NotFoundException('Page not found');
-    if (!transactionId?.trim()) throw new BadRequestException('Transaction ID required');
+    if (!transactionId?.trim())
+      throw new BadRequestException('Transaction ID required');
     const order = await this.prisma.order.findFirst({
       where: { id: orderId, pageIdRef: page.id },
       select: { id: true, paymentStatus: true },
     });
     if (!order) throw new NotFoundException('Order not found');
-    if (order.paymentStatus !== 'pending_proof') throw new BadRequestException('Payment not expected');
+    if (order.paymentStatus !== 'pending_proof')
+      throw new BadRequestException('Payment not expected');
 
-    const smsMatch = await this.smsGatewayService.matchPayment(page.id, transactionId.trim(), null, page.advanceAmount ?? 0);
+    const smsMatch = await this.smsGatewayService.matchPayment(
+      page.id,
+      transactionId.trim(),
+      null,
+      page.advanceAmount ?? 0,
+    );
     await this.prisma.order.update({
       where: { id: orderId },
       data: {
@@ -599,7 +664,8 @@ export class CatalogController {
     if (!page) throw new NotFoundException('Page not found');
 
     const credential = await this.paymentVerify.getActiveCredential(page.id);
-    if (!credential || credential.type !== 'direct') throw new BadRequestException('No direct payment credential configured');
+    if (!credential || credential.type !== 'direct')
+      throw new BadRequestException('No direct payment credential configured');
 
     const result = await this.paymentVerify.verifyDirect(
       page.id,
@@ -613,11 +679,18 @@ export class CatalogController {
       return { success: true, verified: true };
     }
 
-    return { success: false, verified: false, fallbackToScreenshot: true, message: result.errorMessage };
+    return {
+      success: false,
+      verified: false,
+      fallbackToScreenshot: true,
+      message: result.errorMessage,
+    };
   }
 
   @Post(':pageId/web-order/:orderId/payment-proof')
-  @UseInterceptors(FileInterceptor('screenshot', { limits: { fileSize: 5 * 1024 * 1024 } }))
+  @UseInterceptors(
+    FileInterceptor('screenshot', { limits: { fileSize: 5 * 1024 * 1024 } }),
+  )
   async uploadPaymentProof(
     @Param('pageId') pid: string,
     @Param('orderId', ParseIntPipe) orderId: number,
@@ -629,11 +702,17 @@ export class CatalogController {
       select: { id: true, smsGatewayEnabled: true, advanceAmount: true },
     });
     if (!page) throw new NotFoundException('Page not found');
-    if (!file?.buffer && !transactionId?.trim()) throw new BadRequestException('Transaction ID or screenshot required');
+    if (!file?.buffer && !transactionId?.trim())
+      throw new BadRequestException('Transaction ID or screenshot required');
 
     // If only TxID provided (no screenshot) — try SMS gateway match first
     if (!file?.buffer && transactionId?.trim()) {
-      const smsMatch = await this.smsGatewayService.matchPayment(page.id, transactionId.trim(), null, page.advanceAmount ?? 0);
+      const smsMatch = await this.smsGatewayService.matchPayment(
+        page.id,
+        transactionId.trim(),
+        null,
+        page.advanceAmount ?? 0,
+      );
       const order = await this.prisma.order.update({
         where: { id: orderId },
         data: {
@@ -643,16 +722,25 @@ export class CatalogController {
         },
         select: { id: true, customerName: true, phone: true },
       });
-      const status = smsMatch.matched ? '✅ Auto-verified' : '⏳ Pending review';
-      void this.telegram.notify(
-        page.id,
-        `💸 Payment Received\nOrder #${order.id}\nTxID: ${transactionId.trim()}\nCustomer: ${order.customerName ?? '?'} | ${order.phone ?? '?'}\nStatus: ${status}`,
-      ).catch(() => {});
+      const status = smsMatch.matched
+        ? '✅ Auto-verified'
+        : '⏳ Pending review';
+      void this.telegram
+        .notify(
+          page.id,
+          `💸 Payment Received\nOrder #${order.id}\nTxID: ${transactionId.trim()}\nCustomer: ${order.customerName ?? '?'} | ${order.phone ?? '?'}\nStatus: ${status}`,
+        )
+        .catch(() => {});
       return { success: true, autoVerified: smsMatch.matched };
     }
 
     // Screenshot provided — send to Telegram, don't store on server
-    await this.ordersService.uploadWebOrderScreenshot(orderId, page.id, file, transactionId);
+    await this.ordersService.uploadWebOrderScreenshot(
+      orderId,
+      page.id,
+      file,
+      transactionId,
+    );
     return { success: true, autoVerified: false };
   }
 
@@ -675,9 +763,14 @@ export class CatalogController {
       where: pageWhere(pid),
       select: { id: true, primaryColor: true },
     });
-    if (!page) { res.status(404).send('<h2>Not found</h2>'); return; }
+    if (!page) {
+      res.status(404).send('<h2>Not found</h2>');
+      return;
+    }
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.send(this.buildTrackHtml(String(page.id), page.primaryColor || '#5b63f5'));
+    res.send(
+      this.buildTrackHtml(String(page.id), page.primaryColor || '#5b63f5'),
+    );
   }
 
   @Get(':pageId/order-success/:orderId')
@@ -690,9 +783,18 @@ export class CatalogController {
       where: pageWhere(pid),
       select: { id: true, primaryColor: true },
     });
-    if (!page) { res.status(404).send('<h2>Not found</h2>'); return; }
+    if (!page) {
+      res.status(404).send('<h2>Not found</h2>');
+      return;
+    }
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.send(this.buildOrderSuccessHtml(String(page.id), orderId, page.primaryColor || '#5b63f5'));
+    res.send(
+      this.buildOrderSuccessHtml(
+        String(page.id),
+        orderId,
+        page.primaryColor || '#5b63f5',
+      ),
+    );
   }
 
   // Public HTML catalog page
@@ -715,7 +817,10 @@ export class CatalogController {
     }
     // V21: Increment catalog view counter — fire-and-forget
     void this.prisma.page
-      .update({ where: { id: data.page.id }, data: { catalogViews: { increment: 1 } } })
+      .update({
+        where: { id: data.page.id },
+        data: { catalogViews: { increment: 1 } },
+      })
       .catch(() => {});
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.send(
@@ -753,13 +858,16 @@ export class CatalogController {
         websiteEnabled: true,
         restaurantModeEnabled: true,
         menuImagesJson: true,
+        businessHoursJson: true,
         businessInfo: true,
         owner: { select: { isActive: true } },
       },
     });
     if (!page) return { error: 'Page not found' };
-    if ((page as any).owner?.isActive === false) return { error: 'Account is disabled' };
-    if ((page as any).websiteEnabled === false) return { error: 'Website is currently unavailable' };
+    if ((page as any).owner?.isActive === false)
+      return { error: 'Account is disabled' };
+    if ((page as any).websiteEnabled === false)
+      return { error: 'Website is currently unavailable' };
 
     const where: any = {
       pageId: page.id,
@@ -801,18 +909,23 @@ export class CatalogController {
         category: true,
         priceVariantsJson: true,
         trackStock: true,
+        isFeatured: true,
       },
     });
     // Fall back to the first Reference Image when no main Image URL is set —
     // otherwise products added via paste-into-Reference-Images show no photo here,
     // even though the single product page already handles this correctly.
-    const productsWithRefs = await this.productsService.attachReferenceImagesList(
-      page.id,
-      rawProducts,
-    );
+    const productsWithRefs =
+      await this.productsService.attachReferenceImagesList(
+        page.id,
+        rawProducts,
+      );
     const products = productsWithRefs.map((p: any) => ({
       ...p,
-      imageUrl: p.imageUrl || this.parseReferenceImages(p.referenceImagesJson)[0] || null,
+      imageUrl:
+        p.imageUrl ||
+        this.parseReferenceImages(p.referenceImagesJson)[0] ||
+        null,
       priceVariants: parsePriceVariants(p.priceVariantsJson),
     }));
 
@@ -830,7 +943,10 @@ export class CatalogController {
         primaryColor:
           page.primaryColor ||
           ((page as any).restaurantModeEnabled ? '#ea580c' : '#5b63f5'),
-        tagline: String((page as any).businessInfo || '').split('\n')[0]?.slice(0, 90) || '',
+        tagline:
+          String((page as any).businessInfo || '')
+            .split('\n')[0]
+            ?.slice(0, 90) || '',
         footerText: page.memoFooterText || '',
         messengerUrl: page.catalogMessengerUrl || `https://m.me/${page.pageId}`,
         whatsappUrl: buildWhatsAppUrl(page.businessPhone),
@@ -846,9 +962,21 @@ export class CatalogController {
         menuImages: (() => {
           try {
             const raw = JSON.parse((page as any).menuImagesJson || '[]');
-            return Array.isArray(raw) ? raw.filter((u: any) => typeof u === 'string') : [];
+            return Array.isArray(raw)
+              ? raw.filter((u: any) => typeof u === 'string')
+              : [];
           } catch {
             return [];
+          }
+        })(),
+        // null when the merchant hasn't set hours yet — hides the badge
+        businessHours: (() => {
+          const raw = (page as any).businessHoursJson;
+          if (!raw) return null;
+          try {
+            return parseBusinessHours(JSON.parse(raw));
+          } catch {
+            return null;
           }
         })(),
       },
@@ -998,8 +1126,8 @@ ${primaryImage ? `<meta name="twitter:image" content="${esc(primaryImage)}"/>` :
 <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
 ${
   page.webOrderEnabled && page.restaurantMode
-    ? `<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>`
+    ? `<link rel="stylesheet" href="/vendor/leaflet/leaflet.css"/>
+<script src="/vendor/leaflet/leaflet.js"></script>`
     : ''
 }
 <style>
@@ -1341,10 +1469,14 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:var(--b
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
             ${inStock ? 'Messenger এ Order করুন' : 'Stock নেই'}
           </a>
-          ${page.webOrderEnabled && inStock ? `<button class="btn-order" style="background:linear-gradient(135deg,#059669,#047857);box-shadow:0 4px 18px rgba(5,150,105,.35)" onclick="woOpen()">
+          ${
+            page.webOrderEnabled && inStock
+              ? `<button class="btn-order" style="background:linear-gradient(135deg,#059669,#047857);box-shadow:0 4px 18px rgba(5,150,105,.35)" onclick="woOpen()">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
             Website থেকে Order করুন
-          </button>` : ''}
+          </button>`
+              : ''
+          }
           <a class="btn-secondary" href="${catalogHref}">
             🛍️ ${shortlistCodes.length ? 'শর্টলিস্টে ফিরে যান' : 'সব Product দেখুন'}
           </a>
@@ -1380,9 +1512,13 @@ ${
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
     Messenger
   </a>
-  ${page.webOrderEnabled ? `<button class="btn-order" onclick="woOpen()" style="flex:1;min-width:0;background:linear-gradient(135deg,#059669,#047857);box-shadow:0 4px 18px rgba(5,150,105,.35)">
+  ${
+    page.webOrderEnabled
+      ? `<button class="btn-order" onclick="woOpen()" style="flex:1;min-width:0;background:linear-gradient(135deg,#059669,#047857);box-shadow:0 4px 18px rgba(5,150,105,.35)">
     🌐 Website Order
-  </button>` : ''}
+  </button>`
+      : ''
+  }
 </div>`
     : ''
 }
@@ -1406,7 +1542,9 @@ ${
   </div>
 </footer>
 
-${page.webOrderEnabled ? `
+${
+  page.webOrderEnabled
+    ? `
 <!-- ── Web Order Modal ── -->
 <style>
 .wo-overlay{display:none;position:fixed;inset:0;z-index:600;background:rgba(0,0,0,.55);backdrop-filter:blur(4px);align-items:flex-end;justify-content:center;padding:0}
@@ -1493,15 +1631,26 @@ ${page.webOrderEnabled ? `
           try {
             const vopts = JSON.parse(p.variantOptions || '[]');
             if (Array.isArray(vopts) && vopts.length) {
-              varSelects = vopts.map((v: any) => {
-                const label = esc(String(v.label || ''));
-                const choices: string[] = Array.isArray(v.choices) ? v.choices : [];
-                if (!choices.length) return '';
-                const opts = choices.map((c: string) => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
-                return `<div><div class="wo-lbl">${label}</div><select class="wo-inp wo-variant" data-label="${label}"><option value="">-- ${label} বেছে নিন --</option>${opts}</select></div>`;
-              }).join('');
+              varSelects = vopts
+                .map((v: any) => {
+                  const label = esc(String(v.label || ''));
+                  const choices: string[] = Array.isArray(v.choices)
+                    ? v.choices
+                    : [];
+                  if (!choices.length) return '';
+                  const opts = choices
+                    .map(
+                      (c: string) =>
+                        `<option value="${esc(c)}">${esc(c)}</option>`,
+                    )
+                    .join('');
+                  return `<div><div class="wo-lbl">${label}</div><select class="wo-inp wo-variant" data-label="${label}"><option value="">-- ${label} বেছে নিন --</option>${opts}</select></div>`;
+                })
+                .join('');
             }
-          } catch { varSelects = ''; }
+          } catch {
+            varSelects = '';
+          }
           return varSelects;
         })()}
         <div class="wo-row2">
@@ -1625,7 +1774,7 @@ var WO_PAY_MODE = ${JSON.stringify(String(page.paymentMode || 'cod'))};
 var WO_ADV_AMT = ${Number(page.advanceAmount || 0)};
 var WO_BKASH = ${JSON.stringify(String(page.advanceBkash || ''))};
 var WO_NAGAD = ${JSON.stringify(String(page.advanceNagad || ''))};
-var WO_ROCKET = ${JSON.stringify(String((page as any).advanceRocket || ''))};
+var WO_ROCKET = ${JSON.stringify(String(page.advanceRocket || ''))};
 var WO_ADV_MSG = ${JSON.stringify(String(page.advancePaymentMessage || ''))};
 var WO_RESTO = ${page.restaurantMode ? 1 : 0};
 var WO_RLAT = ${Number(page.restaurantLat) || 0};
@@ -1712,12 +1861,25 @@ function woUseGps(){
   var btn=document.getElementById('woGpsBtn');
   if(!navigator.geolocation){ woSetErr('woErr0','আপনার browser-এ GPS support নেই — Google Maps link paste করুন বা ম্যাপে ট্যাপ করে pin করুন'); return; }
   btn.disabled=true; btn.textContent='লোকেশন খোঁজা হচ্ছে...';
+  // Watchdog: some in-app browsers/WebViews never fire either native callback
+  // even with {timeout}, leaving the button stuck forever with no feedback.
+  var woGpsDone=false;
+  var woGpsWatchdog=setTimeout(function(){
+    if(woGpsDone) return;
+    woGpsDone=true;
+    btn.disabled=false; btn.textContent='📍 আমার লোকেশন ব্যবহার করুন (GPS)';
+    woSetErr('woErr0','লোকেশন পেতে বেশি সময় লাগছে। নিচের ঘরে Google Maps link paste করুন বা সরাসরি ম্যাপে ট্যাপ করে pin করুন');
+  },12000);
   navigator.geolocation.getCurrentPosition(function(pos){
+    if(woGpsDone) return;
+    woGpsDone=true; clearTimeout(woGpsWatchdog);
     btn.disabled=false; btn.textContent='📍 আমার লোকেশন ব্যবহার করুন (GPS)';
     woSetErr('woErr0','');
     woPlacePin(pos.coords.latitude,pos.coords.longitude);
     woMap.setView([pos.coords.latitude,pos.coords.longitude],16);
   },function(){
+    if(woGpsDone) return;
+    woGpsDone=true; clearTimeout(woGpsWatchdog);
     btn.disabled=false; btn.textContent='📍 আমার লোকেশন ব্যবহার করুন (GPS)';
     // Messenger/Facebook-এর ভেতরের browser প্রায়ই GPS permission-ই চায় না
     woSetErr('woErr0','লোকেশন পাওয়া যায়নি। Messenger-এর ভেতরের browser-এ GPS প্রায়ই কাজ করে না — নিচের ঘরে Google Maps link paste করুন, ম্যাপে ট্যাপ করুন, অথবা Chrome-এ খুলুন (⋯ menu → Open in browser)');
@@ -1941,7 +2103,9 @@ async function woPaySubmit(){
 }
 
 </script>
-` : ''}
+`
+    : ''
+}
 
 <script>
 var noImgBlock = '<div class="no-img-card"><div class="no-img-orb no-img-orb-1"></div><div class="no-img-orb no-img-orb-2"></div><div class="no-img-icon">🛍️</div><div class="no-img-code"><div class="no-img-code-lbl">Product Code</div><div class="no-img-code-val">${esc(p.code)}</div></div><div class="no-img-hint">ছবি শীঘ্রই আসছে</div></div>';
@@ -1987,6 +2151,18 @@ ${poweredByBadge()}
 
     // V25: Restaurant pages get burgerbhai-style category tabs (Momo's (6) …)
     const restaurantTabs = Boolean(page.restaurantMode);
+
+    // V26: open/closed pill — only shown once the merchant has set hours
+    const openNow = page.businessHours ? isOpenNow(page.businessHours) : null;
+    const todayRow = page.businessHours
+      ? page.businessHours.find((r: any) => r.day === new Date().getDay())
+      : null;
+    const openStatusPill =
+      openNow === null
+        ? ''
+        : openNow
+          ? `<span class="resto-pill resto-pill-open">🟢 এখন খোলা${todayRow && !todayRow.closed ? ` — ${esc(todayRow.open)}-${esc(todayRow.close)}` : ''}</span>`
+          : `<span class="resto-pill resto-pill-closed">🔴 এখন বন্ধ</span>`;
     const categoryCounts = new Map<string, number>();
     if (restaurantTabs) {
       for (const p of products) {
@@ -2015,7 +2191,9 @@ ${poweredByBadge()}
         const origPrice = Number(p.originalPrice) || 0;
         const curPrice = Number(p.price) || 0;
         const hasOffer = origPrice > curPrice && curPrice > 0;
-        const offPct = hasOffer ? Math.round((1 - curPrice / origPrice) * 100) : 0;
+        const offPct = hasOffer
+          ? Math.round((1 - curPrice / origPrice) * 100)
+          : 0;
         const priceBlock = cardVariants.length
           ? `<div class="c-price" style="font-size:17px">${priceRangeText(cardVariants, curPrice, currency)}</div>`
           : hasOffer
@@ -2039,6 +2217,7 @@ ${poweredByBadge()}
         <div class="c-media">
           ${topBlock}
           ${!inStock ? '<div class="c-out-badge">Stock Out</div>' : p.deliveryCharge === 'FREE' ? '<div class="c-free-badge">🚚 Free Delivery</div>' : ''}
+          ${p.isFeatured ? '<div class="c-featured-badge">🔥 জনপ্রিয়</div>' : ''}
           ${videoType ? '<div class="c-vid-badge">🎬</div>' : ''}
         </div>
         <div class="c-body">
@@ -2139,6 +2318,8 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:radial-
 .resto-sub{margin-top:8px;font-size:13.5px;line-height:1.65;color:rgba(255,255,255,.88);max-width:52ch}
 .resto-pills{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
 .resto-pill{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:999px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.18);font-size:11.5px;font-weight:700}
+.resto-pill-open{background:rgba(34,197,94,.22);border-color:rgba(34,197,94,.4)}
+.resto-pill-closed{background:rgba(239,68,68,.22);border-color:rgba(239,68,68,.4)}
 .resto-hero-img{position:relative;display:block;border-radius:16px;overflow:hidden;border:2px solid rgba(255,255,255,.35);box-shadow:0 14px 34px rgba(0,0,0,.25);transform:rotate(2deg);transition:transform .2s}
 .resto-hero-img:hover{transform:rotate(0deg) scale(1.02)}
 .resto-hero-img img{display:block;width:100%;height:150px;object-fit:cover}
@@ -2221,6 +2402,7 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:radial-
 .c-out-badge{position:absolute;top:14px;left:14px;background:rgba(220,38,38,.92);color:#fff;font-size:10px;font-weight:800;padding:5px 10px;border-radius:999px;letter-spacing:.06em}
 .c-vid-badge{position:absolute;top:14px;right:14px;background:rgba(15,23,42,.72);color:#fff;font-size:10px;font-weight:700;padding:5px 10px;border-radius:999px;backdrop-filter:blur(6px)}
 .c-free-badge{position:absolute;top:14px;left:14px;background:rgba(22,163,74,.92);color:#fff;font-size:10px;font-weight:800;padding:5px 10px;border-radius:999px;letter-spacing:.03em}
+.c-featured-badge{position:absolute;top:14px;right:14px;background:rgba(234,88,12,.92);color:#fff;font-size:10px;font-weight:800;padding:5px 10px;border-radius:999px;letter-spacing:.03em}
 .c-store-badge{position:absolute;left:14px;bottom:14px;background:rgba(255,255,255,.88);color:var(--text);font-size:10.5px;font-weight:800;padding:6px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.95);backdrop-filter:blur(8px)}
 
 /* Body */
@@ -2436,6 +2618,7 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:radial-
           <div class="resto-title">${esc(page.name)}</div>
           <div class="resto-sub">${esc(page.tagline || 'গরম গরম খাবার — ম্যাপে লোকেশন দিন, আমরাই পৌঁছে দেব 🛵')}</div>
           <div class="resto-pills">
+            ${openStatusPill}
             <span class="resto-pill">⚡ Fresh &amp; Hot</span>
             <span class="resto-pill">🛵 Home Delivery</span>
             <span class="resto-pill">📍 Live Location Order</span>
@@ -2748,7 +2931,11 @@ document.getElementById('oidInput').addEventListener('keydown', function(e){ if(
 </html>`;
   }
 
-  private buildOrderSuccessHtml(pageId: string, orderId: number, primaryColor: string): string {
+  private buildOrderSuccessHtml(
+    pageId: string,
+    orderId: number,
+    primaryColor: string,
+  ): string {
     const primary = esc(primaryColor);
     return `<!DOCTYPE html>
 <html lang="bn">

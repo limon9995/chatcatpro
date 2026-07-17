@@ -15,6 +15,7 @@ interface FoodProduct {
   isActive: boolean; catalogVisible: boolean;
   priceVariantsJson: string | null; trackStock: boolean;
   stockQty: number; productType: string;
+  referenceImagesJson?: string | null; isFeatured?: boolean;
 }
 interface Ingredient {
   id: number; name: string; unit: string; stockQty: number;
@@ -25,6 +26,7 @@ interface ScanDish {
   name: string; category: string | null; description: string | null;
   variants: { label: string; price: number; pieces: number | null }[];
   imageUrl?: string | null;
+  ingredients?: { name: string; qty: number; unit: string }[];
   _checked?: boolean;
 }
 interface RestoSettings {
@@ -34,15 +36,37 @@ interface RestoSettings {
   deliverySlabs: DeliverySlab[];
   currencySymbol?: string;
 }
+interface HoursRow { day: number; open: string; close: string; closed: boolean }
 
 const CATEGORY_SUGGESTIONS = ['Burger', 'Momo', 'Shawarma', 'Meatbox', 'Pizza', 'Rice', 'Sides', 'Drinks', 'Dessert', 'Combo'];
 const UNIT_OPTIONS = ['pcs', 'gm', 'kg', 'ml', 'liter'];
+const DAY_NAMES_BN = ['রবি', 'সোম', 'মঙ্গল', 'বুধ', 'বৃহস্পতি', 'শুক্র', 'শনি'];
+const DAY_NAMES_EN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+function defaultHours(): HoursRow[] {
+  return Array.from({ length: 7 }, (_, day) => ({ day, open: '10:00', close: '22:00', closed: false }));
+}
 
 function parseVariants(json: string | null): PriceVariant[] {
   try {
     const raw = JSON.parse(json || '[]');
     return Array.isArray(raw) ? raw.filter((v: any) => v?.label && Number.isFinite(Number(v?.price))) : [];
   } catch { return []; }
+}
+
+function parseReferenceImages(value: string | null | undefined): string[] {
+  const raw = String(value || '').trim();
+  if (!raw) return [];
+  try {
+    const arr = JSON.parse(raw);
+    if (Array.isArray(arr)) {
+      return arr
+        .map(item => String(item || '').trim())
+        .filter(Boolean)
+        .filter((url, index, all) => all.indexOf(url) === index);
+    }
+  } catch {}
+  return [];
 }
 
 function priceRange(p: FoodProduct, cur: string): string {
@@ -100,6 +124,7 @@ function FoodFormModal({ th, pageId, product, categories, cur, onClose, onSaved,
   const RBASE = `${API_BASE}/restaurant/${pageId}`;
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [galleryUploading, setGalleryUploading] = useState(false);
   const [form, setForm] = useState(() => ({
     name: product?.name || '',
     category: product?.category || '',
@@ -108,6 +133,8 @@ function FoodFormModal({ th, pageId, product, categories, cur, onClose, onSaved,
     isActive: product ? product.isActive : true,
     variants: product ? parseVariants(product.priceVariantsJson) : [] as PriceVariant[],
     singlePrice: product && !parseVariants(product.priceVariantsJson).length ? product.price : 0,
+    referenceImages: product ? parseReferenceImages(product.referenceImagesJson) : [] as string[],
+    isFeatured: product?.isFeatured || false,
   }));
   const multi = form.variants.length > 0;
 
@@ -127,6 +154,22 @@ function FoodFormModal({ th, pageId, product, categories, cur, onClose, onSaved,
     finally { setUploading(false); }
   };
 
+  const uploadGalleryPhoto = async (file: File) => {
+    setGalleryUploading(true);
+    try {
+      const token = localStorage.getItem('dfbot_token') || '';
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch(`${BASE}/products/upload-image`, {
+        method: 'POST', headers: token ? { Authorization: `Bearer ${token}` } : undefined, body: fd,
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      setForm(f => ({ ...f, referenceImages: [...f.referenceImages, data.url] }));
+    } catch (e: any) { onToast(e.message || 'Upload failed', 'error'); }
+    finally { setGalleryUploading(false); }
+  };
+
   const save = async () => {
     if (!form.name.trim()) return onToast(copy('নাম দিন', 'Name required'), 'error');
     const variants = form.variants.filter(v => v.label.trim() && Number.isFinite(v.price));
@@ -143,6 +186,8 @@ function FoodFormModal({ th, pageId, product, categories, cur, onClose, onSaved,
             description: form.description,
             imageUrl: form.imageUrl,
             isActive: form.isActive,
+            isFeatured: form.isFeatured,
+            referenceImagesJson: form.referenceImages.length ? JSON.stringify(form.referenceImages) : null,
             ...(variants.length
               ? { priceVariants: variants }
               : { priceVariants: null, price: Number(form.singlePrice) }),
@@ -196,6 +241,26 @@ function FoodFormModal({ th, pageId, product, categories, cur, onClose, onSaved,
               </div>
             </Field>
           </div>
+
+          {product && (
+            <Field th={th} label={copy('আরো ছবি (গ্যালারি — একাধিক angle)', 'More photos (gallery — multiple angles)')}>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                {form.referenceImages.map((url, i) => (
+                  <div key={i} style={{ position: 'relative' }}>
+                    <img src={url.startsWith('http') ? url : `${API_BASE}${url}`} alt="" style={{ width: 42, height: 42, borderRadius: 8, objectFit: 'cover', border: `1px solid ${th.border}` }} />
+                    <button type="button" onClick={() => setForm(f => ({ ...f, referenceImages: f.referenceImages.filter((_, j) => j !== i) }))}
+                      style={{ position: 'absolute', top: -6, right: -6, width: 18, height: 18, borderRadius: 9, border: 'none', background: '#dc2626', color: '#fff', fontSize: 10, cursor: 'pointer', lineHeight: 1 }}>×</button>
+                  </div>
+                ))}
+                <label style={{ ...th.btnGhost, fontSize: 12, cursor: 'pointer', margin: 0 }}>
+                  {galleryUploading ? <Spinner size={12} /> : `+ ${copy('ছবি যোগ করুন', 'Add photo')}`}
+                  <input type="file" accept="image/*" style={{ display: 'none' }}
+                    onChange={e => { const f = e.target.files?.[0]; if (f) uploadGalleryPhoto(f); e.target.value = ''; }} />
+                </label>
+              </div>
+            </Field>
+          )}
+
           <Field th={th} label={copy('বিবরণ (ঐচ্ছিক)', 'Description (optional)')}>
             <textarea style={{ ...th.input, minHeight: 56 }} placeholder={copy('উপকরণ, স্বাদ, স্পেশাল কিছু...', 'Ingredients, taste, anything special...')}
               value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
@@ -221,6 +286,10 @@ function FoodFormModal({ th, pageId, product, categories, cur, onClose, onSaved,
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
             <input type="checkbox" checked={form.isActive} onChange={e => setForm(f => ({ ...f, isActive: e.target.checked }))} />
             {copy('Active — website-এ দেখাবে ও order নেওয়া যাবে', 'Active — visible & orderable')}
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
+            <input type="checkbox" checked={form.isFeatured} onChange={e => setForm(f => ({ ...f, isFeatured: e.target.checked }))} />
+            {copy('🔥 Featured / জনপ্রিয় — card-এ badge দেখাবে', '🔥 Featured / best-seller — shows a badge on the card')}
           </label>
 
           <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
@@ -379,6 +448,12 @@ function MenuScanModal({ th, pageId, cur, onClose, onDone, onToast }: {
                     <VariantEditor th={th} cur={cur} variants={d.variants as PriceVariant[]}
                       onChange={v => setDish(i, { variants: v as any })} />
                   )}
+                  {d._checked && !!d.ingredients?.length && (
+                    <div style={{ fontSize: 11.5, color: th.muted, marginTop: 6 }}>
+                      🥕 {copy('AI suggested recipe', 'AI-suggested recipe')}: {d.ingredients.map(ing => `${ing.name} ${ing.qty}${ing.unit}`).join(', ')}
+                      {' — '}{copy('Add-এর পর Recipe editor থেকে দেখুন/বদলান', 'review/edit later via the Recipe editor')}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -528,6 +603,10 @@ export function RestaurantPage({ th, pageId, onToast }: {
   const [deliverySaving, setDeliverySaving] = useState(false);
   const [enabling, setEnabling] = useState(false);
 
+  // business hours
+  const [hours, setHours] = useState<HoursRow[]>(defaultHours());
+  const [hoursSaving, setHoursSaving] = useState(false);
+
   // quick order
   const [orderForm, setOrderForm] = useState({
     customerName: '', phone: '', address: '', orderNote: '',
@@ -539,13 +618,14 @@ export function RestaurantPage({ th, pageId, onToast }: {
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [s, prods, ings, cats, pack, mImgs] = await Promise.all([
+      const [s, prods, ings, cats, pack, mImgs, hrs] = await Promise.all([
         request<any>(`${BASE}/settings`),
         request<FoodProduct[]>(`${BASE}/products`).catch(() => []),
         request<Ingredient[]>(`${RBASE}/ingredients`).catch(() => []),
         request<string[]>(`${RBASE}/categories`).catch(() => []),
         request<any[]>(`${RBASE}/packaging`).catch(() => []),
         request<string[]>(`${RBASE}/menu-images`).catch(() => []),
+        request<HoursRow[]>(`${RBASE}/hours`).catch(() => []),
       ]);
       setSettings({
         restaurantModeEnabled: Boolean(s?.restaurantModeEnabled),
@@ -560,6 +640,7 @@ export function RestaurantPage({ th, pageId, onToast }: {
       setCategories(Array.isArray(cats) ? (cats as string[]) : []);
       setPackaging((Array.isArray(pack) ? pack : []).map((p: any) => ({ ingredientId: p.ingredientId, qty: p.qty })));
       setMenuImages(Array.isArray(mImgs) ? (mImgs as string[]) : []);
+      setHours(Array.isArray(hrs) && hrs.length === 7 ? hrs : defaultHours());
     } catch (e: any) { onToast(e.message, 'error'); }
     finally { setLoading(false); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -578,6 +659,22 @@ export function RestaurantPage({ th, pageId, onToast }: {
     } catch { /* ignore */ }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pageId]);
+
+  const toggleFeatured = async (p: FoodProduct) => {
+    try {
+      await request(`${RBASE}/products/${p.code}/food`, { method: 'PATCH', body: JSON.stringify({ isFeatured: !p.isFeatured }) });
+      reloadProducts();
+    } catch (e: any) { onToast(e.message, 'error'); }
+  };
+
+  const deleteProduct = async (p: FoodProduct) => {
+    if (!window.confirm(copy(`"${p.name || p.code}" মুছে ফেলবেন?`, `Delete "${p.name || p.code}"?`))) return;
+    try {
+      await request(`${BASE}/products/${p.code}`, { method: 'DELETE' });
+      onToast(copy('✅ Deleted', '✅ Deleted'), 'success');
+      reloadProducts();
+    } catch (e: any) { onToast(e.message, 'error'); }
+  };
 
   const reloadIngredients = useCallback(async () => {
     try { setIngredients(await request<Ingredient[]>(`${RBASE}/ingredients`)); } catch { /* ignore */ }
@@ -603,6 +700,15 @@ export function RestaurantPage({ th, pageId, onToast }: {
       if (alsoEnable) await loadAll();
     } catch (e: any) { onToast(e.message, 'error'); }
     finally { setDeliverySaving(false); setEnabling(false); }
+  };
+
+  const saveHours = async () => {
+    setHoursSaving(true);
+    try {
+      await request(`${RBASE}/hours`, { method: 'PUT', body: JSON.stringify({ rows: hours }) });
+      onToast(copy('✅ সেভ হয়েছে', '✅ Saved'), 'success');
+    } catch (e: any) { onToast(e.message, 'error'); }
+    finally { setHoursSaving(false); }
   };
 
   const foodProducts = useMemo(
@@ -790,14 +896,16 @@ export function RestaurantPage({ th, pageId, onToast }: {
                       ? <img src={p.imageUrl.startsWith('http') ? p.imageUrl : `${API_BASE}${p.imageUrl}`} alt="" style={{ width: 42, height: 42, borderRadius: 9, objectFit: 'cover', border: `1px solid ${th.border}` }} />
                       : <div style={{ width: 42, height: 42, borderRadius: 9, background: th.accentSoft, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>🍽️</div>}
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 700, fontSize: 13.5 }}>{p.name || p.code} {!p.isActive && <span style={{ fontSize: 10.5, color: '#dc2626' }}>(off)</span>}</div>
+                      <div style={{ fontWeight: 700, fontSize: 13.5 }}>{p.name || p.code} {p.isFeatured && <span title={copy('Featured', 'Featured')}>🔥</span>} {!p.isActive && <span style={{ fontSize: 10.5, color: '#dc2626' }}>(off)</span>}</div>
                       <div style={{ fontSize: 12, color: th.muted }}>
                         {p.category ? `${p.category} · ` : ''}{vars.length ? vars.map(v => `${v.label} ${cur}${v.price}`).join(' / ') : ''}
                       </div>
                     </div>
                     <div style={{ fontWeight: 800, fontSize: 13.5, color: th.accent, whiteSpace: 'nowrap' }}>{priceRange(p, cur)}</div>
+                    <button style={{ ...th.btnSmGhost, fontSize: 11.5, opacity: p.isFeatured ? 1 : 0.5 }} onClick={() => toggleFeatured(p)} title={copy('Featured/জনপ্রিয় হিসেবে দেখাও', 'Toggle featured badge')}>🔥</button>
                     <button style={{ ...th.btnSmGhost, fontSize: 11.5 }} onClick={() => setRecipeFor(p)} title="Recipe/BOM">🧾 Recipe</button>
                     <button style={{ ...th.btnSmGhost, fontSize: 11.5 }} onClick={() => setEditing(p)}>✏️ Edit</button>
+                    <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626', fontSize: 15 }} title="Delete" onClick={() => deleteProduct(p)}>🗑</button>
                   </div>
                 );
               })}
@@ -926,6 +1034,7 @@ export function RestaurantPage({ th, pageId, onToast }: {
 
       {/* ── DELIVERY ── */}
       {tab === 'DELIVERY' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
         <div style={{ ...th.card }}>
           <CardHeader th={th} title={copy('🛵 Delivery — location ও দূরত্ব-অনুযায়ী fee', '🛵 Delivery — location & distance fees')}
             sub={copy('Customer website-এ ম্যাপে pin করলে এই slab অনুযায়ী auto delivery charge হবে', 'Customers pin on the website map — fee auto-computed from these slabs')} />
@@ -940,6 +1049,31 @@ export function RestaurantPage({ th, pageId, onToast }: {
               {deliverySaving ? <Spinner size={13} /> : copy('✓ Save করুন', '✓ Save')}
             </button>
           </div>
+        </div>
+
+        <div style={{ ...th.card }}>
+          <CardHeader th={th} title={copy('🕐 খোলা/বন্ধের সময়', '🕐 Business hours')}
+            sub={copy('Website-এ "এখন খোলা/বন্ধ" badge দেখাবে এই সময় অনুযায়ী', 'Drives the "open now / closed" badge on your website')} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxWidth: 560 }}>
+            {hours.map((row, i) => (
+              <div key={row.day} style={{ display: 'grid', gridTemplateColumns: '70px 1fr 1fr 90px', gap: 8, alignItems: 'center', opacity: row.closed ? 0.55 : 1 }}>
+                <div style={{ fontSize: 12.5, fontWeight: 700 }}>{copy(DAY_NAMES_BN[row.day], DAY_NAMES_EN[row.day])}</div>
+                <input style={{ ...th.input, padding: '7px 10px' }} type="time" value={row.open} disabled={row.closed}
+                  onChange={e => setHours(hs => hs.map((h, j) => j === i ? { ...h, open: e.target.value } : h))} />
+                <input style={{ ...th.input, padding: '7px 10px' }} type="time" value={row.close} disabled={row.closed}
+                  onChange={e => setHours(hs => hs.map((h, j) => j === i ? { ...h, close: e.target.value } : h))} />
+                <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, whiteSpace: 'nowrap' }}>
+                  <input type="checkbox" checked={row.closed}
+                    onChange={e => setHours(hs => hs.map((h, j) => j === i ? { ...h, closed: e.target.checked } : h))} />
+                  {copy('বন্ধ', 'Closed')}
+                </label>
+              </div>
+            ))}
+            <button style={{ ...th.btnPrimary, marginTop: 10, alignSelf: 'flex-start' }} onClick={saveHours} disabled={hoursSaving}>
+              {hoursSaving ? <Spinner size={13} /> : copy('✓ Save করুন', '✓ Save')}
+            </button>
+          </div>
+        </div>
         </div>
       )}
 

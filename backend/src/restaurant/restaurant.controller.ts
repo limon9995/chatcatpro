@@ -119,6 +119,17 @@ export class RestaurantController {
     return this.svc.setMenuImages(this.pid(r, p), b?.urls ?? []);
   }
 
+  // ── Business hours ───────────────────────────────────────────────────────────
+  @Get(':pageId/hours')
+  getHours(@Param('pageId') p: string, @Req() r: any) {
+    return this.svc.getHours(this.pid(r, p));
+  }
+
+  @Put(':pageId/hours')
+  setHours(@Param('pageId') p: string, @Body() b: any, @Req() r: any) {
+    return this.svc.setHours(this.pid(r, p), b?.rows ?? []);
+  }
+
   @Post(':pageId/products/bulk')
   bulkCreate(@Param('pageId') p: string, @Body() b: any, @Req() r: any) {
     return this.svc.bulkCreateProducts(this.pid(r, p), b?.dishes ?? []);

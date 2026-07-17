@@ -98,9 +98,9 @@ export function isRestaurantReady(page: {
 }): boolean {
   return Boolean(
     page?.restaurantModeEnabled &&
-      isValidLat(page.restaurantLat ?? null) &&
-      isValidLng(page.restaurantLng ?? null) &&
-      parseSlabs(page.deliverySlabsJson).length > 0,
+    isValidLat(page.restaurantLat ?? null) &&
+    isValidLng(page.restaurantLng ?? null) &&
+    parseSlabs(page.deliverySlabsJson).length > 0,
   );
 }
 
@@ -141,7 +141,9 @@ export function parsePriceVariants(
           : {}),
       };
     })
-    .filter((v) => v.label.length > 0 && Number.isFinite(v.price) && v.price >= 0)
+    .filter(
+      (v) => v.label.length > 0 && Number.isFinite(v.price) && v.price >= 0,
+    )
     .slice(0, MAX_PRICE_VARIANTS);
 }
 
@@ -241,15 +243,22 @@ export async function resolveMapsShortLink(
     const res = await fetch(url, {
       method: 'GET',
       redirect: 'follow',
+      // Without a browser-like User-Agent, Google often serves an
+      // interstitial/app-install page instead of redirecting to the map
+      // point, so the link fails to resolve.
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+        'Accept-Language': 'en-US,en;q=0.9,bn;q=0.8',
+      },
       signal: AbortSignal.timeout(8000),
     });
     const point = parseMapsPoint(res.url || '');
     if (point) return point;
     // Some share pages embed the point in the HTML instead of the final URL
+    // (as @lat,lng, ?q=, or !3dLAT!4dLNG) — reuse the full parser here too.
     const body = await res.text();
-    const at = body.match(/@(-?\d{1,3}\.\d+),(-?\d{1,3}\.\d+)/);
-    if (at) return parseMapsPoint(`@${at[1]},${at[2]}`);
-    return null;
+    return parseMapsPoint(body);
   } catch {
     return null;
   }
@@ -271,7 +280,67 @@ export function formatSlabsBn(
 ): string {
   if (!slabs.length) return '';
   const parts = slabs.map(
-    (s) => `${toBnNumber(s.maxKm)} কিমি পর্যন্ত ${currencySymbol}${toBnNumber(s.fee)}`,
+    (s) =>
+      `${toBnNumber(s.maxKm)} কিমি পর্যন্ত ${currencySymbol}${toBnNumber(s.fee)}`,
   );
   return `${parts.join(', ')} — এর বাইরে delivery হয় না`;
+}
+
+// ── V26: Business hours ──────────────────────────────────────────────────────
+// One row per weekday (0=Sunday .. 6=Saturday, matching JS Date#getDay), all
+// times in Asia/Dhaka local time (the only timezone this product serves).
+
+export interface BusinessHoursRow {
+  day: number; // 0-6
+  open: string; // "HH:mm"
+  close: string; // "HH:mm"
+  closed: boolean;
+}
+
+const HHMM_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+/** Validate + normalize raw rows into exactly 7 entries (missing days = closed). */
+export function parseBusinessHours(raw: unknown): BusinessHoursRow[] {
+  const byDay = new Map<number, BusinessHoursRow>();
+  if (Array.isArray(raw)) {
+    for (const r of raw) {
+      const day = Number(r?.day);
+      if (!Number.isInteger(day) || day < 0 || day > 6) continue;
+      const closed = Boolean(r?.closed);
+      const open = HHMM_RE.test(r?.open) ? r.open : '10:00';
+      const close = HHMM_RE.test(r?.close) ? r.close : '22:00';
+      byDay.set(day, { day, open, close, closed });
+    }
+  }
+  return Array.from(
+    { length: 7 },
+    (_, day) =>
+      byDay.get(day) || { day, open: '10:00', close: '22:00', closed: false },
+  );
+}
+
+/** "HH:mm" → minutes since midnight. */
+function hhmmToMinutes(hhmm: string): number {
+  const [h, m] = hhmm.split(':').map(Number);
+  return h * 60 + m;
+}
+
+/** Whether the restaurant is open right now, in Asia/Dhaka local time. */
+export function isOpenNow(
+  hours: BusinessHoursRow[],
+  now: Date = new Date(),
+): boolean {
+  if (!hours.length) return true; // no hours configured = always open (today's behavior)
+  const dhaka = new Date(
+    now.toLocaleString('en-US', { timeZone: 'Asia/Dhaka' }),
+  );
+  const row = hours.find((r) => r.day === dhaka.getDay());
+  if (!row || row.closed) return false;
+  const nowMin = dhaka.getHours() * 60 + dhaka.getMinutes();
+  const openMin = hhmmToMinutes(row.open);
+  const closeMin = hhmmToMinutes(row.close);
+  // overnight window (e.g. open 18:00, close 02:00) wraps past midnight
+  return openMin <= closeMin
+    ? nowMin >= openMin && nowMin < closeMin
+    : nowMin >= openMin || nowMin < closeMin;
 }

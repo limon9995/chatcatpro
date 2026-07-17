@@ -64,8 +64,14 @@ async function bootstrap() {
   const express = require('express');
   // Webhook: raw buffer needed for HMAC signature verification
   app.use('/webhook', express.raw({ type: 'application/json', limit: '1mb' }));
-  app.use('/wa-webhook', express.raw({ type: 'application/json', limit: '1mb' }));
-  app.use('/ig-webhook', express.raw({ type: 'application/json', limit: '1mb' }));
+  app.use(
+    '/wa-webhook',
+    express.raw({ type: 'application/json', limit: '1mb' }),
+  );
+  app.use(
+    '/ig-webhook',
+    express.raw({ type: 'application/json', limit: '1mb' }),
+  );
   // All other routes: standard JSON with 1MB limit
   app.use(express.json({ limit: '1mb' }));
   app.use(express.urlencoded({ extended: true, limit: '1mb' }));
@@ -78,6 +84,20 @@ async function bootstrap() {
     res.status(403).json({ message: 'Forbidden' });
   });
   app.useStaticAssets(storageDir, { prefix: '/storage' });
+
+  // ── Leaflet (self-hosted) ─────────────────────────────────────────────────
+  // Was loaded from unpkg.com — blocked by our own CSP (script-src 'self'
+  // only allows same-origin scripts) so the checkout/admin map never rendered
+  // any tiles or controls in any browser. Serving it same-origin fixes that.
+  const leafletDir = path.join(
+    process.cwd(),
+    'node_modules',
+    'leaflet',
+    'dist',
+  );
+  if (fs.existsSync(leafletDir)) {
+    app.useStaticAssets(leafletDir, { prefix: '/vendor/leaflet' });
+  }
 
   // ── Landing page at root "/" ──────────────────────────────────────────────
   const landingDir = path.join(process.cwd(), '../landing');
@@ -120,9 +140,20 @@ async function bootstrap() {
       if (allowedOrigins.includes(origin)) return cb(null, true);
       // Allow any subdomain of allowed origins (e.g. api.chatcat.pro when app.chatcat.pro is allowed)
       let originHost: string;
-      try { originHost = new URL(origin).hostname; } catch { return deny(origin); }
-      const allowed = allowedOrigins.some(o => {
-        try { return new URL(o).hostname.split('.').slice(-2).join('.') === originHost.split('.').slice(-2).join('.'); } catch { return false; }
+      try {
+        originHost = new URL(origin).hostname;
+      } catch {
+        return deny(origin);
+      }
+      const allowed = allowedOrigins.some((o) => {
+        try {
+          return (
+            new URL(o).hostname.split('.').slice(-2).join('.') ===
+            originHost.split('.').slice(-2).join('.')
+          );
+        } catch {
+          return false;
+        }
       });
       if (allowed) return cb(null, true);
       deny(origin);
