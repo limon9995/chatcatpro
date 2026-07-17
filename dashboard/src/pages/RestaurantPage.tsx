@@ -891,21 +891,25 @@ export function RestaurantPage({ th, pageId, onToast }: {
               {foodProducts.map(p => {
                 const vars = parseVariants(p.priceVariantsJson);
                 return (
-                  <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 10, border: `1px solid ${th.border}`, opacity: p.isActive ? 1 : 0.5 }}>
-                    {p.imageUrl
-                      ? <img src={p.imageUrl.startsWith('http') ? p.imageUrl : `${API_BASE}${p.imageUrl}`} alt="" style={{ width: 42, height: 42, borderRadius: 9, objectFit: 'cover', border: `1px solid ${th.border}` }} />
-                      : <div style={{ width: 42, height: 42, borderRadius: 9, background: th.accentSoft, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>🍽️</div>}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 700, fontSize: 13.5 }}>{p.name || p.code} {p.isFeatured && <span title={copy('Featured', 'Featured')}>🔥</span>} {!p.isActive && <span style={{ fontSize: 10.5, color: '#dc2626' }}>(off)</span>}</div>
-                      <div style={{ fontSize: 12, color: th.muted }}>
-                        {p.category ? `${p.category} · ` : ''}{vars.length ? vars.map(v => `${v.label} ${cur}${v.price}`).join(' / ') : ''}
+                  <div key={p.id} style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '10px 12px', borderRadius: 10, border: `1px solid ${th.border}`, opacity: p.isActive ? 1 : 0.5 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      {p.imageUrl
+                        ? <img src={p.imageUrl.startsWith('http') ? p.imageUrl : `${API_BASE}${p.imageUrl}`} alt="" style={{ width: 42, height: 42, borderRadius: 9, objectFit: 'cover', border: `1px solid ${th.border}`, flexShrink: 0 }} />
+                        : <div style={{ width: 42, height: 42, borderRadius: 9, background: th.accentSoft, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>🍽️</div>}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 700, fontSize: 13.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name || p.code} {p.isFeatured && <span title={copy('Featured', 'Featured')}>🔥</span>} {!p.isActive && <span style={{ fontSize: 10.5, color: '#dc2626' }}>(off)</span>}</div>
+                        <div style={{ fontSize: 12, color: th.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {p.category ? `${p.category} · ` : ''}{vars.length ? vars.map(v => `${v.label} ${cur}${v.price}`).join(' / ') : ''}
+                        </div>
                       </div>
+                      <div style={{ fontWeight: 800, fontSize: 13.5, color: th.accent, whiteSpace: 'nowrap', flexShrink: 0 }}>{priceRange(p, cur)}</div>
                     </div>
-                    <div style={{ fontWeight: 800, fontSize: 13.5, color: th.accent, whiteSpace: 'nowrap' }}>{priceRange(p, cur)}</div>
-                    <button style={{ ...th.btnSmGhost, fontSize: 11.5, opacity: p.isFeatured ? 1 : 0.5 }} onClick={() => toggleFeatured(p)} title={copy('Featured/জনপ্রিয় হিসেবে দেখাও', 'Toggle featured badge')}>🔥</button>
-                    <button style={{ ...th.btnSmGhost, fontSize: 11.5 }} onClick={() => setRecipeFor(p)} title="Recipe/BOM">🧾 Recipe</button>
-                    <button style={{ ...th.btnSmGhost, fontSize: 11.5 }} onClick={() => setEditing(p)}>✏️ Edit</button>
-                    <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626', fontSize: 15 }} title="Delete" onClick={() => deleteProduct(p)}>🗑</button>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      <button style={{ ...th.btnSmGhost, fontSize: 11.5, opacity: p.isFeatured ? 1 : 0.5 }} onClick={() => toggleFeatured(p)} title={copy('Featured/জনপ্রিয় হিসেবে দেখাও', 'Toggle featured badge')}>🔥</button>
+                      <button style={{ ...th.btnSmGhost, fontSize: 11.5 }} onClick={() => setRecipeFor(p)} title="Recipe/BOM">🧾 Recipe</button>
+                      <button style={{ ...th.btnSmGhost, fontSize: 11.5 }} onClick={() => setEditing(p)}>✏️ Edit</button>
+                      <button style={{ ...th.btnSmGhost, fontSize: 11.5, color: '#dc2626' }} title="Delete" onClick={() => deleteProduct(p)}>🗑 Delete</button>
+                    </div>
                   </div>
                 );
               })}
