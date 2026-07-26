@@ -29,6 +29,7 @@ import { OcrModule } from '../ocr/ocr.module';
 import { OcrQueueModule } from '../ocr-queue/ocr-queue.module';
 import { VisionAnalysisModule } from '../vision-analysis/vision-analysis.module';
 import { ProductMatchModule } from '../product-match/product-match.module';
+import { PricingModule } from '../pricing/pricing.module';
 
 @Module({
   imports: [
@@ -55,6 +56,7 @@ import { ProductMatchModule } from '../product-match/product-match.module';
     OcrQueueModule,
     VisionAnalysisModule,
     ProductMatchModule,
+    PricingModule,
   ],
   controllers: [WaWebhookController, WaConnectRequestController],
   providers: [WaWebhookService, DraftOrderHandler, WaConnectRequestService, SmartBotService],
