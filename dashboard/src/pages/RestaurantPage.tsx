@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { CardHeader, EmptyState, Field, Spinner } from '../components/ui';
+import { CardHeader, EmptyState, Field, FieldWithInfo, Spinner } from '../components/ui';
 import type { Theme } from '../components/ui';
 import { API_BASE, useApi } from '../hooks/useApi';
 import { useLanguage } from '../i18n';
@@ -40,6 +40,16 @@ interface HoursRow { day: number; open: string; close: string; closed: boolean }
 
 const CATEGORY_SUGGESTIONS = ['Burger', 'Momo', 'Shawarma', 'Meatbox', 'Pizza', 'Rice', 'Sides', 'Drinks', 'Dessert', 'Combo'];
 const UNIT_OPTIONS = ['pcs', 'gm', 'kg', 'ml', 'liter'];
+
+function ingredientHelp(copy: (bn: string, en: string) => string) {
+  return {
+    name: copy('যা কিছু রান্না/প্যাকেজিং-এ লাগে — যেমন: Small Bun, Chicken (gm), Box, Carry Bag', 'Anything used in cooking or packaging — e.g. Small Bun, Chicken (gm), Box, Carry Bag'),
+    unit: copy('কোন এককে হিসাব রাখবেন — gm/kg (ওজন), pcs (সংখ্যা), ml/liter (তরল)', 'The unit you track stock in — gm/kg (weight), pcs (count), ml/liter (liquid)'),
+    stockQty: copy('এখন হাতে কত আছে', 'How much you currently have in stock'),
+    minStock: copy('এর নিচে নামলে "কম স্টক" সতর্কতা দেখাবে', 'Shows a "low stock" warning once stock drops to or below this'),
+    costPerUnit: copy('প্রতি ইউনিটের খরচ — দিলে recipe থেকে dish-এর cost ও লাভ হিসাব করা যাবে', 'Cost per unit — enables per-dish cost/profit calculation from the recipe'),
+  };
+}
 const DAY_NAMES_BN = ['রবি', 'সোম', 'মঙ্গল', 'বুধ', 'বৃহস্পতি', 'শুক্র', 'শনি'];
 const DAY_NAMES_EN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -565,6 +575,69 @@ function RecipeModal({ th, pageId, product, ingredients, onClose, onToast }: {
   );
 }
 
+// ── Ingredient edit modal ────────────────────────────────────────────────────
+function IngredientEditModal({ th, pageId, ingredient, onClose, onToast, onSaved }: {
+  th: Theme; pageId: number; ingredient: Ingredient;
+  onClose: () => void; onToast: (m: string, t?: any) => void; onSaved: () => void;
+}) {
+  const { copy } = useLanguage();
+  const { request } = useApi();
+  const RBASE = `${API_BASE}/restaurant/${pageId}`;
+  const help = ingredientHelp(copy);
+  const [form, setForm] = useState({
+    name: ingredient.name, unit: ingredient.unit,
+    minStock: ingredient.minStock, costPerUnit: ingredient.costPerUnit,
+  });
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    if (!form.name.trim()) return onToast(copy('নাম দিন', 'Name required'), 'error');
+    setSaving(true);
+    try {
+      await request(`${RBASE}/ingredients/${ingredient.id}`, { method: 'PATCH', body: JSON.stringify(form) });
+      onToast(copy('✅ সেভ হয়েছে', '✅ Saved'), 'success');
+      onSaved();
+      onClose();
+    } catch (e: any) { onToast(e.message || 'Error', 'error'); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <div style={{ ...th.card, width: '100%', maxWidth: 440, maxHeight: '90vh', overflowY: 'auto', border: `1.5px solid ${th.border}` }}>
+        <CardHeader th={th} title={`✏️ ${copy('Ingredient Edit করুন', 'Edit Ingredient')}`}
+          sub={copy('স্টক পরিমাণ বদলাতে list-এর ± বাটন ব্যবহার করুন', 'To change the stock amount, use the ± buttons on the ingredient row')} />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <FieldWithInfo th={th} label={copy('নাম', 'Name')} helpText={help.name}>
+            <input style={{ ...th.input, padding: '8px 10px' }} value={form.name}
+              onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+          </FieldWithInfo>
+          <FieldWithInfo th={th} label={copy('একক', 'Unit')} helpText={help.unit}>
+            <select style={{ ...th.input, padding: '8px 10px' }} value={form.unit}
+              onChange={e => setForm(f => ({ ...f, unit: e.target.value }))}>
+              {UNIT_OPTIONS.map(u => <option key={u} value={u}>{u}</option>)}
+            </select>
+          </FieldWithInfo>
+          <FieldWithInfo th={th} label={copy('কম স্টক সীমা', 'Low-stock threshold')} helpText={help.minStock}>
+            <input style={{ ...th.input, padding: '8px 10px' }} type="number" value={form.minStock || ''}
+              onChange={e => setForm(f => ({ ...f, minStock: Number(e.target.value) }))} />
+          </FieldWithInfo>
+          <FieldWithInfo th={th} label={copy('প্রতি ইউনিট খরচ', 'Cost per unit')} helpText={help.costPerUnit}>
+            <input style={{ ...th.input, padding: '8px 10px' }} type="number" value={form.costPerUnit || ''}
+              onChange={e => setForm(f => ({ ...f, costPerUnit: Number(e.target.value) }))} />
+          </FieldWithInfo>
+          <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+            <button style={th.btnPrimary} onClick={save} disabled={saving}>
+              {saving ? <Spinner size={13} /> : copy('✓ সেভ করুন', '✓ Save')}
+            </button>
+            <button style={th.btnGhost} onClick={onClose}>{copy('Cancel', 'Cancel')}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 export function RestaurantPage({ th, pageId, onToast }: {
   th: Theme; pageId: number; onToast: (m: string, t?: any) => void;
@@ -573,6 +646,7 @@ export function RestaurantPage({ th, pageId, onToast }: {
   const { request } = useApi();
   const BASE = `${API_BASE}/client-dashboard/${pageId}`;
   const RBASE = `${API_BASE}/restaurant/${pageId}`;
+  const ingHelp = ingredientHelp(copy);
 
   const [tab, setTab] = useState<'MENU' | 'INVENTORY' | 'DELIVERY' | 'ORDERS'>('MENU');
   const [loading, setLoading] = useState(true);
@@ -590,10 +664,12 @@ export function RestaurantPage({ th, pageId, onToast }: {
 
   // inventory
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
-  const [newIng, setNewIng] = useState({ name: '', unit: 'pcs', stockQty: 0, minStock: 0 });
+  const [newIng, setNewIng] = useState({ name: '', unit: 'pcs', stockQty: 0, minStock: 0, costPerUnit: 0 });
+  const [editingIng, setEditingIng] = useState<Ingredient | null>(null);
   const [packaging, setPackaging] = useState<{ ingredientId: number; qty: number }[]>([]);
   const [packSaving, setPackSaving] = useState(false);
   const [invRecipeCode, setInvRecipeCode] = useState('');
+  const [showInvGuide, setShowInvGuide] = useState(() => localStorage.getItem(`chatcat_inv_guide_${pageId}`) !== '0');
 
   // menu photos (sent to customers in Messenger)
   const [menuImages, setMenuImages] = useState<string[]>([]);
@@ -816,6 +892,7 @@ export function RestaurantPage({ th, pageId, onToast }: {
       {showAdd && <FoodFormModal th={th} pageId={pageId} product={null} categories={[...new Set([...categories, ...catCounts.map(c => c[0])])]} cur={cur} onClose={() => setShowAdd(false)} onSaved={reloadProducts} onToast={onToast} />}
       {showScan && <MenuScanModal th={th} pageId={pageId} cur={cur} onClose={() => setShowScan(false)} onDone={reloadProducts} onToast={onToast} />}
       {recipeFor && <RecipeModal th={th} pageId={pageId} product={recipeFor} ingredients={ingredients} onClose={() => setRecipeFor(null)} onToast={onToast} />}
+      {editingIng && <IngredientEditModal th={th} pageId={pageId} ingredient={editingIng} onClose={() => setEditingIng(null)} onToast={onToast} onSaved={reloadIngredients} />}
 
       <div>
         <h1 style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.04em', margin: 0 }}>🍕 Restaurant</h1>
@@ -925,21 +1002,55 @@ export function RestaurantPage({ th, pageId, onToast }: {
           <div style={{ ...th.card }}>
             <CardHeader th={th} title={copy('🥕 Ingredients — কাঁচামাল ও প্যাকেজিং', '🥕 Ingredients — raw materials & packaging')}
               sub={copy('Bun, chicken (gm), sauce, box, spoon, carry bag... order confirm হলে recipe অনুযায়ী auto বাদ যাবে', 'Bun, chicken (gm), sauces, box, spoon, carry bag... auto-deducted per recipe on confirm')} />
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 100px 100px auto', gap: 6, marginBottom: 12, alignItems: 'center' }}>
-              <input style={{ ...th.input, padding: '8px 10px' }} placeholder={copy('নাম (যেমন: Small Bun)', 'Name (e.g. Small Bun)')} value={newIng.name}
-                onChange={e => setNewIng(f => ({ ...f, name: e.target.value }))} />
-              <select style={{ ...th.input, padding: '8px 10px' }} value={newIng.unit} onChange={e => setNewIng(f => ({ ...f, unit: e.target.value }))}>
-                {UNIT_OPTIONS.map(u => <option key={u} value={u}>{u}</option>)}
-              </select>
-              <input style={{ ...th.input, padding: '8px 10px' }} type="number" placeholder="Stock" value={newIng.stockQty || ''}
-                onChange={e => setNewIng(f => ({ ...f, stockQty: Number(e.target.value) }))} />
-              <input style={{ ...th.input, padding: '8px 10px' }} type="number" placeholder="Min" title={copy('এর নিচে নামলে warning', 'Warn below this')} value={newIng.minStock || ''}
-                onChange={e => setNewIng(f => ({ ...f, minStock: Number(e.target.value) }))} />
+            {showInvGuide ? (
+              <div style={{ ...th.alertInfo, borderRadius: 10, padding: '10px 12px', marginBottom: 14, lineHeight: 1.7 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+                  <strong style={{ fontSize: 12.5 }}>{copy('💡 কীভাবে কাজ করে', '💡 How this works')}</strong>
+                  <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', fontSize: 11.5, fontFamily: 'inherit' }}
+                    onClick={() => { setShowInvGuide(false); localStorage.setItem(`chatcat_inv_guide_${pageId}`, '0'); }}>
+                    {copy('বন্ধ করুন ✕', 'Dismiss ✕')}
+                  </button>
+                </div>
+                <ul style={{ margin: '6px 0 0', paddingLeft: 18, fontSize: 12 }}>
+                  <li>{copy('Ingredient মানে কাঁচামাল/প্যাকেজিং — bun, chicken, box। নিচে যোগ করুন।', 'An ingredient is a raw material or packaging item — bun, chicken, box. Add it below.')}</li>
+                  <li>{copy('তারপর "Recipe" অংশে বলে দিন কোন খাবারে কোন ingredient কতটুকু লাগে।', 'Then in the Recipe section, tell it which ingredients (and how much) each dish uses.')}</li>
+                  <li>{copy('Order confirm হলে recipe অনুযায়ী stock auto বাদ যাবে — নিজে হিসাব করতে হবে না।', 'When an order is confirmed, stock is auto-deducted per the recipe — no manual tracking needed.')}</li>
+                  <li>{copy('"⚠️ LOW" মানে stock আপনার দেওয়া Min-এর নিচে/সমান নেমে গেছে — restock করার সময় হয়েছে।', '"LOW" means stock has dropped to or below the Min you set — time to restock.')}</li>
+                </ul>
+              </div>
+            ) : (
+              <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: th.muted, fontSize: 11.5, padding: 0, marginBottom: 10, fontFamily: 'inherit' }}
+                onClick={() => { setShowInvGuide(true); localStorage.setItem(`chatcat_inv_guide_${pageId}`, '1'); }}>
+                {copy('❔ গাইড দেখুন', '❔ Show guide')}
+              </button>
+            )}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 100px 100px 110px auto', gap: 6, marginBottom: 12, alignItems: 'end' }}>
+              <FieldWithInfo th={th} label={copy('নাম', 'Name')} helpText={ingHelp.name}>
+                <input style={{ ...th.input, padding: '8px 10px' }} placeholder={copy('যেমন: Small Bun', 'e.g. Small Bun')} value={newIng.name}
+                  onChange={e => setNewIng(f => ({ ...f, name: e.target.value }))} />
+              </FieldWithInfo>
+              <FieldWithInfo th={th} label={copy('একক', 'Unit')} helpText={ingHelp.unit}>
+                <select style={{ ...th.input, padding: '8px 10px' }} value={newIng.unit} onChange={e => setNewIng(f => ({ ...f, unit: e.target.value }))}>
+                  {UNIT_OPTIONS.map(u => <option key={u} value={u}>{u}</option>)}
+                </select>
+              </FieldWithInfo>
+              <FieldWithInfo th={th} label={copy('স্টক', 'Stock')} helpText={ingHelp.stockQty}>
+                <input style={{ ...th.input, padding: '8px 10px' }} type="number" placeholder="Stock" value={newIng.stockQty || ''}
+                  onChange={e => setNewIng(f => ({ ...f, stockQty: Number(e.target.value) }))} />
+              </FieldWithInfo>
+              <FieldWithInfo th={th} label={copy('Min', 'Min')} helpText={ingHelp.minStock}>
+                <input style={{ ...th.input, padding: '8px 10px' }} type="number" placeholder="Min" value={newIng.minStock || ''}
+                  onChange={e => setNewIng(f => ({ ...f, minStock: Number(e.target.value) }))} />
+              </FieldWithInfo>
+              <FieldWithInfo th={th} label={copy('খরচ/একক', 'Cost/unit')} helpText={ingHelp.costPerUnit}>
+                <input style={{ ...th.input, padding: '8px 10px' }} type="number" placeholder="Cost" value={newIng.costPerUnit || ''}
+                  onChange={e => setNewIng(f => ({ ...f, costPerUnit: Number(e.target.value) }))} />
+              </FieldWithInfo>
               <button style={{ ...th.btnPrimary, fontSize: 12.5, whiteSpace: 'nowrap' }} onClick={async () => {
                 if (!newIng.name.trim()) return onToast(copy('নাম দিন', 'Name required'), 'error');
                 try {
                   await request(`${RBASE}/ingredients`, { method: 'POST', body: JSON.stringify(newIng) });
-                  setNewIng({ name: '', unit: 'pcs', stockQty: 0, minStock: 0 });
+                  setNewIng({ name: '', unit: 'pcs', stockQty: 0, minStock: 0, costPerUnit: 0 });
                   reloadIngredients();
                 } catch (e: any) { onToast(e.message, 'error'); }
               }}>+ {copy('যোগ করুন', 'Add')}</button>
@@ -963,11 +1074,15 @@ export function RestaurantPage({ th, pageId, onToast }: {
                         catch (e: any) { onToast(e.message, 'error'); }
                       }}>{d > 0 ? `+${d}` : d}</button>
                     ))}
-                    <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626', fontSize: 15 }} title="Delete" onClick={async () => {
-                      if (!window.confirm(copy(`"${ing.name}" মুছে ফেলবেন? এর recipe row-গুলোও মুছে যাবে।`, `Delete "${ing.name}"? Its recipe rows go too.`))) return;
+                    <button style={{ ...th.btnSmGhost, fontSize: 11.5 }} title={copy('Edit করুন', 'Edit')} onClick={() => setEditingIng(ing)}>✏️ {copy('Edit', 'Edit')}</button>
+                    <button style={{ ...th.btnSmDanger, fontSize: 11.5 }} title={copy('মুছে ফেলুন', 'Delete')} onClick={async () => {
+                      if (!window.confirm(copy(
+                        `"${ing.name}" মুছে ফেলবেন? এই ingredient যেসব recipe-তে ব্যবহার হচ্ছে, সেখান থেকেও এটি বাদ যাবে (recipe-টা মুছবে না, শুধু এই ingredient-এর লাইনটা)।`,
+                        `Delete "${ing.name}"? It will also be removed from any recipes that use it (the recipe itself stays, just this ingredient's line is dropped).`,
+                      ))) return;
                       try { await request(`${RBASE}/ingredients/${ing.id}`, { method: 'DELETE' }); reloadIngredients(); }
                       catch (e: any) { onToast(e.message, 'error'); }
-                    }}>🗑</button>
+                    }}>🗑 {copy('মুছুন', 'Delete')}</button>
                   </div>
                 ))}
               </div>
