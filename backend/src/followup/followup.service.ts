@@ -17,6 +17,9 @@ export interface FollowUpSettings {
   abandonedCartEnabled: boolean;
   abandonedCartDelay: number;
   abandonedCartMsg: string;
+  reviewRequestEnabled: boolean;
+  reviewRequestDelay: number;
+  reviewRequestMsg: string;
 }
 
 @Injectable()
@@ -151,6 +154,10 @@ export class FollowUpService {
       abandonedCartDelay: 2,
       abandonedCartMsg:
         'আপনি product দেখছিলেন — order করতে চাইলে code টা পাঠান 💖',
+      reviewRequestEnabled: false,
+      reviewRequestDelay: 4,
+      reviewRequestMsg:
+        'আপনার Order #{{orderId}} কেমন লাগলো? একটা review দিন 💖 {{reviewLink}}',
     };
     try {
       const parsed = JSON.parse(raw || '{}');
@@ -172,6 +179,12 @@ export class FollowUpService {
           Number(parsed.abandonedCartDelay) || defaults.abandonedCartDelay,
         abandonedCartMsg: String(
           parsed.abandonedCartMsg || defaults.abandonedCartMsg,
+        ),
+        reviewRequestEnabled: Boolean(parsed.reviewRequestEnabled),
+        reviewRequestDelay:
+          Number(parsed.reviewRequestDelay) || defaults.reviewRequestDelay,
+        reviewRequestMsg: String(
+          parsed.reviewRequestMsg || defaults.reviewRequestMsg,
         ),
       };
     } catch {

@@ -11,6 +11,7 @@ import { ConversationContextModule } from '../conversation-context/conversation-
 import { AuthModule } from '../auth/auth.module';
 import { BroadcastModule } from '../broadcast/broadcast.module';
 import { TelegramModule } from '../telegram/telegram.module';
+import { FollowUpModule } from '../followup/followup.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { TelegramModule } from '../telegram/telegram.module';
     AuthModule,
     BroadcastModule,
     TelegramModule,
+    FollowUpModule,
   ],
   controllers: [OrdersController],
   providers: [

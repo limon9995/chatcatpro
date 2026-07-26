@@ -23,6 +23,7 @@ import { OrdersService } from '../orders/orders.service';
 import { PaymentVerifyService } from '../payment-verify/payment-verify.service';
 import { SmsGatewayService } from '../sms-gateway/sms-gateway.service';
 import { TelegramNotificationService } from '../telegram/telegram-notification.service';
+import { ReviewsService } from '../reviews/reviews.service';
 import {
   haversineKm,
   isRestaurantReady,
@@ -157,6 +158,7 @@ export class CatalogController {
     private readonly paymentVerify: PaymentVerifyService,
     private readonly smsGatewayService: SmsGatewayService,
     private readonly telegram: TelegramNotificationService,
+    private readonly reviews: ReviewsService,
   ) {}
 
   private normalizeCodeList(raw?: string): string[] {
@@ -268,6 +270,10 @@ export class CatalogController {
     const productWithReferenceImages =
       await this.productsService.attachReferenceImages(page.id, product);
 
+    const reviewSummary = await this.reviews
+      .listForProduct(page.id, product.code)
+      .catch(() => ({ avgRating: 0, count: 0, reviews: [] }));
+
     // V21: Increment product view counter — fire-and-forget
     void this.prisma.product
       .update({
@@ -309,6 +315,7 @@ export class CatalogController {
       this.buildProductHtml(pageInfo, productWithReferenceImages, {
         selectionMode: select === '1',
         shortlistCodes: this.normalizeCodeList(codes),
+        reviewSummary,
       }),
     );
   }
@@ -989,7 +996,11 @@ export class CatalogController {
   private buildProductHtml(
     page: any,
     p: any,
-    opts?: { selectionMode?: boolean; shortlistCodes?: string[] },
+    opts?: {
+      selectionMode?: boolean;
+      shortlistCodes?: string[];
+      reviewSummary?: { avgRating: number; count: number; reviews: any[] };
+    },
   ): string {
     const primary = esc(page.primaryColor);
     const currency = esc(page.currency);
@@ -1007,6 +1018,32 @@ export class CatalogController {
     const catalogHref = shortlistCodes.length
       ? `/catalog/${esc(page.id)}${shortlistQuery}`
       : `/catalog/${esc(page.id)}`;
+
+    const reviewSummary = opts?.reviewSummary || { avgRating: 0, count: 0, reviews: [] };
+    const stars = (n: number) =>
+      '★'.repeat(Math.round(n)) + '☆'.repeat(5 - Math.round(n));
+    const reviewsHtml = reviewSummary.count
+      ? `<div class="desc-lbl">রিভিউ</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+          <span style="color:#f59e0b;font-size:16px;letter-spacing:1px;">${stars(reviewSummary.avgRating)}</span>
+          <span style="font-size:12.5px;color:#6b7280;">${reviewSummary.avgRating} (${reviewSummary.count}টা রিভিউ)</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:8px;">
+          ${reviewSummary.reviews
+            .slice(0, 10)
+            .map(
+              (r: any) => `<div style="border:1px solid #e5e7eb;border-radius:9px;padding:8px 10px;">
+                <div style="display:flex;justify-content:space-between;gap:8px;">
+                  <span style="font-weight:700;font-size:12.5px;">${esc(r.customerName || 'Customer')}</span>
+                  <span style="color:#f59e0b;font-size:12px;">${stars(r.rating)}</span>
+                </div>
+                ${r.comment ? `<div style="font-size:12.5px;color:#374151;margin-top:3px;">${esc(r.comment)}</div>` : ''}
+              </div>`,
+            )
+            .join('')}
+        </div>
+        <div class="divider"></div>`
+      : '';
 
     const videoType = detectVideoType(p.videoUrl || '');
     const ytId = videoType === 'youtube' ? extractYouTubeId(p.videoUrl) : null;
@@ -1449,6 +1486,8 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:var(--b
         <div class="divider"></div>`
             : '<div class="divider"></div>'
         }
+
+        ${reviewsHtml}
 
         <div class="cta-stack">
           ${

@@ -50,6 +50,7 @@ export class CourierAccountingService {
     });
 
     void this.notification.notifyDelivered(pageId, orderId);
+    void this.notification.scheduleReviewFollowUp(pageId, orderId);
   }
 
   /**

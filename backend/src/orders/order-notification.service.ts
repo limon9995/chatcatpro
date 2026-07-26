@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { MessengerService } from '../messenger/messenger.service';
 import { BotKnowledgeService } from '../bot-knowledge/bot-knowledge.service';
+import { FollowUpService } from '../followup/followup.service';
 
 /**
  * Sends automated Messenger messages to customers when key order events happen.
@@ -21,6 +22,7 @@ export class OrderNotificationService {
     private readonly prisma: PrismaService,
     private readonly messenger: MessengerService,
     private readonly knowledge: BotKnowledgeService,
+    private readonly followUp: FollowUpService,
   ) {}
 
   /** Send order-confirmed message to customer. */
@@ -68,6 +70,34 @@ export class OrderNotificationService {
   /** Send delivery-done message to customer. */
   async notifyDelivered(pageId: number, orderId: number): Promise<void> {
     await this.send(pageId, orderId, 'order_delivered', {});
+  }
+
+  /**
+   * Schedule a delayed "please review your order" follow-up, gated by the
+   * merchant's reviewRequestEnabled toggle (FollowUpPage settings). Reuses
+   * Order.editToken to build the review link — no separate auth token needed.
+   * Only fires for orders reachable via Messenger/WhatsApp/Instagram (needs
+   * a customerPsid), same limitation as the other automated follow-ups.
+   */
+  async scheduleReviewFollowUp(pageId: number, orderId: number): Promise<void> {
+    try {
+      const order = await this.prisma.order.findUnique({ where: { id: orderId } });
+      if (!order || !order.customerPsid || order.pageIdRef !== pageId) return;
+      const settings = await this.followUp.getSettings(pageId);
+      if (!settings.reviewRequestEnabled) return;
+      const reviewLink = `https://chatcat.pro/review?token=${order.editToken}`;
+      await this.followUp.schedule(pageId, {
+        psid: order.customerPsid,
+        orderId,
+        triggerType: 'review_request',
+        message: settings.reviewRequestMsg
+          .replace('{{orderId}}', String(orderId))
+          .replace('{{reviewLink}}', reviewLink),
+        delayHours: settings.reviewRequestDelay,
+      });
+    } catch (err) {
+      this.logger.warn(`[OrderNotify] Failed to schedule review request for order #${orderId}: ${err}`);
+    }
   }
 
   /** Send delivery-cancelled message to customer. */

@@ -49,6 +49,7 @@ import { UniversityModule } from './university/university.module';
 import { TelegramModule } from './telegram/telegram.module';
 import { PublicOrderModule } from './public-order/public-order.module';
 import { RestaurantModule } from './restaurant/restaurant.module';
+import { ReviewsModule } from './reviews/reviews.module';
 
 @Module({
   imports: [
@@ -119,6 +120,7 @@ import { RestaurantModule } from './restaurant/restaurant.module';
     TelegramModule,
     PublicOrderModule,
     RestaurantModule,
+    ReviewsModule,
   ],
   controllers: [AppController],
   providers: [

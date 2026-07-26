@@ -295,6 +295,9 @@ model Page {
   broadcasts       Broadcast[]
   courierShipments CourierShipment[]
 
+  // V27: Product reviews
+  reviews Review[]
+
   // Wallet
   walletTransactions      WalletTransaction[]
   walletRechargeRequests  WalletRechargeRequest[]
@@ -401,6 +404,7 @@ model Product {
 
   orderItems    OrderItem[]
   recipeItems   RecipeItem[]
+  reviews       Review[]
   dualWearingPages Page[] @relation("DualWearing")
   dualHoldingPages Page[] @relation("DualHolding")
   liveSessionsWorn LiveSession[] @relation("SessionWorn")
@@ -526,9 +530,33 @@ model Order {
   courierShipment CourierShipment?
   followUps       FollowUp[]
 
+  // V27: Product reviews
+  reviews Review[]
+
   @@index([pageIdRef])
   @@index([customerPsid])
   @@index([status])
+}
+
+// V27: One review per (order, product) — only customers with a real order for
+// that product can submit one. Link auth reuses Order.editToken, not phone,
+// to avoid spoofing. Auto-visible on submit (no approval queue) since only
+// verified purchasers can create one; merchant can still delete.
+model Review {
+  id           Int      @id @default(autoincrement())
+  pageId       Int
+  page         Page     @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  productId    Int
+  product      Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  orderId      Int
+  order        Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  customerName String?
+  rating       Int
+  comment      String?
+  createdAt    DateTime @default(now())
+
+  @@unique([orderId, productId])
+  @@index([pageId, productId])
 }
 
 model OrderItem {

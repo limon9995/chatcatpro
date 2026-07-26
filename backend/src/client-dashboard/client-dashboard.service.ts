@@ -372,6 +372,7 @@ export class ClientDashboardService {
     if (a === 'deliver') {
       await this.ordersService.markDelivered(orderId, pageId);
       void this.orderNotification.notifyDelivered(pageId, orderId);
+      void this.orderNotification.scheduleReviewFollowUp(pageId, orderId);
       // Also sync courier shipment status if exists
       const shipment = await this.prisma.courierShipment.findUnique({
         where: { orderId },

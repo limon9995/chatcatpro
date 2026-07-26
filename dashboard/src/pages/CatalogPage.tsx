@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { CardHeader, Spinner } from '../components/ui';
+import { CardHeader, EmptyState, Spinner } from '../components/ui';
 import type { Theme } from '../components/ui';
 import { API_BASE } from '../hooks/useApi';
 import { useLanguage } from '../i18n';
@@ -24,6 +24,10 @@ export function CatalogPage({ th, pageId, onToast }: {
   const [ownUrlInput, setOwnUrlInput]     = useState('');
   const [savingOwnUrl, setSavingOwnUrl]   = useState(false);
   const [editingOwnUrl, setEditingOwnUrl] = useState(false);
+
+  // Reviews
+  const [reviews, setReviews]             = useState<any[]>([]);
+  const [reviewsLoading, setReviewsLoading] = useState(false);
 
   const backendBase = API_BASE.startsWith('http') ? API_BASE : `${window.location.protocol}//${window.location.hostname}:3000`;
   const slug        = catalogData?.page?.catalogSlug;
@@ -50,6 +54,32 @@ export function CatalogPage({ th, pageId, onToast }: {
   }, [pageId]);
 
   useEffect(() => { loadPreview(); }, [loadPreview]);
+
+  const loadReviews = useCallback(async () => {
+    setReviewsLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/client-dashboard/${pageId}/reviews`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('dfbot_token')}` },
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setReviews(await res.json());
+    } catch (e: any) { onToast(e.message, 'error'); }
+    finally { setReviewsLoading(false); }
+  }, [pageId]);
+
+  useEffect(() => { loadReviews(); }, [loadReviews]);
+
+  const deleteReview = async (id: number) => {
+    if (!window.confirm(copy('এই review মুছে ফেলবেন?', 'Delete this review?'))) return;
+    try {
+      const res = await fetch(`${API_BASE}/client-dashboard/${pageId}/reviews/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${localStorage.getItem('dfbot_token')}` },
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setReviews(rs => rs.filter(r => r.id !== id));
+    } catch (e: any) { onToast(e.message, 'error'); }
+  };
 
   const copyUrl = () => {
     navigator.clipboard.writeText(CATALOG_URL);
@@ -622,6 +652,35 @@ export function CatalogPage({ th, pageId, onToast }: {
               )}
             </div>
           )}
+
+          <div style={th.card}>
+            <CardHeader th={th}
+              title={copy('⭐ Reviews', '⭐ Reviews')}
+              sub={copy('শুধু যারা order করেছে তারাই review দিতে পারে — delivery হওয়ার পর link পাঠানো হয় (Follow-up settings থেকে বন্ধ/চালু করা যায়)।', 'Only customers who ordered can review — a link is sent after delivery (toggle in Follow-up settings).')}
+              action={<button style={th.btnGhost} onClick={loadReviews}>🔄</button>}
+            />
+            {reviewsLoading ? (
+              <div style={{ display: 'flex', justifyContent: 'center', padding: 30 }}><Spinner size={18} color={th.accent} /></div>
+            ) : reviews.length === 0 ? (
+              <EmptyState icon="⭐" title={copy('এখনো কোনো review নেই', 'No reviews yet')} sub={copy('Order delivered হলে customer-কে review link পাঠানো হবে', "Customers get a review link once their order is delivered")} />
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {reviews.map((r: any) => (
+                  <div key={r.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 12px', borderRadius: 9, border: `1px solid ${th.border}` }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <span style={{ fontWeight: 700, fontSize: 13 }}>{r.product?.name || r.product?.code}</span>
+                        <span style={{ color: '#f59e0b', fontSize: 12 }}>{'★'.repeat(r.rating)}{'☆'.repeat(5 - r.rating)}</span>
+                        <span style={{ fontSize: 11, color: th.muted }}>{r.customerName || copy('Customer', 'Customer')}</span>
+                      </div>
+                      {r.comment && <div style={{ fontSize: 12.5, color: th.muted, marginTop: 3 }}>{r.comment}</div>}
+                    </div>
+                    <button style={{ ...th.btnSmDanger, fontSize: 11.5, flexShrink: 0 }} onClick={() => deleteReview(r.id)}>🗑 {copy('মুছুন', 'Delete')}</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </>
       )}
     </div>

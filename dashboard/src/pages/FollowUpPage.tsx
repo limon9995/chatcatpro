@@ -183,6 +183,7 @@ export function FollowUpPage({ th, pageId, onToast, preset }: {
               { key: 'orderReceived',  label: '📦 Order Received Follow-up',  help: 'Order নেওয়ার কিছুক্ষণ পর customer কে জিজ্ঞেস করা।' },
               { key: 'orderDelivered', label: '✅ Order Delivered Follow-up',  help: 'Delivery হওয়ার পর customer কে feedback নেওয়া।' },
               { key: 'abandonedCart',  label: '🛒 Abandoned Cart Reminder',    help: 'Product দেখার পর order না করলে remind করা।' },
+              { key: 'reviewRequest',  label: '⭐ Review চাওয়ার Follow-up',    help: 'Delivery হওয়ার পর customer কে review link পাঠানো হবে — বন্ধ/চালু করতে পারবেন। {{reviewLink}} variable ব্যবহার করুন।' },
             ].map(({ key, label, help }) => (
               <div key={key} style={{ ...th.card2, borderRadius: 12 }}>
                 <Toggle th={th} label={label} sub={help}
