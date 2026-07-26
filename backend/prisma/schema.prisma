@@ -163,6 +163,19 @@ model Page {
   // (Asia/Dhaka time); drives the open/closed badge on the catalog page
   businessHoursJson     String?
 
+  // V27: Loyalty ("Lucky Customer") — order N times (by phone number, no
+  // account system) to auto-unlock a % discount on every order after.
+  loyaltyEnabled          Boolean @default(false)
+  loyaltyThresholdOrders  Int?
+  loyaltyDiscountPercent  Float?
+
+  // V27: Happy Hour — day/time-window % discount, same JSON shape as
+  // businessHoursJson ([{day, open, close, closed}], Asia/Dhaka).
+  happyHourEnabled         Boolean @default(false)
+  happyHourJson            String?
+  happyHourDiscountPercent Float?
+  happyHourLabel           String?
+
   callConfirmModeOn       Boolean @default(false)
   callConfirmModeAllowed  Boolean @default(true)
   callMode                String  @default("MANUAL")
@@ -369,7 +382,8 @@ model Product {
   productViews     Int     @default(0)
 
   // V22: Simple products (no code/OCR/vision needed — mango, honey, etc.)
-  productType   String  @default("CODED")  // "CODED" | "SIMPLE"
+  // V27: "COMBO" — a bundle of other products at its own set price; see comboItems.
+  productType   String  @default("CODED")  // "CODED" | "SIMPLE" | "COMBO"
   unit          String?                     // "kg", "liter", "piece", "dozen" — for SIMPLE
   orderEnabled  Boolean @default(true)      // false = info-only, no order flow
 
@@ -405,6 +419,11 @@ model Product {
   orderItems    OrderItem[]
   recipeItems   RecipeItem[]
   reviews       Review[]
+  // V27: Combo — this product IS a combo, made of comboItems (each pointing
+  // at a component product). componentOfCombos = the reverse side, used to
+  // guard "can't delete a product that's part of a combo" if ever needed.
+  comboItems       ComboItem[] @relation("ComboParent")
+  componentOfCombos ComboItem[] @relation("ComboComponent")
   dualWearingPages Page[] @relation("DualWearing")
   dualHoldingPages Page[] @relation("DualHolding")
   liveSessionsWorn LiveSession[] @relation("SessionWorn")
@@ -533,6 +552,12 @@ model Order {
   // V27: Product reviews
   reviews Review[]
 
+  // V27: discounts applied at order-creation time (PricingService) — stored
+  // so the charged total is auditable and accounting can subtract them from
+  // revenue the same way ADMIN_ADJUSTMENT wallet transactions are excluded.
+  loyaltyDiscountAmount   Float @default(0)
+  happyHourDiscountAmount Float @default(0)
+
   @@index([pageIdRef])
   @@index([customerPsid])
   @@index([status])
@@ -557,6 +582,22 @@ model Review {
 
   @@unique([orderId, productId])
   @@index([pageId, productId])
+}
+
+// V27: One row = "this combo product includes qty of this component product".
+// The combo's own Product.price is the merchant-set bundle price (not
+// auto-summed). Stock deduction expands a combo into these rows and deducts
+// each component's own recipe/ingredients as if ordered individually.
+model ComboItem {
+  id                 Int     @id @default(autoincrement())
+  comboProductId     Int
+  combo              Product @relation("ComboParent", fields: [comboProductId], references: [id], onDelete: Cascade)
+  componentProductId Int
+  component          Product @relation("ComboComponent", fields: [componentProductId], references: [id], onDelete: Cascade)
+  qty                Int     @default(1)
+
+  @@index([comboProductId])
+  @@index([componentProductId])
 }
 
 model OrderItem {

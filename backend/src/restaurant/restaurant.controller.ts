@@ -130,6 +130,42 @@ export class RestaurantController {
     return this.svc.setHours(this.pid(r, p), b?.rows ?? []);
   }
 
+  @Get(':pageId/happy-hour')
+  getHappyHourWindow(@Param('pageId') p: string, @Req() r: any) {
+    return this.svc.getHappyHourWindow(this.pid(r, p));
+  }
+
+  @Put(':pageId/happy-hour')
+  setHappyHourWindow(@Param('pageId') p: string, @Body() b: any, @Req() r: any) {
+    return this.svc.setHappyHourWindow(this.pid(r, p), b?.rows ?? []);
+  }
+
+  // ── Combo offers ────────────────────────────────────────────────────────────
+  @Get(':pageId/combos')
+  listCombos(@Param('pageId') p: string, @Req() r: any) {
+    return this.svc.listCombos(this.pid(r, p));
+  }
+
+  @Post(':pageId/combos')
+  createCombo(@Param('pageId') p: string, @Body() b: any, @Req() r: any) {
+    return this.svc.createCombo(this.pid(r, p), b || {});
+  }
+
+  @Patch(':pageId/combos/:code')
+  updateCombo(
+    @Param('pageId') p: string,
+    @Param('code') code: string,
+    @Body() b: any,
+    @Req() r: any,
+  ) {
+    return this.svc.updateCombo(this.pid(r, p), code, b || {});
+  }
+
+  @Delete(':pageId/combos/:code')
+  deleteCombo(@Param('pageId') p: string, @Param('code') code: string, @Req() r: any) {
+    return this.svc.deleteCombo(this.pid(r, p), code);
+  }
+
   @Post(':pageId/products/bulk')
   bulkCreate(@Param('pageId') p: string, @Body() b: any, @Req() r: any) {
     return this.svc.bulkCreateProducts(this.pid(r, p), b?.dishes ?? []);

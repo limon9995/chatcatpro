@@ -50,6 +50,7 @@ import { TelegramModule } from './telegram/telegram.module';
 import { PublicOrderModule } from './public-order/public-order.module';
 import { RestaurantModule } from './restaurant/restaurant.module';
 import { ReviewsModule } from './reviews/reviews.module';
+import { PricingModule } from './pricing/pricing.module';
 
 @Module({
   imports: [
@@ -121,6 +122,7 @@ import { ReviewsModule } from './reviews/reviews.module';
     PublicOrderModule,
     RestaurantModule,
     ReviewsModule,
+    PricingModule,
   ],
   controllers: [AppController],
   providers: [

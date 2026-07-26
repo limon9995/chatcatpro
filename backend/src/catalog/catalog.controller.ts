@@ -24,6 +24,7 @@ import { PaymentVerifyService } from '../payment-verify/payment-verify.service';
 import { SmsGatewayService } from '../sms-gateway/sms-gateway.service';
 import { TelegramNotificationService } from '../telegram/telegram-notification.service';
 import { ReviewsService } from '../reviews/reviews.service';
+import { PricingService } from '../pricing/pricing.service';
 import {
   haversineKm,
   isRestaurantReady,
@@ -159,6 +160,7 @@ export class CatalogController {
     private readonly smsGatewayService: SmsGatewayService,
     private readonly telegram: TelegramNotificationService,
     private readonly reviews: ReviewsService,
+    private readonly pricing: PricingService,
   ) {}
 
   private normalizeCodeList(raw?: string): string[] {
@@ -273,6 +275,9 @@ export class CatalogController {
     const reviewSummary = await this.reviews
       .listForProduct(page.id, product.code)
       .catch(() => ({ avgRating: 0, count: 0, reviews: [] }));
+    const happyHour = await this.pricing
+      .getHappyHourStatus(page.id)
+      .catch(() => ({ active: false, discountPercent: 0, label: '' }));
 
     // V21: Increment product view counter — fire-and-forget
     void this.prisma.product
@@ -316,6 +321,7 @@ export class CatalogController {
         selectionMode: select === '1',
         shortlistCodes: this.normalizeCodeList(codes),
         reviewSummary,
+        happyHour,
       }),
     );
   }
@@ -1000,6 +1006,7 @@ export class CatalogController {
       selectionMode?: boolean;
       shortlistCodes?: string[];
       reviewSummary?: { avgRating: number; count: number; reviews: any[] };
+      happyHour?: { active: boolean; discountPercent: number; label: string };
     },
   ): string {
     const primary = esc(page.primaryColor);
@@ -1020,6 +1027,7 @@ export class CatalogController {
       : `/catalog/${esc(page.id)}`;
 
     const reviewSummary = opts?.reviewSummary || { avgRating: 0, count: 0, reviews: [] };
+    const happyHour = opts?.happyHour;
     const stars = (n: number) =>
       '★'.repeat(Math.round(n)) + '☆'.repeat(5 - Math.round(n));
     const reviewsHtml = reviewSummary.count
@@ -1400,6 +1408,7 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:var(--b
 <script>document.addEventListener('DOMContentLoaded',function(){var b=document.getElementById('dkBtn');if(b)b.textContent=document.documentElement.dataset.dark==='1'?'☀️':'🌙'});</script>
 
 <div class="wrapper">
+  ${happyHour?.active ? `<div style="background:#f59e0b18;border:1px solid #f59e0b40;color:#b45309;border-radius:10px;padding:10px 14px;margin-bottom:14px;font-weight:700;font-size:13px;text-align:center;">${esc(happyHour.label)}</div>` : ''}
   <div class="product-grid">
 
     <!-- Left: Media -->
@@ -1697,7 +1706,8 @@ ${
           <div style="display:flex;align-items:flex-end"><div style="font-size:13px;color:var(--sub);padding-bottom:12px">${p.trackStock === false ? '' : `max ${p.stockQty}`}</div></div>
         </div>
         <div><div class="wo-lbl">আপনার নাম *</div><input class="wo-inp" id="woName" type="text" placeholder="পুরো নাম"></div>
-        <div><div class="wo-lbl">ফোন নম্বর *</div><input class="wo-inp" id="woPhone" type="tel" placeholder="01XXXXXXXXX"></div>
+        <div><div class="wo-lbl">ফোন নম্বর *</div><input class="wo-inp" id="woPhone" type="tel" placeholder="01XXXXXXXXX" onblur="woCheckLoyalty()"></div>
+        <div id="woLoyaltyBox" style="display:none;font-size:12.5px;padding:8px 10px;border-radius:8px;margin:-6px 0 8px;"></div>
         ${
           page.restaurantMode
             ? `<div class="wo-addr-lbl-row"><div class="wo-lbl" style="margin-bottom:0">ডেলিভারি লোকেশন * (ম্যাপে pin করুন)</div></div>
@@ -2030,6 +2040,20 @@ function woUpdateProgress(n){
   });
 }
 function woSetErr(id,msg){ var el=document.getElementById(id); if(el){ el.textContent=msg; el.style.display=msg?'block':'none'; } }
+async function woCheckLoyalty(){
+  var box=document.getElementById('woLoyaltyBox');
+  var phone=document.getElementById('woPhone').value.trim();
+  if(!box||phone.replace(/\\D/g,'').length<10){ if(box) box.style.display='none'; return; }
+  try {
+    var r=await fetch('/catalog/'+WO_PAGE_ID+'/loyalty-status?phone='+encodeURIComponent(phone));
+    var d=await r.json();
+    if(!d.enabled||!d.message){ box.style.display='none'; return; }
+    box.textContent=d.message;
+    box.style.background=d.isLoyal?'rgba(22,163,74,0.12)':'rgba(245,158,11,0.12)';
+    box.style.color=d.isLoyal?'#16a34a':'#b45309';
+    box.style.display='block';
+  } catch { box.style.display='none'; }
+}
 
 var woAdvData={};
 

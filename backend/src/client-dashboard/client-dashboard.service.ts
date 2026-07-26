@@ -24,6 +24,7 @@ import { OrderNotificationService } from '../orders/order-notification.service';
 import { TelegramService } from '../common/telegram.service';
 import { TelegramNotificationService } from '../telegram/telegram-notification.service';
 import { AdminService } from '../admin/admin.service';
+import { PricingService } from '../pricing/pricing.service';
 import {
   haversineKm,
   isRestaurantReady,
@@ -32,6 +33,7 @@ import {
   MAX_DELIVERY_SLABS,
   parsePriceVariants,
   parseSlabs,
+  parseBusinessHours,
   resolveDeliveryFee,
 } from '../common/restaurant-delivery';
 
@@ -69,6 +71,7 @@ export class ClientDashboardService {
     private readonly telegram: TelegramService,
     private readonly adminService: AdminService,
     private readonly telegramNotif: TelegramNotificationService,
+    private readonly pricing: PricingService,
   ) {}
 
   // ── Summary ────────────────────────────────────────────────────────────────
@@ -295,6 +298,7 @@ export class ClientDashboardService {
 
     // Create order items
     const items: any[] = Array.isArray(body?.items) ? body.items : [];
+    let subtotal = 0;
     for (const item of items) {
       if (!item?.productCode) continue;
       const code = String(item.productCode).toUpperCase();
@@ -322,16 +326,31 @@ export class ClientDashboardService {
           productName = product?.name ? `${product.name} (${chosen.label})` : null;
         }
       }
+      const qty = Number(item.qty) || 1;
+      subtotal += unitPrice * qty;
       await this.prisma.orderItem.create({
         data: {
           orderId: order.id,
           productCode: code,
-          qty: Number(item.qty) || 1,
+          qty,
           unitPrice,
           productName,
           metaJson,
         },
       });
+    }
+
+    if (subtotal > 0) {
+      const discounts = await this.pricing.computeDiscounts(pageId, order.phone, subtotal);
+      if (discounts.loyaltyDiscount || discounts.happyHourDiscount) {
+        await this.prisma.order.update({
+          where: { id: order.id },
+          data: {
+            loyaltyDiscountAmount: discounts.loyaltyDiscount,
+            happyHourDiscountAmount: discounts.happyHourDiscount,
+          },
+        });
+      }
     }
 
     return this.prisma.order.findUnique({
@@ -1454,6 +1473,13 @@ Return ONLY valid JSON (no markdown):
         englishVoiceFileUrl: page.englishVoiceFileUrl ?? '',
         voiceGeneratedAt: page.voiceGeneratedAt ?? null,
       },
+      // V27: Loyalty ("Lucky Customer") + Happy Hour
+      loyaltyEnabled: Boolean(page.loyaltyEnabled),
+      loyaltyThresholdOrders: page.loyaltyThresholdOrders ?? null,
+      loyaltyDiscountPercent: page.loyaltyDiscountPercent ?? null,
+      happyHourEnabled: Boolean(page.happyHourEnabled),
+      happyHourDiscountPercent: page.happyHourDiscountPercent ?? null,
+      happyHourLabel: page.happyHourLabel ?? '',
     };
   }
 
@@ -1521,6 +1547,13 @@ Return ONLY valid JSON (no markdown):
       'businessInfo',
       // Recurring Notification Mode
       'recurringNotifMode',
+      // V27: Loyalty ("Lucky Customer") + Happy Hour
+      'loyaltyEnabled',
+      'loyaltyThresholdOrders',
+      'loyaltyDiscountPercent',
+      'happyHourEnabled',
+      'happyHourDiscountPercent',
+      'happyHourLabel',
     ];
     const pagePatch: any = {};
     for (const k of PAGE_FIELDS) {

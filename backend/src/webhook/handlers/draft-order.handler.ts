@@ -22,6 +22,7 @@ import { TelegramNotificationService } from '../../telegram/telegram-notificatio
 import { OrderOwnerMailerService } from '../../orders/order-owner-mailer.service';
 import { AgentCoreFieldDef } from '../../agents/agent-behavior-config.interface';
 import { isRestaurantReady } from '../../common/restaurant-delivery';
+import { PricingService } from '../../pricing/pricing.service';
 
 // Verbatim defaults — reproduces today's exact name/phone/address prompts.
 // Used whenever an agent type has no AgentBehaviorConfig.coreFields override
@@ -76,6 +77,7 @@ export class DraftOrderHandler {
     private readonly courier: CourierService,
     private readonly telegram: TelegramNotificationService,
     private readonly orderOwnerMailer: OrderOwnerMailerService,
+    private readonly pricing: PricingService,
     @Optional() private readonly paymentVerify?: PaymentVerifyService,
     @Optional() private readonly smsGateway?: SmsGatewayService,
   ) {}
@@ -624,6 +626,11 @@ export class DraftOrderHandler {
             (draft as any).spamResult = r;
           })
           .catch(() => {});
+        // Loyalty ("Lucky Customer") — real-time status shown right after phone capture
+        const loyalty = await this.pricing
+          .getLoyaltyStatus(pageId, ph)
+          .catch(() => null);
+        if (loyalty?.enabled) (draft as any).loyaltyMessage = loyalty.message;
       } else if (step === 'address') {
         if (!this.isAddressLike(workingText))
           return fields.address.retryPrompt;
@@ -645,7 +652,10 @@ export class DraftOrderHandler {
     if (!draft.address) {
       draft.currentStep = 'address';
       await this.ctx.saveDraft(pageId, psid, draft);
-      return `ঠিক আছে 💖 এখন ${fields.address.label} দিন।`;
+      const loyaltyLine = (draft as any).loyaltyMessage
+        ? `\n\n${(draft as any).loyaltyMessage}`
+        : '';
+      return `ঠিক আছে 💖 এখন ${fields.address.label} দিন।${loyaltyLine}`;
     }
 
     // All collected → check if advance payment required
@@ -895,6 +905,13 @@ export class DraftOrderHandler {
       return lead.id;
     }
 
+    // Loyalty/Happy Hour discounts — computed before the transaction so a slow
+    // pricing query can't hold the DB transaction open.
+    const orderSubtotal = draft.items.reduce((s, i) => s + i.unitPrice * i.qty, 0);
+    const discounts = await this.pricing
+      .computeDiscounts(pageId, draft.phone ?? null, orderSubtotal)
+      .catch(() => ({ loyaltyDiscount: 0, happyHourDiscount: 0 }));
+
     // C-3: Create order AND decrement stock atomically
     const order = await this.prisma.$transaction(async (tx) => {
       const created = await tx.order.create({
@@ -921,6 +938,8 @@ export class DraftOrderHandler {
           spamCancelled: spamResult?.cancelled ?? null,
           spamSource: spamResult?.source ?? null,
           spamCheckedAt: spamResult ? new Date() : null,
+          loyaltyDiscountAmount: discounts.loyaltyDiscount,
+          happyHourDiscountAmount: discounts.happyHourDiscount,
           items: {
             create: draft.items.map((i) => ({
               productCode: i.productCode,

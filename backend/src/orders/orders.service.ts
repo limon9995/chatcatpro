@@ -9,6 +9,7 @@ import { OrderNotificationService } from './order-notification.service';
 import { ConversationContextService } from '../conversation-context/conversation-context.service';
 import { BroadcastService } from '../broadcast/broadcast.service';
 import { TelegramNotificationService } from '../telegram/telegram-notification.service';
+import { PricingService } from '../pricing/pricing.service';
 
 export type OrderStatus =
   | 'RECEIVED'
@@ -27,6 +28,7 @@ export class OrdersService {
     private readonly ctx: ConversationContextService,
     private readonly broadcast: BroadcastService,
     private readonly telegram: TelegramNotificationService,
+    private readonly pricing: PricingService,
   ) {}
 
   // ── List / Summary ─────────────────────────────────────────────────────────
@@ -145,7 +147,7 @@ export class OrdersService {
     for (const item of order.items || []) {
       const product = await tx.product.findFirst({
         where: { pageId: order.pageIdRef, code: item.productCode },
-        select: { id: true },
+        select: { id: true, productType: true },
       });
       if (!product) continue;
       let meta: any = null;
@@ -156,23 +158,42 @@ export class OrdersService {
       }
       const variantLabel: string | null = meta?.variantLabel ?? null;
       const pieces = Number(meta?.pieces) > 0 ? Number(meta.pieces) : 1;
-      const rows = await tx.recipeItem.findMany({
-        where: {
-          productId: product.id,
-          OR: [{ variantLabel: null }, { variantLabel }],
-        },
-      });
-      for (const row of rows) {
-        const amount =
-          row.per === 'piece'
-            ? row.qty * pieces * item.qty
-            : row.qty * item.qty;
-        if (!amount) continue;
-        await tx.ingredient.update({
-          where: { id: row.ingredientId },
-          data: { stockQty: { increment: sign * amount } },
+
+      // V27: Combo — expand into its component products and deduct each
+      // component's own recipe as if it were ordered (comboQty × item.qty)
+      // times, instead of looking for a recipe on the combo itself.
+      let recipeSources: { productId: number; multiplier: number }[];
+      if (product.productType === 'COMBO') {
+        const comboItems = await tx.comboItem.findMany({
+          where: { comboProductId: product.id },
         });
-        touched = true;
+        recipeSources = comboItems.map((ci: any) => ({
+          productId: ci.componentProductId,
+          multiplier: ci.qty,
+        }));
+      } else {
+        recipeSources = [{ productId: product.id, multiplier: 1 }];
+      }
+
+      for (const src of recipeSources) {
+        const rows = await tx.recipeItem.findMany({
+          where: {
+            productId: src.productId,
+            OR: [{ variantLabel: null }, { variantLabel }],
+          },
+        });
+        for (const row of rows) {
+          const amount =
+            (row.per === 'piece'
+              ? row.qty * pieces * item.qty
+              : row.qty * item.qty) * src.multiplier;
+          if (!amount) continue;
+          await tx.ingredient.update({
+            where: { id: row.ingredientId },
+            data: { stockQty: { increment: sign * amount } },
+          });
+          touched = true;
+        }
       }
     }
     // Per-ORDER packaging (e.g. 1 carry bag) — once, regardless of items
@@ -573,6 +594,12 @@ export class OrdersService {
     const psid = `WEB-${data.phone.replace(/\D/g, '')}`;
     const paymentStatus =
       data.paymentMode === 'cod' ? 'not_required' : 'pending_proof';
+    const subtotal = data.items.reduce((s, it) => s + it.unitPrice * it.qty, 0);
+    const discounts = await this.pricing.computeDiscounts(
+      data.pageIdRef,
+      data.phone,
+      subtotal,
+    );
     return this.prisma.order.create({
       data: {
         pageIdRef: data.pageIdRef,
@@ -589,6 +616,8 @@ export class OrdersService {
         deliveryLng: data.deliveryLng ?? null,
         deliveryFee: data.deliveryFee ?? null,
         deliveryDistanceKm: data.deliveryDistanceKm ?? null,
+        loyaltyDiscountAmount: discounts.loyaltyDiscount,
+        happyHourDiscountAmount: discounts.happyHourDiscount,
         items: {
           create: data.items.map((it) => ({
             productCode: it.productCode,

@@ -25,6 +25,7 @@ import { UniversityModule } from '../university/university.module';
 import { CourierModule } from '../courier/courier.module';
 import { TelegramModule } from '../telegram/telegram.module';
 import { OrdersModule } from '../orders/orders.module';
+import { PricingModule } from '../pricing/pricing.module';
 import { WebhookController } from './webhook.controller';
 import { WebhookService } from './webhook.service';
 import { SmartBotService } from '../bot/smart-bot.service';
@@ -60,6 +61,7 @@ import { NegotiationHandler } from './handlers/negotiation.handler';
     CourierModule,
     TelegramModule,
     OrdersModule,
+    PricingModule,
   ],
   controllers: [WebhookController],
   providers: [

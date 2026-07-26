@@ -37,7 +37,8 @@ export class OrderNotificationService {
       .join('\n');
     const subtotal = order.items.reduce((s: number, i: any) => s + i.unitPrice * i.qty, 0);
     const advance = (order as any).advanceAmount ?? 0;
-    const dueAmount = Math.max(0, subtotal - advance);
+    const discounts = (order.loyaltyDiscountAmount || 0) + (order.happyHourDiscountAmount || 0);
+    const dueAmount = Math.max(0, subtotal - advance - discounts);
     const editLink = (order as any).editToken
       ? `https://chatcat.pro/order?token=${(order as any).editToken}`
       : null;

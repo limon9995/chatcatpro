@@ -19,6 +19,7 @@ import { OcrModule } from '../ocr/ocr.module';
 import { SpamCheckerModule } from '../spam-checker/spam-checker.module';
 import { AdminModule } from '../admin/admin.module';
 import { TelegramModule } from '../telegram/telegram.module';
+import { PricingModule } from '../pricing/pricing.module';
 import { ClientDashboardService } from './client-dashboard.service';
 import { ClientDashboardController } from './client-dashboard.controller';
 
@@ -44,6 +45,7 @@ import { ClientDashboardController } from './client-dashboard.controller';
     BroadcastModule,
     AdminModule,
     TelegramModule,
+    PricingModule,
   ],
   providers: [ClientDashboardService],
   controllers: [ClientDashboardController],

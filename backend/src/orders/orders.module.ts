@@ -12,6 +12,7 @@ import { AuthModule } from '../auth/auth.module';
 import { BroadcastModule } from '../broadcast/broadcast.module';
 import { TelegramModule } from '../telegram/telegram.module';
 import { FollowUpModule } from '../followup/followup.module';
+import { PricingModule } from '../pricing/pricing.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { FollowUpModule } from '../followup/followup.module';
     BroadcastModule,
     TelegramModule,
     FollowUpModule,
+    PricingModule,
   ],
   controllers: [OrdersController],
   providers: [

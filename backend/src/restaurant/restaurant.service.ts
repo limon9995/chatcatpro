@@ -393,6 +393,155 @@ export class RestaurantService {
     return clean;
   }
 
+  // ── Happy Hour window (same day/time shape as business hours) ──────────────
+
+  async getHappyHourWindow(pageId: number): Promise<BusinessHoursRow[]> {
+    const page = await this.prisma.page.findUnique({
+      where: { id: pageId },
+      select: { happyHourJson: true },
+    });
+    if (!page?.happyHourJson) return [];
+    try {
+      return parseBusinessHours(JSON.parse(page.happyHourJson));
+    } catch {
+      return [];
+    }
+  }
+
+  async setHappyHourWindow(pageId: number, rows: any[]) {
+    if (!Array.isArray(rows))
+      throw new BadRequestException('rows must be an array');
+    const clean = parseBusinessHours(rows);
+    await this.prisma.page.update({
+      where: { id: pageId },
+      data: { happyHourJson: JSON.stringify(clean) },
+    });
+    return clean;
+  }
+
+  // ── Combo offers ────────────────────────────────────────────────────────────
+  // A combo is its own Product (productType: "COMBO") so it shows in the menu
+  // and orders like any dish; ComboItem rows list its component products.
+  // trackStock is false on combos — real inventory comes from each
+  // component's own recipe/BOM ingredients (see OrdersService.applyIngredientUsage).
+
+  async listCombos(pageId: number) {
+    return this.prisma.product.findMany({
+      where: { pageId, productType: 'COMBO' },
+      include: {
+        comboItems: { include: { component: { select: { id: true, code: true, name: true, price: true } } } },
+      },
+      orderBy: { id: 'desc' },
+    });
+  }
+
+  private async sanitizeComboItems(pageId: number, raw: any): Promise<{ componentProductId: number; qty: number }[]> {
+    const items = Array.isArray(raw) ? raw : [];
+    const clean = items
+      .map((i: any) => ({
+        componentProductId: Number(i?.componentProductId),
+        qty: Math.max(1, Math.round(Number(i?.qty)) || 1),
+      }))
+      .filter((i: any) => Number.isFinite(i.componentProductId) && i.componentProductId > 0);
+    if (clean.length < 2)
+      throw new BadRequestException('কমপক্ষে ২টা item দিয়ে combo বানান');
+    const ids = [...new Set(clean.map((i) => i.componentProductId))];
+    const found = await this.prisma.product.findMany({
+      where: { id: { in: ids }, pageId, productType: { not: 'COMBO' } },
+      select: { id: true },
+    });
+    if (found.length !== ids.length)
+      throw new BadRequestException('একটা বা একাধিক product খুঁজে পাওয়া যায়নি');
+    return clean;
+  }
+
+  async createCombo(
+    pageId: number,
+    body: { name?: string; price?: number; imageUrl?: string; items?: any[] },
+  ) {
+    const name = String(body?.name || '').trim();
+    if (!name) throw new BadRequestException('নাম দিন');
+    const price = Number(body?.price);
+    if (!Number.isFinite(price) || price < 0)
+      throw new BadRequestException('সঠিক দাম দিন');
+    const items = await this.sanitizeComboItems(pageId, body?.items);
+
+    const code = `CB-${Date.now().toString().slice(-8)}`;
+    return this.prisma.product.create({
+      data: {
+        pageId,
+        code,
+        name,
+        price,
+        productType: 'COMBO',
+        trackStock: false,
+        imageUrl: body?.imageUrl || null,
+        comboItems: { create: items },
+      },
+      include: { comboItems: { include: { component: { select: { id: true, code: true, name: true } } } } },
+    });
+  }
+
+  async updateCombo(
+    pageId: number,
+    code: string,
+    body: { name?: string; price?: number; imageUrl?: string; items?: any[]; isActive?: boolean },
+  ) {
+    const combo = await this.prisma.product.findFirst({
+      where: { pageId, code: code.toUpperCase(), productType: 'COMBO' },
+    });
+    if (!combo) throw new NotFoundException('Combo not found');
+
+    const data: any = {};
+    if (body?.name !== undefined) {
+      const name = String(body.name).trim();
+      if (!name) throw new BadRequestException('নাম দিন');
+      data.name = name;
+    }
+    if (body?.price !== undefined) {
+      const price = Number(body.price);
+      if (!Number.isFinite(price) || price < 0)
+        throw new BadRequestException('সঠিক দাম দিন');
+      data.price = price;
+    }
+    if (body?.imageUrl !== undefined) data.imageUrl = body.imageUrl || null;
+    if (body?.isActive !== undefined) data.isActive = Boolean(body.isActive);
+
+    if (body?.items !== undefined) {
+      const items = await this.sanitizeComboItems(pageId, body.items);
+      return this.prisma.$transaction(async (tx) => {
+        if (Object.keys(data).length) {
+          await tx.product.update({ where: { id: combo.id }, data });
+        }
+        await tx.comboItem.deleteMany({ where: { comboProductId: combo.id } });
+        await tx.comboItem.createMany({
+          data: items.map((i) => ({ comboProductId: combo.id, ...i })),
+        });
+        return tx.product.findUnique({
+          where: { id: combo.id },
+          include: { comboItems: { include: { component: { select: { id: true, code: true, name: true } } } } },
+        });
+      });
+    }
+
+    if (!Object.keys(data).length) return combo;
+    return this.prisma.product.update({
+      where: { id: combo.id },
+      data,
+      include: { comboItems: { include: { component: { select: { id: true, code: true, name: true } } } } },
+    });
+  }
+
+  async deleteCombo(pageId: number, code: string) {
+    const combo = await this.prisma.product.findFirst({
+      where: { pageId, code: code.toUpperCase(), productType: 'COMBO' },
+      select: { id: true },
+    });
+    if (!combo) throw new NotFoundException('Combo not found');
+    await this.prisma.product.delete({ where: { id: combo.id } });
+    return { success: true };
+  }
+
   // ── Bulk create from reviewed dishes ────────────────────────────────────────
 
   private validateVariants(raw: any): PriceVariant[] {
