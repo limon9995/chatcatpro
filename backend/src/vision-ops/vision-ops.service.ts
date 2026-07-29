@@ -3,6 +3,7 @@ import { WalletService } from '../wallet/wallet.service';
 import { promises as fs } from 'fs';
 import { extname, join } from 'path';
 import { randomUUID } from 'crypto';
+import sharp from 'sharp';
 import { VisionAnalysisService } from '../vision-analysis/vision-analysis.service';
 import { ProductMatchService } from '../product-match/product-match.service';
 import type { VisionAttributes } from '../vision-analysis/vision-analysis.interface';
@@ -329,16 +330,30 @@ export class VisionOpsService {
       throw new Error('Only image uploads are supported');
     }
 
-    const ext =
-      extname(String(file.originalname || '')).toLowerCase() || '.jpg';
-    const safeExt = ['.jpg', '.jpeg', '.png', '.webp'].includes(ext)
-      ? ext
-      : '.jpg';
+    // Product photos come straight off phone cameras (often 3-5MB) — resize
+    // to a sane display size and re-encode as JPEG so catalog pages don't
+    // ship multi-megabyte images. Falls back to the raw upload if sharp
+    // can't process it (e.g. an already-tiny or malformed file).
+    let outBuffer = file.buffer;
+    let safeExt = '.jpg';
+    try {
+      outBuffer = await sharp(file.buffer)
+        .rotate() // apply EXIF orientation before stripping metadata
+        .resize({ width: 1600, height: 1600, fit: 'inside', withoutEnlargement: true })
+        .jpeg({ quality: 82, mozjpeg: true })
+        .toBuffer();
+    } catch (e: any) {
+      this.logger.warn(`[VisionOps] Image compression failed, storing original: ${e?.message}`);
+      const ext =
+        extname(String(file.originalname || '')).toLowerCase() || '.jpg';
+      safeExt = ['.jpg', '.jpeg', '.png', '.webp'].includes(ext) ? ext : '.jpg';
+    }
+
     const dir = join(this.uploadsDir, String(pageId));
     await this.ensureDir(dir);
     const filename = `${Date.now()}-${randomUUID().slice(0, 8)}${safeExt}`;
     const abs = join(dir, filename);
-    await fs.writeFile(abs, file.buffer);
+    await fs.writeFile(abs, outBuffer);
     return {
       success: true,
       url: `/storage/products/${pageId}/${filename}`,

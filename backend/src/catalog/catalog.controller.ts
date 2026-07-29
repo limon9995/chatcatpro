@@ -269,15 +269,16 @@ export class CatalogController {
       return;
     }
 
-    const productWithReferenceImages =
-      await this.productsService.attachReferenceImages(page.id, product);
-
-    const reviewSummary = await this.reviews
-      .listForProduct(page.id, product.code)
-      .catch(() => ({ avgRating: 0, count: 0, reviews: [] }));
-    const happyHour = await this.pricing
-      .getHappyHourStatus(page.id)
-      .catch(() => ({ active: false, discountPercent: 0, label: '' }));
+    // Independent lookups — run in parallel instead of one-after-another.
+    const [productWithReferenceImages, reviewSummary, happyHour] = await Promise.all([
+      this.productsService.attachReferenceImages(page.id, product),
+      this.reviews
+        .listForProduct(page.id, product.code)
+        .catch(() => ({ avgRating: 0, count: 0, reviews: [] })),
+      this.pricing
+        .getHappyHourStatus(page.id)
+        .catch(() => ({ active: false, discountPercent: 0, label: '' })),
+    ]);
 
     // V21: Increment product view counter — fire-and-forget
     void this.prisma.product
