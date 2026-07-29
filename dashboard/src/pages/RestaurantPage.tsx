@@ -731,6 +731,7 @@ export function RestaurantPage({ th, pageId, onToast }: {
   const ingHelp = ingredientHelp(copy);
 
   const [tab, setTab] = useState<'MENU' | 'INVENTORY' | 'DELIVERY' | 'ORDERS' | 'OFFERS'>('MENU');
+  const [invSubTab, setInvSubTab] = useState<'INGREDIENTS' | 'RECIPE' | 'PACKAGING'>('INGREDIENTS');
   const [loading, setLoading] = useState(true);
   const [settings, setSettings] = useState<RestoSettings>({
     restaurantModeEnabled: false, restaurantLat: null, restaurantLng: null, deliverySlabs: [],
@@ -1169,31 +1170,46 @@ export function RestaurantPage({ th, pageId, onToast }: {
       {/* ── INVENTORY ── */}
       {tab === 'INVENTORY' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+          {showInvGuide ? (
+            <div style={{ ...th.alertInfo, borderRadius: 10, padding: '10px 12px', lineHeight: 1.7 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+                <strong style={{ fontSize: 12.5 }}>{copy('💡 Inventory কীভাবে কাজ করে', '💡 How Inventory works')}</strong>
+                <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', fontSize: 11.5, fontFamily: 'inherit' }}
+                  onClick={() => { setShowInvGuide(false); localStorage.setItem(`chatcat_inv_guide_${pageId}`, '0'); }}>
+                  {copy('বন্ধ করুন ✕', 'Dismiss ✕')}
+                </button>
+              </div>
+              <ul style={{ margin: '6px 0 0', paddingLeft: 18, fontSize: 12 }}>
+                <li>{copy('🥕 Ingredients — কাঁচামাল/প্যাকেজিং (bun, chicken, box) — কত আছে সেটা এখানে রাখুন।', '🥕 Ingredients — raw materials/packaging (bun, chicken, box) — track how much you have here.')}</li>
+                <li>{copy('🧾 Recipe — কোন খাবারে কোন ingredient কতটুকু লাগে, সেটা এখানে সেট করুন।', '🧾 Recipe — set which ingredients (and how much) each dish uses.')}</li>
+                <li>{copy('🛍️ Packaging — প্রতিটা order-এ একবার যা লাগে (যেমন carry bag) — এখানে সেট করুন।', '🛍️ Packaging — what every order needs once (e.g. a carry bag) — set it here.')}</li>
+                <li>{copy('Order confirm হলে recipe + packaging অনুযায়ী stock auto বাদ যাবে — নিজে হিসাব করতে হবে না।', 'When an order is confirmed, stock is auto-deducted per the recipe + packaging — no manual tracking needed.')}</li>
+              </ul>
+            </div>
+          ) : (
+            <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: th.muted, fontSize: 11.5, padding: 0, alignSelf: 'flex-start', fontFamily: 'inherit' }}
+              onClick={() => { setShowInvGuide(true); localStorage.setItem(`chatcat_inv_guide_${pageId}`, '1'); }}>
+              {copy('❔ গাইড দেখুন', '❔ Show guide')}
+            </button>
+          )}
+
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {[
+              { key: 'INGREDIENTS' as const, label: copy('🥕 Ingredients', '🥕 Ingredients') },
+              { key: 'RECIPE' as const, label: copy('🧾 Recipe', '🧾 Recipe') },
+              { key: 'PACKAGING' as const, label: copy('🛍️ Packaging', '🛍️ Packaging') },
+            ].map(t => (
+              <button key={t.key} onClick={() => setInvSubTab(t.key)}
+                style={{ padding: '6px 14px', borderRadius: 999, fontSize: 12.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', border: `1px solid ${invSubTab === t.key ? th.accent : th.border}`, background: invSubTab === t.key ? th.accentSoft : 'transparent', color: invSubTab === t.key ? th.accentText : th.muted }}>
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          {invSubTab === 'INGREDIENTS' && (
           <div style={{ ...th.card }}>
             <CardHeader th={th} title={copy('🥕 Ingredients — কাঁচামাল ও প্যাকেজিং', '🥕 Ingredients — raw materials & packaging')}
               sub={copy('Bun, chicken (gm), sauce, box, spoon, carry bag... order confirm হলে recipe অনুযায়ী auto বাদ যাবে', 'Bun, chicken (gm), sauces, box, spoon, carry bag... auto-deducted per recipe on confirm')} />
-            {showInvGuide ? (
-              <div style={{ ...th.alertInfo, borderRadius: 10, padding: '10px 12px', marginBottom: 14, lineHeight: 1.7 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
-                  <strong style={{ fontSize: 12.5 }}>{copy('💡 কীভাবে কাজ করে', '💡 How this works')}</strong>
-                  <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', fontSize: 11.5, fontFamily: 'inherit' }}
-                    onClick={() => { setShowInvGuide(false); localStorage.setItem(`chatcat_inv_guide_${pageId}`, '0'); }}>
-                    {copy('বন্ধ করুন ✕', 'Dismiss ✕')}
-                  </button>
-                </div>
-                <ul style={{ margin: '6px 0 0', paddingLeft: 18, fontSize: 12 }}>
-                  <li>{copy('Ingredient মানে কাঁচামাল/প্যাকেজিং — bun, chicken, box। নিচে যোগ করুন।', 'An ingredient is a raw material or packaging item — bun, chicken, box. Add it below.')}</li>
-                  <li>{copy('তারপর "Recipe" অংশে বলে দিন কোন খাবারে কোন ingredient কতটুকু লাগে।', 'Then in the Recipe section, tell it which ingredients (and how much) each dish uses.')}</li>
-                  <li>{copy('Order confirm হলে recipe অনুযায়ী stock auto বাদ যাবে — নিজে হিসাব করতে হবে না।', 'When an order is confirmed, stock is auto-deducted per the recipe — no manual tracking needed.')}</li>
-                  <li>{copy('"⚠️ LOW" মানে stock আপনার দেওয়া Min-এর নিচে/সমান নেমে গেছে — restock করার সময় হয়েছে।', '"LOW" means stock has dropped to or below the Min you set — time to restock.')}</li>
-                </ul>
-              </div>
-            ) : (
-              <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: th.muted, fontSize: 11.5, padding: 0, marginBottom: 10, fontFamily: 'inherit' }}
-                onClick={() => { setShowInvGuide(true); localStorage.setItem(`chatcat_inv_guide_${pageId}`, '1'); }}>
-                {copy('❔ গাইড দেখুন', '❔ Show guide')}
-              </button>
-            )}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 100px 100px 110px auto', gap: 6, marginBottom: 12, alignItems: 'end' }}>
               <FieldWithInfo th={th} label={copy('নাম', 'Name')} helpText={ingHelp.name}>
                 <input style={{ ...th.input, padding: '8px 10px' }} placeholder={copy('যেমন: Small Bun', 'e.g. Small Bun')} value={newIng.name}
@@ -1258,8 +1274,10 @@ export function RestaurantPage({ th, pageId, onToast }: {
               </div>
             )}
           </div>
+          )}
 
           {/* Recipe editor — which ingredients go into each dish */}
+          {invSubTab === 'RECIPE' && (
           <div style={{ ...th.card }}>
             <CardHeader th={th} title={copy('🧾 Recipe — কোন খাবারে কী কী লাগে', '🧾 Recipes — what goes into each dish')}
               sub={copy('খাবার বেছে নিয়ে ingredient ও পরিমাণ set করুন — order confirm হলে ঠিক এই হিসাবেই stock থেকে বাদ যাবে', 'Pick a dish and set its ingredients & quantities — stock deducts exactly by this on confirm')} />
@@ -1284,8 +1302,10 @@ export function RestaurantPage({ th, pageId, onToast }: {
               💡 {copy('Menu tab-এর প্রতিটা খাবারের পাশে "🧾 Recipe" button থেকেও একই editor খোলে।', 'The same editor opens from the "🧾 Recipe" button beside each item in the Menu tab.')}
             </div>
           </div>
+          )}
 
           {/* per-order packaging */}
+          {invSubTab === 'PACKAGING' && (
           <div style={{ ...th.card }}>
             <CardHeader th={th} title={copy('🛍️ প্রতি Order-এ প্যাকেজিং', '🛍️ Per-order packaging')}
               sub={copy('যা প্রতিটা order-এ একবার লাগে — যেমন ১টা carry bag। item যত-ই হোক, একবারই বাদ যাবে।', 'Consumed once per order regardless of items — e.g. 1 carry bag.')} />
@@ -1318,6 +1338,7 @@ export function RestaurantPage({ th, pageId, onToast }: {
               </div>
             </div>
           </div>
+          )}
         </div>
       )}
 
