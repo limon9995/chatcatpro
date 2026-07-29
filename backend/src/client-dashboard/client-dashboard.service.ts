@@ -351,7 +351,7 @@ export class ClientDashboardService {
         : Promise.resolve({ loyaltyDiscount: 0, happyHourDiscount: 0 }),
       this.pricing.isComboOrder(pageId, orderedCodes),
     ]);
-    const { thisOrderNumber, reward } = await this.pricing.getMilestoneReward(
+    const { thisOrderNumber, rewards } = await this.pricing.getMilestoneRewards(
       pageId,
       order.phone,
       isCombo,
@@ -361,23 +361,27 @@ export class ClientDashboardService {
     const orderUpdate: any = {};
     if (discounts.loyaltyDiscount) orderUpdate.loyaltyDiscountAmount = discounts.loyaltyDiscount;
     if (discounts.happyHourDiscount) orderUpdate.happyHourDiscountAmount = discounts.happyHourDiscount;
-    if (reward) {
-      orderUpdate.milestoneRewardAppliedJson = JSON.stringify({ ...reward, orderNumber: thisOrderNumber });
-      if (reward.rewardType === 'FREE_DELIVERY') orderUpdate.deliveryFee = 0;
+    if (rewards.length) {
+      orderUpdate.milestoneRewardAppliedJson = JSON.stringify(
+        rewards.map((r) => ({ ...r, orderNumber: thisOrderNumber })),
+      );
+      if (rewards.some((r) => r.rewardType === 'FREE_DELIVERY')) orderUpdate.deliveryFee = 0;
     }
     if (Object.keys(orderUpdate).length) {
       await this.prisma.order.update({ where: { id: order.id }, data: orderUpdate });
     }
-    if (reward?.rewardType === 'FREE_ITEM' && reward.productCode) {
-      await this.prisma.orderItem.create({
-        data: {
-          orderId: order.id,
-          productCode: reward.productCode,
-          qty: reward.qty,
-          unitPrice: 0,
-          productName: `🎁 Free — ${reward.productName}`,
-        },
-      });
+    for (const reward of rewards) {
+      if (reward.rewardType === 'FREE_ITEM' && reward.productCode) {
+        await this.prisma.orderItem.create({
+          data: {
+            orderId: order.id,
+            productCode: reward.productCode,
+            qty: reward.qty,
+            unitPrice: 0,
+            productName: `🎁 Free — ${reward.productName}`,
+          },
+        });
+      }
     }
 
     return this.prisma.order.findUnique({

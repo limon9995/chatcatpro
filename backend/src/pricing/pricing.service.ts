@@ -30,7 +30,7 @@ export interface MilestoneReward {
 export interface MilestonePreview {
   enabled: boolean;
   thisOrderNumber: number;
-  reward: MilestoneReward | null;
+  rewards: MilestoneReward[];
   next: { interval: number; ordersAway: number; rewardType: string; productName?: string } | null;
 }
 
@@ -160,52 +160,53 @@ export class PricingService {
   }
 
   /**
-   * Order-count-based recurring reward (every Nth order gets a configured
-   * free item or free delivery). Combo orders never receive a milestone
-   * reward on the order that contains the combo, but they still count
-   * toward the running order total.
+   * Order-count-based recurring reward(s) — every Nth order gets a configured
+   * free item or free delivery. If an order number satisfies more than one
+   * configured interval (e.g. intervals 2 and 3 both hit on order 6), ALL
+   * matching rewards apply — not just the first. Combo orders never receive
+   * any milestone reward on the order that contains the combo, but they
+   * still count toward the running order total.
    */
-  async getMilestoneReward(
+  async getMilestoneRewards(
     pageId: number,
     phone: string | null | undefined,
     isComboOrder: boolean,
     excludeOrderId?: number,
-  ): Promise<{ thisOrderNumber: number; reward: MilestoneReward | null }> {
+  ): Promise<{ thisOrderNumber: number; rewards: MilestoneReward[] }> {
     const page = await this.prisma.page.findUnique({
       where: { id: pageId },
       select: { milestoneRewardsEnabled: true },
     });
-    if (!page?.milestoneRewardsEnabled) return { thisOrderNumber: 0, reward: null };
+    if (!page?.milestoneRewardsEnabled) return { thisOrderNumber: 0, rewards: [] };
 
     const clean = normalizePhone(phone);
-    if (!clean) return { thisOrderNumber: 0, reward: null };
+    if (!clean) return { thisOrderNumber: 0, rewards: [] };
 
     const priorCount = await this.countPriorOrders(pageId, clean, excludeOrderId);
     const thisOrderNumber = priorCount + 1;
-    if (isComboOrder) return { thisOrderNumber, reward: null };
+    if (isComboOrder) return { thisOrderNumber, rewards: [] };
 
     const milestones = await this.prisma.milestoneReward.findMany({
       where: { pageId, isActive: true },
       include: { product: { select: { id: true, code: true, name: true } } },
     });
-    const match = milestones.find(
-      (m) => m.orderInterval > 0 && thisOrderNumber % m.orderInterval === 0,
+    const matches = milestones.filter(
+      (m) =>
+        m.orderInterval > 0 &&
+        thisOrderNumber % m.orderInterval === 0 &&
+        !(m.rewardType === 'FREE_ITEM' && !m.product), // skip if reward product was deleted
     );
-    if (!match) return { thisOrderNumber, reward: null };
-    if (match.rewardType === 'FREE_ITEM' && !match.product) {
-      return { thisOrderNumber, reward: null }; // reward product was deleted — skip safely
-    }
 
     return {
       thisOrderNumber,
-      reward: {
-        interval: match.orderInterval,
-        rewardType: match.rewardType as 'FREE_ITEM' | 'FREE_DELIVERY',
-        productId: match.product?.id,
-        productCode: match.product?.code,
-        productName: match.product?.name ?? match.product?.code,
-        qty: match.qty,
-      },
+      rewards: matches.map((m) => ({
+        interval: m.orderInterval,
+        rewardType: m.rewardType as 'FREE_ITEM' | 'FREE_DELIVERY',
+        productId: m.product?.id,
+        productCode: m.product?.code,
+        productName: m.product?.name ?? m.product?.code,
+        qty: m.qty,
+      })),
     };
   }
 
@@ -216,7 +217,7 @@ export class PricingService {
       select: { milestoneRewardsEnabled: true },
     });
     if (!page?.milestoneRewardsEnabled) {
-      return { enabled: false, thisOrderNumber: 0, reward: null, next: null };
+      return { enabled: false, thisOrderNumber: 0, rewards: [], next: null };
     }
     const clean = normalizePhone(phone);
     const priorCount = clean ? await this.countPriorOrders(pageId, clean) : 0;
@@ -226,20 +227,18 @@ export class PricingService {
       where: { pageId, isActive: true },
       include: { product: { select: { id: true, code: true, name: true } } },
     });
-    const hit = milestones.find((m) => m.orderInterval > 0 && thisOrderNumber % m.orderInterval === 0);
-    const reward: MilestoneReward | null = hit
-      ? {
-          interval: hit.orderInterval,
-          rewardType: hit.rewardType as 'FREE_ITEM' | 'FREE_DELIVERY',
-          productId: hit.product?.id,
-          productCode: hit.product?.code,
-          productName: hit.product?.name ?? hit.product?.code,
-          qty: hit.qty,
-        }
-      : null;
+    const hits = milestones.filter((m) => m.orderInterval > 0 && thisOrderNumber % m.orderInterval === 0);
+    const rewards: MilestoneReward[] = hits.map((hit) => ({
+      interval: hit.orderInterval,
+      rewardType: hit.rewardType as 'FREE_ITEM' | 'FREE_DELIVERY',
+      productId: hit.product?.id,
+      productCode: hit.product?.code,
+      productName: hit.product?.name ?? hit.product?.code,
+      qty: hit.qty,
+    }));
 
     let next: MilestonePreview['next'] = null;
-    if (!reward && milestones.length) {
+    if (!rewards.length && milestones.length) {
       let best: { interval: number; ordersAway: number; rewardType: string; productName?: string } | null = null;
       for (const m of milestones) {
         if (m.orderInterval <= 0) continue;
@@ -257,6 +256,6 @@ export class PricingService {
       next = best;
     }
 
-    return { enabled: true, thisOrderNumber, reward, next };
+    return { enabled: true, thisOrderNumber, rewards, next };
   }
 }

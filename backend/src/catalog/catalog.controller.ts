@@ -2065,9 +2065,9 @@ async function woCheckMilestone(){
     var d=await r.json();
     if(!d.enabled){ box.style.display='none'; return; }
     var msg=null;
-    if(d.reward){
-      var what=d.reward.rewardType==='FREE_DELIVERY'?'ফ্রি ডেলিভারি':('ফ্রি '+d.reward.productName);
-      msg='🎁 এই অর্ডারেই আপনি পাচ্ছেন '+what+'!';
+    if(d.rewards&&d.rewards.length){
+      var whats=d.rewards.map(function(r){ return r.rewardType==='FREE_DELIVERY'?'ফ্রি ডেলিভারি':('ফ্রি '+r.productName); });
+      msg='🎁 এই অর্ডারেই আপনি পাচ্ছেন '+whats.join(' + ')+'!';
     } else if(d.next){
       var what2=d.next.rewardType==='FREE_DELIVERY'?'ফ্রি ডেলিভারি':('ফ্রি '+d.next.productName);
       msg='🎁 আরও '+d.next.ordersAway+'টা অর্ডার করলে পাবেন '+what2+'!';

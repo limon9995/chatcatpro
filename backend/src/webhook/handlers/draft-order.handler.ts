@@ -636,12 +636,11 @@ export class DraftOrderHandler {
           .getMilestonePreview(pageId, ph)
           .catch(() => null);
         if (milestone?.enabled) {
-          if (milestone.reward) {
-            const what =
-              milestone.reward.rewardType === 'FREE_DELIVERY'
-                ? 'ফ্রি ডেলিভারি'
-                : `ফ্রি ${milestone.reward.productName}`;
-            (draft as any).milestoneMessage = `🎁 এই অর্ডারেই আপনি পাচ্ছেন ${what}!`;
+          if (milestone.rewards.length) {
+            const whats = milestone.rewards.map((r) =>
+              r.rewardType === 'FREE_DELIVERY' ? 'ফ্রি ডেলিভারি' : `ফ্রি ${r.productName}`,
+            );
+            (draft as any).milestoneMessage = `🎁 এই অর্ডারেই আপনি পাচ্ছেন ${whats.join(' + ')}!`;
           } else if (milestone.next) {
             const what =
               milestone.next.rewardType === 'FREE_DELIVERY'
@@ -938,9 +937,10 @@ export class DraftOrderHandler {
         .isComboOrder(pageId, draft.items.map((i) => i.productCode))
         .catch(() => false),
     ]);
-    const { thisOrderNumber, reward: milestoneReward } = await this.pricing
-      .getMilestoneReward(pageId, draft.phone ?? null, isCombo)
-      .catch(() => ({ thisOrderNumber: 0, reward: null }));
+    const { thisOrderNumber, rewards: milestoneRewards } = await this.pricing
+      .getMilestoneRewards(pageId, draft.phone ?? null, isCombo)
+      .catch(() => ({ thisOrderNumber: 0, rewards: [] as any[] }));
+    const milestoneFreeDelivery = milestoneRewards.some((r) => r.rewardType === 'FREE_DELIVERY');
 
     // C-3: Create order AND decrement stock atomically
     const order = await this.prisma.$transaction(async (tx) => {
@@ -970,10 +970,10 @@ export class DraftOrderHandler {
           spamCheckedAt: spamResult ? new Date() : null,
           loyaltyDiscountAmount: discounts.loyaltyDiscount,
           happyHourDiscountAmount: discounts.happyHourDiscount,
-          milestoneRewardAppliedJson: milestoneReward
-            ? JSON.stringify({ ...milestoneReward, orderNumber: thisOrderNumber })
+          milestoneRewardAppliedJson: milestoneRewards.length
+            ? JSON.stringify(milestoneRewards.map((r) => ({ ...r, orderNumber: thisOrderNumber })))
             : null,
-          ...(milestoneReward?.rewardType === 'FREE_DELIVERY' ? { deliveryFee: 0 } : {}),
+          ...(milestoneFreeDelivery ? { deliveryFee: 0 } : {}),
           items: {
             create: [
               ...draft.items.map((i) => ({
@@ -981,14 +981,14 @@ export class DraftOrderHandler {
                 qty: i.qty,
                 unitPrice: i.unitPrice,
               })),
-              ...(milestoneReward?.rewardType === 'FREE_ITEM' && milestoneReward.productCode
-                ? [{
-                    productCode: milestoneReward.productCode,
-                    qty: milestoneReward.qty,
-                    unitPrice: 0,
-                    productName: `🎁 Free — ${milestoneReward.productName}`,
-                  }]
-                : []),
+              ...milestoneRewards
+                .filter((r) => r.rewardType === 'FREE_ITEM' && r.productCode)
+                .map((r) => ({
+                  productCode: r.productCode,
+                  qty: r.qty,
+                  unitPrice: 0,
+                  productName: `🎁 Free — ${r.productName}`,
+                })),
             ],
           },
         },

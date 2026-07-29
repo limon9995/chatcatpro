@@ -599,15 +599,15 @@ export class OrdersService {
       this.pricing.computeDiscounts(data.pageIdRef, data.phone, subtotal),
       this.pricing.isComboOrder(data.pageIdRef, data.items.map((it) => it.productCode.toUpperCase())),
     ]);
-    const { thisOrderNumber, reward } = await this.pricing.getMilestoneReward(
+    const { thisOrderNumber, rewards } = await this.pricing.getMilestoneRewards(
       data.pageIdRef,
       data.phone,
       isCombo,
     );
-    const extraItems: typeof data.items =
-      reward?.rewardType === 'FREE_ITEM' && reward.productCode
-        ? [{ productCode: reward.productCode, qty: reward.qty, unitPrice: 0, productName: `🎁 Free — ${reward.productName}`, metaJson: null }]
-        : [];
+    const extraItems: typeof data.items = rewards
+      .filter((r) => r.rewardType === 'FREE_ITEM' && r.productCode)
+      .map((r) => ({ productCode: r.productCode!, qty: r.qty, unitPrice: 0, productName: `🎁 Free — ${r.productName}`, metaJson: null }));
+    const freeDelivery = rewards.some((r) => r.rewardType === 'FREE_DELIVERY');
 
     return this.prisma.order.create({
       data: {
@@ -623,11 +623,13 @@ export class OrdersService {
         paymentStatus,
         deliveryLat: data.deliveryLat ?? null,
         deliveryLng: data.deliveryLng ?? null,
-        deliveryFee: reward?.rewardType === 'FREE_DELIVERY' ? 0 : (data.deliveryFee ?? null),
+        deliveryFee: freeDelivery ? 0 : (data.deliveryFee ?? null),
         deliveryDistanceKm: data.deliveryDistanceKm ?? null,
         loyaltyDiscountAmount: discounts.loyaltyDiscount,
         happyHourDiscountAmount: discounts.happyHourDiscount,
-        milestoneRewardAppliedJson: reward ? JSON.stringify({ ...reward, orderNumber: thisOrderNumber }) : null,
+        milestoneRewardAppliedJson: rewards.length
+          ? JSON.stringify(rewards.map((r) => ({ ...r, orderNumber: thisOrderNumber })))
+          : null,
         items: {
           create: [...data.items, ...extraItems].map((it) => ({
             productCode: it.productCode,

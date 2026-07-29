@@ -46,11 +46,14 @@ export class OrderNotificationService {
     let rewardLine = '';
     if (order.milestoneRewardAppliedJson) {
       try {
-        const r = JSON.parse(order.milestoneRewardAppliedJson);
-        rewardLine =
+        const parsed = JSON.parse(order.milestoneRewardAppliedJson);
+        const rewards: any[] = Array.isArray(parsed) ? parsed : [parsed];
+        const lines = rewards.map((r) =>
           r.rewardType === 'FREE_DELIVERY'
-            ? '\n\n🎁 অভিনন্দন! এই অর্ডারে আপনি ফ্রি ডেলিভারি পেয়েছেন।'
-            : `\n\n🎁 অভিনন্দন! এই অর্ডারে আপনি ফ্রি ${r.productName || ''} পেয়েছেন।`;
+            ? '🎁 অভিনন্দন! এই অর্ডারে আপনি ফ্রি ডেলিভারি পেয়েছেন।'
+            : `🎁 অভিনন্দন! এই অর্ডারে আপনি ফ্রি ${r.productName || ''} পেয়েছেন।`,
+        );
+        if (lines.length) rewardLine = '\n\n' + lines.join('\n');
       } catch {
         /* ignore malformed snapshot */
       }
