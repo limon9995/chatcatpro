@@ -1707,8 +1707,9 @@ ${
           <div style="display:flex;align-items:flex-end"><div style="font-size:13px;color:var(--sub);padding-bottom:12px">${p.trackStock === false ? '' : `max ${p.stockQty}`}</div></div>
         </div>
         <div><div class="wo-lbl">আপনার নাম *</div><input class="wo-inp" id="woName" type="text" placeholder="পুরো নাম"></div>
-        <div><div class="wo-lbl">ফোন নম্বর *</div><input class="wo-inp" id="woPhone" type="tel" placeholder="01XXXXXXXXX" onblur="woCheckLoyalty()"></div>
+        <div><div class="wo-lbl">ফোন নম্বর *</div><input class="wo-inp" id="woPhone" type="tel" placeholder="01XXXXXXXXX" onblur="woCheckLoyalty();woCheckMilestone();"></div>
         <div id="woLoyaltyBox" style="display:none;font-size:12.5px;padding:8px 10px;border-radius:8px;margin:-6px 0 8px;"></div>
+        <div id="woMilestoneBox" style="display:none;font-size:12.5px;padding:8px 10px;border-radius:8px;margin:-6px 0 8px;background:rgba(139,92,246,0.12);color:#7c3aed;"></div>
         ${
           page.restaurantMode
             ? `<div class="wo-addr-lbl-row"><div class="wo-lbl" style="margin-bottom:0">ডেলিভারি লোকেশন * (ম্যাপে pin করুন)</div></div>
@@ -2052,6 +2053,27 @@ async function woCheckLoyalty(){
     box.textContent=d.message;
     box.style.background=d.isLoyal?'rgba(22,163,74,0.12)':'rgba(245,158,11,0.12)';
     box.style.color=d.isLoyal?'#16a34a':'#b45309';
+    box.style.display='block';
+  } catch { box.style.display='none'; }
+}
+async function woCheckMilestone(){
+  var box=document.getElementById('woMilestoneBox');
+  var phone=document.getElementById('woPhone').value.trim();
+  if(!box||phone.replace(/\\D/g,'').length<10){ if(box) box.style.display='none'; return; }
+  try {
+    var r=await fetch('/catalog/'+WO_PAGE_ID+'/milestone-status?phone='+encodeURIComponent(phone));
+    var d=await r.json();
+    if(!d.enabled){ box.style.display='none'; return; }
+    var msg=null;
+    if(d.reward){
+      var what=d.reward.rewardType==='FREE_DELIVERY'?'ফ্রি ডেলিভারি':('ফ্রি '+d.reward.productName);
+      msg='🎁 এই অর্ডারেই আপনি পাচ্ছেন '+what+'!';
+    } else if(d.next){
+      var what2=d.next.rewardType==='FREE_DELIVERY'?'ফ্রি ডেলিভারি':('ফ্রি '+d.next.productName);
+      msg='🎁 আরও '+d.next.ordersAway+'টা অর্ডার করলে পাবেন '+what2+'!';
+    }
+    if(!msg){ box.style.display='none'; return; }
+    box.textContent=msg;
     box.style.display='block';
   } catch { box.style.display='none'; }
 }

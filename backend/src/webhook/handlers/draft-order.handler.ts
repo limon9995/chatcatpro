@@ -631,6 +631,25 @@ export class DraftOrderHandler {
           .getLoyaltyStatus(pageId, ph)
           .catch(() => null);
         if (loyalty?.enabled) (draft as any).loyaltyMessage = loyalty.message;
+        // Milestone Rewards — preview what this order (or an upcoming one) earns
+        const milestone = await this.pricing
+          .getMilestonePreview(pageId, ph)
+          .catch(() => null);
+        if (milestone?.enabled) {
+          if (milestone.reward) {
+            const what =
+              milestone.reward.rewardType === 'FREE_DELIVERY'
+                ? 'ফ্রি ডেলিভারি'
+                : `ফ্রি ${milestone.reward.productName}`;
+            (draft as any).milestoneMessage = `🎁 এই অর্ডারেই আপনি পাচ্ছেন ${what}!`;
+          } else if (milestone.next) {
+            const what =
+              milestone.next.rewardType === 'FREE_DELIVERY'
+                ? 'ফ্রি ডেলিভারি'
+                : `ফ্রি ${milestone.next.productName}`;
+            (draft as any).milestoneMessage = `🎁 আরও ${milestone.next.ordersAway}টা অর্ডার করলে পাবেন ${what}!`;
+          }
+        }
       } else if (step === 'address') {
         if (!this.isAddressLike(workingText))
           return fields.address.retryPrompt;
@@ -655,7 +674,10 @@ export class DraftOrderHandler {
       const loyaltyLine = (draft as any).loyaltyMessage
         ? `\n\n${(draft as any).loyaltyMessage}`
         : '';
-      return `ঠিক আছে 💖 এখন ${fields.address.label} দিন।${loyaltyLine}`;
+      const milestoneLine = (draft as any).milestoneMessage
+        ? `\n\n${(draft as any).milestoneMessage}`
+        : '';
+      return `ঠিক আছে 💖 এখন ${fields.address.label} দিন।${loyaltyLine}${milestoneLine}`;
     }
 
     // All collected → check if advance payment required
@@ -905,12 +927,20 @@ export class DraftOrderHandler {
       return lead.id;
     }
 
-    // Loyalty/Happy Hour discounts — computed before the transaction so a slow
+    // Loyalty/Happy Hour/Milestone — computed before the transaction so a slow
     // pricing query can't hold the DB transaction open.
     const orderSubtotal = draft.items.reduce((s, i) => s + i.unitPrice * i.qty, 0);
-    const discounts = await this.pricing
-      .computeDiscounts(pageId, draft.phone ?? null, orderSubtotal)
-      .catch(() => ({ loyaltyDiscount: 0, happyHourDiscount: 0 }));
+    const [discounts, isCombo] = await Promise.all([
+      this.pricing
+        .computeDiscounts(pageId, draft.phone ?? null, orderSubtotal)
+        .catch(() => ({ loyaltyDiscount: 0, happyHourDiscount: 0 })),
+      this.pricing
+        .isComboOrder(pageId, draft.items.map((i) => i.productCode))
+        .catch(() => false),
+    ]);
+    const { thisOrderNumber, reward: milestoneReward } = await this.pricing
+      .getMilestoneReward(pageId, draft.phone ?? null, isCombo)
+      .catch(() => ({ thisOrderNumber: 0, reward: null }));
 
     // C-3: Create order AND decrement stock atomically
     const order = await this.prisma.$transaction(async (tx) => {
@@ -940,12 +970,26 @@ export class DraftOrderHandler {
           spamCheckedAt: spamResult ? new Date() : null,
           loyaltyDiscountAmount: discounts.loyaltyDiscount,
           happyHourDiscountAmount: discounts.happyHourDiscount,
+          milestoneRewardAppliedJson: milestoneReward
+            ? JSON.stringify({ ...milestoneReward, orderNumber: thisOrderNumber })
+            : null,
+          ...(milestoneReward?.rewardType === 'FREE_DELIVERY' ? { deliveryFee: 0 } : {}),
           items: {
-            create: draft.items.map((i) => ({
-              productCode: i.productCode,
-              qty: i.qty,
-              unitPrice: i.unitPrice,
-            })),
+            create: [
+              ...draft.items.map((i) => ({
+                productCode: i.productCode,
+                qty: i.qty,
+                unitPrice: i.unitPrice,
+              })),
+              ...(milestoneReward?.rewardType === 'FREE_ITEM' && milestoneReward.productCode
+                ? [{
+                    productCode: milestoneReward.productCode,
+                    qty: milestoneReward.qty,
+                    unitPrice: 0,
+                    productName: `🎁 Free — ${milestoneReward.productName}`,
+                  }]
+                : []),
+            ],
           },
         },
       });

@@ -176,6 +176,11 @@ model Page {
   happyHourDiscountPercent Float?
   happyHourLabel           String?
 
+  // V28: Milestone Rewards — every Nth order (by phone) gets a configured
+  // free item or free delivery. See MilestoneReward model.
+  milestoneRewardsEnabled Boolean @default(false)
+  milestoneRewards        MilestoneReward[]
+
   callConfirmModeOn       Boolean @default(false)
   callConfirmModeAllowed  Boolean @default(true)
   callMode                String  @default("MANUAL")
@@ -424,6 +429,8 @@ model Product {
   // guard "can't delete a product that's part of a combo" if ever needed.
   comboItems       ComboItem[] @relation("ComboParent")
   componentOfCombos ComboItem[] @relation("ComboComponent")
+  // V28: this product configured as the free-item reward on a milestone
+  milestoneRewards MilestoneReward[]
   dualWearingPages Page[] @relation("DualWearing")
   dualHoldingPages Page[] @relation("DualHolding")
   liveSessionsWorn LiveSession[] @relation("SessionWorn")
@@ -558,6 +565,10 @@ model Order {
   loyaltyDiscountAmount   Float @default(0)
   happyHourDiscountAmount Float @default(0)
 
+  // V28: snapshot of the milestone reward granted on this order, if any —
+  // {interval, rewardType, productId, productName, qty}. Null = none.
+  milestoneRewardAppliedJson String?
+
   @@index([pageIdRef])
   @@index([customerPsid])
   @@index([status])
@@ -598,6 +609,27 @@ model ComboItem {
 
   @@index([comboProductId])
   @@index([componentProductId])
+}
+
+// V28: "every Nth order gets a reward" — recurring (3rd, 6th, 9th... for
+// orderInterval=3), keyed by phone number via PricingService.getMilestoneReward.
+// A combo-containing order never receives a milestone reward (still counts
+// toward the running total though).
+model MilestoneReward {
+  id            Int      @id @default(autoincrement())
+  pageId        Int
+  page          Page     @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  orderInterval Int
+  rewardType    String   // "FREE_ITEM" | "FREE_DELIVERY"
+  productId     Int?     // set when rewardType = FREE_ITEM
+  product       Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  qty           Int      @default(1)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([pageId, orderInterval])
+  @@index([pageId])
 }
 
 model OrderItem {

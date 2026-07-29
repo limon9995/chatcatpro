@@ -340,17 +340,44 @@ export class ClientDashboardService {
       });
     }
 
-    if (subtotal > 0) {
-      const discounts = await this.pricing.computeDiscounts(pageId, order.phone, subtotal);
-      if (discounts.loyaltyDiscount || discounts.happyHourDiscount) {
-        await this.prisma.order.update({
-          where: { id: order.id },
-          data: {
-            loyaltyDiscountAmount: discounts.loyaltyDiscount,
-            happyHourDiscountAmount: discounts.happyHourDiscount,
-          },
-        });
-      }
+    // excludeOrderId=order.id: this order row already exists (items are
+    // attached after creation to resolve variant prices first) — without
+    // this, the loyalty/milestone order-count would count this order as
+    // one of its own "prior" orders.
+    const orderedCodes = items.filter((it) => it?.productCode).map((it) => String(it.productCode).toUpperCase());
+    const [discounts, isCombo] = await Promise.all([
+      subtotal > 0
+        ? this.pricing.computeDiscounts(pageId, order.phone, subtotal, new Date(), order.id)
+        : Promise.resolve({ loyaltyDiscount: 0, happyHourDiscount: 0 }),
+      this.pricing.isComboOrder(pageId, orderedCodes),
+    ]);
+    const { thisOrderNumber, reward } = await this.pricing.getMilestoneReward(
+      pageId,
+      order.phone,
+      isCombo,
+      order.id,
+    );
+
+    const orderUpdate: any = {};
+    if (discounts.loyaltyDiscount) orderUpdate.loyaltyDiscountAmount = discounts.loyaltyDiscount;
+    if (discounts.happyHourDiscount) orderUpdate.happyHourDiscountAmount = discounts.happyHourDiscount;
+    if (reward) {
+      orderUpdate.milestoneRewardAppliedJson = JSON.stringify({ ...reward, orderNumber: thisOrderNumber });
+      if (reward.rewardType === 'FREE_DELIVERY') orderUpdate.deliveryFee = 0;
+    }
+    if (Object.keys(orderUpdate).length) {
+      await this.prisma.order.update({ where: { id: order.id }, data: orderUpdate });
+    }
+    if (reward?.rewardType === 'FREE_ITEM' && reward.productCode) {
+      await this.prisma.orderItem.create({
+        data: {
+          orderId: order.id,
+          productCode: reward.productCode,
+          qty: reward.qty,
+          unitPrice: 0,
+          productName: `🎁 Free — ${reward.productName}`,
+        },
+      });
     }
 
     return this.prisma.order.findUnique({
@@ -1480,6 +1507,8 @@ Return ONLY valid JSON (no markdown):
       happyHourEnabled: Boolean(page.happyHourEnabled),
       happyHourDiscountPercent: page.happyHourDiscountPercent ?? null,
       happyHourLabel: page.happyHourLabel ?? '',
+      // V28: Milestone Rewards
+      milestoneRewardsEnabled: Boolean(page.milestoneRewardsEnabled),
     };
   }
 
@@ -1554,6 +1583,8 @@ Return ONLY valid JSON (no markdown):
       'happyHourEnabled',
       'happyHourDiscountPercent',
       'happyHourLabel',
+      // V28: Milestone Rewards
+      'milestoneRewardsEnabled',
     ];
     const pagePatch: any = {};
     for (const k of PAGE_FIELDS) {

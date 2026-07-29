@@ -21,4 +21,13 @@ export class PricingController {
   happyHourStatus(@Param('pageId', ParseIntPipe) pageId: number) {
     return this.svc.getHappyHourStatus(pageId);
   }
+
+  /** Public: milestone-reward preview ("this order earns..." / "N more orders until..."), keyed by phone. */
+  @Get(':pageId/milestone-status')
+  milestoneStatus(
+    @Param('pageId', ParseIntPipe) pageId: number,
+    @Query('phone') phone: string,
+  ) {
+    return this.svc.getMilestonePreview(pageId, phone);
+  }
 }

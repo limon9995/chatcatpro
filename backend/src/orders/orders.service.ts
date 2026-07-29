@@ -595,11 +595,20 @@ export class OrdersService {
     const paymentStatus =
       data.paymentMode === 'cod' ? 'not_required' : 'pending_proof';
     const subtotal = data.items.reduce((s, it) => s + it.unitPrice * it.qty, 0);
-    const discounts = await this.pricing.computeDiscounts(
+    const [discounts, isCombo] = await Promise.all([
+      this.pricing.computeDiscounts(data.pageIdRef, data.phone, subtotal),
+      this.pricing.isComboOrder(data.pageIdRef, data.items.map((it) => it.productCode.toUpperCase())),
+    ]);
+    const { thisOrderNumber, reward } = await this.pricing.getMilestoneReward(
       data.pageIdRef,
       data.phone,
-      subtotal,
+      isCombo,
     );
+    const extraItems: typeof data.items =
+      reward?.rewardType === 'FREE_ITEM' && reward.productCode
+        ? [{ productCode: reward.productCode, qty: reward.qty, unitPrice: 0, productName: `🎁 Free — ${reward.productName}`, metaJson: null }]
+        : [];
+
     return this.prisma.order.create({
       data: {
         pageIdRef: data.pageIdRef,
@@ -614,12 +623,13 @@ export class OrdersService {
         paymentStatus,
         deliveryLat: data.deliveryLat ?? null,
         deliveryLng: data.deliveryLng ?? null,
-        deliveryFee: data.deliveryFee ?? null,
+        deliveryFee: reward?.rewardType === 'FREE_DELIVERY' ? 0 : (data.deliveryFee ?? null),
         deliveryDistanceKm: data.deliveryDistanceKm ?? null,
         loyaltyDiscountAmount: discounts.loyaltyDiscount,
         happyHourDiscountAmount: discounts.happyHourDiscount,
+        milestoneRewardAppliedJson: reward ? JSON.stringify({ ...reward, orderNumber: thisOrderNumber }) : null,
         items: {
-          create: data.items.map((it) => ({
+          create: [...data.items, ...extraItems].map((it) => ({
             productCode: it.productCode,
             qty: it.qty,
             unitPrice: it.unitPrice,

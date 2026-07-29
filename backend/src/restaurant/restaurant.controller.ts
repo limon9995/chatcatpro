@@ -166,6 +166,32 @@ export class RestaurantController {
     return this.svc.deleteCombo(this.pid(r, p), code);
   }
 
+  // ── Milestone Rewards ───────────────────────────────────────────────────────
+  @Get(':pageId/milestones')
+  listMilestones(@Param('pageId') p: string, @Req() r: any) {
+    return this.svc.listMilestones(this.pid(r, p));
+  }
+
+  @Post(':pageId/milestones')
+  createMilestone(@Param('pageId') p: string, @Body() b: any, @Req() r: any) {
+    return this.svc.createMilestone(this.pid(r, p), b || {});
+  }
+
+  @Patch(':pageId/milestones/:id')
+  updateMilestone(
+    @Param('pageId') p: string,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() b: any,
+    @Req() r: any,
+  ) {
+    return this.svc.updateMilestone(this.pid(r, p), id, b || {});
+  }
+
+  @Delete(':pageId/milestones/:id')
+  deleteMilestone(@Param('pageId') p: string, @Param('id', ParseIntPipe) id: number, @Req() r: any) {
+    return this.svc.deleteMilestone(this.pid(r, p), id);
+  }
+
   @Post(':pageId/products/bulk')
   bulkCreate(@Param('pageId') p: string, @Body() b: any, @Req() r: any) {
     return this.svc.bulkCreateProducts(this.pid(r, p), b?.dishes ?? []);

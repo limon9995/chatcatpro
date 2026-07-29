@@ -18,6 +18,22 @@ export interface HappyHourStatus {
   label: string;
 }
 
+export interface MilestoneReward {
+  interval: number;
+  rewardType: 'FREE_ITEM' | 'FREE_DELIVERY';
+  productId?: number;
+  productCode?: string;
+  productName?: string;
+  qty: number;
+}
+
+export interface MilestonePreview {
+  enabled: boolean;
+  thisOrderNumber: number;
+  reward: MilestoneReward | null;
+  next: { interval: number; ordersAway: number; rewardType: string; productName?: string } | null;
+}
+
 export interface DiscountResult {
   loyaltyDiscount: number;
   loyaltyMessage?: string;
@@ -29,8 +45,33 @@ export interface DiscountResult {
 export class PricingService {
   constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * How many non-cancelled orders this phone number has placed at this page
+   * so far. `excludeOrderId` lets a caller that already created the order row
+   * (before pricing runs, e.g. the manual/quick-order flow) avoid counting
+   * that just-created order as one of its own "prior" orders.
+   */
+  private async countPriorOrders(
+    pageId: number,
+    phone: string,
+    excludeOrderId?: number,
+  ): Promise<number> {
+    return this.prisma.order.count({
+      where: {
+        pageIdRef: pageId,
+        phone,
+        status: { not: 'CANCELLED' },
+        ...(excludeOrderId ? { id: { not: excludeOrderId } } : {}),
+      },
+    });
+  }
+
   /** Real-time "how close is this phone number to a loyalty discount" check. */
-  async getLoyaltyStatus(pageId: number, phone: string | null | undefined): Promise<LoyaltyStatus> {
+  async getLoyaltyStatus(
+    pageId: number,
+    phone: string | null | undefined,
+    excludeOrderId?: number,
+  ): Promise<LoyaltyStatus> {
     const page = await this.prisma.page.findUnique({
       where: { id: pageId },
       select: { loyaltyEnabled: true, loyaltyThresholdOrders: true, loyaltyDiscountPercent: true },
@@ -43,9 +84,7 @@ export class PricingService {
 
     const clean = normalizePhone(phone);
     const ordersSoFar = clean
-      ? await this.prisma.order.count({
-          where: { pageIdRef: pageId, phone: clean, status: { not: 'CANCELLED' } },
-        })
+      ? await this.countPriorOrders(pageId, clean, excludeOrderId)
       : 0;
     const isLoyal = ordersSoFar >= threshold;
     const ordersNeeded = Math.max(0, threshold - ordersSoFar);
@@ -90,9 +129,10 @@ export class PricingService {
     phone: string | null | undefined,
     subtotal: number,
     now: Date = new Date(),
+    excludeOrderId?: number,
   ): Promise<DiscountResult> {
     const [loyalty, happyHour] = await Promise.all([
-      this.getLoyaltyStatus(pageId, phone),
+      this.getLoyaltyStatus(pageId, phone, excludeOrderId),
       this.getHappyHourStatus(pageId, now),
     ]);
     const loyaltyDiscount = loyalty.isLoyal
@@ -107,5 +147,116 @@ export class PricingService {
       happyHourDiscount,
       happyHourLabel: happyHour.active ? happyHour.label : undefined,
     };
+  }
+
+  /** True if any of these product codes is a COMBO product for this page. */
+  async isComboOrder(pageId: number, productCodes: string[]): Promise<boolean> {
+    if (!productCodes.length) return false;
+    const combo = await this.prisma.product.findFirst({
+      where: { pageId, code: { in: productCodes }, productType: 'COMBO' },
+      select: { id: true },
+    });
+    return Boolean(combo);
+  }
+
+  /**
+   * Order-count-based recurring reward (every Nth order gets a configured
+   * free item or free delivery). Combo orders never receive a milestone
+   * reward on the order that contains the combo, but they still count
+   * toward the running order total.
+   */
+  async getMilestoneReward(
+    pageId: number,
+    phone: string | null | undefined,
+    isComboOrder: boolean,
+    excludeOrderId?: number,
+  ): Promise<{ thisOrderNumber: number; reward: MilestoneReward | null }> {
+    const page = await this.prisma.page.findUnique({
+      where: { id: pageId },
+      select: { milestoneRewardsEnabled: true },
+    });
+    if (!page?.milestoneRewardsEnabled) return { thisOrderNumber: 0, reward: null };
+
+    const clean = normalizePhone(phone);
+    if (!clean) return { thisOrderNumber: 0, reward: null };
+
+    const priorCount = await this.countPriorOrders(pageId, clean, excludeOrderId);
+    const thisOrderNumber = priorCount + 1;
+    if (isComboOrder) return { thisOrderNumber, reward: null };
+
+    const milestones = await this.prisma.milestoneReward.findMany({
+      where: { pageId, isActive: true },
+      include: { product: { select: { id: true, code: true, name: true } } },
+    });
+    const match = milestones.find(
+      (m) => m.orderInterval > 0 && thisOrderNumber % m.orderInterval === 0,
+    );
+    if (!match) return { thisOrderNumber, reward: null };
+    if (match.rewardType === 'FREE_ITEM' && !match.product) {
+      return { thisOrderNumber, reward: null }; // reward product was deleted — skip safely
+    }
+
+    return {
+      thisOrderNumber,
+      reward: {
+        interval: match.orderInterval,
+        rewardType: match.rewardType as 'FREE_ITEM' | 'FREE_DELIVERY',
+        productId: match.product?.id,
+        productCode: match.product?.code,
+        productName: match.product?.name ?? match.product?.code,
+        qty: match.qty,
+      },
+    };
+  }
+
+  /** Public preview (web checkout / bot phone-capture): what's coming up, without placing an order. */
+  async getMilestonePreview(pageId: number, phone: string | null | undefined): Promise<MilestonePreview> {
+    const page = await this.prisma.page.findUnique({
+      where: { id: pageId },
+      select: { milestoneRewardsEnabled: true },
+    });
+    if (!page?.milestoneRewardsEnabled) {
+      return { enabled: false, thisOrderNumber: 0, reward: null, next: null };
+    }
+    const clean = normalizePhone(phone);
+    const priorCount = clean ? await this.countPriorOrders(pageId, clean) : 0;
+    const thisOrderNumber = priorCount + 1;
+
+    const milestones = await this.prisma.milestoneReward.findMany({
+      where: { pageId, isActive: true },
+      include: { product: { select: { id: true, code: true, name: true } } },
+    });
+    const hit = milestones.find((m) => m.orderInterval > 0 && thisOrderNumber % m.orderInterval === 0);
+    const reward: MilestoneReward | null = hit
+      ? {
+          interval: hit.orderInterval,
+          rewardType: hit.rewardType as 'FREE_ITEM' | 'FREE_DELIVERY',
+          productId: hit.product?.id,
+          productCode: hit.product?.code,
+          productName: hit.product?.name ?? hit.product?.code,
+          qty: hit.qty,
+        }
+      : null;
+
+    let next: MilestonePreview['next'] = null;
+    if (!reward && milestones.length) {
+      let best: { interval: number; ordersAway: number; rewardType: string; productName?: string } | null = null;
+      for (const m of milestones) {
+        if (m.orderInterval <= 0) continue;
+        const upcoming = Math.ceil(thisOrderNumber / m.orderInterval) * m.orderInterval;
+        const ordersAway = upcoming - thisOrderNumber + 1;
+        if (!best || ordersAway < best.ordersAway) {
+          best = {
+            interval: m.orderInterval,
+            ordersAway,
+            rewardType: m.rewardType,
+            productName: m.product?.name ?? m.product?.code,
+          };
+        }
+      }
+      next = best;
+    }
+
+    return { enabled: true, thisOrderNumber, reward, next };
   }
 }

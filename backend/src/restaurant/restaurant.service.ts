@@ -542,6 +542,89 @@ export class RestaurantService {
     return { success: true };
   }
 
+  // ── Milestone Rewards ───────────────────────────────────────────────────────
+  // "Every Nth order gets a reward" — merchant picks the interval (3, 5, 7...)
+  // and a reward per interval (a specific free menu item, or free delivery).
+
+  async listMilestones(pageId: number) {
+    return this.prisma.milestoneReward.findMany({
+      where: { pageId },
+      include: { product: { select: { id: true, code: true, name: true } } },
+      orderBy: { orderInterval: 'asc' },
+    });
+  }
+
+  private sanitizeMilestoneInput(body: any) {
+    const orderInterval = Math.round(Number(body?.orderInterval));
+    if (!Number.isFinite(orderInterval) || orderInterval < 2 || orderInterval > 100)
+      throw new BadRequestException('অর্ডার সংখ্যা ২-১০০ এর মধ্যে দিন');
+    const rewardType = body?.rewardType === 'FREE_DELIVERY' ? 'FREE_DELIVERY' : 'FREE_ITEM';
+    const qty = Math.max(1, Math.round(Number(body?.qty)) || 1);
+    const productId = rewardType === 'FREE_ITEM' ? Number(body?.productId) || null : null;
+    if (rewardType === 'FREE_ITEM' && !productId)
+      throw new BadRequestException('কোন item free দেবেন সেটা বেছে নিন');
+    return { orderInterval, rewardType, qty, productId };
+  }
+
+  async createMilestone(pageId: number, body: any) {
+    const clean = this.sanitizeMilestoneInput(body);
+    if (clean.productId) {
+      const product = await this.prisma.product.findFirst({
+        where: { id: clean.productId, pageId },
+        select: { id: true },
+      });
+      if (!product) throw new BadRequestException('Product খুঁজে পাওয়া যায়নি');
+    }
+    try {
+      return await this.prisma.milestoneReward.create({
+        data: { pageId, ...clean },
+        include: { product: { select: { id: true, code: true, name: true } } },
+      });
+    } catch (e: any) {
+      if (e?.code === 'P2002')
+        throw new BadRequestException(`${clean.orderInterval} নম্বর অর্ডারের জন্য একটা reward আগে থেকেই আছে`);
+      throw e;
+    }
+  }
+
+  async updateMilestone(pageId: number, id: number, body: any) {
+    const existing = await this.prisma.milestoneReward.findFirst({ where: { id, pageId } });
+    if (!existing) throw new NotFoundException('Milestone not found');
+    if (body?.isActive !== undefined && Object.keys(body).length === 1) {
+      return this.prisma.milestoneReward.update({
+        where: { id },
+        data: { isActive: Boolean(body.isActive) },
+        include: { product: { select: { id: true, code: true, name: true } } },
+      });
+    }
+    const clean = this.sanitizeMilestoneInput(body);
+    if (clean.productId) {
+      const product = await this.prisma.product.findFirst({
+        where: { id: clean.productId, pageId },
+        select: { id: true },
+      });
+      if (!product) throw new BadRequestException('Product খুঁজে পাওয়া যায়নি');
+    }
+    try {
+      return await this.prisma.milestoneReward.update({
+        where: { id },
+        data: clean,
+        include: { product: { select: { id: true, code: true, name: true } } },
+      });
+    } catch (e: any) {
+      if (e?.code === 'P2002')
+        throw new BadRequestException(`${clean.orderInterval} নম্বর অর্ডারের জন্য একটা reward আগে থেকেই আছে`);
+      throw e;
+    }
+  }
+
+  async deleteMilestone(pageId: number, id: number) {
+    const existing = await this.prisma.milestoneReward.findFirst({ where: { id, pageId } });
+    if (!existing) throw new NotFoundException('Milestone not found');
+    await this.prisma.milestoneReward.delete({ where: { id } });
+    return { success: true };
+  }
+
   // ── Bulk create from reviewed dishes ────────────────────────────────────────
 
   private validateVariants(raw: any): PriceVariant[] {

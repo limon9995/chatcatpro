@@ -41,6 +41,7 @@ interface RestoSettings {
   happyHourEnabled: boolean;
   happyHourDiscountPercent: number | null;
   happyHourLabel: string;
+  milestoneRewardsEnabled: boolean;
 }
 interface HoursRow { day: number; open: string; close: string; closed: boolean }
 
@@ -720,6 +721,77 @@ function ComboModal({ th, pageId, combo, products, cur, onClose, onToast, onSave
   );
 }
 
+// ── Milestone reward modal ───────────────────────────────────────────────────
+function MilestoneModal({ th, pageId, milestone, products, onClose, onToast, onSaved }: {
+  th: Theme; pageId: number; milestone: any; products: FoodProduct[];
+  onClose: () => void; onToast: (m: string, t?: any) => void; onSaved: () => void;
+}) {
+  const { copy } = useLanguage();
+  const { request } = useApi();
+  const RBASE = `${API_BASE}/restaurant/${pageId}`;
+  const isEdit = Boolean(milestone?.id);
+  const [orderInterval, setOrderInterval] = useState(milestone?.orderInterval || 3);
+  const [rewardType, setRewardType] = useState<'FREE_ITEM' | 'FREE_DELIVERY'>(milestone?.rewardType || 'FREE_ITEM');
+  const [productId, setProductId] = useState<number>(milestone?.productId || 0);
+  const [qty, setQty] = useState(milestone?.qty || 1);
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    if (!orderInterval || orderInterval < 2) return onToast(copy('২ বা তার বেশি একটা সংখ্যা দিন', 'Enter a number 2 or higher'), 'error');
+    if (rewardType === 'FREE_ITEM' && !productId) return onToast(copy('কোন item free দেবেন বেছে নিন', 'Pick a free item'), 'error');
+    setSaving(true);
+    try {
+      const body = { orderInterval: Number(orderInterval), rewardType, productId: rewardType === 'FREE_ITEM' ? productId : null, qty: Number(qty) || 1 };
+      if (isEdit) await request(`${RBASE}/milestones/${milestone.id}`, { method: 'PATCH', body: JSON.stringify(body) });
+      else await request(`${RBASE}/milestones`, { method: 'POST', body: JSON.stringify(body) });
+      onToast(copy('✅ সেভ হয়েছে', '✅ Saved'), 'success');
+      onSaved();
+      onClose();
+    } catch (e: any) { onToast(e.message || 'Error', 'error'); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <div style={{ ...th.card, width: '100%', maxWidth: 440, maxHeight: '90vh', overflowY: 'auto', border: `1.5px solid ${th.border}` }}>
+        <CardHeader th={th} title={isEdit ? `🎯 ${copy('Milestone Edit', 'Edit Milestone')}` : `🎯 ${copy('নতুন Milestone', 'New Milestone')}`}
+          sub={copy('প্রতি N-তম অর্ডারে এই reward auto দেওয়া হবে (combo order বাদে)', 'Every Nth order auto-gets this reward (combo orders excluded)')} />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <FieldWithInfo th={th} label={copy('প্রতি কত নম্বর অর্ডারে', 'Every Nth order')} helpText={copy('যেমন 3 দিলে 3rd, 6th, 9th... অর্ডারে reward পাবে', 'e.g. 3 means the 3rd, 6th, 9th... order gets the reward')}>
+            <input style={{ ...th.input, padding: '8px 10px' }} type="number" min={2} max={100} value={orderInterval}
+              onChange={e => setOrderInterval(Number(e.target.value))} />
+          </FieldWithInfo>
+          <FieldWithInfo th={th} label={copy('Reward ধরন', 'Reward type')} helpText="">
+            <select style={{ ...th.input, padding: '8px 10px' }} value={rewardType} onChange={e => setRewardType(e.target.value === 'FREE_DELIVERY' ? 'FREE_DELIVERY' : 'FREE_ITEM')}>
+              <option value="FREE_ITEM">{copy('🎁 নির্দিষ্ট item Free', '🎁 Specific item free')}</option>
+              <option value="FREE_DELIVERY">{copy('🛵 Free Delivery', '🛵 Free Delivery')}</option>
+            </select>
+          </FieldWithInfo>
+          {rewardType === 'FREE_ITEM' && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px', gap: 8 }}>
+              <FieldWithInfo th={th} label={copy('কোন item', 'Which item')} helpText="">
+                <select style={{ ...th.input, padding: '8px 10px' }} value={productId} onChange={e => setProductId(Number(e.target.value))}>
+                  <option value={0}>-- {copy('বেছে নিন', 'pick one')} --</option>
+                  {products.filter(p => (p as any).productType !== 'COMBO').map(p => <option key={p.id} value={p.id}>{p.name || p.code}</option>)}
+                </select>
+              </FieldWithInfo>
+              <FieldWithInfo th={th} label={copy('পরিমাণ', 'Qty')} helpText="">
+                <input style={{ ...th.input, padding: '8px 10px' }} type="number" min={1} value={qty} onChange={e => setQty(Number(e.target.value))} />
+              </FieldWithInfo>
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+            <button style={th.btnPrimary} onClick={save} disabled={saving}>
+              {saving ? <Spinner size={13} /> : copy('✓ Save করুন', '✓ Save')}
+            </button>
+            <button style={th.btnGhost} onClick={onClose}>{copy('Cancel', 'Cancel')}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 export function RestaurantPage({ th, pageId, onToast }: {
   th: Theme; pageId: number; onToast: (m: string, t?: any) => void;
@@ -737,8 +809,11 @@ export function RestaurantPage({ th, pageId, onToast }: {
     restaurantModeEnabled: false, restaurantLat: null, restaurantLng: null, deliverySlabs: [],
     loyaltyEnabled: false, loyaltyThresholdOrders: null, loyaltyDiscountPercent: null,
     happyHourEnabled: false, happyHourDiscountPercent: null, happyHourLabel: '',
+    milestoneRewardsEnabled: false,
   });
   const [offersSaving, setOffersSaving] = useState(false);
+  const [milestones, setMilestones] = useState<any[]>([]);
+  const [milestoneModal, setMilestoneModal] = useState<any | null>(null);
   const [happyHourWindow, setHappyHourWindow] = useState<HoursRow[]>(defaultHours());
   const [happyHourWindowSaving, setHappyHourWindowSaving] = useState(false);
   const cur = settings.currencySymbol || '৳';
@@ -786,7 +861,7 @@ export function RestaurantPage({ th, pageId, onToast }: {
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [s, prods, ings, cats, pack, mImgs, hrs, hh, combosList] = await Promise.all([
+      const [s, prods, ings, cats, pack, mImgs, hrs, hh, combosList, milestonesList] = await Promise.all([
         request<any>(`${BASE}/settings`),
         request<FoodProduct[]>(`${BASE}/products`).catch(() => []),
         request<Ingredient[]>(`${RBASE}/ingredients`).catch(() => []),
@@ -796,6 +871,7 @@ export function RestaurantPage({ th, pageId, onToast }: {
         request<HoursRow[]>(`${RBASE}/hours`).catch(() => []),
         request<HoursRow[]>(`${RBASE}/happy-hour`).catch(() => []),
         request<any[]>(`${RBASE}/combos`).catch(() => []),
+        request<any[]>(`${RBASE}/milestones`).catch(() => []),
       ]);
       setSettings({
         restaurantModeEnabled: Boolean(s?.restaurantModeEnabled),
@@ -809,6 +885,7 @@ export function RestaurantPage({ th, pageId, onToast }: {
         happyHourEnabled: Boolean(s?.happyHourEnabled),
         happyHourDiscountPercent: s?.happyHourDiscountPercent ?? null,
         happyHourLabel: s?.happyHourLabel || '',
+        milestoneRewardsEnabled: Boolean(s?.milestoneRewardsEnabled),
       });
       setDelivery({ lat: s?.restaurantLat ?? null, lng: s?.restaurantLng ?? null, slabs: Array.isArray(s?.deliverySlabs) ? s.deliverySlabs : [] });
       setProducts(Array.isArray(prods) ? prods : []);
@@ -819,6 +896,7 @@ export function RestaurantPage({ th, pageId, onToast }: {
       setHours(Array.isArray(hrs) && hrs.length === 7 ? hrs : defaultHours());
       setHappyHourWindow(Array.isArray(hh) && hh.length === 7 ? hh : defaultHours());
       setCombos(Array.isArray(combosList) ? combosList : []);
+      setMilestones(Array.isArray(milestonesList) ? milestonesList : []);
     } catch (e: any) { onToast(e.message, 'error'); }
     finally { setLoading(false); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -906,12 +984,18 @@ export function RestaurantPage({ th, pageId, onToast }: {
           happyHourEnabled: settings.happyHourEnabled,
           happyHourDiscountPercent: settings.happyHourDiscountPercent,
           happyHourLabel: settings.happyHourLabel,
+          milestoneRewardsEnabled: settings.milestoneRewardsEnabled,
         }),
       });
       onToast(copy('✅ সেভ হয়েছে', '✅ Saved'), 'success');
     } catch (e: any) { onToast(e.message, 'error'); }
     finally { setOffersSaving(false); }
   };
+
+  const reloadMilestones = useCallback(async () => {
+    try { setMilestones(await request<any[]>(`${RBASE}/milestones`)); } catch { /* ignore */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pageId]);
 
   const saveHappyHourWindow = async () => {
     setHappyHourWindowSaving(true);
@@ -1030,6 +1114,7 @@ export function RestaurantPage({ th, pageId, onToast }: {
       {recipeFor && <RecipeModal th={th} pageId={pageId} product={recipeFor} ingredients={ingredients} onClose={() => setRecipeFor(null)} onToast={onToast} />}
       {editingIng && <IngredientEditModal th={th} pageId={pageId} ingredient={editingIng} onClose={() => setEditingIng(null)} onToast={onToast} onSaved={reloadIngredients} />}
       {comboModal && <ComboModal th={th} pageId={pageId} combo={comboModal} products={products} cur={cur} onClose={() => setComboModal(null)} onToast={onToast} onSaved={reloadCombos} />}
+      {milestoneModal && <MilestoneModal th={th} pageId={pageId} milestone={milestoneModal} products={products} onClose={() => setMilestoneModal(null)} onToast={onToast} onSaved={reloadMilestones} />}
 
       <div>
         <h1 style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.04em', margin: 0 }}>🍕 Restaurant</h1>
@@ -1464,6 +1549,46 @@ export function RestaurantPage({ th, pageId, onToast }: {
                 </>
               )}
             </div>
+          </div>
+
+          <div style={{ ...th.card }}>
+            <CardHeader th={th}
+              title={copy('🎯 Milestone Rewards', '🎯 Milestone Rewards')}
+              sub={copy('প্রতি N-তম অর্ডারে auto ফ্রি item বা ফ্রি delivery — যেমন প্রতি ৩টা অর্ডারে একটা, প্রতি ৫টায় আরেকটা। Combo order-এ reward পাবে না (কিন্তু গণনায় ধরা হবে)।', 'Auto free item or free delivery every Nth order — e.g. every 3rd order one thing, every 5th another. Combo orders don\'t get a reward (but still count).')}
+              action={<button style={{ ...th.btnPrimary, fontSize: 12.5 }} onClick={() => setMilestoneModal({})}>+ {copy('নতুন Milestone', 'New Milestone')}</button>}
+            />
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 700, marginBottom: 12 }}>
+              <input type="checkbox" checked={settings.milestoneRewardsEnabled}
+                onChange={e => setSettings(s => ({ ...s, milestoneRewardsEnabled: e.target.checked }))} />
+              {copy('চালু করুন', 'Enable')}
+              <button style={{ ...th.btnGhost, fontSize: 11.5, marginLeft: 8 }} onClick={saveOffers} disabled={offersSaving}>
+                {offersSaving ? <Spinner size={12} /> : copy('✓ Save', '✓ Save')}
+              </button>
+            </label>
+            {milestones.length === 0 ? (
+              <EmptyState icon="🎯" title={copy('এখনো কোনো milestone নেই', 'No milestones yet')} sub={copy('"+ নতুন Milestone" দিয়ে যোগ করুন', 'Add one with "+ New Milestone"')} />
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {milestones.map((m: any) => (
+                  <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 9, border: `1px solid ${th.border}`, opacity: m.isActive ? 1 : 0.5 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 700, fontSize: 13 }}>{copy(`প্রতি ${m.orderInterval} নম্বর অর্ডারে`, `Every ${m.orderInterval}th order`)}</div>
+                      <div style={{ fontSize: 12, color: th.muted }}>
+                        {m.rewardType === 'FREE_DELIVERY'
+                          ? copy('🛵 ফ্রি Delivery', '🛵 Free Delivery')
+                          : copy(`🎁 ফ্রি ${m.product?.name || m.product?.code} × ${m.qty}`, `🎁 Free ${m.product?.name || m.product?.code} × ${m.qty}`)}
+                      </div>
+                    </div>
+                    <button style={{ ...th.btnSmGhost, fontSize: 11.5 }} onClick={() => setMilestoneModal(m)}>✏️ {copy('Edit', 'Edit')}</button>
+                    <button style={{ ...th.btnSmDanger, fontSize: 11.5 }} onClick={async () => {
+                      if (!window.confirm(copy('এই milestone মুছে ফেলবেন?', 'Delete this milestone?'))) return;
+                      try { await request(`${RBASE}/milestones/${m.id}`, { method: 'DELETE' }); reloadMilestones(); }
+                      catch (e: any) { onToast(e.message, 'error'); }
+                    }}>🗑 {copy('মুছুন', 'Delete')}</button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}

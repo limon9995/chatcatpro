@@ -33,7 +33,7 @@ export class OrderNotificationService {
     });
     if (!order) return;
     const itemLines = order.items
-      .map((i: any) => `• ${i.productCode} × ${i.qty} = ৳${i.unitPrice * i.qty}`)
+      .map((i: any) => `• ${i.productName || i.productCode} × ${i.qty} = ৳${i.unitPrice * i.qty}`)
       .join('\n');
     const subtotal = order.items.reduce((s: number, i: any) => s + i.unitPrice * i.qty, 0);
     const advance = (order as any).advanceAmount ?? 0;
@@ -42,8 +42,22 @@ export class OrderNotificationService {
     const editLink = (order as any).editToken
       ? `https://chatcat.pro/order?token=${(order as any).editToken}`
       : null;
+
+    let rewardLine = '';
+    if (order.milestoneRewardAppliedJson) {
+      try {
+        const r = JSON.parse(order.milestoneRewardAppliedJson);
+        rewardLine =
+          r.rewardType === 'FREE_DELIVERY'
+            ? '\n\n🎁 অভিনন্দন! এই অর্ডারে আপনি ফ্রি ডেলিভারি পেয়েছেন।'
+            : `\n\n🎁 অভিনন্দন! এই অর্ডারে আপনি ফ্রি ${r.productName || ''} পেয়েছেন।`;
+      } catch {
+        /* ignore malformed snapshot */
+      }
+    }
+
     await this.send(pageId, orderId, 'order_confirmed', {
-      items: itemLines || '—',
+      items: (itemLines || '—') + rewardLine,
       phone: order.phone || '—',
       address: order.address || '—',
       total: subtotal,
