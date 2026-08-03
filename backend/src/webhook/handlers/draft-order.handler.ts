@@ -247,7 +247,7 @@ export class DraftOrderHandler {
           if (draft.currentStep === 'advance_payment') {
             return this.buildAdvancePrompt(page, draft);
           }
-          return this.buildSummary(draft, page);
+          return await this.buildSummary(draft, page);
         }
         // Ask for what's still missing
         if (!draft.customerName) return fields.name.askPrompt;
@@ -310,7 +310,7 @@ export class DraftOrderHandler {
         }
         draft.currentStep = 'confirm';
         await this.ctx.saveDraft(pageId, psid, draft);
-        return this.buildSummary(draft, page);
+        return await this.buildSummary(draft, page);
       }
       // Customer gave a new address
       if (this.isAddressLike(workingText)) {
@@ -322,7 +322,7 @@ export class DraftOrderHandler {
         }
         draft.currentStep = 'confirm';
         await this.ctx.saveDraft(pageId, psid, draft);
-        return this.buildSummary(draft, page);
+        return await this.buildSummary(draft, page);
       }
       return `আগের ঠিকানায় পাঠাব?\n📍 *${draft.address}*\n\n"হ্যাঁ" বললে এই ঠিকানায় যাবে, অথবা নতুন ঠিকানা লিখুন 💖`;
     }
@@ -363,7 +363,7 @@ export class DraftOrderHandler {
         draft.phone = inlinePhone;
         draft.currentStep = 'confirm';
         await this.ctx.saveDraft(pageId, psid, draft);
-        return this.buildSummary(draft, page);
+        return await this.buildSummary(draft, page);
       }
       return `সব ঠিক থাকলে **confirm** লিখুন 💖\nকিছু বদলাতে চাইলে: ${this.buildEditOptions(draft)}`;
     }
@@ -396,7 +396,7 @@ export class DraftOrderHandler {
           draft.paymentVerified = true;
           draft.currentStep = 'confirm';
           await this.ctx.saveDraft(pageId, psid, draft);
-          return `✅ Payment পাওয়া গেছে! ৳${smsMatch.amount} (${(smsMatch.method ?? 'SMS').toUpperCase()})\n\n${this.buildSummary(draft, page)}`;
+          return `✅ Payment পাওয়া গেছে! ৳${smsMatch.amount} (${(smsMatch.method ?? 'SMS').toUpperCase()})\n\n${await this.buildSummary(draft, page)}`;
         }
         return `এই নম্বর থেকে payment পাইনি এখনো 😊 একটু পর আবার চেষ্টা করুন, অথবা Transaction ID দিন।`;
       }
@@ -427,7 +427,7 @@ export class DraftOrderHandler {
             await this.ctx.saveDraft(pageId, psid, draft);
             return (
               `✅ Payment verify হয়েছে! (${activeCred.method.toUpperCase()})\n\n` +
-              this.buildSummary(draft, page)
+              (await this.buildSummary(draft, page))
             );
           } else if (
             !result.needsManual &&
@@ -460,7 +460,7 @@ export class DraftOrderHandler {
             await this.ctx.saveDraft(pageId, psid, draft);
             return (
               `✅ Payment verify হয়েছে! (${(smsMatch.method ?? 'SMS').toUpperCase()})\n\n` +
-              this.buildSummary(draft, page)
+              (await this.buildSummary(draft, page))
             );
           }
         }
@@ -470,7 +470,7 @@ export class DraftOrderHandler {
       draft.paymentProof = proofText.slice(0, 200);
       draft.currentStep = 'confirm';
       await this.ctx.saveDraft(pageId, psid, draft);
-      return this.buildSummary(draft, page);
+      return await this.buildSummary(draft, page);
     }
 
     // ── AWAITING GATEWAY PAYMENT ──────────────────────────────────────────────
@@ -730,7 +730,7 @@ export class DraftOrderHandler {
     // No advance needed → show summary and ask for confirm
     draft.currentStep = 'confirm';
     await this.ctx.saveDraft(pageId, psid, draft);
-    return this.buildSummary(draft, page);
+    return await this.buildSummary(draft, page);
   }
 
   buildInfoFormPrompt(fields?: Record<string, AgentCoreFieldDef>): string {
@@ -761,7 +761,41 @@ export class DraftOrderHandler {
     );
   }
 
-  buildSummary(draft: DraftSession, page: any): string {
+  /**
+   * Offers preview for a bot-chat draft — product-side (subtotal/category/
+   * products) only. Delivery-side offers are intentionally excluded here:
+   * bot-chat orders never carry a resolved delivery fee (restaurant pages
+   * need the website map pin; normal pages don't persist Order.deliveryFee
+   * from this flow at all), so finalizeDraftOrder() never applies a
+   * delivery-side offer either — previewing one here would show a discount
+   * the saved order can't actually give. Same rule for restaurant AND
+   * normal pages; only the item-level math (page-type-agnostic) runs.
+   */
+  private async previewOfferDiscounts(
+    pageId: number,
+    items: { productCode: string; qty: number; unitPrice: number }[],
+  ) {
+    const empty = { productDiscountAmount: 0, deliveryDiscountAmount: 0, appliedOffers: [] as any[] };
+    if (!items.length) return empty;
+    try {
+      const products = await this.prisma.product.findMany({
+        where: { pageId, code: { in: items.map((i) => i.productCode) } },
+        select: { id: true, code: true, category: true },
+      });
+      const byCode = new Map(products.map((p) => [p.code, p]));
+      const offerItems = items
+        .map((i) => {
+          const p = byCode.get(i.productCode);
+          return p ? { productId: p.id, category: p.category, qty: i.qty, unitPrice: i.unitPrice } : null;
+        })
+        .filter((i): i is NonNullable<typeof i> => i !== null);
+      return await this.pricing.resolveOfferDiscounts(pageId, offerItems, null);
+    } catch {
+      return empty; // preview-only — never block the chat flow on a pricing error
+    }
+  }
+
+  async buildSummary(draft: DraftSession, page: any): Promise<string> {
     const sym = page.currencySymbol || '৳';
     const isRestaurant = isRestaurantReady(page);
     const fee = this.zoneDeliveryFee(draft.address || '', page);
@@ -785,16 +819,28 @@ export class DraftOrderHandler {
       ? `💳 Payment: ${draft.paymentProof}`
       : '';
 
+    // V29: Offers — see previewOfferDiscounts() for why this is product-side
+    // only. discountedSubtotal is what finalizeDraftOrder() will actually
+    // save as (subtotal − Order.offerDiscountAmount), for both page types.
+    const offerResult = await this.previewOfferDiscounts(page.id, draft.items);
+    const discountedSubtotal = Math.max(0, subtotal - offerResult.productDiscountAmount);
+    const offerTitle = offerResult.appliedOffers.find((o: any) => o.target !== 'DELIVERY')?.title;
+    const offerLine =
+      offerResult.productDiscountAmount > 0
+        ? `🎁 ${offerTitle ?? 'Offer'} ছাড়: -${sym}${offerResult.productDiscountAmount}`
+        : '';
+
     return [
       '📦 *Order Summary*',
       ...lines,
       ...(cfLines.length ? cfLines : []),
+      ...(offerLine ? [offerLine] : []),
       isRestaurant
         ? `🛵 Delivery: দূরত্ব অনুযায়ী (delivery-র সময় জানানো হবে)`
         : `🚚 Delivery: ${sym}${fee}`,
       isRestaurant
-        ? `💰 Total: ${sym}${subtotal} + delivery charge`
-        : `💰 Total: ${sym}${subtotal + fee}`,
+        ? `💰 Total: ${sym}${discountedSubtotal} + delivery charge`
+        : `💰 Total: ${sym}${discountedSubtotal + fee}`,
       '',
       `👤 Name:    ${draft.customerName ?? '—'}`,
       `📞 Phone:   ${draft.phone ?? '—'}`,
@@ -947,23 +993,13 @@ export class DraftOrderHandler {
       orderSubtotal,
     );
 
-    // Offers — product-side (subtotal/category/products). Bot-chat orders
-    // don't carry a structured delivery fee at this point (see the fixed
-    // Dhaka-zone quote flow), so only the product-side bucket applies here.
-    const offerProducts = await this.prisma.product.findMany({
-      where: { pageId, code: { in: draft.items.map((i) => i.productCode) } },
-      select: { id: true, code: true, category: true },
-    }).catch(() => [] as { id: number; code: string; category: string | null }[]);
-    const offerProductByCode = new Map(offerProducts.map((p) => [p.code, p]));
-    const offerItems = draft.items
-      .map((i) => {
-        const p = offerProductByCode.get(i.productCode);
-        return p ? { productId: p.id, category: p.category, qty: i.qty, unitPrice: i.unitPrice } : null;
-      })
-      .filter((i): i is NonNullable<typeof i> => i !== null);
-    const offerResult = await this.pricing
-      .resolveOfferDiscounts(pageId, offerItems, null)
-      .catch(() => ({ productDiscountAmount: 0, deliveryDiscountAmount: 0, appliedOffers: [] as any[] }));
+    // Offers — product-side (subtotal/category/products) only. Bot-chat
+    // orders don't carry a structured delivery fee at this point (see the
+    // fixed Dhaka-zone quote flow), so the delivery-side bucket never
+    // applies here — for either restaurant or normal pages. buildSummary()
+    // previews the exact same product-side-only result so the pre-confirm
+    // chat total always matches what actually gets saved.
+    const offerResult = await this.previewOfferDiscounts(pageId, draft.items);
 
     // C-3: Create order AND decrement stock atomically
     const order = await this.prisma.$transaction(async (tx) => {

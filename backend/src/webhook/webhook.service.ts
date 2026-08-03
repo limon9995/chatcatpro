@@ -2465,7 +2465,7 @@ export class WebhookService implements OnModuleDestroy {
       await this.safeSend(
         page.pageToken,
         psid,
-        `✅ ${removeCode} remove হয়েছে।\n\n${this.draftHandler.buildSummary(draft, page)}`,
+        `✅ ${removeCode} remove হয়েছে।\n\n${await this.draftHandler.buildSummary(draft, page)}`,
       );
     }
   }
@@ -2565,7 +2565,7 @@ export class WebhookService implements OnModuleDestroy {
       await this.safeSend(
         page.pageToken,
         psid,
-        `✅ Updated!\n\n${this.draftHandler.buildSummary(draft, page)}`,
+        `✅ Updated!\n\n${await this.draftHandler.buildSummary(draft, page)}`,
       );
       return true;
     }
@@ -2906,7 +2906,7 @@ export class WebhookService implements OnModuleDestroy {
         draft.paymentScreenshotUrl = imageUrl;
         draft.currentStep = 'confirm';
         await this.ctx.saveDraft(pageId, psid, draft);
-        const summary = this.draftHandler.buildSummary(draft, page);
+        const summary = await this.draftHandler.buildSummary(draft, page);
         await this.safeSend(
           token,
           psid,

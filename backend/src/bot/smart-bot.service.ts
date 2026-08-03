@@ -47,7 +47,7 @@ export interface IDraftOrderHandler {
     draft: DraftSession,
     page: any,
   ): Promise<number>;
-  buildSummary(draft: DraftSession, page: any): string;
+  buildSummary(draft: DraftSession, page: any): Promise<string>;
   buildAdvancePrompt(page: any, draft: DraftSession): string;
 }
 
@@ -391,7 +391,7 @@ export class SmartBotService {
             return `${parsed.reply}\n\n${draftHandler.buildAdvancePrompt(page, d!)}`;
           }
           if (d!.currentStep === 'confirm') {
-            return `${parsed.reply}\n\n${draftHandler.buildSummary(d!, page)}`;
+            return `${parsed.reply}\n\n${await draftHandler.buildSummary(d!, page)}`;
           }
         }
         return parsed.reply;

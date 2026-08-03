@@ -481,7 +481,7 @@ export class WaWebhookService {
           draft.paymentScreenshotUrl = media.url;
           draft.currentStep = 'confirm';
           await this.ctx.saveDraft(pageId, waId, draft);
-          const summary = this.draftHandler.buildSummary(draft, page);
+          const summary = await this.draftHandler.buildSummary(draft, page);
           await safeSend(`✅ Payment পাওয়া গেছে! Transaction ID: *${txnId}*\n\n${summary}`);
         } else {
           draft.paymentScreenshotUrl = media.url;
