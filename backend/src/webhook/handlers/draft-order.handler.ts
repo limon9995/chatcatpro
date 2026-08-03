@@ -12,6 +12,7 @@ import { CallService } from '../../call/call.service';
 import { ProductsService } from '../../products/products.service';
 import { BotKnowledgeService } from '../../bot-knowledge/bot-knowledge.service';
 import { CrmService } from '../../crm/crm.service';
+import { normalizePhone } from '../../crm/phone.util';
 import { FollowUpService } from '../../followup/followup.service';
 import { BillingService } from '../../billing/billing.service';
 import { SpamCheckerService } from '../../spam-checker/spam-checker.service';
@@ -1350,7 +1351,10 @@ export class DraftOrderHandler {
     );
     const phoneMatch = normalized.match(/(?:\+?88)?01[3-9]\d{8}/);
     if (phoneMatch) {
-      result.phone = phoneMatch[0];
+      // Canonicalize to the bare 11-digit form (see extractPhone's comment) —
+      // matters for milestone/loyalty order-counting, which exact-matches
+      // Order.phone.
+      result.phone = normalizePhone(phoneMatch[0]) ?? phoneMatch[0];
       const phoneIdx = normalized.indexOf(phoneMatch[0]);
       remaining = (
         remaining.slice(0, phoneIdx) +
@@ -1425,7 +1429,14 @@ export class DraftOrderHandler {
       String('০১২৩৪৫৬৭৮৯'.indexOf(d)),
     );
     const m = normalized.match(/(?:\+?88)?01[3-9]\d{8}/);
-    return m ? m[0] : null;
+    if (!m) return null;
+    // The matched text can be "01712345678", "8801712345678", or
+    // "+8801712345678" depending on how the customer typed it — canonicalize
+    // to the bare 11-digit form so the SAME customer always lands on the SAME
+    // Order.phone value. Without this, milestone/loyalty order-counting
+    // (exact string match in PricingService.countPriorOrders) silently treats
+    // every differently-formatted re-entry as a brand new customer.
+    return normalizePhone(m[0]) ?? m[0];
   }
 
   /**

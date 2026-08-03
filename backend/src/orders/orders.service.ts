@@ -10,6 +10,7 @@ import { ConversationContextService } from '../conversation-context/conversation
 import { BroadcastService } from '../broadcast/broadcast.service';
 import { TelegramNotificationService } from '../telegram/telegram-notification.service';
 import { PricingService } from '../pricing/pricing.service';
+import { normalizePhone } from '../crm/phone.util';
 
 export type OrderStatus =
   | 'RECEIVED'
@@ -591,17 +592,23 @@ export class OrdersService {
     deliveryFee?: number;
     deliveryDistanceKm?: number;
   }) {
-    const psid = `WEB-${data.phone.replace(/\D/g, '')}`;
+    // Canonicalize to the bare 11-digit form so the SAME customer always
+    // lands on the SAME Order.phone value — milestone/loyalty order-counting
+    // (PricingService.countPriorOrders) exact-matches this column, so an
+    // unnormalized mix of "01712345678" / "+8801712345678" / "8801712345678"
+    // across orders would silently undercount a real repeat customer.
+    const phone = normalizePhone(data.phone) ?? data.phone.trim();
+    const psid = `WEB-${phone.replace(/\D/g, '')}`;
     const paymentStatus =
       data.paymentMode === 'cod' ? 'not_required' : 'pending_proof';
     const subtotal = data.items.reduce((s, it) => s + it.unitPrice * it.qty, 0);
     const [discounts, isCombo] = await Promise.all([
-      this.pricing.computeDiscounts(data.pageIdRef, data.phone, subtotal),
+      this.pricing.computeDiscounts(data.pageIdRef, phone, subtotal),
       this.pricing.isComboOrder(data.pageIdRef, data.items.map((it) => it.productCode.toUpperCase())),
     ]);
     const { thisOrderNumber, rewards } = await this.pricing.getMilestoneRewards(
       data.pageIdRef,
-      data.phone,
+      phone,
       isCombo,
     );
     const extraItems: typeof data.items = rewards
@@ -615,7 +622,7 @@ export class OrdersService {
         pageIdRef: data.pageIdRef,
         customerPsid: psid,
         customerName: data.customerName,
-        phone: data.phone,
+        phone,
         address: data.address,
         status: 'RECEIVED',
         editToken: randomUUID(),

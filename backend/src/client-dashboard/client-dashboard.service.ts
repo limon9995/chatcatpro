@@ -25,6 +25,7 @@ import { TelegramService } from '../common/telegram.service';
 import { TelegramNotificationService } from '../telegram/telegram-notification.service';
 import { AdminService } from '../admin/admin.service';
 import { PricingService } from '../pricing/pricing.service';
+import { normalizePhone } from '../crm/phone.util';
 import {
   haversineKm,
   isRestaurantReady,
@@ -282,12 +283,19 @@ export class ClientDashboardService {
       }
     }
 
+    // Canonicalize to the bare 11-digit form (see PricingService.
+    // countPriorOrders) so a merchant typing the same customer's number in a
+    // different format on a later manual order still counts as the same
+    // customer for milestone/loyalty tracking.
+    const manualOrderPhone = body?.phone
+      ? (normalizePhone(body.phone) ?? String(body.phone).trim())
+      : '';
     const order = await this.prisma.order.create({
       data: {
         pageIdRef: pageId,
         customerPsid: '',
         customerName: body?.customerName || '',
-        phone: body?.phone || '',
+        phone: manualOrderPhone,
         address: body?.address || '',
         orderNote: body?.orderNote || '',
         status: 'RECEIVED',
