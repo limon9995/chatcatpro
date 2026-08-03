@@ -35,9 +35,6 @@ interface RestoSettings {
   restaurantLng: number | null;
   deliverySlabs: DeliverySlab[];
   currencySymbol?: string;
-  loyaltyEnabled: boolean;
-  loyaltyThresholdOrders: number | null;
-  loyaltyDiscountPercent: number | null;
   happyHourEnabled: boolean;
   happyHourDiscountPercent: number | null;
   happyHourLabel: string;
@@ -831,7 +828,6 @@ export function RestaurantPage({ th, pageId, onToast }: {
   const [loading, setLoading] = useState(true);
   const [settings, setSettings] = useState<RestoSettings>({
     restaurantModeEnabled: false, restaurantLat: null, restaurantLng: null, deliverySlabs: [],
-    loyaltyEnabled: false, loyaltyThresholdOrders: null, loyaltyDiscountPercent: null,
     happyHourEnabled: false, happyHourDiscountPercent: null, happyHourLabel: '',
     milestoneRewardsEnabled: false,
   });
@@ -906,9 +902,6 @@ export function RestaurantPage({ th, pageId, onToast }: {
         restaurantLng: s?.restaurantLng ?? null,
         deliverySlabs: Array.isArray(s?.deliverySlabs) ? s.deliverySlabs : [],
         currencySymbol: s?.currencySymbol || '৳',
-        loyaltyEnabled: Boolean(s?.loyaltyEnabled),
-        loyaltyThresholdOrders: s?.loyaltyThresholdOrders ?? null,
-        loyaltyDiscountPercent: s?.loyaltyDiscountPercent ?? null,
         happyHourEnabled: Boolean(s?.happyHourEnabled),
         happyHourDiscountPercent: s?.happyHourDiscountPercent ?? null,
         happyHourLabel: s?.happyHourLabel || '',
@@ -1009,9 +1002,6 @@ export function RestaurantPage({ th, pageId, onToast }: {
       await request(`${BASE}/settings`, {
         method: 'PATCH',
         body: JSON.stringify({
-          loyaltyEnabled: settings.loyaltyEnabled,
-          loyaltyThresholdOrders: settings.loyaltyThresholdOrders,
-          loyaltyDiscountPercent: settings.loyaltyDiscountPercent,
           happyHourEnabled: settings.happyHourEnabled,
           happyHourDiscountPercent: settings.happyHourDiscountPercent,
           happyHourLabel: settings.happyHourLabel,
@@ -1582,36 +1572,9 @@ export function RestaurantPage({ th, pageId, onToast }: {
         </div>
       )}
 
-      {/* ── OFFERS: Loyalty + Happy Hour ── */}
+      {/* ── OFFERS: Happy Hour (repeat-customer rewards now live under Milestone Rewards) ── */}
       {tab === 'OFFERS' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-          <div style={{ ...th.card }}>
-            <CardHeader th={th} title={copy('🎉 Lucky Customer (Loyalty)', '🎉 Lucky Customer (Loyalty)')}
-              sub={copy('একই ফোন নম্বর থেকে বার বার order এলে গোনা হয় (কোনো account লাগে না)। চালু থাকলে order দেওয়ার সময় ফোন নম্বর দিলেই customer কে ছাড়ের status জানিয়ে দেওয়া হয়।', 'Counted by phone number — no account needed. When on, the customer is told their discount status right when they give their phone number.')} />
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 480 }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 700 }}>
-                <input type="checkbox" checked={settings.loyaltyEnabled}
-                  onChange={e => setSettings(s => ({ ...s, loyaltyEnabled: e.target.checked }))} />
-                {copy('চালু করুন', 'Enable')}
-              </label>
-              {settings.loyaltyEnabled && (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                  <FieldWithInfo th={th} label={copy('কত অর্ডারে', 'Orders needed')} helpText={copy('এত বার order করলে "Lucky Customer" হয়ে যাবে', 'Reaching this many orders makes them a Lucky Customer')}>
-                    <input style={{ ...th.input, padding: '8px 10px' }} type="number" min={1} value={settings.loyaltyThresholdOrders ?? ''}
-                      onChange={e => setSettings(s => ({ ...s, loyaltyThresholdOrders: Number(e.target.value) || null }))} />
-                  </FieldWithInfo>
-                  <FieldWithInfo th={th} label={copy('কত % ছাড়', 'Discount %')} helpText={copy('Lucky Customer হওয়ার পর প্রতি order-এ এই % ছাড় auto apply হবে', 'Applied automatically on every order once qualified')}>
-                    <input style={{ ...th.input, padding: '8px 10px' }} type="number" min={0} max={100} value={settings.loyaltyDiscountPercent ?? ''}
-                      onChange={e => setSettings(s => ({ ...s, loyaltyDiscountPercent: Number(e.target.value) || null }))} />
-                  </FieldWithInfo>
-                </div>
-              )}
-              <button style={{ ...th.btnPrimary, alignSelf: 'flex-start' }} onClick={saveOffers} disabled={offersSaving}>
-                {offersSaving ? <Spinner size={13} /> : copy('✓ Save করুন', '✓ Save')}
-              </button>
-            </div>
-          </div>
-
           <div style={{ ...th.card }}>
             <CardHeader th={th} title={copy('⏰ Happy Hour', '⏰ Happy Hour')}
               sub={copy('নির্দিষ্ট সময়ে সব order-এ auto % ছাড় — website-এ banner হিসেবে দেখাবে', 'Auto % discount during a set window — shown as a banner on your website')} />
