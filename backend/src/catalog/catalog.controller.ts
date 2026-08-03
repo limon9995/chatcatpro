@@ -336,6 +336,7 @@ export class CatalogController {
     @Query('q') q?: string,
     @Query('codes') codes?: string,
     @Query('select') select?: string,
+    @Query('category') category?: string,
   ) {
     const domain = (host || '')
       .toLowerCase()
@@ -388,6 +389,7 @@ export class CatalogController {
       this.buildHtml(data, q || '', {
         selectionMode: select === '1',
         shortlistCodes: this.normalizeCodeList(codes),
+        category,
       }),
     );
   }
@@ -819,6 +821,7 @@ export class CatalogController {
     @Query('q') q: string,
     @Query('codes') codes?: string,
     @Query('select') select?: string,
+    @Query('category') category?: string,
   ) {
     const data = await this.buildData(pid, q, codes);
     if ('error' in data) {
@@ -841,6 +844,7 @@ export class CatalogController {
       this.buildHtml(data, q || '', {
         selectionMode: select === '1',
         shortlistCodes: this.normalizeCodeList(codes),
+        category,
       }),
     );
   }
@@ -874,6 +878,8 @@ export class CatalogController {
         menuImagesJson: true,
         businessHoursJson: true,
         businessInfo: true,
+        menuLayoutMode: true,
+        menuCategoryOrderJson: true,
         owner: { select: { isActive: true } },
       },
     });
@@ -973,6 +979,20 @@ export class CatalogController {
         customDomain: page.customDomain || null,
         websiteUrl: page.websiteUrl || null,
         restaurantMode: Boolean((page as any).restaurantModeEnabled),
+        // V29: "single" = one page, JS category tabs (today's default,
+        // unchanged behavior). "pages" = each category is its own page load.
+        menuLayoutMode:
+          (page as any).menuLayoutMode === 'pages' ? 'pages' : 'single',
+        menuCategoryOrder: (() => {
+          try {
+            const raw = JSON.parse((page as any).menuCategoryOrderJson || '[]');
+            return Array.isArray(raw)
+              ? raw.filter((c: any) => typeof c === 'string')
+              : [];
+          } catch {
+            return [];
+          }
+        })(),
         menuImages: (() => {
           try {
             const raw = JSON.parse((page as any).menuImagesJson || '[]');
@@ -2220,11 +2240,36 @@ ${poweredByBadge()}
 </html>`;
   }
 
+  /**
+   * Order a page's category tabs: the merchant's saved order first (matched
+   * case-insensitively against real category names), then any category not
+   * in that list appended alphabetically — so newly-added categories keep
+   * showing up without the merchant re-visiting the layout settings.
+   */
+  private orderCategoryTabs(
+    counts: Map<string, number>,
+    savedOrder: string[],
+  ): [string, number][] {
+    const savedLower = savedOrder.map((s) => s.trim().toLowerCase()).filter(Boolean);
+    const allKeys = [...counts.keys()];
+    const orderedKeys: string[] = [];
+    for (const wanted of savedLower) {
+      const match = allKeys.find(
+        (k) => k.toLowerCase() === wanted && !orderedKeys.includes(k),
+      );
+      if (match) orderedKeys.push(match);
+    }
+    const remaining = allKeys
+      .filter((k) => !orderedKeys.includes(k))
+      .sort((a, b) => a.localeCompare(b));
+    return [...orderedKeys, ...remaining].map((k) => [k, counts.get(k)!]);
+  }
+
   // ── Catalog HTML page ──────────────────────────────────────────────────────
   private buildHtml(
     data: any,
     search: string,
-    opts?: { selectionMode?: boolean; shortlistCodes?: string[] },
+    opts?: { selectionMode?: boolean; shortlistCodes?: string[]; category?: string },
   ): string {
     const { page, products } = data;
     const primary = esc(page.primaryColor);
@@ -2237,6 +2282,10 @@ ${poweredByBadge()}
 
     // V25: Restaurant pages get burgerbhai-style category tabs (Momo's (6) …)
     const restaurantTabs = Boolean(page.restaurantMode);
+    // V29: "pages" mode — every category tab is a real page load (its own
+    // shareable URL), landing on the merchant's first-ordered category by
+    // default. "single" (default) keeps today's one-page JS-tab behavior.
+    const pagesMode = restaurantTabs && page.menuLayoutMode === 'pages';
 
     // V26: open/closed pill — only shown once the merchant has set hours
     const openNow = page.businessHours ? isOpenNow(page.businessHours) : null;
@@ -2257,11 +2306,38 @@ ${poweredByBadge()}
         categoryCounts.set(c, (categoryCounts.get(c) || 0) + 1);
       }
     }
-    const categoryTabs = [...categoryCounts.entries()].sort((a, b) =>
-      a[0].localeCompare(b[0]),
+    const categoryTabs = this.orderCategoryTabs(
+      categoryCounts,
+      Array.isArray(page.menuCategoryOrder) ? page.menuCategoryOrder : [],
     );
 
-    const cards = products
+    // V29: resolve which category page this request is actually showing.
+    // Search always wins (shows every match, never "stuck" on one category).
+    // '' / unset falls back to the merchant's first-ordered category so
+    // "which category comes first" has a real effect; 'all' is the explicit
+    // "browse everything" tab.
+    const rawCategoryParam = String(opts?.category || '').trim();
+    let effectiveCategory: string | null = null; // null = show everything
+    if (pagesMode && !search.trim() && categoryTabs.length > 0) {
+      if (rawCategoryParam && rawCategoryParam.toLowerCase() !== 'all') {
+        const match = categoryTabs.find(
+          ([cat]) => cat.toLowerCase() === rawCategoryParam.toLowerCase(),
+        );
+        effectiveCategory = match ? match[0] : categoryTabs[0][0];
+      } else if (!rawCategoryParam) {
+        effectiveCategory = categoryTabs[0][0];
+      }
+      // rawCategoryParam === 'all' → effectiveCategory stays null (show all)
+    }
+    const cardsProducts = effectiveCategory
+      ? products.filter(
+          (p: any) =>
+            String(p.category || '').trim().toLowerCase() ===
+            effectiveCategory!.toLowerCase(),
+        )
+      : products;
+
+    const cards = cardsProducts
       .map((p: any, idx: number) => {
         const videoType = detectVideoType(p.videoUrl || '');
         const ytId =
@@ -2320,12 +2396,12 @@ ${poweredByBadge()}
       .join('');
 
     const emptyState =
-      products.length === 0
+      cardsProducts.length === 0
         ? `
       <div class="empty">
         <div class="empty-icon">🔍</div>
-        <div class="empty-title">${search ? `"${esc(search)}" পাওয়া যায়নি` : selectionMode ? 'ম্যাচ করা shortlist এ কোনো product নেই' : 'কোনো product নেই'}</div>
-        ${search || selectionMode ? `<a href="/catalog/${esc(page.id)}" class="empty-btn">সব product দেখুন</a>` : ''}
+        <div class="empty-title">${search ? `"${esc(search)}" পাওয়া যায়নি` : selectionMode ? 'ম্যাচ করা shortlist এ কোনো product নেই' : effectiveCategory ? `${esc(effectiveCategory)}-এ এখনো কিছু নেই` : 'কোনো product নেই'}</div>
+        ${search || selectionMode || effectiveCategory ? `<a href="/catalog/${esc(page.id)}${effectiveCategory ? '?category=all' : ''}" class="empty-btn">সব product দেখুন</a>` : ''}
       </div>`
         : '';
 
@@ -2738,7 +2814,7 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:radial-
     ${
       search
         ? `"${esc(search)}" — <span>${products.length} টি result</span>`
-        : `মোট <span>${products.length}</span> টি product`
+        : `মোট <span>${cardsProducts.length}</span> টি product`
     }
   </div>
 </div>
@@ -2747,8 +2823,13 @@ ${
   restaurantTabs && categoryTabs.length > 0
     ? `<div class="filters">
   <div class="filters-inner" id="categoryBar">
-    <button type="button" class="filter-btn active" data-cat="">🍽️ সব (${products.length})</button>
-    ${categoryTabs.map(([cat, count]) => `<button type="button" class="filter-btn" data-cat="${esc(cat.toLowerCase())}">${esc(cat)} (${count})</button>`).join('\n    ')}
+    ${
+      pagesMode
+        ? `<a href="/catalog/${esc(page.id)}?category=all" class="filter-btn${effectiveCategory === null ? ' active' : ''}">🍽️ সব (${products.length})</a>
+    ${categoryTabs.map(([cat, count]) => `<a href="/catalog/${esc(page.id)}?category=${encodeURIComponent(cat)}" class="filter-btn${effectiveCategory && effectiveCategory.toLowerCase() === cat.toLowerCase() ? ' active' : ''}">${esc(cat)} (${count})</a>`).join('\n    ')}`
+        : `<button type="button" class="filter-btn active" data-cat="">🍽️ সব (${products.length})</button>
+    ${categoryTabs.map(([cat, count]) => `<button type="button" class="filter-btn" data-cat="${esc(cat.toLowerCase())}">${esc(cat)} (${count})</button>`).join('\n    ')}`
+    }
   </div>
 </div>`
     : ''
@@ -2767,7 +2848,7 @@ ${
   <div class="section-head">
     <div>
       <div class="section-kicker">${restaurantTabs ? "Today's Menu" : 'Featured Products'}</div>
-      <div class="section-title">${search ? 'Search Result' : restaurantTabs ? '🍽️ আমাদের Menu' : 'Shop The Collection'}</div>
+      <div class="section-title">${search ? 'Search Result' : effectiveCategory ? `🍽️ ${esc(effectiveCategory)}` : restaurantTabs ? '🍽️ আমাদের Menu' : 'Shop The Collection'}</div>
       <div class="section-text">${search ? 'আপনার search অনুযায়ী filtered product দেখানো হচ্ছে।' : 'স্টোরের available product গুলো browse করুন, detail page খুলে order complete করুন।'}</div>
     </div>
   </div>
@@ -2917,8 +2998,9 @@ ${poweredByBadge()}
     });
   });
 
-  /* ── V25: restaurant category tabs ── */
-  var catButtons = Array.from(document.querySelectorAll('#categoryBar .filter-btn'));
+  /* ── V25: restaurant category tabs (single-page JS mode only — in "pages"
+     mode these render as real <a href> links and just navigate) ── */
+  var catButtons = Array.from(document.querySelectorAll('#categoryBar button.filter-btn'));
   catButtons.forEach(function(btn){
     btn.addEventListener('click', function(){
       catButtons.forEach(function(b){ b.classList.remove('active'); });

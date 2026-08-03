@@ -12,6 +12,19 @@ import {
 // Keep in sync with restaurant.service.ts's VALID_UNITS
 const MENU_SCAN_VALID_UNITS = ['gm', 'kg', 'pcs', 'ml', 'liter'];
 
+interface MenuScanDish {
+  name: string;
+  category: string | null;
+  description: string | null;
+  variants: { label: string; price: number; pieces: number | null }[];
+  ingredients: { name: string; qty: number; unit: string }[];
+}
+interface MenuScanUsage {
+  model: string;
+  promptTokens: number;
+  outputTokens: number;
+}
+
 @Injectable()
 export class GeminiVisionProvider implements VisionAnalysisProvider {
   private readonly logger = new Logger(GeminiVisionProvider.name);
@@ -345,22 +358,38 @@ Rules:
   }
 
   /**
-   * Extract dishes from restaurant menu photo(s). Returns [] dishes on
-   * unreadable input. `usage` carries Gemini token counts for metering.
+   * Extract dishes from restaurant menu photo(s) — any number of photos.
+   * Gemini is only reliable up to ~5 images per call (larger batches start
+   * truncating/dropping dishes), so this chunks the input into groups of 5
+   * and calls the model once per chunk, sequentially (shares the same key
+   * rotator as every other batch — parallel calls would just fight over
+   * rate limits), merging the dish lists and summing token usage.
    */
-  async extractMenuItems(imageUrls: string[]): Promise<{
-    dishes: {
-      name: string;
-      category: string | null;
-      description: string | null;
-      variants: { label: string; price: number; pieces: number | null }[];
-      ingredients: { name: string; qty: number; unit: string }[];
-    }[];
-    usage: { model: string; promptTokens: number; outputTokens: number };
-  }> {
+  async extractMenuItems(
+    imageUrls: string[],
+  ): Promise<{ dishes: MenuScanDish[]; usage: MenuScanUsage }> {
+    const BATCH_SIZE = 5;
+    const chunks: string[][] = [];
+    for (let i = 0; i < imageUrls.length; i += BATCH_SIZE) {
+      chunks.push(imageUrls.slice(i, i + BATCH_SIZE));
+    }
+    const dishes: MenuScanDish[] = [];
+    let promptTokens = 0;
+    let outputTokens = 0;
+    for (const chunk of chunks) {
+      const result = await this.extractMenuItemsBatch(chunk);
+      dishes.push(...result.dishes);
+      promptTokens += result.usage.promptTokens;
+      outputTokens += result.usage.outputTokens;
+    }
+    return { dishes, usage: { model: this.model, promptTokens, outputTokens } };
+  }
+
+  private async extractMenuItemsBatch(
+    urls: string[],
+  ): Promise<{ dishes: MenuScanDish[]; usage: MenuScanUsage }> {
     const apiKey = this.getKey();
     if (!apiKey) throw new Error('GEMINI_API_KEY not configured');
-    const urls = imageUrls.slice(0, 5);
     const dataUrls = await Promise.all(
       urls.map((u) => this.toBase64DataUrl(u)),
     );

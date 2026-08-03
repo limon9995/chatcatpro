@@ -47,6 +47,10 @@ interface HoursRow { day: number; open: string; close: string; closed: boolean }
 
 const CATEGORY_SUGGESTIONS = ['Burger', 'Momo', 'Shawarma', 'Meatbox', 'Pizza', 'Rice', 'Sides', 'Drinks', 'Dessert', 'Combo'];
 const UNIT_OPTIONS = ['pcs', 'gm', 'kg', 'ml', 'liter'];
+// Backend batches these 5-at-a-time into Gemini — this is just the overall
+// per-scan cap (covers even a large multi-page menu), keep in sync with
+// MAX_MENU_SCAN_IMAGES in backend/src/restaurant/restaurant.service.ts.
+const MAX_SCAN_IMAGES = 30;
 
 function ingredientHelp(copy: (bn: string, en: string) => string) {
   return {
@@ -360,7 +364,7 @@ function MenuScanModal({ th, pageId, cur, onClose, onDone, onToast }: {
     try {
       const token = localStorage.getItem('dfbot_token') || '';
       const urls: string[] = [];
-      for (const f of files.slice(0, 5)) {
+      for (const f of files.slice(0, MAX_SCAN_IMAGES)) {
         const fd = new FormData();
         fd.append('file', f);
         const res = await fetch(`${BASE}/products/upload-image`, {
@@ -407,7 +411,7 @@ function MenuScanModal({ th, pageId, cur, onClose, onDone, onToast }: {
       <div style={{ ...th.card, width: '100%', maxWidth: step === 'review' ? 780 : 480, maxHeight: '90vh', overflowY: 'auto', border: `1.5px solid ${th.border}` }}>
         <CardHeader th={th} title={copy('📷 Menu Scan — AI দিয়ে সব খাবার Add', '📷 Menu Scan — AI import')}
           sub={step === 'upload'
-            ? copy('Menu-র পরিষ্কার ছবি দিন (সর্বোচ্চ ৫টা) — AI নাম/দাম/size পড়ে নেবে', 'Upload clear menu photos (max 5) — AI reads names/prices/sizes')
+            ? copy(`Menu-র পরিষ্কার ছবি দিন (সর্বোচ্চ ${MAX_SCAN_IMAGES}টা) — AI নাম/দাম/size পড়ে নেবে`, `Upload clear menu photos (up to ${MAX_SCAN_IMAGES}) — AI reads names/prices/sizes`)
             : copy('AI যা পড়েছে check করুন — 📷 ঘরে খাবারের ছবি দিন (website/card-এ দেখাবে), ভুল ঠিক করুন, তারপর Add চাপুন', 'Review what AI read — add a 📷 photo per dish (shows on the website/cards), fix mistakes, then Add')} />
 
         {step === 'upload' && (
@@ -416,7 +420,7 @@ function MenuScanModal({ th, pageId, cur, onClose, onDone, onToast }: {
               <span style={{ fontSize: 30 }}>📄</span>
               {files.length ? `${files.length}টা ছবি selected` : copy('Menu-র ছবি বেছে নিন / তুলুন', 'Choose / take menu photos')}
               <input type="file" accept="image/*" multiple style={{ display: 'none' }}
-                onChange={e => setFiles(Array.from(e.target.files || []).slice(0, 5))} />
+                onChange={e => setFiles(Array.from(e.target.files || []).slice(0, MAX_SCAN_IMAGES))} />
             </label>
             {files.length > 0 && (
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -848,6 +852,8 @@ export function RestaurantPage({ th, pageId, onToast }: {
   const [recipeFor, setRecipeFor] = useState<FoodProduct | null>(null);
   const [combos, setCombos] = useState<any[]>([]);
   const [comboModal, setComboModal] = useState<any | null>(null);
+  const [menuLayout, setMenuLayout] = useState<{ mode: 'single' | 'pages'; categoryOrder: string[] }>({ mode: 'single', categoryOrder: [] });
+  const [menuLayoutSaving, setMenuLayoutSaving] = useState(false);
 
   // inventory
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
@@ -881,7 +887,7 @@ export function RestaurantPage({ th, pageId, onToast }: {
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [s, prods, ings, cats, pack, mImgs, hrs, hh, combosList, milestonesList] = await Promise.all([
+      const [s, prods, ings, cats, pack, mImgs, hrs, hh, combosList, milestonesList, layout] = await Promise.all([
         request<any>(`${BASE}/settings`),
         request<FoodProduct[]>(`${BASE}/products`).catch(() => []),
         request<Ingredient[]>(`${RBASE}/ingredients`).catch(() => []),
@@ -892,6 +898,7 @@ export function RestaurantPage({ th, pageId, onToast }: {
         request<HoursRow[]>(`${RBASE}/happy-hour`).catch(() => []),
         request<any[]>(`${RBASE}/combos`).catch(() => []),
         request<any[]>(`${RBASE}/milestones`).catch(() => []),
+        request<{ mode: 'single' | 'pages'; categoryOrder: string[] }>(`${RBASE}/menu-layout`).catch(() => ({ mode: 'single' as const, categoryOrder: [] })),
       ]);
       setSettings({
         restaurantModeEnabled: Boolean(s?.restaurantModeEnabled),
@@ -917,6 +924,10 @@ export function RestaurantPage({ th, pageId, onToast }: {
       setHappyHourWindow(Array.isArray(hh) && hh.length === 7 ? hh : defaultHours());
       setCombos(Array.isArray(combosList) ? combosList : []);
       setMilestones(Array.isArray(milestonesList) ? milestonesList : []);
+      setMenuLayout({
+        mode: layout?.mode === 'pages' ? 'pages' : 'single',
+        categoryOrder: Array.isArray(layout?.categoryOrder) ? layout.categoryOrder : [],
+      });
     } catch (e: any) { onToast(e.message, 'error'); }
     finally { setLoading(false); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1026,6 +1037,17 @@ export function RestaurantPage({ th, pageId, onToast }: {
     finally { setHappyHourWindowSaving(false); }
   };
 
+  const saveMenuLayout = async (next?: Partial<typeof menuLayout>) => {
+    const payload = { ...menuLayout, ...next };
+    setMenuLayoutSaving(true);
+    try {
+      await request(`${RBASE}/menu-layout`, { method: 'PUT', body: JSON.stringify(payload) });
+      setMenuLayout(payload);
+      onToast(copy('✅ সেভ হয়েছে', '✅ Saved'), 'success');
+    } catch (e: any) { onToast(e.message, 'error'); }
+    finally { setMenuLayoutSaving(false); }
+  };
+
   const foodProducts = useMemo(
     () => products.filter(p => !catFilter || (p.category || '') === catFilter),
     [products, catFilter],
@@ -1035,6 +1057,26 @@ export function RestaurantPage({ th, pageId, onToast }: {
     products.forEach(p => { const c = (p.category || '').trim(); if (c) m.set(c, (m.get(c) || 0) + 1); });
     return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   }, [products]);
+  // Merchant's saved order first (matched case-insensitively), then any
+  // category with products that isn't in the saved order yet, alphabetical —
+  // mirrors backend orderCategoryTabs() so this list previews what customers see.
+  const orderedCategoryNames = useMemo(() => {
+    const liveNames = catCounts.map(([c]) => c);
+    const savedLower = menuLayout.categoryOrder.map(s => s.toLowerCase());
+    const ordered = savedLower
+      .map(wanted => liveNames.find(n => n.toLowerCase() === wanted))
+      .filter((n): n is string => Boolean(n));
+    const remaining = liveNames.filter(n => !ordered.includes(n));
+    return [...ordered, ...remaining];
+  }, [catCounts, menuLayout.categoryOrder]);
+  const moveCategory = (name: string, dir: -1 | 1) => {
+    const idx = orderedCategoryNames.indexOf(name);
+    const swapWith = idx + dir;
+    if (idx < 0 || swapWith < 0 || swapWith >= orderedCategoryNames.length) return;
+    const next = [...orderedCategoryNames];
+    [next[idx], next[swapWith]] = [next[swapWith], next[idx]];
+    saveMenuLayout({ categoryOrder: next });
+  };
   const lowCount = ingredients.filter(i => i.low).length;
 
   // quick order helpers
@@ -1160,6 +1202,54 @@ export function RestaurantPage({ th, pageId, onToast }: {
       {/* ── MENU ── */}
       {tab === 'MENU' && (
         <>
+        <div style={{ ...th.card }}>
+          <CardHeader th={th} title={copy('🗂️ Menu দেখানোর ধরন', '🗂️ Menu layout')}
+            sub={copy('Full menu এক পেইজে থাকবে, নাকি প্রতিটা category-র নিজস্ব আলাদা পেইজ থাকবে — এবং কোন category আগে দেখাবে সেটাও এখান থেকে ঠিক করুন।', 'Show the whole menu on one page, or give each category its own separate page — and set which category shows first.')} />
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: orderedCategoryNames.length > 0 ? 14 : 0 }}>
+            {([
+              { key: 'single' as const, label: copy('🗒️ Full Menu — এক পেইজে', '🗒️ Full Menu — one page') },
+              { key: 'pages' as const, label: copy('📑 Category-wise — আলাদা পেইজ', '📑 Category-wise — separate pages') },
+            ]).map(opt => (
+              <button key={opt.key} onClick={() => saveMenuLayout({ mode: opt.key })} disabled={menuLayoutSaving}
+                style={{
+                  padding: '10px 16px', borderRadius: 10, cursor: menuLayoutSaving ? 'default' : 'pointer', fontFamily: 'inherit',
+                  fontWeight: 700, fontSize: 13, border: `1.5px solid ${menuLayout.mode === opt.key ? th.accent : th.border}`,
+                  background: menuLayout.mode === opt.key ? th.accentSoft : 'transparent',
+                  color: menuLayout.mode === opt.key ? th.accentText : th.muted,
+                }}>
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          {orderedCategoryNames.length > 0 ? (
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: th.muted, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                {copy('কোন Category আগে আসবে (উপরেরটা প্রথমে দেখাবে)', 'Category order (top shows first)')}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {orderedCategoryNames.map((name, i) => (
+                  <div key={name} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', borderRadius: 8, border: `1px solid ${th.border}` }}>
+                    <span style={{ fontSize: 12, fontWeight: 800, color: th.muted, width: 18 }}>{i + 1}.</span>
+                    <span style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>{name}</span>
+                    <button onClick={() => moveCategory(name, -1)} disabled={i === 0 || menuLayoutSaving}
+                      style={{ ...th.btnSmGhost, fontSize: 12, opacity: i === 0 ? 0.35 : 1, cursor: i === 0 ? 'default' : 'pointer' }}>↑</button>
+                    <button onClick={() => moveCategory(name, 1)} disabled={i === orderedCategoryNames.length - 1 || menuLayoutSaving}
+                      style={{ ...th.btnSmGhost, fontSize: 12, opacity: i === orderedCategoryNames.length - 1 ? 0.35 : 1, cursor: i === orderedCategoryNames.length - 1 ? 'default' : 'pointer' }}>↓</button>
+                  </div>
+                ))}
+              </div>
+              {menuLayout.mode === 'pages' && (
+                <div style={{ fontSize: 12, color: th.muted, marginTop: 10, lineHeight: 1.6 }}>
+                  💡 {copy(`Customer catalog খুললেই সরাসরি "${orderedCategoryNames[0]}" category দেখবে — বাকি category-গুলো tab-এ ক্লিক করে দেখা যাবে।`, `Customers land directly on "${orderedCategoryNames[0]}" — the rest are one tab-click away.`)}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div style={{ fontSize: 12, color: th.muted }}>
+              {copy('খাবারে category দিলে এখানে reorder করতে পারবেন।', 'Add categories to your dishes to reorder them here.')}
+            </div>
+          )}
+        </div>
         {menuImages.length > 0 && (
           <div style={{ ...th.card }}>
             <CardHeader th={th} title={copy('📖 Menu-র ছবি (customer-দের পাঠানো হয়)', '📖 Menu photos (sent to customers)')}

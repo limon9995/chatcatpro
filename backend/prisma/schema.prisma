@@ -163,6 +163,16 @@ model Page {
   // (Asia/Dhaka time); drives the open/closed badge on the catalog page
   businessHoursJson     String?
 
+  // V29: restaurant catalog layout — "single" (default, one page, JS category
+  // tabs — today's behavior) | "pages" (each category is its own page load,
+  // landing on the merchant's first-ordered category by default).
+  menuLayoutMode        String  @default("single")
+  // Merchant-chosen category display order, JSON array of category name
+  // strings. Categories not listed here fall back to alphabetical, appended
+  // after the ordered ones — so a newly-added category still shows up
+  // without the merchant having to remember to re-save this.
+  menuCategoryOrderJson String?
+
   // V27: Loyalty ("Lucky Customer") — order N times (by phone number, no
   // account system) to auto-unlock a % discount on every order after.
   loyaltyEnabled          Boolean @default(false)

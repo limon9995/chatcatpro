@@ -18,6 +18,12 @@ import {
 } from '../common/restaurant-delivery';
 
 const VALID_UNITS = ['gm', 'kg', 'pcs', 'ml', 'liter'];
+// Cost/abuse guardrail only — not a "your menu must fit in N photos" limit.
+// GeminiVisionProvider.extractMenuItems batches these 5-at-a-time internally.
+const MAX_MENU_SCAN_IMAGES = 30;
+// How many menu photos stay on the page for the customer-facing gallery
+// (the Messenger bot only ever forwards the first 3 of these per message).
+const MAX_MENU_GALLERY_IMAGES = 10;
 
 export interface MenuDish {
   name: string;
@@ -286,8 +292,13 @@ export class RestaurantService {
   ): Promise<{ dishes: MenuDish[] }> {
     if (!Array.isArray(imageUrls) || imageUrls.length === 0)
       throw new BadRequestException('Menu-র ছবি দিন');
-    if (imageUrls.length > 5)
-      throw new BadRequestException('একবারে সর্বোচ্চ ৫টা ছবি scan করা যাবে');
+    // Gemini only reliably reads ~5 images per call, so extractMenuItems
+    // batches internally — this cap is just an abuse/cost guardrail, high
+    // enough to cover any real menu (even a 20-30 page laminated one).
+    if (imageUrls.length > MAX_MENU_SCAN_IMAGES)
+      throw new BadRequestException(
+        `একবারে সর্বোচ্চ ${MAX_MENU_SCAN_IMAGES}টা ছবি scan করা যাবে`,
+      );
     // Only our own /storage/ uploads — never fetch arbitrary URLs on behalf of a client
     for (const u of imageUrls) {
       if (!/^(https?:\/\/[^/]+)?\/storage\/products\//.test(String(u)))
@@ -313,7 +324,7 @@ export class RestaurantService {
     void this.prisma.page
       .update({
         where: { id: pageId },
-        data: { menuImagesJson: JSON.stringify(relative.slice(0, 5)) },
+        data: { menuImagesJson: JSON.stringify(relative.slice(0, MAX_MENU_GALLERY_IMAGES)) },
       })
       .catch(() => {});
 
@@ -359,7 +370,7 @@ export class RestaurantService {
     const clean = urls
       .map((u) => String(u).replace(/^https?:\/\/[^/]+/, ''))
       .filter((u) => /^\/storage\/products\//.test(u))
-      .slice(0, 5);
+      .slice(0, MAX_MENU_GALLERY_IMAGES);
     await this.prisma.page.update({
       where: { id: pageId },
       data: { menuImagesJson: clean.length ? JSON.stringify(clean) : null },
@@ -850,5 +861,42 @@ export class RestaurantService {
       distinct: ['category'],
     });
     return rows.map((r) => r.category).filter(Boolean);
+  }
+
+  // ── Menu layout (full menu vs category-wise pages) ──────────────────────────
+
+  async getMenuLayout(pageId: number): Promise<{ mode: 'single' | 'pages'; categoryOrder: string[] }> {
+    const page = await this.prisma.page.findUnique({
+      where: { id: pageId },
+      select: { menuLayoutMode: true, menuCategoryOrderJson: true },
+    });
+    const mode = page?.menuLayoutMode === 'pages' ? 'pages' : 'single';
+    let categoryOrder: string[] = [];
+    try {
+      const raw = JSON.parse(page?.menuCategoryOrderJson || '[]');
+      if (Array.isArray(raw)) categoryOrder = raw.filter((c) => typeof c === 'string');
+    } catch {
+      categoryOrder = [];
+    }
+    return { mode, categoryOrder };
+  }
+
+  async setMenuLayout(pageId: number, body: any) {
+    const mode = body?.mode === 'pages' ? 'pages' : 'single';
+    const categoryOrder = Array.isArray(body?.categoryOrder)
+      ? [...new Set(
+          body.categoryOrder
+            .map((c: any) => String(c ?? '').trim())
+            .filter((c: string) => c.length > 0),
+        )].slice(0, 40)
+      : [];
+    await this.prisma.page.update({
+      where: { id: pageId },
+      data: {
+        menuLayoutMode: mode,
+        menuCategoryOrderJson: categoryOrder.length ? JSON.stringify(categoryOrder) : null,
+      },
+    });
+    return { mode, categoryOrder };
   }
 }

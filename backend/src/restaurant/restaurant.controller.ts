@@ -212,4 +212,14 @@ export class RestaurantController {
   listCategories(@Param('pageId') p: string, @Req() r: any) {
     return this.svc.listCategories(this.pid(r, p));
   }
+
+  @Get(':pageId/menu-layout')
+  getMenuLayout(@Param('pageId') p: string, @Req() r: any) {
+    return this.svc.getMenuLayout(this.pid(r, p));
+  }
+
+  @Put(':pageId/menu-layout')
+  setMenuLayout(@Param('pageId') p: string, @Body() b: any, @Req() r: any) {
+    return this.svc.setMenuLayout(this.pid(r, p), b || {});
+  }
 }
