@@ -307,6 +307,7 @@ export class ClientDashboardService {
     // Create order items
     const items: any[] = Array.isArray(body?.items) ? body.items : [];
     let subtotal = 0;
+    const resolvedItems: { productCode: string; qty: number; unitPrice: number }[] = [];
     for (const item of items) {
       if (!item?.productCode) continue;
       const code = String(item.productCode).toUpperCase();
@@ -336,6 +337,7 @@ export class ClientDashboardService {
       }
       const qty = Number(item.qty) || 1;
       subtotal += unitPrice * qty;
+      resolvedItems.push({ productCode: code, qty, unitPrice });
       await this.prisma.orderItem.create({
         data: {
           orderId: order.id,
@@ -371,12 +373,50 @@ export class ClientDashboardService {
     if (discounts.happyHourDiscount) orderUpdate.happyHourDiscountAmount = discounts.happyHourDiscount;
     const milestoneDiscountAmount = this.pricing.computeMilestoneDiscountAmount(rewards, subtotal);
     if (milestoneDiscountAmount) orderUpdate.milestoneDiscountAmount = milestoneDiscountAmount;
+    const milestoneFreeDelivery = rewards.some((r) => r.rewardType === 'FREE_DELIVERY');
     if (rewards.length) {
       orderUpdate.milestoneRewardAppliedJson = JSON.stringify(
         rewards.map((r) => ({ ...r, orderNumber: thisOrderNumber })),
       );
-      if (rewards.some((r) => r.rewardType === 'FREE_DELIVERY')) orderUpdate.deliveryFee = 0;
     }
+
+    // Offers — product-side (subtotal/category/products) + delivery-side.
+    // Delivery discount is computed against the fee AFTER milestone's
+    // free-delivery reward, so it never "discounts" an already-zeroed fee.
+    if (resolvedItems.length) {
+      const productsForOffers = await this.prisma.product.findMany({
+        where: { pageId, code: { in: orderedCodes } },
+        select: { id: true, code: true, category: true },
+      });
+      const byCode = new Map(productsForOffers.map((p) => [p.code, p]));
+      const offerItems = resolvedItems
+        .map((it) => {
+          const p = byCode.get(it.productCode);
+          return p ? { productId: p.id, category: p.category, qty: it.qty, unitPrice: it.unitPrice } : null;
+        })
+        .filter((i): i is NonNullable<typeof i> => i !== null);
+      const deliveryFeeAfterMilestone = milestoneFreeDelivery
+        ? 0
+        : (restaurantDelivery?.deliveryFee ?? null);
+      const offerResult = await this.pricing.resolveOfferDiscounts(
+        pageId,
+        offerItems,
+        deliveryFeeAfterMilestone,
+      );
+      if (offerResult.productDiscountAmount) orderUpdate.offerDiscountAmount = offerResult.productDiscountAmount;
+      if (offerResult.deliveryDiscountAmount) orderUpdate.offerDeliveryDiscountAmount = offerResult.deliveryDiscountAmount;
+      if (offerResult.appliedOffers.length) orderUpdate.offerAppliedJson = JSON.stringify(offerResult.appliedOffers);
+      if (offerResult.deliveryFixedPrice !== undefined) {
+        orderUpdate.deliveryFee = offerResult.deliveryFixedPrice;
+      } else if (offerResult.deliveryDiscountAmount && deliveryFeeAfterMilestone != null) {
+        orderUpdate.deliveryFee = deliveryFeeAfterMilestone - offerResult.deliveryDiscountAmount;
+      } else if (milestoneFreeDelivery) {
+        orderUpdate.deliveryFee = 0;
+      }
+    } else if (milestoneFreeDelivery) {
+      orderUpdate.deliveryFee = 0;
+    }
+
     if (Object.keys(orderUpdate).length) {
       await this.prisma.order.update({ where: { id: order.id }, data: orderUpdate });
     }

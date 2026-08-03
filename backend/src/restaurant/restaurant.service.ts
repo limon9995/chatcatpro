@@ -15,6 +15,7 @@ import {
   PriceVariant,
   parseBusinessHours,
   BusinessHoursRow,
+  sanitizeOfferHours,
 } from '../common/restaurant-delivery';
 
 const VALID_UNITS = ['gm', 'kg', 'pcs', 'ml', 'liter'];
@@ -404,7 +405,7 @@ export class RestaurantService {
     return clean;
   }
 
-  // ── Happy Hour window (same day/time shape as business hours) ──────────────
+  // ── Happy Hour window (DEPRECATED — see Offer model / "Offers" section below) ──
 
   async getHappyHourWindow(pageId: number): Promise<BusinessHoursRow[]> {
     const page = await this.prisma.page.findUnique({
@@ -428,6 +429,195 @@ export class RestaurantService {
       data: { happyHourJson: JSON.stringify(clean) },
     });
     return clean;
+  }
+
+  // ── Offers ───────────────────────────────────────────────────────────────────
+  // A named promotion: % or fixed discount on the subtotal, a category,
+  // selected products, or the delivery charge, with a validity window and an
+  // optional attached time-of-day schedule. Best-per-bucket at order time —
+  // see PricingService.resolveOfferDiscounts.
+
+  private readonly OFFER_TARGETS = ['SUBTOTAL', 'CATEGORY', 'PRODUCTS', 'DELIVERY'];
+  private readonly OFFER_DELIVERY_TYPES = ['PERCENT', 'FIXED_OFF', 'FIXED_PRICE'];
+
+  async listOffers(pageId: number) {
+    const offers = await this.prisma.offer.findMany({
+      where: { pageId },
+      include: { products: { include: { product: { select: { id: true, code: true, name: true } } } } },
+      orderBy: { createdAt: 'desc' },
+    });
+    const now = new Date();
+    return offers.map((o) => ({
+      ...o,
+      // Convenience status for the panel list — doesn't affect actual
+      // discount resolution, which re-checks live.
+      status:
+        !o.isActive
+          ? 'inactive'
+          : !o.isUnlimited && o.endDate && o.endDate < now
+            ? 'expired'
+            : !o.isUnlimited && o.startDate && o.startDate > now
+              ? 'scheduled'
+              : 'active',
+    }));
+  }
+
+  private async sanitizeOfferInput(
+    pageId: number,
+    body: any,
+    existing?: { discountTarget: string } | null,
+  ) {
+    const title = String(body?.title ?? '').trim();
+    if ('title' in body && !title) throw new BadRequestException('Offer-এর নাম দিন');
+
+    const target = this.OFFER_TARGETS.includes(body?.discountTarget)
+      ? body.discountTarget
+      : existing?.discountTarget || 'SUBTOTAL';
+
+    const data: any = {};
+    if ('title' in body) data.title = title.slice(0, 100);
+    if ('subtitle' in body) data.subtitle = body.subtitle ? String(body.subtitle).trim().slice(0, 160) : null;
+    if ('description' in body) data.description = body.description ? String(body.description).trim() : null;
+    if ('imageUrl' in body) {
+      const img = String(body.imageUrl ?? '').trim();
+      data.imageUrl = img && /^(https?:\/\/[^/]+)?\/storage\/products\//.test(img) ? img : null;
+    }
+    if ('isActive' in body) data.isActive = Boolean(body.isActive);
+
+    if ('discountTarget' in body || 'discountCategory' in body || 'discountType' in body || 'discountValue' in body) {
+      data.discountTarget = target;
+      if (target === 'CATEGORY') {
+        const cat = String(body?.discountCategory ?? '').trim();
+        if (!cat) throw new BadRequestException('কোন category-তে ছাড় দিচ্ছেন সেটা বেছে নিন');
+        data.discountCategory = cat;
+      } else {
+        data.discountCategory = null;
+      }
+
+      const type =
+        target === 'DELIVERY'
+          ? this.OFFER_DELIVERY_TYPES.includes(body?.discountType) ? body.discountType : 'PERCENT'
+          : 'PERCENT'; // SUBTOTAL/CATEGORY/PRODUCTS are percent-only — see Offer model doc
+      data.discountType = type;
+
+      const value = Number(body?.discountValue);
+      if (!Number.isFinite(value) || value < 0)
+        throw new BadRequestException('ছাড়ের পরিমাণ সঠিক নয়');
+      if (type === 'PERCENT' && (value <= 0 || value > 100))
+        throw new BadRequestException('% ছাড় ১-১০০ এর মধ্যে দিন');
+      data.discountValue = value;
+    }
+
+    if ('isUnlimited' in body || 'startDate' in body || 'endDate' in body) {
+      const isUnlimited = body?.isUnlimited !== false;
+      data.isUnlimited = isUnlimited;
+      if (isUnlimited) {
+        data.startDate = null;
+        data.endDate = null;
+      } else {
+        const start = body?.startDate ? new Date(body.startDate) : null;
+        const end = body?.endDate ? new Date(body.endDate) : null;
+        if (!start || isNaN(start.getTime()) || !end || isNaN(end.getTime()))
+          throw new BadRequestException('শুরু ও শেষের তারিখ দিন');
+        if (end < start) throw new BadRequestException('শেষের তারিখ শুরুর আগে হতে পারে না');
+        data.startDate = start;
+        data.endDate = end;
+      }
+    }
+
+    if ('hoursMode' in body || 'hoursRows' in body) {
+      const { hoursMode, hoursJson } = sanitizeOfferHours(body?.hoursMode, body?.hoursRows);
+      data.hoursMode = hoursMode;
+      data.hoursJson = hoursJson;
+    }
+
+    let productIds: number[] | undefined;
+    if (target === 'PRODUCTS' && (body?.productIds !== undefined || data.discountTarget === 'PRODUCTS')) {
+      const ids: number[] = Array.isArray(body?.productIds)
+        ? [
+            ...new Set<number>(
+              body.productIds
+                .map((v: any) => Number(v))
+                .filter((v: number) => Number.isFinite(v)),
+            ),
+          ]
+        : [];
+      if (!ids.length)
+        throw new BadRequestException('কোন কোন product-এ ছাড় দিচ্ছেন বেছে নিন');
+      const found = await this.prisma.product.findMany({
+        where: { id: { in: ids }, pageId },
+        select: { id: true },
+      });
+      if (found.length !== ids.length)
+        throw new BadRequestException('একটা বা একাধিক product খুঁজে পাওয়া যায়নি');
+      productIds = ids;
+    }
+
+    return { data, productIds };
+  }
+
+  async createOffer(pageId: number, body: any) {
+    if (!body?.title?.trim()) throw new BadRequestException('Offer-এর নাম দিন');
+    if (body?.discountValue === undefined) throw new BadRequestException('ছাড়ের পরিমাণ দিন');
+    const { data, productIds } = await this.sanitizeOfferInput(pageId, body);
+    return this.prisma.offer.create({
+      data: {
+        pageId,
+        title: data.title,
+        subtitle: data.subtitle ?? null,
+        description: data.description ?? null,
+        imageUrl: data.imageUrl ?? null,
+        isActive: data.isActive ?? true,
+        isUnlimited: data.isUnlimited ?? true,
+        startDate: data.startDate ?? null,
+        endDate: data.endDate ?? null,
+        discountTarget: data.discountTarget ?? 'SUBTOTAL',
+        discountCategory: data.discountCategory ?? null,
+        discountType: data.discountType ?? 'PERCENT',
+        discountValue: data.discountValue,
+        hoursMode: data.hoursMode ?? null,
+        hoursJson: data.hoursJson ?? null,
+        ...(productIds ? { products: { create: productIds.map((productId) => ({ productId })) } } : {}),
+      },
+      include: { products: { include: { product: { select: { id: true, code: true, name: true } } } } },
+    });
+  }
+
+  async updateOffer(pageId: number, id: number, body: any) {
+    const existing = await this.prisma.offer.findFirst({ where: { id, pageId } });
+    if (!existing) throw new NotFoundException('Offer not found');
+
+    if (body?.isActive !== undefined && Object.keys(body).length === 1) {
+      return this.prisma.offer.update({
+        where: { id },
+        data: { isActive: Boolean(body.isActive) },
+        include: { products: { include: { product: { select: { id: true, code: true, name: true } } } } },
+      });
+    }
+
+    const { data, productIds } = await this.sanitizeOfferInput(pageId, body, existing);
+    return this.prisma.$transaction(async (tx) => {
+      if (Object.keys(data).length) {
+        await tx.offer.update({ where: { id }, data });
+      }
+      if (productIds || (data.discountTarget && data.discountTarget !== 'PRODUCTS')) {
+        await tx.offerProduct.deleteMany({ where: { offerId: id } });
+        if (productIds) {
+          await tx.offerProduct.createMany({ data: productIds.map((productId) => ({ offerId: id, productId })) });
+        }
+      }
+      return tx.offer.findUnique({
+        where: { id },
+        include: { products: { include: { product: { select: { id: true, code: true, name: true } } } } },
+      });
+    });
+  }
+
+  async deleteOffer(pageId: number, id: number) {
+    const existing = await this.prisma.offer.findFirst({ where: { id, pageId }, select: { id: true } });
+    if (!existing) throw new NotFoundException('Offer not found');
+    await this.prisma.offer.delete({ where: { id } }); // OfferProduct rows cascade
+    return { success: true };
   }
 
   // ── Combo offers ────────────────────────────────────────────────────────────

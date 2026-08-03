@@ -35,9 +35,6 @@ interface RestoSettings {
   restaurantLng: number | null;
   deliverySlabs: DeliverySlab[];
   currencySymbol?: string;
-  happyHourEnabled: boolean;
-  happyHourDiscountPercent: number | null;
-  happyHourLabel: string;
   milestoneRewardsEnabled: boolean;
 }
 interface HoursRow { day: number; open: string; close: string; closed: boolean }
@@ -813,6 +810,284 @@ function MilestoneModal({ th, pageId, milestone, products, onClose, onToast, onS
   );
 }
 
+// ── Offer modal — full promotions: subtotal/category/product/delivery discounts ──
+function OfferModal({ th, pageId, offer, products, categories, cur, onClose, onToast, onSaved }: {
+  th: Theme; pageId: number; offer: any; products: FoodProduct[]; categories: string[]; cur: string;
+  onClose: () => void; onToast: (m: string, t?: any) => void; onSaved: () => void;
+}) {
+  const { copy } = useLanguage();
+  const { request } = useApi();
+  const BASE = `${API_BASE}/client-dashboard/${pageId}`;
+  const RBASE = `${API_BASE}/restaurant/${pageId}`;
+  const isEdit = Boolean(offer?.id);
+
+  const parsedHours = useMemo(() => {
+    if (!offer?.hoursMode) return { mode: '' as '' | 'general' | 'daywise', general: { open: '17:00', close: '22:00' }, daywise: defaultHours() };
+    try {
+      const raw = JSON.parse(offer.hoursJson || 'null');
+      if (offer.hoursMode === 'general' && raw) {
+        return { mode: 'general' as const, general: { open: raw.open || '17:00', close: raw.close || '22:00' }, daywise: defaultHours() };
+      }
+      if (offer.hoursMode === 'daywise' && Array.isArray(raw)) {
+        const byDay = new Map<number, any>(raw.map((r: any) => [Number(r.day), r]));
+        return {
+          mode: 'daywise' as const,
+          general: { open: '17:00', close: '22:00' },
+          daywise: defaultHours().map(d => byDay.has(d.day)
+            ? { ...d, open: byDay.get(d.day).open, close: byDay.get(d.day).close, closed: false }
+            : { ...d, closed: true }),
+        };
+      }
+    } catch { /* fall through to default */ }
+    return { mode: '' as const, general: { open: '17:00', close: '22:00' }, daywise: defaultHours() };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const [form, setForm] = useState(() => ({
+    title: offer?.title || '',
+    subtitle: offer?.subtitle || '',
+    description: offer?.description || '',
+    imageUrl: offer?.imageUrl || '',
+    isActive: offer ? offer.isActive !== false : true,
+    discountTarget: (offer?.discountTarget || 'SUBTOTAL') as 'SUBTOTAL' | 'CATEGORY' | 'PRODUCTS' | 'DELIVERY',
+    discountCategory: offer?.discountCategory || '',
+    discountType: (offer?.discountType || 'PERCENT') as 'PERCENT' | 'FIXED_OFF' | 'FIXED_PRICE',
+    discountValue: offer?.discountValue ?? 10,
+    isUnlimited: offer ? offer.isUnlimited !== false : true,
+    startDate: offer?.startDate ? String(offer.startDate).slice(0, 10) : '',
+    endDate: offer?.endDate ? String(offer.endDate).slice(0, 10) : '',
+    hoursMode: parsedHours.mode,
+    hoursGeneral: parsedHours.general,
+    hoursDaywise: parsedHours.daywise,
+    productIds: ((offer?.products || []).map((p: any) => p.productId)) as number[],
+  }));
+  const [uploading, setUploading] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const upload = async (file: File) => {
+    setUploading(true);
+    try {
+      const token = localStorage.getItem('dfbot_token') || '';
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch(`${BASE}/products/upload-image`, {
+        method: 'POST', headers: token ? { Authorization: `Bearer ${token}` } : undefined, body: fd,
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      setForm(f => ({ ...f, imageUrl: data.url }));
+    } catch (e: any) { onToast(e.message || 'Upload failed', 'error'); }
+    finally { setUploading(false); }
+  };
+
+  const toggleProduct = (id: number) =>
+    setForm(f => ({ ...f, productIds: f.productIds.includes(id) ? f.productIds.filter(x => x !== id) : [...f.productIds, id] }));
+
+  const effectiveType = form.discountTarget === 'DELIVERY' ? form.discountType : 'PERCENT';
+  const valueLabel = effectiveType === 'PERCENT'
+    ? copy('কত % ছাড়', 'Discount %')
+    : effectiveType === 'FIXED_OFF'
+      ? copy(`কত ${cur} ছাড়`, `${cur} off amount`)
+      : copy(`নতুন Delivery Fee (${cur})`, `New delivery fee (${cur})`);
+
+  const save = async () => {
+    if (!form.title.trim()) return onToast(copy('Offer-এর নাম দিন', 'Offer name required'), 'error');
+    if (form.discountTarget === 'CATEGORY' && !form.discountCategory.trim())
+      return onToast(copy('Category বেছে নিন', 'Pick a category'), 'error');
+    if (form.discountTarget === 'PRODUCTS' && !form.productIds.length)
+      return onToast(copy('কমপক্ষে একটা product বেছে নিন', 'Pick at least one product'), 'error');
+    if (effectiveType === 'PERCENT' && (!form.discountValue || form.discountValue <= 0 || form.discountValue > 100))
+      return onToast(copy('% ছাড় ১-১০০ এর মধ্যে দিন', 'Enter a discount between 1-100%'), 'error');
+    if (effectiveType !== 'PERCENT' && (form.discountValue === '' || Number(form.discountValue) < 0))
+      return onToast(copy('সঠিক পরিমাণ দিন', 'Enter a valid amount'), 'error');
+    if (!form.isUnlimited && (!form.startDate || !form.endDate))
+      return onToast(copy('শুরু ও শেষের তারিখ দিন', 'Enter start & end dates'), 'error');
+    setSaving(true);
+    try {
+      const body: any = {
+        title: form.title.trim(),
+        subtitle: form.subtitle.trim() || null,
+        description: form.description.trim() || null,
+        imageUrl: form.imageUrl || null,
+        isActive: form.isActive,
+        discountTarget: form.discountTarget,
+        discountCategory: form.discountTarget === 'CATEGORY' ? form.discountCategory.trim() : null,
+        discountType: effectiveType,
+        discountValue: Number(form.discountValue),
+        isUnlimited: form.isUnlimited,
+        startDate: form.isUnlimited ? null : form.startDate,
+        endDate: form.isUnlimited ? null : form.endDate,
+        hoursMode: form.hoursMode || null,
+        hoursRows: form.hoursMode === 'general'
+          ? form.hoursGeneral
+          : form.hoursMode === 'daywise'
+            ? form.hoursDaywise.filter(r => !r.closed).map(r => ({ day: r.day, open: r.open, close: r.close }))
+            : null,
+        ...(form.discountTarget === 'PRODUCTS' ? { productIds: form.productIds } : {}),
+      };
+      if (isEdit) await request(`${RBASE}/offers/${offer.id}`, { method: 'PATCH', body: JSON.stringify(body) });
+      else await request(`${RBASE}/offers`, { method: 'POST', body: JSON.stringify(body) });
+      onToast(copy('✅ সেভ হয়েছে', '✅ Saved'), 'success');
+      onSaved(); onClose();
+    } catch (e: any) { onToast(e.message || 'Error', 'error'); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <div style={{ ...th.card, width: '100%', maxWidth: 560, maxHeight: '90vh', overflowY: 'auto', border: `1.5px solid ${th.border}` }}>
+        <CardHeader th={th} title={isEdit ? `🎁 ${copy('Offer Edit করুন', 'Edit Offer')}` : `🎁 ${copy('নতুন Offer', 'New Offer')}`}
+          sub={copy('Website-এ card হিসেবে দেখাবে ও চেকআউটে auto ছাড় প্রযোজ্য হবে', 'Shows as a card on your website and auto-applies at checkout')} />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <Field th={th} label={copy('Offer-এর নাম *', 'Offer title *')}>
+            <input style={th.input} placeholder={copy('যেমন: উইকেন্ড অফার', 'e.g. Weekend Special')} value={form.title}
+              onChange={e => setForm(f => ({ ...f, title: e.target.value }))} />
+          </Field>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <Field th={th} label={copy('উপশিরোনাম (ঐচ্ছিক)', 'Subtitle (optional)')}>
+              <input style={th.input} placeholder={copy('ছোট এক লাইন', 'A short line')} value={form.subtitle}
+                onChange={e => setForm(f => ({ ...f, subtitle: e.target.value }))} />
+            </Field>
+            <Field th={th} label={copy('ছবি', 'Photo')}>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                {form.imageUrl && <img src={form.imageUrl.startsWith('http') ? form.imageUrl : `${API_BASE}${form.imageUrl}`} alt="" style={{ width: 38, height: 38, borderRadius: 8, objectFit: 'cover', border: `1px solid ${th.border}` }} />}
+                <label style={{ ...th.btnGhost, fontSize: 12, cursor: 'pointer', margin: 0 }}>
+                  {uploading ? <Spinner size={12} /> : copy('📷 Upload', '📷 Upload')}
+                  <input type="file" accept="image/*" style={{ display: 'none' }}
+                    onChange={e => { const f = e.target.files?.[0]; if (f) upload(f); }} />
+                </label>
+              </div>
+            </Field>
+          </div>
+          <Field th={th} label={copy('বিবরণ (ঐচ্ছিক)', 'Description (optional)')}>
+            <textarea style={{ ...th.input, minHeight: 50 }} value={form.description}
+              onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
+          </Field>
+
+          <FieldWithInfo th={th} label={copy('কোথায় ছাড় প্রযোজ্য', 'Where the discount applies')} helpText={copy('একসাথে একাধিক offer active থাকলে customer-এর জন্য সবচেয়ে ভালোটাই প্রযোজ্য হবে (stack হবে না)', 'When multiple offers are active at once, only the single best one applies (no stacking)')}>
+            <select style={th.input} value={form.discountTarget}
+              onChange={e => setForm(f => ({ ...f, discountTarget: e.target.value as any }))}>
+              <option value="SUBTOTAL">{copy('🧾 পুরো অর্ডারে', '🧾 Entire order')}</option>
+              <option value="CATEGORY">{copy('📂 নির্দিষ্ট Category-তে', '📂 A specific category')}</option>
+              <option value="PRODUCTS">{copy('🍽️ নির্দিষ্ট Product-এ', '🍽️ Specific products')}</option>
+              <option value="DELIVERY">{copy('🛵 Delivery ফি-তে', '🛵 Delivery fee')}</option>
+            </select>
+          </FieldWithInfo>
+
+          {form.discountTarget === 'CATEGORY' && (
+            <Field th={th} label={copy('Category', 'Category')}>
+              <input style={th.input} list="offer-cats" placeholder="Burger / Momo / Drinks" value={form.discountCategory}
+                onChange={e => setForm(f => ({ ...f, discountCategory: e.target.value }))} />
+              <datalist id="offer-cats">
+                {categories.map(c => <option key={c} value={c} />)}
+              </datalist>
+            </Field>
+          )}
+
+          {form.discountTarget === 'PRODUCTS' && (
+            <Field th={th} label={copy(`Product বেছে নিন (${form.productIds.length} selected)`, `Pick products (${form.productIds.length} selected)`)}>
+              <div style={{ maxHeight: 160, overflowY: 'auto', border: `1px solid ${th.border}`, borderRadius: 8, padding: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {products.filter(p => p.isActive).map(p => (
+                  <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, cursor: 'pointer' }}>
+                    <input type="checkbox" checked={form.productIds.includes(p.id)} onChange={() => toggleProduct(p.id)} />
+                    {p.name || p.code}
+                  </label>
+                ))}
+              </div>
+            </Field>
+          )}
+
+          {form.discountTarget === 'DELIVERY' && (
+            <FieldWithInfo th={th} label={copy('ছাড়ের ধরন', 'Discount type')} helpText={copy('আগে থেকে যেই fee হিসাব হয়, সেটার চেয়ে খারাপ (বেশি) হলে offer প্রযোজ্য হবে না', 'Never applies if it would make the fee worse than the computed one')}>
+              <select style={th.input} value={form.discountType}
+                onChange={e => setForm(f => ({ ...f, discountType: e.target.value as any }))}>
+                <option value="PERCENT">{copy('% ছাড়', '% off')}</option>
+                <option value="FIXED_OFF">{copy(`${cur} পরিমাণ ছাড়`, `Fixed ${cur} off`)}</option>
+                <option value="FIXED_PRICE">{copy('নির্দিষ্ট নতুন Fee', 'Set a flat fee')}</option>
+              </select>
+            </FieldWithInfo>
+          )}
+
+          <Field th={th} label={valueLabel}>
+            <div style={{ position: 'relative', maxWidth: 160 }}>
+              <input style={{ ...th.input, paddingRight: effectiveType === 'PERCENT' ? 28 : 10 }} type="number" min={0}
+                max={effectiveType === 'PERCENT' ? 100 : undefined} value={form.discountValue}
+                onChange={e => setForm(f => ({ ...f, discountValue: Number(e.target.value) }))} />
+              {effectiveType === 'PERCENT' && <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: th.muted, fontSize: 13, pointerEvents: 'none' }}>%</span>}
+            </div>
+          </Field>
+
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+            <input type="checkbox" checked={form.isUnlimited} onChange={e => setForm(f => ({ ...f, isUnlimited: e.target.checked }))} />
+            {copy('মেয়াদ নেই — সবসময় চলবে', 'No end date — runs indefinitely')}
+          </label>
+          {!form.isUnlimited && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <Field th={th} label={copy('শুরু', 'Start date')}>
+                <input style={th.input} type="date" value={form.startDate} onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))} />
+              </Field>
+              <Field th={th} label={copy('শেষ', 'End date')}>
+                <input style={th.input} type="date" value={form.endDate} onChange={e => setForm(f => ({ ...f, endDate: e.target.value }))} />
+              </Field>
+            </div>
+          )}
+
+          <FieldWithInfo th={th} label={copy('নির্দিষ্ট সময়ে চালু (ঐচ্ছিক)', 'Restrict to certain hours (optional)')} helpText={copy('না দিলে offer সবসময় active থাকবে (validity period-এর মধ্যে)', 'Leave as Always and the offer runs all day within its validity period')}>
+            <select style={th.input} value={form.hoursMode} onChange={e => setForm(f => ({ ...f, hoursMode: e.target.value as any }))}>
+              <option value="">{copy('সবসময়', 'Always')}</option>
+              <option value="general">{copy('প্রতিদিন একই সময়ে', 'Same time every day')}</option>
+              <option value="daywise">{copy('নির্দিষ্ট দিনে / আলাদা সময়ে', 'Specific days / different times')}</option>
+            </select>
+          </FieldWithInfo>
+
+          {form.hoursMode === 'general' && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <Field th={th} label={copy('শুরু সময়', 'Start time')}>
+                <input style={th.input} type="time" value={form.hoursGeneral.open}
+                  onChange={e => setForm(f => ({ ...f, hoursGeneral: { ...f.hoursGeneral, open: e.target.value } }))} />
+              </Field>
+              <Field th={th} label={copy('শেষ সময়', 'End time')}>
+                <input style={th.input} type="time" value={form.hoursGeneral.close}
+                  onChange={e => setForm(f => ({ ...f, hoursGeneral: { ...f.hoursGeneral, close: e.target.value } }))} />
+              </Field>
+            </div>
+          )}
+          {form.hoursMode === 'daywise' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {form.hoursDaywise.map((row, i) => (
+                <div key={row.day} style={{ display: 'grid', gridTemplateColumns: '70px 1fr 1fr 90px', gap: 8, alignItems: 'center', opacity: row.closed ? 0.55 : 1 }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 700 }}>{copy(DAY_NAMES_BN[row.day], DAY_NAMES_EN[row.day])}</div>
+                  <input style={{ ...th.input, padding: '7px 10px' }} type="time" value={row.open} disabled={row.closed}
+                    onChange={e => setForm(f => ({ ...f, hoursDaywise: f.hoursDaywise.map((h, j) => j === i ? { ...h, open: e.target.value } : h) }))} />
+                  <input style={{ ...th.input, padding: '7px 10px' }} type="time" value={row.close} disabled={row.closed}
+                    onChange={e => setForm(f => ({ ...f, hoursDaywise: f.hoursDaywise.map((h, j) => j === i ? { ...h, close: e.target.value } : h) }))} />
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, whiteSpace: 'nowrap' }}>
+                    <input type="checkbox" checked={row.closed}
+                      onChange={e => setForm(f => ({ ...f, hoursDaywise: f.hoursDaywise.map((h, j) => j === i ? { ...h, closed: e.target.checked } : h) }))} />
+                    {copy('বন্ধ', 'Off')}
+                  </label>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
+            <input type="checkbox" checked={form.isActive} onChange={e => setForm(f => ({ ...f, isActive: e.target.checked }))} />
+            {copy('Active — website-এ দেখাবে ও checkout-এ প্রযোজ্য হবে', 'Active — shown on the site & applied at checkout')}
+          </label>
+
+          <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
+            <button style={th.btnPrimary} onClick={save} disabled={saving}>
+              {saving ? <><Spinner size={13} /> {copy('Saving...', 'Saving...')}</> : copy('✓ Save করুন', '✓ Save')}
+            </button>
+            <button style={th.btnGhost} onClick={onClose}>{copy('Cancel', 'Cancel')}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 export function RestaurantPage({ th, pageId, onToast }: {
   th: Theme; pageId: number; onToast: (m: string, t?: any) => void;
@@ -828,14 +1103,13 @@ export function RestaurantPage({ th, pageId, onToast }: {
   const [loading, setLoading] = useState(true);
   const [settings, setSettings] = useState<RestoSettings>({
     restaurantModeEnabled: false, restaurantLat: null, restaurantLng: null, deliverySlabs: [],
-    happyHourEnabled: false, happyHourDiscountPercent: null, happyHourLabel: '',
     milestoneRewardsEnabled: false,
   });
   const [offersSaving, setOffersSaving] = useState(false);
   const [milestones, setMilestones] = useState<any[]>([]);
   const [milestoneModal, setMilestoneModal] = useState<any | null>(null);
-  const [happyHourWindow, setHappyHourWindow] = useState<HoursRow[]>(defaultHours());
-  const [happyHourWindowSaving, setHappyHourWindowSaving] = useState(false);
+  const [offers, setOffers] = useState<any[]>([]);
+  const [offerModal, setOfferModal] = useState<any | null>(null);
   const cur = settings.currencySymbol || '৳';
 
   // menu
@@ -883,7 +1157,7 @@ export function RestaurantPage({ th, pageId, onToast }: {
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [s, prods, ings, cats, pack, mImgs, hrs, hh, combosList, milestonesList, layout] = await Promise.all([
+      const [s, prods, ings, cats, pack, mImgs, hrs, combosList, milestonesList, offersList, layout] = await Promise.all([
         request<any>(`${BASE}/settings`),
         request<FoodProduct[]>(`${BASE}/products`).catch(() => []),
         request<Ingredient[]>(`${RBASE}/ingredients`).catch(() => []),
@@ -891,9 +1165,9 @@ export function RestaurantPage({ th, pageId, onToast }: {
         request<any[]>(`${RBASE}/packaging`).catch(() => []),
         request<string[]>(`${RBASE}/menu-images`).catch(() => []),
         request<HoursRow[]>(`${RBASE}/hours`).catch(() => []),
-        request<HoursRow[]>(`${RBASE}/happy-hour`).catch(() => []),
         request<any[]>(`${RBASE}/combos`).catch(() => []),
         request<any[]>(`${RBASE}/milestones`).catch(() => []),
+        request<any[]>(`${RBASE}/offers`).catch(() => []),
         request<{ mode: 'single' | 'pages'; categoryOrder: string[] }>(`${RBASE}/menu-layout`).catch(() => ({ mode: 'single' as const, categoryOrder: [] })),
       ]);
       setSettings({
@@ -902,9 +1176,6 @@ export function RestaurantPage({ th, pageId, onToast }: {
         restaurantLng: s?.restaurantLng ?? null,
         deliverySlabs: Array.isArray(s?.deliverySlabs) ? s.deliverySlabs : [],
         currencySymbol: s?.currencySymbol || '৳',
-        happyHourEnabled: Boolean(s?.happyHourEnabled),
-        happyHourDiscountPercent: s?.happyHourDiscountPercent ?? null,
-        happyHourLabel: s?.happyHourLabel || '',
         milestoneRewardsEnabled: Boolean(s?.milestoneRewardsEnabled),
       });
       setDelivery({ lat: s?.restaurantLat ?? null, lng: s?.restaurantLng ?? null, slabs: Array.isArray(s?.deliverySlabs) ? s.deliverySlabs : [] });
@@ -914,9 +1185,9 @@ export function RestaurantPage({ th, pageId, onToast }: {
       setPackaging((Array.isArray(pack) ? pack : []).map((p: any) => ({ ingredientId: p.ingredientId, qty: p.qty })));
       setMenuImages(Array.isArray(mImgs) ? (mImgs as string[]) : []);
       setHours(Array.isArray(hrs) && hrs.length === 7 ? hrs : defaultHours());
-      setHappyHourWindow(Array.isArray(hh) && hh.length === 7 ? hh : defaultHours());
       setCombos(Array.isArray(combosList) ? combosList : []);
       setMilestones(Array.isArray(milestonesList) ? milestonesList : []);
+      setOffers(Array.isArray(offersList) ? offersList : []);
       setMenuLayout({
         mode: layout?.mode === 'pages' ? 'pages' : 'single',
         categoryOrder: Array.isArray(layout?.categoryOrder) ? layout.categoryOrder : [],
@@ -1002,9 +1273,6 @@ export function RestaurantPage({ th, pageId, onToast }: {
       await request(`${BASE}/settings`, {
         method: 'PATCH',
         body: JSON.stringify({
-          happyHourEnabled: settings.happyHourEnabled,
-          happyHourDiscountPercent: settings.happyHourDiscountPercent,
-          happyHourLabel: settings.happyHourLabel,
           milestoneRewardsEnabled: settings.milestoneRewardsEnabled,
         }),
       });
@@ -1018,13 +1286,24 @@ export function RestaurantPage({ th, pageId, onToast }: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pageId]);
 
-  const saveHappyHourWindow = async () => {
-    setHappyHourWindowSaving(true);
+  const reloadOffers = useCallback(async () => {
+    try { setOffers(await request<any[]>(`${RBASE}/offers`)); } catch { /* ignore */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pageId]);
+
+  const toggleOfferActive = async (o: any) => {
     try {
-      await request(`${RBASE}/happy-hour`, { method: 'PUT', body: JSON.stringify({ rows: happyHourWindow }) });
-      onToast(copy('✅ সেভ হয়েছে', '✅ Saved'), 'success');
+      await request(`${RBASE}/offers/${o.id}`, { method: 'PATCH', body: JSON.stringify({ isActive: !o.isActive }) });
+      reloadOffers();
     } catch (e: any) { onToast(e.message, 'error'); }
-    finally { setHappyHourWindowSaving(false); }
+  };
+
+  const deleteOffer = async (o: any) => {
+    if (!window.confirm(copy(`"${o.title}" Offer মুছে ফেলবেন?`, `Delete offer "${o.title}"?`))) return;
+    try {
+      await request(`${RBASE}/offers/${o.id}`, { method: 'DELETE' });
+      reloadOffers();
+    } catch (e: any) { onToast(e.message, 'error'); }
   };
 
   const saveMenuLayout = async (next?: Partial<typeof menuLayout>) => {
@@ -1167,6 +1446,7 @@ export function RestaurantPage({ th, pageId, onToast }: {
       {editingIng && <IngredientEditModal th={th} pageId={pageId} ingredient={editingIng} onClose={() => setEditingIng(null)} onToast={onToast} onSaved={reloadIngredients} />}
       {comboModal && <ComboModal th={th} pageId={pageId} combo={comboModal} products={products} cur={cur} onClose={() => setComboModal(null)} onToast={onToast} onSaved={reloadCombos} />}
       {milestoneModal && <MilestoneModal th={th} pageId={pageId} milestone={milestoneModal} products={products} onClose={() => setMilestoneModal(null)} onToast={onToast} onSaved={reloadMilestones} />}
+      {offerModal && <OfferModal th={th} pageId={pageId} offer={offerModal} products={products} categories={categories} cur={cur} onClose={() => setOfferModal(null)} onToast={onToast} onSaved={reloadOffers} />}
 
       <div>
         <h1 style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.04em', margin: 0 }}>🍕 Restaurant</h1>
@@ -1572,56 +1852,49 @@ export function RestaurantPage({ th, pageId, onToast }: {
         </div>
       )}
 
-      {/* ── OFFERS: Happy Hour (repeat-customer rewards now live under Milestone Rewards) ── */}
+      {/* ── OFFERS: multi-offer promotions gallery + Milestone Rewards ── */}
       {tab === 'OFFERS' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
           <div style={{ ...th.card }}>
-            <CardHeader th={th} title={copy('⏰ Happy Hour', '⏰ Happy Hour')}
-              sub={copy('নির্দিষ্ট সময়ে সব order-এ auto % ছাড় — website-এ banner হিসেবে দেখাবে', 'Auto % discount during a set window — shown as a banner on your website')} />
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 560 }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 700 }}>
-                <input type="checkbox" checked={settings.happyHourEnabled}
-                  onChange={e => setSettings(s => ({ ...s, happyHourEnabled: e.target.checked }))} />
-                {copy('চালু করুন', 'Enable')}
-              </label>
-              {settings.happyHourEnabled && (
-                <>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 10 }}>
-                    <FieldWithInfo th={th} label={copy('কত % ছাড়', 'Discount %')} helpText={copy('Happy Hour চলাকালীন সব order-এ এই % ছাড়', 'Applied to every order during the window')}>
-                      <input style={{ ...th.input, padding: '8px 10px' }} type="number" min={0} max={100} value={settings.happyHourDiscountPercent ?? ''}
-                        onChange={e => setSettings(s => ({ ...s, happyHourDiscountPercent: Number(e.target.value) || null }))} />
-                    </FieldWithInfo>
-                    <FieldWithInfo th={th} label={copy('Banner টেক্সট', 'Banner text')} helpText={copy('খালি রাখলে auto টেক্সট দেখাবে', 'Leave blank for an auto-generated message')}>
-                      <input style={{ ...th.input, padding: '8px 10px' }} placeholder={copy('যেমন: 🎉 Happy Hour! ২০% ছাড়', 'e.g. 🎉 Happy Hour! 20% off')} value={settings.happyHourLabel}
-                        onChange={e => setSettings(s => ({ ...s, happyHourLabel: e.target.value }))} />
-                    </FieldWithInfo>
-                  </div>
-                  <button style={{ ...th.btnPrimary, alignSelf: 'flex-start' }} onClick={saveOffers} disabled={offersSaving}>
-                    {offersSaving ? <Spinner size={13} /> : copy('✓ Save করুন', '✓ Save')}
-                  </button>
-                  <div style={{ fontSize: 12.5, fontWeight: 700, color: th.muted, marginTop: 6 }}>{copy('কখন Happy Hour চলবে:', 'When Happy Hour runs:')}</div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    {happyHourWindow.map((row, i) => (
-                      <div key={row.day} style={{ display: 'grid', gridTemplateColumns: '70px 1fr 1fr 90px', gap: 8, alignItems: 'center', opacity: row.closed ? 0.55 : 1 }}>
-                        <div style={{ fontSize: 12.5, fontWeight: 700 }}>{copy(DAY_NAMES_BN[row.day], DAY_NAMES_EN[row.day])}</div>
-                        <input style={{ ...th.input, padding: '7px 10px' }} type="time" value={row.open} disabled={row.closed}
-                          onChange={e => setHappyHourWindow(hs => hs.map((h, j) => j === i ? { ...h, open: e.target.value } : h))} />
-                        <input style={{ ...th.input, padding: '7px 10px' }} type="time" value={row.close} disabled={row.closed}
-                          onChange={e => setHappyHourWindow(hs => hs.map((h, j) => j === i ? { ...h, close: e.target.value } : h))} />
-                        <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, whiteSpace: 'nowrap' }}>
-                          <input type="checkbox" checked={row.closed}
-                            onChange={e => setHappyHourWindow(hs => hs.map((h, j) => j === i ? { ...h, closed: e.target.checked } : h))} />
-                          {copy('বন্ধ', 'Off')}
-                        </label>
+            <CardHeader th={th} title={copy('🎁 Offers', '🎁 Offers')}
+              sub={copy('একাধিক offer বানান — পুরো অর্ডার, নির্দিষ্ট category/product, বা delivery fee-তে ছাড়। Website-এ card হিসেবে দেখাবে; একসাথে একাধিক active থাকলে customer-এর জন্য সবচেয়ে ভালোটাই প্রযোজ্য হবে।', 'Create multiple offers — off the whole order, a category/product, or the delivery fee. Shown as cards on your website; when several are active at once, only the single best one applies.')}
+              action={<button style={{ ...th.btnPrimary, fontSize: 12.5 }} onClick={() => setOfferModal({})}>+ {copy('নতুন Offer', 'New Offer')}</button>}
+            />
+            {offers.length === 0 ? (
+              <EmptyState icon="🎁" title={copy('এখনো কোনো Offer নেই', 'No offers yet')} sub={copy('"+ নতুন Offer" দিয়ে যোগ করুন', 'Add one with "+ New Offer"')} />
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {offers.map((o: any) => {
+                  const val = o.discountType === 'PERCENT' ? `${o.discountValue}%` : `${cur}${o.discountValue}`;
+                  const scope =
+                    o.discountTarget === 'SUBTOTAL' ? copy(`🧾 পুরো অর্ডারে ${val} ছাড়`, `🧾 ${val} off entire order`)
+                    : o.discountTarget === 'CATEGORY' ? copy(`📂 "${o.discountCategory}"-তে ${val} ছাড়`, `📂 ${val} off "${o.discountCategory}"`)
+                    : o.discountTarget === 'PRODUCTS' ? copy(`🍽️ ${o.products?.length || 0}টা item-এ ${val} ছাড়`, `🍽️ ${val} off ${o.products?.length || 0} items`)
+                    : o.discountType === 'FIXED_PRICE' ? copy(`🛵 Delivery fee ${cur}${o.discountValue}`, `🛵 Delivery fee ${cur}${o.discountValue}`)
+                    : copy(`🛵 Delivery-তে ${val} ছাড়`, `🛵 ${val} off delivery`);
+                  const statusColor = o.status === 'active' ? '#16a34a' : o.status === 'scheduled' ? '#2563eb' : o.status === 'expired' ? '#dc2626' : th.muted;
+                  const statusText = o.status === 'active' ? copy('চলছে', 'Active') : o.status === 'scheduled' ? copy('আসছে', 'Scheduled') : o.status === 'expired' ? copy('শেষ', 'Expired') : copy('বন্ধ', 'Off');
+                  return (
+                    <div key={o.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 9, border: `1px solid ${th.border}`, opacity: o.isActive ? 1 : 0.6 }}>
+                      {o.imageUrl && <img src={o.imageUrl.startsWith('http') ? o.imageUrl : `${API_BASE}${o.imageUrl}`} alt="" style={{ width: 36, height: 36, borderRadius: 8, objectFit: 'cover', border: `1px solid ${th.border}`, flexShrink: 0 }} />}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
+                          {o.title}
+                          <span style={{ fontSize: 10, fontWeight: 800, padding: '1px 8px', borderRadius: 7, background: `${statusColor}18`, color: statusColor, border: `1px solid ${statusColor}35` }}>{statusText}</span>
+                        </div>
+                        <div style={{ fontSize: 12, color: th.muted }}>{scope}</div>
                       </div>
-                    ))}
-                    <button style={{ ...th.btnPrimary, marginTop: 4, alignSelf: 'flex-start' }} onClick={saveHappyHourWindow} disabled={happyHourWindowSaving}>
-                      {happyHourWindowSaving ? <Spinner size={13} /> : copy('✓ সময় Save করুন', '✓ Save window')}
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                        <input type="checkbox" checked={o.isActive} onChange={() => toggleOfferActive(o)} />
+                        {copy('Active', 'Active')}
+                      </label>
+                      <button style={{ ...th.btnSmGhost, fontSize: 11.5 }} onClick={() => setOfferModal(o)}>✏️ {copy('Edit', 'Edit')}</button>
+                      <button style={{ ...th.btnSmDanger, fontSize: 11.5 }} onClick={() => deleteOffer(o)}>🗑 {copy('মুছুন', 'Delete')}</button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           <div style={{ ...th.card }}>

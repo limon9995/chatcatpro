@@ -270,14 +270,19 @@ export class CatalogController {
     }
 
     // Independent lookups — run in parallel instead of one-after-another.
-    const [productWithReferenceImages, reviewSummary, happyHour] = await Promise.all([
+    const [productWithReferenceImages, reviewSummary, offerPreview, deliveryOfferOptions] = await Promise.all([
       this.productsService.attachReferenceImages(page.id, product),
       this.reviews
         .listForProduct(page.id, product.code)
         .catch(() => ({ avgRating: 0, count: 0, reviews: [] })),
+      // V29: best product-side Offer for THIS product, if any — replaces the
+      // old static Happy-Hour banner; now actually reflected in the checkout
+      // total too (see the wo-offer-box / woApplyOffer JS below), not just
+      // shown as an FYI banner.
       this.pricing
-        .getHappyHourStatus(page.id)
-        .catch(() => ({ active: false, discountPercent: 0, label: '' })),
+        .getProductOfferPreview(page.id, product.id, product.category)
+        .catch(() => null),
+      this.pricing.getActiveDeliveryOfferOptions(page.id).catch(() => []),
     ]);
 
     // V21: Increment product view counter — fire-and-forget
@@ -322,7 +327,8 @@ export class CatalogController {
         selectionMode: select === '1',
         shortlistCodes: this.normalizeCodeList(codes),
         reviewSummary,
-        happyHour,
+        offerPreview,
+        deliveryOfferOptions,
       }),
     );
   }
@@ -911,6 +917,13 @@ export class CatalogController {
       where.code = { in: filteredCodes };
     }
 
+    // V29: active Offers for the public "🎁 Offers" gallery — independent of
+    // the product query above (an offer with zero matching products today
+    // can still be shown; it's a marketing card, not a filter).
+    const activeOffers = await this.pricing
+      .listActiveOffersForGallery(page.id)
+      .catch(() => []);
+
     const rawProducts = await this.prisma.product.findMany({
       where,
       orderBy: [{ catalogSortOrder: 'asc' }, { id: 'desc' }],
@@ -1013,6 +1026,7 @@ export class CatalogController {
             return null;
           }
         })(),
+        activeOffers,
       },
       products,
       total: products.length,
@@ -1027,7 +1041,8 @@ export class CatalogController {
       selectionMode?: boolean;
       shortlistCodes?: string[];
       reviewSummary?: { avgRating: number; count: number; reviews: any[] };
-      happyHour?: { active: boolean; discountPercent: number; label: string };
+      offerPreview?: { percent: number; label: string; offerId: number } | null;
+      deliveryOfferOptions?: { id: number; title: string; type: string; value: number }[];
     },
   ): string {
     const primary = esc(page.primaryColor);
@@ -1048,7 +1063,8 @@ export class CatalogController {
       : `/catalog/${esc(page.id)}`;
 
     const reviewSummary = opts?.reviewSummary || { avgRating: 0, count: 0, reviews: [] };
-    const happyHour = opts?.happyHour;
+    const offerPreview = opts?.offerPreview;
+    const deliveryOfferOptions = opts?.deliveryOfferOptions || [];
     const stars = (n: number) =>
       '★'.repeat(Math.round(n)) + '☆'.repeat(5 - Math.round(n));
     const reviewsHtml = reviewSummary.count
@@ -1429,7 +1445,7 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:var(--b
 <script>document.addEventListener('DOMContentLoaded',function(){var b=document.getElementById('dkBtn');if(b)b.textContent=document.documentElement.dataset.dark==='1'?'☀️':'🌙'});</script>
 
 <div class="wrapper">
-  ${happyHour?.active ? `<div style="background:#f59e0b18;border:1px solid #f59e0b40;color:#b45309;border-radius:10px;padding:10px 14px;margin-bottom:14px;font-weight:700;font-size:13px;text-align:center;">${esc(happyHour.label)}</div>` : ''}
+  ${offerPreview ? `<div style="background:#f59e0b18;border:1px solid #f59e0b40;color:#b45309;border-radius:10px;padding:10px 14px;margin-bottom:14px;font-weight:700;font-size:13px;text-align:center;">🎉 ${esc(offerPreview.label)} — ${offerPreview.percent}% ছাড়</div>` : ''}
   <div class="product-grid">
 
     <!-- Left: Media -->
@@ -1853,8 +1869,46 @@ var WO_RLNG = ${Number(page.restaurantLng) || 0};
 var WO_SLABS = ${JSON.stringify(page.deliverySlabs || [])};
 var WO_VARIANTS = ${JSON.stringify(foodVariants)};
 var woVarLabel = WO_VARIANTS.length ? WO_VARIANTS[0].label : null;
+// V29: Offer live preview — display only, server always recomputes
+// authoritatively from scratch at order submission (same trust model as the
+// variant price / delivery fee above).
+var WO_OFFER_PERCENT = ${offerPreview ? offerPreview.percent : 0};
+var WO_OFFER_LABEL = ${JSON.stringify(offerPreview ? offerPreview.label : '')};
+var WO_DELIVERY_OFFERS = ${JSON.stringify(deliveryOfferOptions)};
 var woOrderIdVal = null;
 var woPaymentUrl = null;
+
+/** Apply the live-preview product offer (if any) to a unit price. */
+function woDiscountedPrice(price){
+  if (!WO_OFFER_PERCENT) return price;
+  return Math.round(price * (1 - WO_OFFER_PERCENT / 100) * 100) / 100;
+}
+/** Best (lowest final) delivery fee among WO_DELIVERY_OFFERS, mirroring the
+ *  server's PricingService.resolveOfferDiscounts bucket-picking logic. */
+function woDiscountedDeliveryFee(fee){
+  var best = fee;
+  for (var i = 0; i < WO_DELIVERY_OFFERS.length; i++) {
+    var o = WO_DELIVERY_OFFERS[i], finalFee;
+    if (o.type === 'PERCENT') finalFee = Math.round(fee * (1 - o.value / 100) * 100) / 100;
+    else if (o.type === 'FIXED_OFF') finalFee = Math.max(0, fee - o.value);
+    else finalFee = o.value; // FIXED_PRICE
+    if (finalFee < best) best = finalFee;
+  }
+  return best;
+}
+function woUpdateInfoPrice(){
+  var info = document.getElementById('woInfoPrice');
+  if (!info) return;
+  var label = WO_VARIANTS.length ? (' (' + woVarLabel + ')') : '';
+  if (WO_OFFER_PERCENT) {
+    info.innerHTML = '<s style="opacity:.55">' + WO_CURRENCY + WO_PRICE.toLocaleString() + '</s> '
+      + WO_CURRENCY + woDiscountedPrice(WO_PRICE).toLocaleString() + label
+      + ' <span style="color:#b45309;font-weight:800">🎉 ' + WO_OFFER_PERCENT + '% ছাড়</span>';
+  } else {
+    info.textContent = WO_CURRENCY + WO_PRICE.toLocaleString('bn-BD') + label;
+  }
+}
+woUpdateInfoPrice(); // upgrade the server-rendered initial price to show any live offer
 
 // ── Size/portion price variants — server re-validates the chosen label ──────
 function woApplyVariant(label){
@@ -1865,8 +1919,7 @@ function woApplyVariant(label){
   WO_PRICE = v.price;
   var pv = document.getElementById('pvPrice');
   if (pv) pv.textContent = WO_CURRENCY + v.price.toLocaleString();
-  var info = document.getElementById('woInfoPrice');
-  if (info) info.textContent = WO_CURRENCY + v.price.toLocaleString() + ' (' + v.label + ')';
+  woUpdateInfoPrice();
   // keep page chips + modal select in sync
   document.querySelectorAll('.pv-chip').forEach(function(c){ c.classList.toggle('active', c.getAttribute('data-label') === v.label); });
   var sel = document.getElementById('woSizeSel');
@@ -1922,11 +1975,16 @@ function woRecalcFee(){
     box.textContent='দুঃখিত, এই লোকেশন আমাদের ডেলিভারি এলাকার বাইরে ('+km+' km) 😔';
     return;
   }
-  woFee=slab.fee;
+  woFee=slab.fee; // null-check role only (out-of-range guard) — display below applies any live offer on top
   var qty=parseInt(document.getElementById('woQty').value)||1;
-  var total=WO_PRICE*qty+slab.fee;
+  var unitPrice=woDiscountedPrice(WO_PRICE);
+  var deliveryFee=woDiscountedDeliveryFee(slab.fee);
+  var total=unitPrice*qty+deliveryFee;
+  var offerLines='';
+  if(WO_OFFER_PERCENT) offerLines+='<br>🎉 '+WO_OFFER_LABEL+' ('+WO_OFFER_PERCENT+'% ছাড়): -'+WO_CURRENCY+Math.round((WO_PRICE-unitPrice)*qty).toLocaleString();
+  if(deliveryFee<slab.fee) offerLines+='<br>🎉 Delivery discount: -'+WO_CURRENCY+Math.round(slab.fee-deliveryFee).toLocaleString();
   box.className='wo-fee-box ok';
-  box.innerHTML='🛵 Delivery charge: <strong>'+WO_CURRENCY+slab.fee+'</strong> ('+km+' km)<br>মোট: <strong>'+WO_CURRENCY+total.toLocaleString()+'</strong> ('+WO_CURRENCY+WO_PRICE.toLocaleString()+' × '+qty+' + delivery)';
+  box.innerHTML='🛵 Delivery charge: <strong>'+WO_CURRENCY+deliveryFee.toLocaleString()+'</strong> ('+km+' km)'+offerLines+'<br>মোট: <strong>'+WO_CURRENCY+total.toLocaleString()+'</strong> ('+WO_CURRENCY+unitPrice.toLocaleString()+' × '+qty+' + delivery)';
 }
 function woUseGps(){
   var btn=document.getElementById('woGpsBtn');
@@ -2311,6 +2369,40 @@ ${poweredByBadge()}
       Array.isArray(page.menuCategoryOrder) ? page.menuCategoryOrder : [],
     );
 
+    // V29: "🎁 Offers" gallery — active offers as image cards, hidden while
+    // searching so search results stay the focus.
+    const activeOffers: any[] = Array.isArray(page.activeOffers)
+      ? page.activeOffers
+      : [];
+    const offerBadgeText = (o: any): string => {
+      if (o.discountType === 'FIXED_PRICE')
+        return `${currency}${Number(o.discountValue) || 0} ডেলিভারি`;
+      if (o.discountType === 'FIXED_OFF')
+        return `${currency}${Number(o.discountValue) || 0} ছাড়`;
+      return `${Number(o.discountValue) || 0}% ছাড়`;
+    };
+    const offersGallery =
+      !search.trim() && activeOffers.length > 0
+        ? `<div class="offers-wrap">
+  <div class="offers-head">🎁 চলমান অফার</div>
+  <div class="offers-strip">
+    ${activeOffers
+      .map(
+        (o) => `
+    <div class="offer-card">
+      <div class="offer-img">${o.imageUrl ? `<img src="${esc(o.imageUrl)}" alt="${esc(o.title)}" loading="lazy" onerror="this.parentElement.innerHTML='🎁'"/>` : '🎁'}</div>
+      <div class="offer-badge">${esc(offerBadgeText(o))}</div>
+      <div class="offer-body">
+        <div class="offer-title">${esc(o.title)}</div>
+        ${o.subtitle ? `<div class="offer-sub">${esc(o.subtitle)}</div>` : ''}
+      </div>
+    </div>`,
+      )
+      .join('')}
+  </div>
+</div>`
+        : '';
+
     // V29: resolve which category page this request is actually showing.
     // Search always wins (shows every match, never "stuck" on one category).
     // '' / unset falls back to the merchant's first-ordered category so
@@ -2537,6 +2629,21 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:radial-
 .filter-btn{appearance:none;border:none;cursor:pointer;padding:10px 14px;border-radius:999px;background:rgba(255,255,255,.88);border:1px solid var(--border);box-shadow:var(--shadow-sm);font-size:12.5px;font-weight:800;color:var(--sub);font-family:inherit;transition:all .18s}
 .filter-btn:hover{transform:translateY(-1px);border-color:color-mix(in srgb,var(--p) 22%,#dbe4f0)}
 .filter-btn.active{background:linear-gradient(135deg,var(--p),var(--p2));color:#fff;border-color:transparent;box-shadow:0 14px 28px color-mix(in srgb,var(--p) 28%,transparent)}
+
+/* ── OFFERS GALLERY ── */
+.offers-wrap{max-width:1180px;margin:14px auto 0;padding:0 20px}
+.offers-head{font-size:11px;font-weight:800;letter-spacing:.13em;text-transform:uppercase;color:var(--p);margin-bottom:10px}
+.offers-strip{display:flex;gap:16px;overflow-x:auto;padding-bottom:6px;scroll-snap-type:x proximity}
+.offers-strip::-webkit-scrollbar{height:6px}
+.offers-strip::-webkit-scrollbar-thumb{background:var(--border);border-radius:99px}
+.offer-card{position:relative;flex:0 0 auto;width:270px;scroll-snap-align:start;border-radius:22px;overflow:hidden;background:linear-gradient(180deg,#fff,#fbfcff);border:1px solid rgba(148,163,184,.16);box-shadow:var(--shadow-sm);text-decoration:none;color:inherit;display:flex;flex-direction:column;transition:transform .2s,box-shadow .2s}
+.offer-card:hover{transform:translateY(-5px);box-shadow:var(--shadow)}
+.offer-img{width:100%;aspect-ratio:16/9;background:linear-gradient(135deg,#f8fbff,#eef3ff);display:flex;align-items:center;justify-content:center;font-size:38px;overflow:hidden}
+.offer-img img{width:100%;height:100%;object-fit:cover;display:block}
+.offer-badge{position:absolute;top:10px;left:10px;background:rgba(234,88,12,.94);color:#fff;font-size:11px;font-weight:800;padding:5px 11px;border-radius:999px;letter-spacing:.03em;box-shadow:0 6px 14px rgba(0,0,0,.18)}
+.offer-body{padding:12px 14px 14px}
+.offer-title{font-size:14.5px;font-weight:800;letter-spacing:-.2px}
+.offer-sub{margin-top:4px;font-size:12px;color:var(--sub);line-height:1.5}
 
 /* ── GRID ── */
 .grid-wrap{max-width:1180px;margin:0 auto 70px;padding:0 28px}
@@ -2808,6 +2915,8 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:radial-
     </div>
   </div>
 </header>
+
+${offersGallery}
 
 <div class="stats">
   <div class="stats-count">

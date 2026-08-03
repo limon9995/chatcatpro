@@ -616,6 +616,34 @@ export class OrdersService {
       .map((r) => ({ productCode: r.productCode!, qty: r.qty, unitPrice: 0, productName: `🎁 Free — ${r.productName}`, metaJson: null }));
     const freeDelivery = rewards.some((r) => r.rewardType === 'FREE_DELIVERY');
     const milestoneDiscountAmount = this.pricing.computeMilestoneDiscountAmount(rewards, subtotal);
+    // Delivery fee AFTER milestone's free-delivery reward — an Offer's own
+    // delivery discount is computed against what will ACTUALLY be charged,
+    // so it never tries to "discount" a fee that's already zeroed out.
+    const deliveryFeeAfterMilestone = freeDelivery ? 0 : (data.deliveryFee ?? null);
+
+    // Offers — product-side (subtotal/category/products) + delivery-side.
+    const products = await this.prisma.product.findMany({
+      where: { pageId: data.pageIdRef, code: { in: data.items.map((it) => it.productCode.toUpperCase()) } },
+      select: { id: true, code: true, category: true },
+    });
+    const byCode = new Map(products.map((p) => [p.code, p]));
+    const offerItems = data.items
+      .map((it) => {
+        const p = byCode.get(it.productCode.toUpperCase());
+        return p ? { productId: p.id, category: p.category, qty: it.qty, unitPrice: it.unitPrice } : null;
+      })
+      .filter((i): i is NonNullable<typeof i> => i !== null);
+    const offerResult = await this.pricing.resolveOfferDiscounts(
+      data.pageIdRef,
+      offerItems,
+      deliveryFeeAfterMilestone,
+    );
+    const finalDeliveryFee =
+      offerResult.deliveryFixedPrice !== undefined
+        ? offerResult.deliveryFixedPrice
+        : deliveryFeeAfterMilestone != null
+          ? deliveryFeeAfterMilestone - offerResult.deliveryDiscountAmount
+          : deliveryFeeAfterMilestone;
 
     return this.prisma.order.create({
       data: {
@@ -631,11 +659,14 @@ export class OrdersService {
         paymentStatus,
         deliveryLat: data.deliveryLat ?? null,
         deliveryLng: data.deliveryLng ?? null,
-        deliveryFee: freeDelivery ? 0 : (data.deliveryFee ?? null),
+        deliveryFee: finalDeliveryFee,
         deliveryDistanceKm: data.deliveryDistanceKm ?? null,
         loyaltyDiscountAmount: discounts.loyaltyDiscount,
         happyHourDiscountAmount: discounts.happyHourDiscount,
         milestoneDiscountAmount,
+        offerDiscountAmount: offerResult.productDiscountAmount,
+        offerDeliveryDiscountAmount: offerResult.deliveryDiscountAmount,
+        offerAppliedJson: offerResult.appliedOffers.length ? JSON.stringify(offerResult.appliedOffers) : null,
         milestoneRewardAppliedJson: rewards.length
           ? JSON.stringify(rewards.map((r) => ({ ...r, orderNumber: thisOrderNumber })))
           : null,

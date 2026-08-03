@@ -140,6 +140,36 @@ export class RestaurantController {
     return this.svc.setHappyHourWindow(this.pid(r, p), b?.rows ?? []);
   }
 
+  // ── Offers ───────────────────────────────────────────────────────────────────
+  @Get(':pageId/offers')
+  listOffers(@Param('pageId') p: string, @Req() r: any) {
+    return this.svc.listOffers(this.pid(r, p));
+  }
+
+  @Post(':pageId/offers')
+  createOffer(@Param('pageId') p: string, @Body() b: any, @Req() r: any) {
+    return this.svc.createOffer(this.pid(r, p), b || {});
+  }
+
+  @Patch(':pageId/offers/:id')
+  updateOffer(
+    @Param('pageId') p: string,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() b: any,
+    @Req() r: any,
+  ) {
+    return this.svc.updateOffer(this.pid(r, p), id, b || {});
+  }
+
+  @Delete(':pageId/offers/:id')
+  deleteOffer(
+    @Param('pageId') p: string,
+    @Param('id', ParseIntPipe) id: number,
+    @Req() r: any,
+  ) {
+    return this.svc.deleteOffer(this.pid(r, p), id);
+  }
+
   // ── Combo offers ────────────────────────────────────────────────────────────
   @Get(':pageId/combos')
   listCombos(@Param('pageId') p: string, @Req() r: any) {

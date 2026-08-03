@@ -179,8 +179,12 @@ model Page {
   loyaltyThresholdOrders  Int?
   loyaltyDiscountPercent  Float?
 
-  // V27: Happy Hour — day/time-window % discount, same JSON shape as
-  // businessHoursJson ([{day, open, close, closed}], Asia/Dhaka).
+  // V27: Happy Hour — DEPRECATED, superseded by the Offer model (V29) which
+  // covers the same "day/time-window % discount" case plus category/product/
+  // delivery-charge scoping and a public gallery. Kept only so any page that
+  // already had one saved keeps its historical Order.happyHourDiscountAmount
+  // meaning; a one-time data migration converts an active saved window into
+  // an equivalent Offer row and turns this off. No UI writes these anymore.
   happyHourEnabled         Boolean @default(false)
   happyHourJson            String?
   happyHourDiscountPercent Float?
@@ -190,6 +194,12 @@ model Page {
   // free item or free delivery. See MilestoneReward model.
   milestoneRewardsEnabled Boolean @default(false)
   milestoneRewards        MilestoneReward[]
+
+  // V29: Offers — merchant-created named promotions (% or fixed discount on
+  // the subtotal, a category, selected products, or the delivery charge),
+  // each with its own validity window and an optional attached time-of-day
+  // schedule. See Offer model.
+  offers Offer[]
 
   callConfirmModeOn       Boolean @default(false)
   callConfirmModeAllowed  Boolean @default(true)
@@ -441,6 +451,8 @@ model Product {
   componentOfCombos ComboItem[] @relation("ComboComponent")
   // V28: this product configured as the free-item reward on a milestone
   milestoneRewards MilestoneReward[]
+  // V29: this product included in an Offer's "selected products" scope
+  offerProducts OfferProduct[]
   dualWearingPages Page[] @relation("DualWearing")
   dualHoldingPages Page[] @relation("DualHolding")
   liveSessionsWorn LiveSession[] @relation("SessionWorn")
@@ -583,6 +595,14 @@ model Order {
   // {interval, rewardType, productId, productName, qty, discountPercent}. Null = none.
   milestoneRewardAppliedJson String?
 
+  // V29: Offers — product-side (subtotal/category/products target) and
+  // delivery-side discount amounts are tracked separately since they can
+  // both apply on the same order (different buckets, see Offer model doc).
+  offerDiscountAmount         Float   @default(0)
+  offerDeliveryDiscountAmount Float   @default(0)
+  // Snapshot of the offer(s) applied — [{id, title, target, type, value}]. Null = none.
+  offerAppliedJson            String?
+
   @@index([pageIdRef])
   @@index([customerPsid])
   @@index([status])
@@ -645,6 +665,67 @@ model MilestoneReward {
 
   @@unique([pageId, orderInterval])
   @@index([pageId])
+}
+
+// V29: A merchant-created named promotion. Discount is either a % or a fixed
+// amount, applied to one of four "targets":
+//   SUBTOTAL — whole order          CATEGORY — items in discountCategory
+//   PRODUCTS — items in offerProducts        DELIVERY — the delivery fee itself
+// discountType is "PERCENT" for SUBTOTAL/CATEGORY/PRODUCTS (a fixed taka
+// amount doesn't have well-defined behavior against an order smaller than
+// that amount); DELIVERY additionally allows "FIXED_OFF" (taka off the
+// computed fee) and "FIXED_PRICE" (override the fee entirely, e.g. ৳0 for
+// free delivery).
+// Validity is a date range (skipped entirely when isUnlimited); an optional
+// attached time-of-day schedule further restricts WHEN within that range the
+// offer is live — see common/offer-hours.ts for why this is a dedicated
+// helper and not a reuse of parseBusinessHours (different "missing day"
+// default). When two+ offers of the same target-bucket (product-side vs
+// delivery-side) are active at once, PricingService.resolveOfferDiscounts
+// picks the single highest-value one per bucket — they don't stack.
+model Offer {
+  id          Int      @id @default(autoincrement())
+  pageId      Int
+  page        Page     @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  title       String
+  subtitle    String?
+  description String?
+  imageUrl    String?
+  isActive    Boolean  @default(true)
+
+  isUnlimited Boolean   @default(true)
+  startDate   DateTime?
+  endDate     DateTime?
+
+  discountTarget   String  @default("SUBTOTAL") // "SUBTOTAL" | "CATEGORY" | "PRODUCTS" | "DELIVERY"
+  discountCategory String? // set when discountTarget = CATEGORY
+  discountType     String  @default("PERCENT")  // "PERCENT" | "FIXED_OFF" | "FIXED_PRICE" (latter two: DELIVERY only)
+  discountValue    Float   // percent (0-100) or taka amount depending on discountType
+
+  // Optional attached time-of-day schedule — null = no time restriction
+  // (active all day, every day, within the validity window above).
+  hoursMode String? // "general" | "daywise"
+  hoursJson String? // general: {open,close}; daywise: [{day,open,close}], missing day = inactive
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  products OfferProduct[]
+
+  @@index([pageId])
+}
+
+// One row = "this offer's PRODUCTS-target scope includes this product".
+model OfferProduct {
+  id        Int     @id @default(autoincrement())
+  offerId   Int
+  offer     Offer   @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  productId Int
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([offerId, productId])
+  @@index([offerId])
+  @@index([productId])
 }
 
 model OrderItem {

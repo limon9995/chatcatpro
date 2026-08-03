@@ -947,6 +947,24 @@ export class DraftOrderHandler {
       orderSubtotal,
     );
 
+    // Offers — product-side (subtotal/category/products). Bot-chat orders
+    // don't carry a structured delivery fee at this point (see the fixed
+    // Dhaka-zone quote flow), so only the product-side bucket applies here.
+    const offerProducts = await this.prisma.product.findMany({
+      where: { pageId, code: { in: draft.items.map((i) => i.productCode) } },
+      select: { id: true, code: true, category: true },
+    }).catch(() => [] as { id: number; code: string; category: string | null }[]);
+    const offerProductByCode = new Map(offerProducts.map((p) => [p.code, p]));
+    const offerItems = draft.items
+      .map((i) => {
+        const p = offerProductByCode.get(i.productCode);
+        return p ? { productId: p.id, category: p.category, qty: i.qty, unitPrice: i.unitPrice } : null;
+      })
+      .filter((i): i is NonNullable<typeof i> => i !== null);
+    const offerResult = await this.pricing
+      .resolveOfferDiscounts(pageId, offerItems, null)
+      .catch(() => ({ productDiscountAmount: 0, deliveryDiscountAmount: 0, appliedOffers: [] as any[] }));
+
     // C-3: Create order AND decrement stock atomically
     const order = await this.prisma.$transaction(async (tx) => {
       const created = await tx.order.create({
@@ -976,6 +994,8 @@ export class DraftOrderHandler {
           loyaltyDiscountAmount: discounts.loyaltyDiscount,
           happyHourDiscountAmount: discounts.happyHourDiscount,
           milestoneDiscountAmount,
+          offerDiscountAmount: offerResult.productDiscountAmount,
+          offerAppliedJson: offerResult.appliedOffers.length ? JSON.stringify(offerResult.appliedOffers) : null,
           milestoneRewardAppliedJson: milestoneRewards.length
             ? JSON.stringify(milestoneRewards.map((r) => ({ ...r, orderNumber: thisOrderNumber })))
             : null,

@@ -344,3 +344,84 @@ export function isOpenNow(
     ? nowMin >= openMin && nowMin < closeMin
     : nowMin >= openMin || nowMin < closeMin;
 }
+
+// ── V29: Offer time-of-day schedule ─────────────────────────────────────────
+// Deliberately NOT a reuse of parseBusinessHours/isOpenNow above: those
+// default a day that's missing from the saved data to "open 10:00-22:00" —
+// correct for "is my shop open" (assume open unless told otherwise), but
+// backwards for a promotional offer window (assume INACTIVE unless a day is
+// explicitly configured). Reusing the shop-hours default here would silently
+// make an offer meant for "Friday only" apply on every other day too.
+
+export interface OfferHoursDayRow {
+  day: number; // 0-6, JS Date#getDay
+  open: string; // "HH:mm"
+  close: string; // "HH:mm"
+}
+
+function isWithinRange(openMin: number, closeMin: number, nowMin: number): boolean {
+  return openMin <= closeMin
+    ? nowMin >= openMin && nowMin < closeMin
+    : nowMin >= openMin || nowMin < closeMin; // overnight wrap
+}
+
+/**
+ * Whether an Offer's attached time-of-day schedule is active right now
+ * (Asia/Dhaka). `hoursMode` null/undefined = no time restriction (always
+ * active). "general" = one open/close range, every day. "daywise" = only the
+ * listed days are active; a day not present in `rows` is INACTIVE.
+ */
+export function isOfferActiveNow(
+  hoursMode: string | null | undefined,
+  hoursJson: string | null | undefined,
+  now: Date = new Date(),
+): boolean {
+  if (!hoursMode) return true;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(hoursJson || 'null');
+  } catch {
+    return true; // malformed schedule — fail open rather than hide a live offer
+  }
+  const dhaka = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Dhaka' }));
+  const nowMin = dhaka.getHours() * 60 + dhaka.getMinutes();
+
+  if (hoursMode === 'general') {
+    const open = HHMM_RE.test((parsed as any)?.open) ? (parsed as any).open : null;
+    const close = HHMM_RE.test((parsed as any)?.close) ? (parsed as any).close : null;
+    if (!open || !close) return true; // unconfigured — don't hide the offer
+    return isWithinRange(hhmmToMinutes(open), hhmmToMinutes(close), nowMin);
+  }
+
+  if (hoursMode === 'daywise') {
+    if (!Array.isArray(parsed)) return true; // unconfigured — don't hide the offer
+    const row = (parsed as OfferHoursDayRow[]).find(
+      (r) => Number(r?.day) === dhaka.getDay() && HHMM_RE.test(r?.open) && HHMM_RE.test(r?.close),
+    );
+    if (!row) return false; // this weekday was never configured — inactive
+    return isWithinRange(hhmmToMinutes(row.open), hhmmToMinutes(row.close), nowMin);
+  }
+
+  return true;
+}
+
+/** Sanitize a client-submitted offer schedule; returns null when there's nothing valid to save. */
+export function sanitizeOfferHours(
+  hoursMode: unknown,
+  hoursRaw: unknown,
+): { hoursMode: string | null; hoursJson: string | null } {
+  if (hoursMode === 'general') {
+    const open = HHMM_RE.test((hoursRaw as any)?.open) ? (hoursRaw as any).open : '17:00';
+    const close = HHMM_RE.test((hoursRaw as any)?.close) ? (hoursRaw as any).close : '22:00';
+    return { hoursMode: 'general', hoursJson: JSON.stringify({ open, close }) };
+  }
+  if (hoursMode === 'daywise') {
+    const rows: OfferHoursDayRow[] = Array.isArray(hoursRaw)
+      ? hoursRaw
+          .map((r: any) => ({ day: Number(r?.day), open: String(r?.open ?? ''), close: String(r?.close ?? '') }))
+          .filter((r) => Number.isInteger(r.day) && r.day >= 0 && r.day <= 6 && HHMM_RE.test(r.open) && HHMM_RE.test(r.close))
+      : [];
+    return { hoursMode: 'daywise', hoursJson: JSON.stringify(rows) };
+  }
+  return { hoursMode: null, hoursJson: null };
+}
