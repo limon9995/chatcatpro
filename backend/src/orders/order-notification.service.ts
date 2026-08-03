@@ -40,7 +40,8 @@ export class OrderNotificationService {
     const discounts =
       (order.loyaltyDiscountAmount || 0) +
       (order.happyHourDiscountAmount || 0) +
-      (order.milestoneDiscountAmount || 0);
+      (order.milestoneDiscountAmount || 0) +
+      ((order as any).offerDiscountAmount || 0);
     const dueAmount = Math.max(0, subtotal - advance - discounts);
     const editLink = (order as any).editToken
       ? `https://chatcat.pro/order?token=${(order as any).editToken}`
@@ -59,6 +60,23 @@ export class OrderNotificationService {
               : `🎁 অভিনন্দন! এই অর্ডারে আপনি ফ্রি ${r.productName || ''} পেয়েছেন।`,
         );
         if (lines.length) rewardLine = '\n\n' + lines.join('\n');
+      } catch {
+        /* ignore malformed snapshot */
+      }
+    }
+    // V29: Offers — announce whichever offer(s) actually won (product-side
+    // and/or delivery-side can both apply on the same order).
+    if ((order as any).offerAppliedJson) {
+      try {
+        const applied: any[] = JSON.parse((order as any).offerAppliedJson);
+        const lines = (Array.isArray(applied) ? applied : [])
+          .filter((o) => o?.title)
+          .map((o) =>
+            o.target === 'DELIVERY'
+              ? `🎁 "${o.title}" অফারে আপনি ডেলিভারি ফি-তে ছাড় পেয়েছেন।`
+              : `🎁 "${o.title}" অফারে আপনি ছাড় পেয়েছেন।`,
+          );
+        if (lines.length) rewardLine += '\n\n' + lines.join('\n');
       } catch {
         /* ignore malformed snapshot */
       }
