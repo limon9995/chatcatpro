@@ -941,6 +941,10 @@ export class DraftOrderHandler {
       .getMilestoneRewards(pageId, draft.phone ?? null, isCombo)
       .catch(() => ({ thisOrderNumber: 0, rewards: [] as any[] }));
     const milestoneFreeDelivery = milestoneRewards.some((r) => r.rewardType === 'FREE_DELIVERY');
+    const milestoneDiscountAmount = this.pricing.computeMilestoneDiscountAmount(
+      milestoneRewards,
+      orderSubtotal,
+    );
 
     // C-3: Create order AND decrement stock atomically
     const order = await this.prisma.$transaction(async (tx) => {
@@ -970,6 +974,7 @@ export class DraftOrderHandler {
           spamCheckedAt: spamResult ? new Date() : null,
           loyaltyDiscountAmount: discounts.loyaltyDiscount,
           happyHourDiscountAmount: discounts.happyHourDiscount,
+          milestoneDiscountAmount,
           milestoneRewardAppliedJson: milestoneRewards.length
             ? JSON.stringify(milestoneRewards.map((r) => ({ ...r, orderNumber: thisOrderNumber })))
             : null,

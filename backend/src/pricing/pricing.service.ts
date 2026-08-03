@@ -20,18 +20,19 @@ export interface HappyHourStatus {
 
 export interface MilestoneReward {
   interval: number;
-  rewardType: 'FREE_ITEM' | 'FREE_DELIVERY';
+  rewardType: 'FREE_ITEM' | 'FREE_DELIVERY' | 'DISCOUNT_PERCENT';
   productId?: number;
   productCode?: string;
   productName?: string;
   qty: number;
+  discountPercent?: number;
 }
 
 export interface MilestonePreview {
   enabled: boolean;
   thisOrderNumber: number;
   rewards: MilestoneReward[];
-  next: { interval: number; ordersAway: number; rewardType: string; productName?: string } | null;
+  next: { interval: number; ordersAway: number; rewardType: string; productName?: string; discountPercent?: number } | null;
 }
 
 export interface DiscountResult {
@@ -201,13 +202,29 @@ export class PricingService {
       thisOrderNumber,
       rewards: matches.map((m) => ({
         interval: m.orderInterval,
-        rewardType: m.rewardType as 'FREE_ITEM' | 'FREE_DELIVERY',
+        rewardType: m.rewardType as 'FREE_ITEM' | 'FREE_DELIVERY' | 'DISCOUNT_PERCENT',
         productId: m.product?.id,
         productCode: m.product?.code,
         productName: m.product?.name ?? m.product?.code,
         qty: m.qty,
+        discountPercent: m.discountPercent ?? undefined,
       })),
     };
+  }
+
+  /**
+   * Taka amount for the DISCOUNT_PERCENT reward(s) among a set of matched
+   * milestone rewards — percentages are SUMMED when more than one interval
+   * hits the same order (same "apply ALL matching rewards" rule as
+   * FREE_ITEM), capped at 100% so a stacked combo can never exceed the
+   * subtotal itself.
+   */
+  computeMilestoneDiscountAmount(rewards: MilestoneReward[], subtotal: number): number {
+    const percent = rewards
+      .filter((r) => r.rewardType === 'DISCOUNT_PERCENT')
+      .reduce((sum, r) => sum + (Number(r.discountPercent) || 0), 0);
+    if (!percent || subtotal <= 0) return 0;
+    return Math.round(subtotal * Math.min(100, percent)) / 100;
   }
 
   /** Public preview (web checkout / bot phone-capture): what's coming up, without placing an order. */
@@ -230,16 +247,17 @@ export class PricingService {
     const hits = milestones.filter((m) => m.orderInterval > 0 && thisOrderNumber % m.orderInterval === 0);
     const rewards: MilestoneReward[] = hits.map((hit) => ({
       interval: hit.orderInterval,
-      rewardType: hit.rewardType as 'FREE_ITEM' | 'FREE_DELIVERY',
+      rewardType: hit.rewardType as 'FREE_ITEM' | 'FREE_DELIVERY' | 'DISCOUNT_PERCENT',
       productId: hit.product?.id,
       productCode: hit.product?.code,
       productName: hit.product?.name ?? hit.product?.code,
       qty: hit.qty,
+      discountPercent: hit.discountPercent ?? undefined,
     }));
 
     let next: MilestonePreview['next'] = null;
     if (!rewards.length && milestones.length) {
-      let best: { interval: number; ordersAway: number; rewardType: string; productName?: string } | null = null;
+      let best: { interval: number; ordersAway: number; rewardType: string; productName?: string; discountPercent?: number } | null = null;
       for (const m of milestones) {
         if (m.orderInterval <= 0) continue;
         const upcoming = Math.ceil(thisOrderNumber / m.orderInterval) * m.orderInterval;
@@ -250,6 +268,7 @@ export class PricingService {
             ordersAway,
             rewardType: m.rewardType,
             productName: m.product?.name ?? m.product?.code,
+            discountPercent: m.discountPercent ?? undefined,
           };
         }
       }

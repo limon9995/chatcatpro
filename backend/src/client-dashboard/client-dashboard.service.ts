@@ -361,6 +361,8 @@ export class ClientDashboardService {
     const orderUpdate: any = {};
     if (discounts.loyaltyDiscount) orderUpdate.loyaltyDiscountAmount = discounts.loyaltyDiscount;
     if (discounts.happyHourDiscount) orderUpdate.happyHourDiscountAmount = discounts.happyHourDiscount;
+    const milestoneDiscountAmount = this.pricing.computeMilestoneDiscountAmount(rewards, subtotal);
+    if (milestoneDiscountAmount) orderUpdate.milestoneDiscountAmount = milestoneDiscountAmount;
     if (rewards.length) {
       orderUpdate.milestoneRewardAppliedJson = JSON.stringify(
         rewards.map((r) => ({ ...r, orderNumber: thisOrderNumber })),

@@ -565,8 +565,12 @@ model Order {
   loyaltyDiscountAmount   Float @default(0)
   happyHourDiscountAmount Float @default(0)
 
+  // V29: taka amount of any DISCOUNT_PERCENT milestone reward(s) applied to
+  // this order's subtotal — same auditing purpose as the two fields above.
+  milestoneDiscountAmount Float @default(0)
+
   // V28: snapshot of the milestone reward granted on this order, if any —
-  // {interval, rewardType, productId, productName, qty}. Null = none.
+  // {interval, rewardType, productId, productName, qty, discountPercent}. Null = none.
   milestoneRewardAppliedJson String?
 
   @@index([pageIdRef])
@@ -616,17 +620,18 @@ model ComboItem {
 // A combo-containing order never receives a milestone reward (still counts
 // toward the running total though).
 model MilestoneReward {
-  id            Int      @id @default(autoincrement())
-  pageId        Int
-  page          Page     @relation(fields: [pageId], references: [id], onDelete: Cascade)
-  orderInterval Int
-  rewardType    String   // "FREE_ITEM" | "FREE_DELIVERY"
-  productId     Int?     // set when rewardType = FREE_ITEM
-  product       Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
-  qty           Int      @default(1)
-  isActive      Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id             Int      @id @default(autoincrement())
+  pageId         Int
+  page           Page     @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  orderInterval  Int
+  rewardType     String   // "FREE_ITEM" | "FREE_DELIVERY" | "DISCOUNT_PERCENT"
+  productId      Int?     // set when rewardType = FREE_ITEM
+  product        Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  qty            Int      @default(1)
+  discountPercent Float?  // set when rewardType = DISCOUNT_PERCENT (1-100)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   @@unique([pageId, orderInterval])
   @@index([pageId])

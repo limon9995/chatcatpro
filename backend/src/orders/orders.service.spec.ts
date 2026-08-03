@@ -5,6 +5,7 @@ import { OrderNotificationService } from './order-notification.service';
 import { ConversationContextService } from '../conversation-context/conversation-context.service';
 import { BroadcastService } from '../broadcast/broadcast.service';
 import { TelegramNotificationService } from '../telegram/telegram-notification.service';
+import { PricingService } from '../pricing/pricing.service';
 
 describe('OrdersService', () => {
   let service: OrdersService;
@@ -21,6 +22,7 @@ describe('OrdersService', () => {
         { provide: ConversationContextService, useValue: {} },
         { provide: BroadcastService, useValue: {} },
         { provide: TelegramNotificationService, useValue: {} },
+        { provide: PricingService, useValue: {} },
       ],
     }).compile();
 

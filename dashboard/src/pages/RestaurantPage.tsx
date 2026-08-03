@@ -731,17 +731,26 @@ function MilestoneModal({ th, pageId, milestone, products, onClose, onToast, onS
   const RBASE = `${API_BASE}/restaurant/${pageId}`;
   const isEdit = Boolean(milestone?.id);
   const [orderInterval, setOrderInterval] = useState(milestone?.orderInterval || 3);
-  const [rewardType, setRewardType] = useState<'FREE_ITEM' | 'FREE_DELIVERY'>(milestone?.rewardType || 'FREE_ITEM');
+  const [rewardType, setRewardType] = useState<'FREE_ITEM' | 'FREE_DELIVERY' | 'DISCOUNT_PERCENT'>(milestone?.rewardType || 'FREE_ITEM');
   const [productId, setProductId] = useState<number>(milestone?.productId || 0);
   const [qty, setQty] = useState(milestone?.qty || 1);
+  const [discountPercent, setDiscountPercent] = useState<number>(milestone?.discountPercent || 10);
   const [saving, setSaving] = useState(false);
 
   const save = async () => {
     if (!orderInterval || orderInterval < 2) return onToast(copy('২ বা তার বেশি একটা সংখ্যা দিন', 'Enter a number 2 or higher'), 'error');
     if (rewardType === 'FREE_ITEM' && !productId) return onToast(copy('কোন item free দেবেন বেছে নিন', 'Pick a free item'), 'error');
+    if (rewardType === 'DISCOUNT_PERCENT' && (!discountPercent || discountPercent <= 0 || discountPercent > 100))
+      return onToast(copy('ছাড় ১-১০০% এর মধ্যে দিন', 'Enter a discount between 1-100%'), 'error');
     setSaving(true);
     try {
-      const body = { orderInterval: Number(orderInterval), rewardType, productId: rewardType === 'FREE_ITEM' ? productId : null, qty: Number(qty) || 1 };
+      const body = {
+        orderInterval: Number(orderInterval),
+        rewardType,
+        productId: rewardType === 'FREE_ITEM' ? productId : null,
+        qty: Number(qty) || 1,
+        discountPercent: rewardType === 'DISCOUNT_PERCENT' ? Number(discountPercent) : null,
+      };
       if (isEdit) await request(`${RBASE}/milestones/${milestone.id}`, { method: 'PATCH', body: JSON.stringify(body) });
       else await request(`${RBASE}/milestones`, { method: 'POST', body: JSON.stringify(body) });
       onToast(copy('✅ সেভ হয়েছে', '✅ Saved'), 'success');
@@ -762,9 +771,11 @@ function MilestoneModal({ th, pageId, milestone, products, onClose, onToast, onS
               onChange={e => setOrderInterval(Number(e.target.value))} />
           </FieldWithInfo>
           <FieldWithInfo th={th} label={copy('Reward ধরন', 'Reward type')} helpText="">
-            <select style={{ ...th.input, padding: '8px 10px' }} value={rewardType} onChange={e => setRewardType(e.target.value === 'FREE_DELIVERY' ? 'FREE_DELIVERY' : 'FREE_ITEM')}>
+            <select style={{ ...th.input, padding: '8px 10px' }} value={rewardType}
+              onChange={e => setRewardType(e.target.value === 'FREE_DELIVERY' ? 'FREE_DELIVERY' : e.target.value === 'DISCOUNT_PERCENT' ? 'DISCOUNT_PERCENT' : 'FREE_ITEM')}>
               <option value="FREE_ITEM">{copy('🎁 নির্দিষ্ট item Free', '🎁 Specific item free')}</option>
               <option value="FREE_DELIVERY">{copy('🛵 Free Delivery', '🛵 Free Delivery')}</option>
+              <option value="DISCOUNT_PERCENT">{copy('💯 % ছাড়', '💯 % Discount')}</option>
             </select>
           </FieldWithInfo>
           {rewardType === 'FREE_ITEM' && (
@@ -779,6 +790,15 @@ function MilestoneModal({ th, pageId, milestone, products, onClose, onToast, onS
                 <input style={{ ...th.input, padding: '8px 10px' }} type="number" min={1} value={qty} onChange={e => setQty(Number(e.target.value))} />
               </FieldWithInfo>
             </div>
+          )}
+          {rewardType === 'DISCOUNT_PERCENT' && (
+            <FieldWithInfo th={th} label={copy('কত % ছাড়', 'Discount %')} helpText={copy('অর্ডারের subtotal-এর উপর এই % ছাড় প্রযোজ্য হবে', 'This % is applied to the order subtotal')}>
+              <div style={{ position: 'relative' }}>
+                <input style={{ ...th.input, padding: '8px 28px 8px 10px' }} type="number" min={1} max={100} value={discountPercent}
+                  onChange={e => setDiscountPercent(Number(e.target.value))} />
+                <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: th.muted, fontSize: 13, pointerEvents: 'none' }}>%</span>
+              </div>
+            </FieldWithInfo>
           )}
           <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
             <button style={th.btnPrimary} onClick={save} disabled={saving}>
@@ -1554,7 +1574,7 @@ export function RestaurantPage({ th, pageId, onToast }: {
           <div style={{ ...th.card }}>
             <CardHeader th={th}
               title={copy('🎯 Milestone Rewards', '🎯 Milestone Rewards')}
-              sub={copy('প্রতি N-তম অর্ডারে auto ফ্রি item বা ফ্রি delivery — যেমন প্রতি ৩টা অর্ডারে একটা, প্রতি ৫টায় আরেকটা। Combo order-এ reward পাবে না (কিন্তু গণনায় ধরা হবে)।', 'Auto free item or free delivery every Nth order — e.g. every 3rd order one thing, every 5th another. Combo orders don\'t get a reward (but still count).')}
+              sub={copy('প্রতি N-তম অর্ডারে auto ফ্রি item, ফ্রি delivery, বা % ছাড় — যেমন প্রতি ৩টা অর্ডারে একটা, প্রতি ৫টায় আরেকটা। Combo order-এ reward পাবে না (কিন্তু গণনায় ধরা হবে)।', 'Auto free item, free delivery, or % discount every Nth order — e.g. every 3rd order one thing, every 5th another. Combo orders don\'t get a reward (but still count).')}
               action={<button style={{ ...th.btnPrimary, fontSize: 12.5 }} onClick={() => setMilestoneModal({})}>+ {copy('নতুন Milestone', 'New Milestone')}</button>}
             />
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 700, marginBottom: 12 }}>
@@ -1576,7 +1596,9 @@ export function RestaurantPage({ th, pageId, onToast }: {
                       <div style={{ fontSize: 12, color: th.muted }}>
                         {m.rewardType === 'FREE_DELIVERY'
                           ? copy('🛵 ফ্রি Delivery', '🛵 Free Delivery')
-                          : copy(`🎁 ফ্রি ${m.product?.name || m.product?.code} × ${m.qty}`, `🎁 Free ${m.product?.name || m.product?.code} × ${m.qty}`)}
+                          : m.rewardType === 'DISCOUNT_PERCENT'
+                            ? copy(`💯 ${m.discountPercent}% ছাড়`, `💯 ${m.discountPercent}% Discount`)
+                            : copy(`🎁 ফ্রি ${m.product?.name || m.product?.code} × ${m.qty}`, `🎁 Free ${m.product?.name || m.product?.code} × ${m.qty}`)}
                       </div>
                     </div>
                     <button style={{ ...th.btnSmGhost, fontSize: 11.5 }} onClick={() => setMilestoneModal(m)}>✏️ {copy('Edit', 'Edit')}</button>
