@@ -153,6 +153,14 @@ export class SmartBotService {
       return false;
     }
 
+    // V25: Restaurant pages — if a draft already has an item picked (from a
+    // prior turn, e.g. a leftover draft or a race with the checks below),
+    // never continue the chat flow — skip the AI call entirely and redirect.
+    if (isRestaurantReady(page) && draft && draft.items.length > 0) {
+      await this.ctx.clearDraft(pageId, psid);
+      return `🍽️ Order করতে আমাদের website-এ যান, সেখানে ম্যাপে location pin করলে delivery fee auto হিসাব হয়ে যাবে:\n${this.buildCatalogUrl(page)} 🛵`;
+    }
+
     const businessContext = await this.botContext.buildBusinessContext(pageId);
     const history = await this.ctx.getHistory(pageId, psid);
 
@@ -264,15 +272,22 @@ export class SmartBotService {
       `[SmartBot] action=${parsed.action} reply="${parsed.reply.slice(0, 60)}"`,
     );
 
-    // V25: Restaurant pages — the moment the customer commits to ordering
-    // (qty/product picked, or giving name/phone/address for it — action
-    // COLLECT or CONFIRM_ORDER), redirect to the website instead of
-    // collecting anything via chat. Checked BEFORE merging into the draft so
-    // nothing gets saved into a chat-based draft — product/price/menu
-    // questions still answer normally (those are action CHAT, untouched).
+    // V25: Restaurant pages — the moment the customer commits to ordering,
+    // redirect to the website instead of collecting anything via chat.
+    // Checked BEFORE merging into the draft so nothing gets saved into a
+    // chat-based draft. Deliberately NOT gated on parsed.action alone — a
+    // weaker model can mislabel a size/variant reply as CHAT instead of
+    // COLLECT (seen live: "Mini" after "Chicken burger" kept looping instead
+    // of redirecting), so this also checks the actual collected data.
+    // Product/price/menu-only questions (no product picked) are unaffected.
+    const collectedProductCodes = parsed.collected?.productCodes;
+    const pickedProductThisTurn =
+      Array.isArray(collectedProductCodes) && collectedProductCodes.length > 0;
     if (
       isRestaurantReady(page) &&
-      (parsed.action === 'COLLECT' || parsed.action === 'CONFIRM_ORDER')
+      (pickedProductThisTurn ||
+        parsed.action === 'COLLECT' ||
+        parsed.action === 'CONFIRM_ORDER')
     ) {
       await this.ctx.clearDraft(pageId, psid);
       const productUrl = this.buildCatalogUrl(page);

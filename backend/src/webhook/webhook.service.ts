@@ -1646,9 +1646,25 @@ export class WebhookService implements OnModuleDestroy {
         );
         if (contextCode) {
           const product = await this.prisma.product.findFirst({
-            where: { pageId, code: contextCode, stockQty: { gt: 0 } },
+            where: { pageId, code: contextCode },
           });
-          if (product) {
+          if (
+            product &&
+            (product.trackStock === false || product.stockQty > 0) &&
+            isRestaurantReady(page)
+          ) {
+            const websiteUrl = String(page.websiteUrl || '').trim();
+            const productUrl = websiteUrl
+              ? this.buildCatalogUrl(page)
+              : `${this.buildCatalogUrl(page)}/product/${encodeURIComponent(contextCode)}`;
+            await this.safeSend(
+              token,
+              psid,
+              `🍽️ Order করতে আমাদের website-এ যান, সেখানে ম্যাপে location pin করলে delivery fee auto হিসাব হয়ে যাবে:\n${productUrl} 🛵`,
+            );
+            return;
+          }
+          if (product && (product.trackStock === false || product.stockQty > 0)) {
             let variantOptions: any[] = [];
             try {
               if (product.variantOptions)
@@ -2417,8 +2433,23 @@ export class WebhookService implements OnModuleDestroy {
         );
         return;
       }
-      if (product.stockQty <= 0) {
+      if (product.trackStock !== false && product.stockQty <= 0) {
         this.logger.log(`[Webhook] Stock out: pageId=${pageId} code=${code}`);
+        return;
+      }
+
+      // V25: Restaurant pages need a website map pin for the delivery fee —
+      // never start a chat-collected draft here, send the order link instead.
+      if (isRestaurantReady(page)) {
+        const websiteUrl = String(page.websiteUrl || '').trim();
+        const productUrl = websiteUrl
+          ? this.buildCatalogUrl(page)
+          : `${this.buildCatalogUrl(page)}/product/${encodeURIComponent(code)}`;
+        await this.safeSend(
+          token,
+          psid,
+          `🍽️ Order করতে আমাদের website-এ যান, সেখানে ম্যাপে location pin করলে delivery fee auto হিসাব হয়ে যাবে:\n${productUrl} 🛵`,
+        );
         return;
       }
 
