@@ -264,6 +264,21 @@ export class SmartBotService {
       `[SmartBot] action=${parsed.action} reply="${parsed.reply.slice(0, 60)}"`,
     );
 
+    // V25: Restaurant pages — the moment the customer commits to ordering
+    // (qty/product picked, or giving name/phone/address for it — action
+    // COLLECT or CONFIRM_ORDER), redirect to the website instead of
+    // collecting anything via chat. Checked BEFORE merging into the draft so
+    // nothing gets saved into a chat-based draft — product/price/menu
+    // questions still answer normally (those are action CHAT, untouched).
+    if (
+      isRestaurantReady(page) &&
+      (parsed.action === 'COLLECT' || parsed.action === 'CONFIRM_ORDER')
+    ) {
+      await this.ctx.clearDraft(pageId, psid);
+      const productUrl = this.buildCatalogUrl(page);
+      return `🍽️ Order করতে আমাদের website-এ যান, সেখানে ম্যাপে location pin করলে delivery fee auto হিসাব হয়ে যাবে:\n${productUrl} 🛵`;
+    }
+
     // Snapshot completeness BEFORE merging, so the deterministic next-step
     // message below fires exactly once — on the turn that completes collection.
     const wasComplete = !!(
@@ -302,16 +317,8 @@ export class SmartBotService {
           // Fields still missing — AI reply already asks for them
           return parsed.reply;
         }
-
-        // V25: Restaurant pages need a website map pin for the delivery fee —
-        // this is also told to the AI (see deliveryCtx), but that's only a
-        // prompt-level nudge a weaker model can ignore. Hard-block finalizing
-        // a chat-collected order here regardless of what the AI decided.
-        if (isRestaurantReady(page)) {
-          await this.ctx.clearDraft(pageId, psid);
-          const productUrl = this.buildCatalogUrl(page);
-          return `🍽️ দুঃখিত, সঠিক delivery fee হিসাব করতে আমাদের website-এ ম্যাপে location pin করে order করতে হবে — চ্যাটে address দিয়ে order নেওয়া যায় না।\n\nএখানে order করুন: ${productUrl} 🛵`;
-        }
+        // Restaurant pages never reach here — caught earlier (before merge)
+        // by the isRestaurantReady check on action COLLECT/CONFIRM_ORDER.
         try {
           await draftHandler.finalizeDraftOrder(pageId, psid, d, page);
           const orderReply = await this.botKnowledge
