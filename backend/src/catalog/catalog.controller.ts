@@ -1230,16 +1230,16 @@ ${
   --shadow-lg:0 8px 40px rgba(0,0,0,.1),0 2px 8px rgba(0,0,0,.06);
 }
 html{scroll-behavior:smooth}
-body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;-webkit-font-smoothing:antialiased}
+body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:radial-gradient(circle at top left,color-mix(in srgb,var(--p) 12%,transparent),transparent 34%),linear-gradient(180deg,#f9fbff 0%,#f6f7fb 32%,#eef2f8 100%);color:var(--text);min-height:100vh;-webkit-font-smoothing:antialiased}
 
-/* ── NAV ── */
-.nav{position:sticky;top:0;z-index:200;background:rgba(255,255,255,.92);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border-bottom:1px solid var(--border);box-shadow:0 1px 8px rgba(0,0,0,.04)}
+/* ── NAV — matches the catalog home page's gradient header ── */
+.nav{position:sticky;top:0;z-index:200;background:linear-gradient(135deg,var(--p),var(--p-dark));box-shadow:0 10px 30px rgba(15,23,42,.16)}
 .nav-inner{max-width:980px;margin:0 auto;padding:11px 20px;display:flex;align-items:center;gap:10px}
-.nav-logo{width:34px;height:34px;border-radius:10px;object-fit:cover;flex-shrink:0;border:1.5px solid var(--border)}
-.nav-logo-ph{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--p),var(--p-dark));display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
-.nav-biz{font-size:14.5px;font-weight:700;color:var(--text);letter-spacing:-.2px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.nav-back{display:inline-flex;align-items:center;gap:5px;padding:7px 14px;border-radius:22px;background:var(--bg);color:var(--sub);text-decoration:none;font-size:12.5px;font-weight:600;border:1.5px solid var(--border);transition:all .15s;white-space:nowrap;flex-shrink:0}
-.nav-back:hover{background:var(--p);color:#fff;border-color:var(--p)}
+.nav-logo{width:34px;height:34px;border-radius:10px;object-fit:cover;flex-shrink:0;border:1.5px solid rgba(255,255,255,.3)}
+.nav-logo-ph{width:34px;height:34px;border-radius:10px;background:rgba(255,255,255,.2);border:1.5px solid rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
+.nav-biz{font-size:14.5px;font-weight:700;color:#fff;letter-spacing:-.2px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nav-back{display:inline-flex;align-items:center;gap:5px;padding:7px 14px;border-radius:22px;background:rgba(255,255,255,.18);color:#fff;text-decoration:none;font-size:12.5px;font-weight:600;border:1.5px solid rgba(255,255,255,.35);transition:all .15s;white-space:nowrap;flex-shrink:0}
+.nav-back:hover{background:rgba(255,255,255,.28);border-color:rgba(255,255,255,.5)}
 .nav-back svg{width:13px;height:13px;fill:currentColor}
 
 /* ── LAYOUT ── */
@@ -1385,7 +1385,7 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:var(--b
 /* ── DARK MODE ── */
 @media(prefers-color-scheme:dark){
   :root{color-scheme:dark;--bg:#0b0b13;--surface:#13131f;--text:#eeeef5;--sub:#9ca3af;--muted:#6b7280;--border:rgba(255,255,255,.08)}
-  .nav{background:rgba(19,19,31,.92)!important}
+  .nav{background:linear-gradient(180deg,#090d14 0%,#0c1220 58%,#10192a 100%)!important;box-shadow:0 14px 40px rgba(0,0,0,.34)!important}
   .no-img-card{background:linear-gradient(145deg,rgba(79,70,229,.12),rgba(124,58,237,.07))!important;border-color:rgba(255,255,255,.07)!important}
   .media-info-strip{background:rgba(255,255,255,.03)}
   .s-in{background:rgba(21,128,61,.18);color:#4ade80;border-color:rgba(21,128,61,.3)}
@@ -1393,15 +1393,15 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:var(--b
   .mobile-cta{background:linear-gradient(to top,rgba(11,11,19,1) 60%,rgba(11,11,19,0))!important}
 }
 [data-dark="1"]{color-scheme:dark;--bg:#0b0b13;--surface:#13131f;--text:#eeeef5;--sub:#9ca3af;--muted:#6b7280;--border:rgba(255,255,255,.08)}
-[data-dark="1"] .nav{background:rgba(19,19,31,.92)!important}
+[data-dark="1"] .nav{background:linear-gradient(180deg,#090d14 0%,#0c1220 58%,#10192a 100%)!important;box-shadow:0 14px 40px rgba(0,0,0,.34)!important}
 [data-dark="1"] .no-img-card{background:linear-gradient(145deg,rgba(79,70,229,.12),rgba(124,58,237,.07))!important;border-color:rgba(255,255,255,.07)!important}
 [data-dark="1"] .media-info-strip{background:rgba(255,255,255,.03)}
 [data-dark="1"] .s-in{background:rgba(21,128,61,.18);color:#4ade80;border-color:rgba(21,128,61,.3)}
 [data-dark="1"] .s-out{background:rgba(220,38,38,.18);color:#f87171;border-color:rgba(220,38,38,.3)}
 [data-dark="1"] .mobile-cta{background:linear-gradient(to top,rgba(11,11,19,1) 60%,rgba(11,11,19,0))!important}
 [data-dark="0"]{color-scheme:light;--bg:#f4f6fb;--surface:#fff;--text:#0d1117;--sub:#4b5563;--muted:#9ca3af;--border:#e5e7eb}
-[data-dark="0"] body{background:var(--bg)!important}
-[data-dark="0"] .nav{background:rgba(255,255,255,.92)!important}
+[data-dark="0"] body{background:radial-gradient(circle at top left,color-mix(in srgb,var(--p) 12%,transparent),transparent 34%),linear-gradient(180deg,#f9fbff 0%,#f6f7fb 32%,#eef2f8 100%)!important}
+[data-dark="0"] .nav{background:linear-gradient(135deg,var(--p),var(--p-dark))!important;box-shadow:0 10px 30px rgba(15,23,42,.16)!important}
 [data-dark="0"] .no-img-card{background:linear-gradient(145deg,var(--p-light),color-mix(in srgb,var(--p) 6%,#fff))!important;border-color:color-mix(in srgb,var(--p) 14%,#fff)!important}
 [data-dark="0"] .media-info-strip{background:var(--surface)!important}
 [data-dark="0"] .info-card{background:var(--surface)!important}
@@ -1413,9 +1413,9 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:var(--b
 [data-dark="0"] .btn-action{background:var(--bg)!important;color:var(--sub)!important;border-color:var(--border)!important}
 [data-dark="0"] .site-footer{background:var(--surface)!important;border-color:var(--border)!important}
 
-/* Dark toggle button */
-.dark-btn{background:var(--bg);border:1.5px solid var(--border);color:var(--sub);border-radius:22px;padding:6px 12px;font-size:14px;cursor:pointer;transition:all .15s;flex-shrink:0;line-height:1;display:flex;align-items:center;justify-content:center}
-.dark-btn:hover{background:var(--border)}
+/* Dark toggle button — translucent white pill on the gradient nav */
+.dark-btn{background:rgba(255,255,255,.15);border:1.5px solid rgba(255,255,255,.28);color:#fff;border-radius:22px;padding:6px 12px;font-size:14px;cursor:pointer;transition:all .15s;flex-shrink:0;line-height:1;display:flex;align-items:center;justify-content:center}
+.dark-btn:hover{background:rgba(255,255,255,.25)}
 </style>
 <script>
 (function(){
