@@ -300,7 +300,11 @@ export class CatalogController {
       phone: page.businessPhone || '',
       logoUrl: page.logoUrl || '',
       currency: page.currencySymbol || '৳',
-      primaryColor: page.primaryColor || '#5b63f5',
+      // Restaurant pages default to a warm food-brand orange (matches the
+      // catalog home page); the merchant's own primaryColor always wins.
+      primaryColor:
+        page.primaryColor ||
+        ((page as any).restaurantModeEnabled ? '#ea580c' : '#5b63f5'),
       footerText: page.memoFooterText || '',
       messengerUrl: page.catalogMessengerUrl || `https://m.me/${page.pageId}`,
       whatsappUrl: buildWhatsAppUrl(page.businessPhone),
