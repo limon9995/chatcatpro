@@ -329,12 +329,16 @@ export class RestaurantService {
       })
       .catch(() => {});
 
-    // Meter: one ADMIN_VISION deduction per image + token-level cost record
-    for (let i = 0; i < imageUrls.length; i++) {
-      void this.walletService.deductUsage(pageId, 'ADMIN_VISION', {
-        provider: 'gemini',
-      });
-    }
+    // Meter: ONE atomic ADMIN_VISION deduction for the whole batch (photoCount
+    // multiplier) — N separate fire-and-forget calls would each re-read the
+    // wallet balance before any of them commit, so a scan that crosses zero
+    // mid-batch could let every call through instead of stopping at the
+    // crossing point. A single transaction checks the balance once and
+    // deducts the full amount atomically. + token-level cost record.
+    await this.walletService.deductUsage(pageId, 'ADMIN_VISION', {
+      provider: 'gemini',
+      photoCount: imageUrls.length,
+    });
     void this.aiUsage.record({
       pageId,
       provider: 'gemini',

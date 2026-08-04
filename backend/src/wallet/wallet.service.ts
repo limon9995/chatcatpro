@@ -128,10 +128,17 @@ export class WalletService {
           amountToDeduct = page.costPerImageBdt * 0.5;
           description = 'ছবি থেকে অর্ডার কোড পড়া (OCR)';
           break;
-        case 'ADMIN_VISION':
-          amountToDeduct = page.costPerAnalyzeBdt;
-          description = 'পণ্য ছবি বিশ্লেষণ';
+        case 'ADMIN_VISION': {
+          // photoCount lets a multi-image batch (e.g. restaurant menu scan)
+          // deduct in ONE atomic transaction instead of N concurrent calls —
+          // N unawaited calls each re-read the balance before any commits,
+          // so the "stop once balance hits zero" guard below can't reliably
+          // catch the crossing point under concurrency.
+          const photoCount = options?.photoCount ?? 1;
+          amountToDeduct = page.costPerAnalyzeBdt * photoCount;
+          description = photoCount > 1 ? `পণ্য ছবি বিশ্লেষণ (${photoCount}টি)` : 'পণ্য ছবি বিশ্লেষণ';
           break;
+        }
         case 'IMAGE_UNIQUENESS':
           amountToDeduct = 0.02;
           description = 'পণ্য যাচাই';
