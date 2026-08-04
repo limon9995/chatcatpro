@@ -13,6 +13,7 @@ import { estimateMonthlyCost, PricingCalcInput } from '../common/pricing-estimat
 import { MessengerService } from '../messenger/messenger.service';
 import { isInsideDhakaAddress } from '../webhook/handlers/dhaka-areas';
 import { AiUsageService } from '../common/ai-usage.service';
+import { isRestaurantReady } from '../common/restaurant-delivery';
 import {
   formatSlabsBn,
   parsePriceVariants,
@@ -300,6 +301,16 @@ export class SmartBotService {
         if (!canFinalize) {
           // Fields still missing — AI reply already asks for them
           return parsed.reply;
+        }
+
+        // V25: Restaurant pages need a website map pin for the delivery fee —
+        // this is also told to the AI (see deliveryCtx), but that's only a
+        // prompt-level nudge a weaker model can ignore. Hard-block finalizing
+        // a chat-collected order here regardless of what the AI decided.
+        if (isRestaurantReady(page)) {
+          await this.ctx.clearDraft(pageId, psid);
+          const productUrl = this.buildCatalogUrl(page);
+          return `🍽️ দুঃখিত, সঠিক delivery fee হিসাব করতে আমাদের website-এ ম্যাপে location pin করে order করতে হবে — চ্যাটে address দিয়ে order নেওয়া যায় না।\n\nএখানে order করুন: ${productUrl} 🛵`;
         }
         try {
           await draftHandler.finalizeDraftOrder(pageId, psid, d, page);

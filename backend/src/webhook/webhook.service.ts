@@ -604,6 +604,24 @@ export class WebhookService implements OnModuleDestroy {
       return;
     }
 
+    // V25: Restaurant pages — delivery fee is distance-based and only
+    // resolvable from a website map pin, so never start a chat-collected
+    // draft here. Show the product info and send them to order on the site.
+    if (isRestaurantReady(page)) {
+      const websiteUrl = String(page.websiteUrl || '').trim();
+      const productUrl = websiteUrl
+        ? this.buildCatalogUrl(page)
+        : `${this.buildCatalogUrl(page)}/product/${encodeURIComponent(product.code)}`;
+      await this.messenger
+        .sendText(
+          tok,
+          psid,
+          `🍽️ ${product.name || product.code} — ${currency}${priceFormatted}\n✅ Stock আছে\n\nOrder করতে আমাদের website-এ যান, সেখানে ম্যাপে আপনার location pin করলে delivery fee auto হিসাব হয়ে যাবে:\n${productUrl} 🛵`,
+        )
+        .catch(() => {});
+      return;
+    }
+
     const newDraft = this.draftHandler.startDraftFromCodes(
       [product.code],
       [{ code: product.code, price: Number(product.price) }],
@@ -1738,6 +1756,20 @@ export class WebhookService implements OnModuleDestroy {
         const product = await this.prisma.product.findFirst({
           where: { pageId, code: contextCode },
         });
+        // V25: Restaurant pages need a website map pin for the delivery fee —
+        // never start a chat-collected draft here, send the order link instead.
+        if (product && isRestaurantReady(page)) {
+          const websiteUrl = String(page.websiteUrl || '').trim();
+          const productUrl = websiteUrl
+            ? this.buildCatalogUrl(page)
+            : `${this.buildCatalogUrl(page)}/product/${encodeURIComponent(product.code)}`;
+          await this.safeSend(
+            token,
+            psid,
+            `🍽️ Order করতে আমাদের website-এ যান, সেখানে ম্যাপে location pin করলে delivery fee auto হিসাব হয়ে যাবে:\n${productUrl} 🛵`,
+          );
+          return;
+        }
         if (product && (product.trackStock === false || product.stockQty > 0)) {
           let variantOptions: CustomFieldDef[] = [];
           if (product.variantOptions) {
