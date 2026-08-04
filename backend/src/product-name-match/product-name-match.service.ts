@@ -5,6 +5,7 @@ export interface NameMatchCandidate {
   name: string | null;
   price: number;
   stockQty: number;
+  trackStock?: boolean;
   unit?: string | null;
   productType?: string;
   orderEnabled?: boolean;
@@ -16,6 +17,7 @@ export interface NameMatchResult {
   productName: string;
   price: number;
   stockQty: number;
+  trackStock: boolean;
   unit: string | null;
   orderEnabled: boolean;
   description: string | null;
@@ -97,6 +99,7 @@ export class ProductNameMatchService {
           productName: p.name,
           price: p.price,
           stockQty: p.stockQty,
+          trackStock: p.trackStock !== false,
           unit: p.unit ?? null,
           orderEnabled: p.orderEnabled !== false,
           description: p.description ?? null,

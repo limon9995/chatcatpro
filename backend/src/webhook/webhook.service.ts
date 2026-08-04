@@ -350,6 +350,7 @@ export class WebhookService implements OnModuleDestroy {
       name: string | null;
       price: number;
       stockQty: number;
+      trackStock: boolean;
       description: string | null;
     };
     const productSelect = {
@@ -357,6 +358,7 @@ export class WebhookService implements OnModuleDestroy {
       name: true,
       price: true,
       stockQty: true,
+      trackStock: true,
       description: true,
     } as const;
 
@@ -485,7 +487,13 @@ export class WebhookService implements OnModuleDestroy {
       case 'price':
         return `• ${label} — ${product.price}৳ 🏷️`;
       case 'stock':
-        return `• ${label} — ${product.stockQty > 0 ? `${product.stockQty}টি stock ✅` : 'stock নেই ❌'}`;
+        return `• ${label} — ${
+          product.trackStock === false
+            ? 'stock আছে ✅'
+            : product.stockQty > 0
+              ? `${product.stockQty}টি stock ✅`
+              : 'stock নেই ❌'
+        }`;
       case 'delivery':
         return isRestaurantReady(page)
           ? `• ডেলিভারি চার্জ দূরত্ব অনুযায়ী: ${formatSlabsBn(parseSlabs(page.deliverySlabsJson))} 🛵`
@@ -513,9 +521,11 @@ export class WebhookService implements OnModuleDestroy {
         return `${label} এর দাম ${product.price}৳ 🏷️${inboxCta}`;
       case 'stock':
         return (
-          (product.stockQty > 0
-            ? `${label} এ ${product.stockQty} টি stock আছে ✅`
-            : `${label} বর্তমানে stock এ নেই ❌`) + inboxCta
+          (product.trackStock === false
+            ? `${label} এ stock আছে ✅`
+            : product.stockQty > 0
+              ? `${label} এ ${product.stockQty} টি stock আছে ✅`
+              : `${label} বর্তমানে stock এ নেই ❌`) + inboxCta
         );
       case 'delivery':
         return isRestaurantReady(page)
@@ -550,6 +560,7 @@ export class WebhookService implements OnModuleDestroy {
         name: true,
         price: true,
         stockQty: true,
+        trackStock: true,
         imageUrl: true,
         variantOptions: true,
       },
@@ -563,7 +574,9 @@ export class WebhookService implements OnModuleDestroy {
     }
 
     const currency = page.currencySymbol || '৳';
-    const inStock = product.stockQty > 0;
+    // V25: trackStock=false (restaurant food) — BOM ingredients are the real
+    // inventory, so the item itself is always orderable while active.
+    const inStock = product.trackStock === false ? true : product.stockQty > 0;
     const priceFormatted = Number(product.price).toLocaleString();
 
     // Parse variant options (size, color, etc.)
@@ -644,6 +657,7 @@ export class WebhookService implements OnModuleDestroy {
         price: true,
         originalPrice: true,
         stockQty: true,
+        trackStock: true,
         description: true,
         deliveryCharge: true,
       },
@@ -656,7 +670,8 @@ export class WebhookService implements OnModuleDestroy {
       product.originalPrice && Number(product.originalPrice) > Number(product.price)
         ? ` (আগের দাম ${currency}${Number(product.originalPrice).toLocaleString()})`
         : '';
-    const stockLine = product.stockQty > 0 ? '✅ Stock আছে' : '❌ Stock শেষ';
+    const stockLine =
+      product.trackStock === false || product.stockQty > 0 ? '✅ Stock আছে' : '❌ Stock শেষ';
     const deliveryLine =
       product.deliveryCharge === 'FREE' ? '\n🚚 Home Delivery ফ্রি' : '';
     const descLine = product.description ? `\n\n${product.description}` : '';
@@ -1456,6 +1471,7 @@ export class WebhookService implements OnModuleDestroy {
           name: true,
           price: true,
           stockQty: true,
+          trackStock: true,
           unit: true,
           orderEnabled: true,
           description: true,
@@ -1722,7 +1738,7 @@ export class WebhookService implements OnModuleDestroy {
         const product = await this.prisma.product.findFirst({
           where: { pageId, code: contextCode },
         });
-        if (product && product.stockQty > 0) {
+        if (product && (product.trackStock === false || product.stockQty > 0)) {
           let variantOptions: CustomFieldDef[] = [];
           if (product.variantOptions) {
             try {
@@ -2301,11 +2317,15 @@ export class WebhookService implements OnModuleDestroy {
     if (matches.length === 1) {
       const p = matches[0];
       const unit = p.unit || 'pcs';
-      const stockText =
-        p.stockQty > 0 ? `✅ ${p.stockQty} ${unit} আছে` : '❌ Stock শেষ';
+      const inStock = p.trackStock === false || p.stockQty > 0;
+      const stockText = p.trackStock === false
+        ? '✅ আছে'
+        : p.stockQty > 0
+          ? `✅ ${p.stockQty} ${unit} আছে`
+          : '❌ Stock শেষ';
       let msg = `🛍️ *${p.productName}*\n💰 মূল্য: ${sym}${Number(p.price).toLocaleString()}/${unit}\n📦 ${stockText}`;
       if (p.description) msg += `\n\nℹ️ ${p.description}`;
-      if (p.orderEnabled && p.stockQty > 0)
+      if (p.orderEnabled && inStock)
         msg += `\n\nOrder করতে চাইলে বলুন 😊`;
       await this.safeSend(token, psid, msg);
     } else {
@@ -2314,7 +2334,12 @@ export class WebhookService implements OnModuleDestroy {
         .slice(0, 6)
         .map((p) => {
           const unit = p.unit || 'pcs';
-          const stock = p.stockQty > 0 ? `${p.stockQty} ${unit}` : 'Stock শেষ';
+          const stock =
+            p.trackStock === false
+              ? 'আছে'
+              : p.stockQty > 0
+                ? `${p.stockQty} ${unit}`
+                : 'Stock শেষ';
           return `• *${p.productName}* — ${sym}${Number(p.price).toLocaleString()}/${unit} (${stock})`;
         })
         .join('\n');
@@ -3140,6 +3165,7 @@ export class WebhookService implements OnModuleDestroy {
               name: true,
               price: true,
               stockQty: true,
+              trackStock: true,
               unit: true,
               orderEnabled: true,
               description: true,
@@ -3340,6 +3366,7 @@ export class WebhookService implements OnModuleDestroy {
               name: true,
               price: true,
               stockQty: true,
+              trackStock: true,
               unit: true,
               orderEnabled: true,
               description: true,
@@ -3564,6 +3591,7 @@ export class WebhookService implements OnModuleDestroy {
             name: true,
             price: true,
             stockQty: true,
+            trackStock: true,
             unit: true,
             orderEnabled: true,
             description: true,
