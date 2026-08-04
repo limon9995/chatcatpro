@@ -456,7 +456,10 @@ export class CatalogController {
       },
     });
     if (!page) throw new NotFoundException('Page not found');
-    if (!page.webOrderEnabled)
+    // V25: Restaurant pages never offer chat ordering (delivery fee needs a
+    // map pin — see the bot-side redirect), so the website is their ONLY
+    // ordering path and must work regardless of the webOrderEnabled toggle.
+    if (!page.webOrderEnabled && !isRestaurantReady(page))
       throw new BadRequestException(
         'Web ordering is not enabled for this page',
       );
@@ -1207,7 +1210,7 @@ ${primaryImage ? `<meta name="twitter:image" content="${esc(primaryImage)}"/>` :
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
 ${
-  page.webOrderEnabled && page.restaurantMode
+  page.restaurantMode
     ? `<link rel="stylesheet" href="/vendor/leaflet/leaflet.css"/>
 <script src="/vendor/leaflet/leaflet.js"></script>`
     : ''
@@ -1547,15 +1550,19 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:radial-
           </a>`
               : ''
           }
-          <a class="btn-order${!inStock ? ' disabled' : ''}"
+          ${
+            !page.restaurantMode
+              ? `<a class="btn-order${!inStock ? ' disabled' : ''}"
             href="${inStock ? mmeOrderUrl : '#'}"
             target="_blank" rel="noopener"
             ${!inStock ? 'onclick="return false"' : ''}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
             ${inStock ? 'Messenger এ Order করুন' : 'Stock নেই'}
-          </a>
+          </a>`
+              : ''
+          }
           ${
-            page.webOrderEnabled && inStock
+            (page.webOrderEnabled || page.restaurantMode) && inStock
               ? `<button class="btn-order" style="background:linear-gradient(135deg,#059669,#047857);box-shadow:0 4px 18px rgba(5,150,105,.35)" onclick="woOpen()">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
             Website থেকে Order করুন
@@ -1593,12 +1600,16 @@ ${
   inStock
     ? `
 <div class="mobile-cta" style="display:flex;gap:10px;flex-wrap:wrap">
-  <a class="btn-order" href="${mmeOrderUrl}" target="_blank" rel="noopener" style="flex:1;min-width:0">
+  ${
+    !page.restaurantMode
+      ? `<a class="btn-order" href="${mmeOrderUrl}" target="_blank" rel="noopener" style="flex:1;min-width:0">
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
     Messenger
-  </a>
+  </a>`
+      : ''
+  }
   ${
-    page.webOrderEnabled
+    page.webOrderEnabled || page.restaurantMode
       ? `<button class="btn-order" onclick="woOpen()" style="flex:1;min-width:0;background:linear-gradient(135deg,#059669,#047857);box-shadow:0 4px 18px rgba(5,150,105,.35)">
     🌐 Website Order
   </button>`
@@ -1613,7 +1624,11 @@ ${
     <div class="footer-biz">${esc(page.name)}</div>
     <div class="footer-sub">
       ${page.footerText ? `${esc(page.footerText)} · ` : ''}
-      <a href="${esc(page.messengerUrl)}" target="_blank">💬 Messenger এ Order করুন</a>
+      ${
+        page.restaurantMode
+          ? `🌐 Order করতে উপরের "Website থেকে Order করুন" বাটন ব্যবহার করুন`
+          : `<a href="${esc(page.messengerUrl)}" target="_blank">💬 Messenger এ Order করুন</a>`
+      }
     </div>
     ${page.phone ? `<div class="footer-help">Helpline: ${esc(page.phone)}</div>` : ''}
     ${
@@ -1628,7 +1643,7 @@ ${
 </footer>
 
 ${
-  page.webOrderEnabled
+  page.webOrderEnabled || page.restaurantMode
     ? `
 <!-- ── Web Order Modal ── -->
 <style>
@@ -2971,7 +2986,11 @@ ${
     <div class="f-name">${esc(page.name)}</div>
     <div class="f-sub">
       ${page.footerText ? `${esc(page.footerText)} · ` : ''}
-      <a href="${esc(page.messengerUrl)}" target="_blank">💬 Messenger এ Order করুন</a>
+      ${
+        page.restaurantMode
+          ? `🌐 Order করতে যেকোনো item খুলে "Website থেকে Order করুন" চাপুন`
+          : `<a href="${esc(page.messengerUrl)}" target="_blank">💬 Messenger এ Order করুন</a>`
+      }
     </div>
     ${page.phone ? `<div class="footer-help">Helpline: ${esc(page.phone)}</div>` : ''}
     ${
