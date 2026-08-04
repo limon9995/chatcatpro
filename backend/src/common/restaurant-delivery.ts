@@ -425,3 +425,42 @@ export function sanitizeOfferHours(
   }
   return { hoursMode: null, hoursJson: null };
 }
+
+// ── Order status labels ──────────────────────────────────────────────────
+// The codebase used to have 4 independently-maintained Bengali status-label
+// maps (orders.service.ts, smart-bot.service.ts x2, webhook.service.ts)
+// that had already drifted out of sync with each other (missing SHIPPED in
+// some, missing CANCELLED/ISSUE in others). Consolidated into one source of
+// truth here, with a restaurant-mode variant: "প্যাক/শিপ" (packed/shipped)
+// implies a 3rd-party courier shipment, which doesn't describe a restaurant
+// preparing food and delivering it themselves.
+
+const ORDER_STATUS_LABELS: Record<string, string> = {
+  RECEIVED: '✅ অর্ডার পাওয়া হয়েছে — প্রক্রিয়া চলছে',
+  PENDING: '⏳ অর্ডার পেন্ডিং আছে',
+  CONFIRMED: '✅ অর্ডার কনফার্ম হয়েছে — প্যাকেজিং শুরু হবে শীঘ্রই',
+  PACKED: '📦 অর্ডার প্যাক হয়ে গেছে — শীঘ্রই কুরিয়ারে যাবে',
+  SHIPPED: '🚚 কুরিয়ারে পাঠানো হয়েছে — পথে আছে',
+  DELIVERED: '🎉 ডেলিভারি সম্পন্ন হয়েছে',
+  CANCELLED: '❌ অর্ডারটি বাতিল হয়েছে',
+  ISSUE: '⚠️ অর্ডারে সমস্যা আছে — আমাদের সাথে যোগাযোগ করুন',
+};
+
+const RESTAURANT_ORDER_STATUS_LABELS: Record<string, string> = {
+  ...ORDER_STATUS_LABELS,
+  CONFIRMED: '✅ অর্ডার কনফার্ম হয়েছে — রান্না শুরু হবে শীঘ্রই',
+  PACKED: '🍳 আপনার খাবার প্রস্তুত হচ্ছে',
+  SHIPPED: '🛵 Delivery-তে বের হয়েছে — পথে আছে',
+};
+
+/**
+ * Bengali label for an Order.status value — the single source of truth for
+ * every customer/merchant-facing status display (tracking page, bot reply,
+ * dashboard badge). Pass isRestaurant so restaurant pages get kitchen/rider
+ * wording instead of courier-shipment wording. Internal status VALUES
+ * (RECEIVED/CONFIRMED/PACKED/SHIPPED/...) are unchanged — only the label.
+ */
+export function orderStatusLabel(status: string, isRestaurant: boolean): string {
+  const map = isRestaurant ? RESTAURANT_ORDER_STATUS_LABELS : ORDER_STATUS_LABELS;
+  return map[status] ?? status;
+}

@@ -11,6 +11,7 @@ import { BroadcastService } from '../broadcast/broadcast.service';
 import { TelegramNotificationService } from '../telegram/telegram-notification.service';
 import { PricingService } from '../pricing/pricing.service';
 import { normalizePhone } from '../crm/phone.util';
+import { orderStatusLabel, isRestaurantReady } from '../common/restaurant-delivery';
 
 export type OrderStatus =
   | 'RECEIVED'
@@ -770,19 +771,22 @@ export class OrdersService {
             unitPrice: true,
           },
         },
+        page: {
+          select: {
+            restaurantModeEnabled: true,
+            restaurantLat: true,
+            restaurantLng: true,
+            deliverySlabsJson: true,
+          },
+        },
       },
     });
     if (!order) throw new NotFoundException('Order not found');
-    const statusMap: Record<string, string> = {
-      RECEIVED: '✅ অর্ডার পাওয়া হয়েছে — প্রক্রিয়া চলছে',
-      PENDING: '⏳ অর্ডার পেন্ডিং আছে',
-      CONFIRMED: '✅ অর্ডার কনফার্ম হয়েছে — প্রস্তুত হচ্ছে',
-      PACKED: '📦 অর্ডার প্যাক হয়ে গেছে — শীঘ্রই কুরিয়ারে যাবে',
-      DELIVERED: '🎉 ডেলিভারি সম্পন্ন হয়েছে',
-      CANCELLED: '❌ অর্ডারটি বাতিল হয়েছে',
-      ISSUE: '⚠️ অর্ডারে সমস্যা আছে — আমাদের সাথে যোগাযোগ করুন',
+    const { page, ...orderFields } = order;
+    return {
+      ...orderFields,
+      statusBn: orderStatusLabel(order.status, isRestaurantReady(page)),
     };
-    return { ...order, statusBn: statusMap[order.status] ?? order.status };
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────

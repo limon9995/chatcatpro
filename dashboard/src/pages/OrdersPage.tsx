@@ -507,6 +507,19 @@ export function OrdersPage({ th, pageId, onToast, preset }: {
 
   const BASE = `${API_BASE}/client-dashboard/${pageId}`;
 
+  // Whether this page is a restaurant — relabels PACKED/SHIPPED status
+  // badges/actions (kitchen "Preparing" / rider "Out for delivery" instead
+  // of courier-shipment wording). /modes is already a cheap toggle-status
+  // endpoint, so this is fetched eagerly (unlike the heavier /settings
+  // fetch below, which stays lazy).
+  const [isRestaurant, setIsRestaurant] = useState(false);
+  useEffect(() => {
+    request<any>(`${BASE}/modes`)
+      .then(m => setIsRestaurant(Boolean(m?.restaurantModeEnabled)))
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pageId]);
+
   // Restaurant config for the manual-order map picker — fetched lazily when
   // the create modal first opens (settings payload is heavy)
   const [restoCfg, setRestoCfg] = useState<RestaurantConfig | null>(null);
@@ -1079,7 +1092,7 @@ export function OrdersPage({ th, pageId, onToast, preset }: {
                       <div style={{ fontWeight: 700, fontSize: 14, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                         {o.customerName || 'Customer'}
                         <span style={{ fontSize: 10, color: th.muted, fontWeight: 400 }}>#{o.id}</span>
-                        <StatusBadge th={th} status={o.status} />
+                        <StatusBadge th={th} status={o.status} restaurant={isRestaurant} />
                         {o.callRetryCount > 0 && (
                           <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 5, background: '#b4530918', color: '#b45309', border: '1px solid #b4530930' }}>
                             {o.callRetryCount}x called
@@ -1156,10 +1169,10 @@ export function OrdersPage({ th, pageId, onToast, preset }: {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
             <div>
               <div style={{ fontSize: 14, fontWeight: 800, color: '#7c3aed', display: 'flex', alignItems: 'center', gap: 6 }}>
-                📦 Packing Zone
+                {isRestaurant ? '🍳 Preparing Zone' : '📦 Packing Zone'}
                 <span style={{ background: '#7c3aed', color: '#fff', fontSize: 10, borderRadius: 10, padding: '2px 7px', fontWeight: 700 }}>{packingOrders.length}</span>
               </div>
-              <div style={{ fontSize: 11, color: th.muted, marginTop: 2 }}>Confirmed orders — একটি একটি করে প্যাক করুন</div>
+              <div style={{ fontSize: 11, color: th.muted, marginTop: 2 }}>{isRestaurant ? 'Confirmed orders — একটি একটি করে রান্না শুরু করুন' : 'Confirmed orders — একটি একটি করে প্যাক করুন'}</div>
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
               <button style={{ ...th.btnGhost, fontSize: 12 }} onClick={loadPackingOrders}>
@@ -1169,7 +1182,7 @@ export function OrdersPage({ th, pageId, onToast, preset }: {
                 onClick={packAllOrders}
                 disabled={busy || packingLoading}
                 style={{ padding: '7px 14px', borderRadius: 8, fontWeight: 700, fontSize: 12, cursor: 'pointer', border: '1.5px solid #7c3aed', background: '#7c3aed18', color: '#7c3aed' }}>
-                {busy ? <Spinner size={11} /> : '📦 সব Pack করুন'}
+                {busy ? <Spinner size={11} /> : isRestaurant ? '🍳 সব Preparing করুন' : '📦 সব Pack করুন'}
               </button>
             </div>
           </div>
@@ -1197,7 +1210,7 @@ export function OrdersPage({ th, pageId, onToast, preset }: {
                     onClick={() => packOrder(o.id)}
                     disabled={isPacking}
                     style={{ padding: '8px 18px', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer', border: '1.5px solid #7c3aed', background: '#7c3aed', color: '#fff', boxShadow: '0 1px 4px #7c3aed30' }}>
-                    {isPacking ? <Spinner size={11} /> : '📦 Pack Done'}
+                    {isPacking ? <Spinner size={11} /> : isRestaurant ? '🍳 প্রস্তুত হয়ে গেছে' : '📦 Pack Done'}
                   </button>
                 </div>
               );
@@ -1212,10 +1225,10 @@ export function OrdersPage({ th, pageId, onToast, preset }: {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
             <div>
               <div style={{ fontSize: 14, fontWeight: 800, color: '#0891b2', display: 'flex', alignItems: 'center', gap: 6 }}>
-                🚚 Delivery Zone
+                {isRestaurant ? '🛵 Out for Delivery' : '🚚 Delivery Zone'}
                 <span style={{ background: '#0891b2', color: '#fff', fontSize: 10, borderRadius: 10, padding: '2px 7px', fontWeight: 700 }}>{deliveryOrders.length}</span>
               </div>
-              <div style={{ fontSize: 11, color: th.muted, marginTop: 2 }}>Packed orders — Delivered বা Cancelled mark করুন। Customer automatically notify পাবে।</div>
+              <div style={{ fontSize: 11, color: th.muted, marginTop: 2 }}>{isRestaurant ? 'প্রস্তুত হওয়া orders — Delivered বা Cancelled mark করুন। Customer automatically notify পাবে।' : 'Packed orders — Delivered বা Cancelled mark করুন। Customer automatically notify পাবে।'}</div>
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
               <button style={{ ...th.btnGhost, fontSize: 12 }} onClick={loadDeliveryOrders}>
@@ -1408,7 +1421,7 @@ export function OrdersPage({ th, pageId, onToast, preset }: {
               color: status === s ? STATUS_COLORS[s] || th.accent : th.muted,
               boxShadow: status === s ? th.shadow : 'none', transition: 'all .12s',
             }}>
-              {s === 'ALL' ? 'All' : s.charAt(0) + s.slice(1).toLowerCase()}
+              {s === 'ALL' ? 'All' : isRestaurant && s === 'PACKED' ? 'Preparing' : isRestaurant && s === 'SHIPPED' ? 'Out for delivery' : s.charAt(0) + s.slice(1).toLowerCase()}
             </button>
           ))}
         </div>}
@@ -1428,7 +1441,7 @@ export function OrdersPage({ th, pageId, onToast, preset }: {
             <div style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '6px 12px', background: th.accentSoft, borderRadius: 8, border: `1px solid ${th.accent}33` }}>
               <span style={{ fontSize: 12.5, fontWeight: 700, color: th.accentText }}>{selected.size} selected</span>
               {canConfirm && <button style={th.btnSmSuccess} onClick={() => action([...selected], 'confirm')} disabled={busy}>✓ Confirm</button>}
-              {canPack && <button style={{ ...th.btnSmGhost, border: '1.5px solid #7c3aed', color: '#7c3aed', fontSize: 10 }} onClick={() => action([...selected], 'pack')} disabled={busy}>📦 Pack</button>}
+              {canPack && <button style={{ ...th.btnSmGhost, border: '1.5px solid #7c3aed', color: '#7c3aed', fontSize: 10 }} onClick={() => action([...selected], 'pack')} disabled={busy}>{isRestaurant ? '🍳 Preparing' : '📦 Pack'}</button>}
               <button style={th.btnSmDanger} onClick={() => action([...selected], 'cancel')} disabled={busy}>✕ Cancel</button>
               <button style={th.btnSmGhost} onClick={() => setSelected(new Set())}>Clear</button>
             </div>
@@ -1475,7 +1488,7 @@ export function OrdersPage({ th, pageId, onToast, preset }: {
                         <div style={{ fontSize: 11, color: th.muted, marginTop: 2 }}>{o.address?.slice(0, 60) || '—'}</div>
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
-                        <StatusBadge th={th} status={o.status} />
+                        <StatusBadge th={th} status={o.status} restaurant={isRestaurant} />
                         <span style={{ fontWeight: 800, fontSize: 14 }}>৳{total.toLocaleString()}</span>
                       </div>
                     </div>
@@ -1522,13 +1535,13 @@ export function OrdersPage({ th, pageId, onToast, preset }: {
                               {o.status === 'CONFIRMED' && (
                                 <button style={{ display: 'block', width: '100%', padding: '8px 12px', textAlign: 'left', background: 'transparent', border: 'none', color: '#7c3aed', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
                                   onClick={(e) => { e.stopPropagation(); setOpenDropdown(null); action([o.id], 'pack'); }}>
-                                  📦 Pack
+                                  {isRestaurant ? '🍳 Preparing' : '📦 Pack'}
                                 </button>
                               )}
                               {o.status === 'PACKED' && (
                                 <button style={{ display: 'block', width: '100%', padding: '8px 12px', textAlign: 'left', background: 'transparent', border: 'none', color: '#0891b2', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
                                   onClick={(e) => { e.stopPropagation(); setOpenDropdown(null); action([o.id], 'ship'); }}>
-                                  🚚 Ship / Courier
+                                  {isRestaurant ? '🛵 Out for Delivery' : '🚚 Ship / Courier'}
                                 </button>
                               )}
                               {(o.status === 'PACKED' || o.status === 'SHIPPED') && (
@@ -1670,7 +1683,7 @@ export function OrdersPage({ th, pageId, onToast, preset }: {
                       </td>
                       <td style={{ ...th.td, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>৳{total.toLocaleString()}</td>
                       <td style={th.td}>
-                        <StatusBadge th={th} status={o.status} />
+                        <StatusBadge th={th} status={o.status} restaurant={isRestaurant} />
                         {o.courierShipment?.status === 'partial_delivery' && (
                           <div style={{ marginTop: 3 }}>
                             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 5, background: '#f9731618', color: '#f97316', border: '1px solid #f9731630' }}>⚠️ আংশিক</span>
@@ -1726,7 +1739,7 @@ export function OrdersPage({ th, pageId, onToast, preset }: {
                                   {o.status === 'CONFIRMED' && (
                                     <button style={{ display: 'block', width: '100%', padding: '8px 12px', textAlign: 'left', background: 'transparent', border: 'none', color: '#7c3aed', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
                                       onClick={(e) => { e.stopPropagation(); setOpenDropdown(null); action([o.id], 'pack'); }}>
-                                      📦 Pack
+                                      {isRestaurant ? '🍳 Preparing' : '📦 Pack'}
                                     </button>
                                   )}
                                   <button style={{ display: 'block', width: '100%', padding: '8px 12px', textAlign: 'left', background: 'transparent', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}

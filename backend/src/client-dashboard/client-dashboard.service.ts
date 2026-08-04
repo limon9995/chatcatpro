@@ -124,6 +124,7 @@ export class ClientDashboardService {
   async getModes(pageId: number) {
     const page: any = await this.pageService.getById(pageId);
     return {
+      restaurantModeEnabled: Boolean(page.restaurantModeEnabled),
       automationOn: Boolean(page.automationOn),
       ocrOn: Boolean(page.ocrOn),
       infoModeOn: Boolean(page.infoModeOn),

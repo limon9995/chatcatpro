@@ -399,15 +399,18 @@ export function CardHeader({ th, title, sub, action }: {
 }
 
 // ── StatusBadge ───────────────────────────────────────────────────────────────
-export function StatusBadge({ th, status }: { th: Theme; status: string }) {
+// restaurant=true relabels PACKED/SHIPPED — those imply a 3rd-party courier
+// shipment, which doesn't describe a restaurant preparing food and
+// delivering it themselves (kitchen "preparing" / rider "out for delivery").
+export function StatusBadge({ th, status, restaurant }: { th: Theme; status: string; restaurant?: boolean }) {
   const s = status?.toUpperCase();
   const map: Record<string, [string, any]> = {
     CONFIRMED: ['Confirmed', th.pillGreen],
     CANCELLED: ['Cancelled', th.pillRed],
     RECEIVED:  ['Received',  th.pillYellow],
     PENDING:   ['Pending',   th.pillYellow],
-    PACKED:    ['Packed',    th.pillBlue],
-    SHIPPED:   ['Shipped',   { background: '#0891b2', color: '#fff' }],
+    PACKED:    [restaurant ? 'Preparing' : 'Packed', th.pillBlue],
+    SHIPPED:   [restaurant ? 'Out for delivery' : 'Shipped', { background: '#0891b2', color: '#fff' }],
     DELIVERED: ['Delivered', th.pillGreen],
     ISSUE:     ['Issue',     th.pillRed],
     PENDING_CALL: ['Queued', th.pillYellow],

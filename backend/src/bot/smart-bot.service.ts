@@ -13,7 +13,7 @@ import { estimateMonthlyCost, PricingCalcInput } from '../common/pricing-estimat
 import { MessengerService } from '../messenger/messenger.service';
 import { isInsideDhakaAddress } from '../webhook/handlers/dhaka-areas';
 import { AiUsageService } from '../common/ai-usage.service';
-import { isRestaurantReady } from '../common/restaurant-delivery';
+import { isRestaurantReady, orderStatusLabel } from '../common/restaurant-delivery';
 import {
   formatSlabsBn,
   parsePriceVariants,
@@ -721,15 +721,7 @@ ${
     // Last placed order tracking context
     let orderTrackCtx = '';
     if (lastOrder) {
-      const statusMap: Record<string, string> = {
-        RECEIVED: '✅ অর্ডার পাওয়া হয়েছে — প্রক্রিয়া চলছে',
-        CONFIRMED: '✅ অর্ডার কনফার্ম হয়েছে — প্রস্তুত হচ্ছে',
-        PACKED: '📦 অর্ডার প্যাক হয়ে গেছে — শীঘ্রই কুরিয়ারে যাবে',
-        SHIPPED: '🚚 কুরিয়ারে পাঠানো হয়েছে — পথে আছে',
-        DELIVERED: '✅ ডেলিভারি সম্পন্ন হয়েছে',
-        CANCELLED: '❌ অর্ডারটি বাতিল হয়েছে',
-      };
-      const statusBn = statusMap[lastOrder.status] ?? lastOrder.status;
+      const statusBn = orderStatusLabel(lastOrder.status, isRestaurantReady(page));
       const products = lastOrder.items
         .map((i: any) => `${i.productCode} x${i.qty}`)
         .join(', ');
@@ -740,16 +732,7 @@ ${
     // Specific Order ID lookup context
     let orderByIdCtx = '';
     if (orderById) {
-      const smMap: Record<string, string> = {
-        RECEIVED: '✅ অর্ডার পাওয়া হয়েছে — প্রক্রিয়া চলছে',
-        CONFIRMED: '✅ অর্ডার কনফার্ম হয়েছে — প্রস্তুত হচ্ছে',
-        PACKED: '📦 অর্ডার প্যাক হয়ে গেছে — শীঘ্রই কুরিয়ারে যাবে',
-        SHIPPED: '🚚 কুরিয়ারে পাঠানো হয়েছে — পথে আছে',
-        DELIVERED: '🎉 ডেলিভারি সম্পন্ন হয়েছে',
-        CANCELLED: '❌ অর্ডারটি বাতিল হয়েছে',
-        ISSUE: '⚠️ অর্ডারে সমস্যা আছে',
-      };
-      const snBn = smMap[orderById.status] ?? orderById.status;
+      const snBn = orderStatusLabel(orderById.status, isRestaurantReady(page));
       const snProds = orderById.items.map((i: any) => `${i.productCode} x${i.qty}`).join(', ');
       const snDate = new Date(orderById.createdAt).toLocaleDateString('bn-BD');
       orderByIdCtx = `\n\n## Order ID দিয়ে খোঁজা Order (DB থেকে)\nOrder #${orderById.id} — ${snDate}\nProducts: ${snProds || '?'}\nStatus: **${snBn}**\n\n⚠️ Customer এই specific Order ID টি পাঠিয়েছে। উপরের status দেখে CHAT action দিয়ে reply করো।`;

@@ -41,6 +41,7 @@ import {
   formatSlabsBn,
   haversineKm,
   isRestaurantReady,
+  orderStatusLabel,
   parseMapsPoint,
   parsePriceVariants,
   parseSlabs,
@@ -1081,7 +1082,7 @@ export class WebhookService implements OnModuleDestroy {
       const phone = this.extractTrackingPhone(text);
       const orders = await this.findOrdersForTrackingQuery(pageId, psid, phone);
       if (orders.length > 0) {
-        await this.safeSend(token, psid, await this.buildOrderStatusReply(pageId, orders));
+        await this.safeSend(token, psid, await this.buildOrderStatusReply(pageId, orders, isRestaurantReady(page)));
         return;
       }
     }
@@ -2762,15 +2763,9 @@ export class WebhookService implements OnModuleDestroy {
       items: { productCode: string; qty: number }[];
       courierShipment: { trackingId: string | null; courierName: string; status: string } | null;
     }>,
+    isRestaurant: boolean,
   ): Promise<string> {
     if (orders.length === 0) return 'আপনার কোনো active order নেই।';
-    const statusLabel: Record<string, string> = {
-      RECEIVED: '📥 প্রাপ্ত (প্রসেসিং)',
-      CONFIRMED: '✅ কনফার্ম হয়েছে',
-      PACKED: '📦 প্যাক হয়েছে',
-      SHIPPED: '🚚 পাঠানো হয়েছে',
-      DELIVERED: '🎉 ডেলিভারি হয়েছে',
-    };
     const courierStatusLabel: Record<string, string> = {
       delivered: '🎉 ডেলিভারি সম্পন্ন হয়েছে',
       in_transit: '🚚 কুরিয়ারে পথে আছে',
@@ -2781,7 +2776,7 @@ export class WebhookService implements OnModuleDestroy {
     const lines = await Promise.all(
       orders.map(async (o) => {
         const items = o.items.map((i) => `${i.productCode}×${i.qty}`).join(', ');
-        let statusLine = statusLabel[o.status] || o.status;
+        let statusLine = orderStatusLabel(o.status, isRestaurant);
 
         const shipment = o.courierShipment;
         if (shipment?.trackingId && shipment.courierName !== 'manual') {
