@@ -16,6 +16,8 @@ import {
   parseBusinessHours,
   BusinessHoursRow,
   sanitizeOfferHours,
+  parseMenuImages,
+  MenuImageEntry,
 } from '../common/restaurant-delivery';
 
 const VALID_UNITS = ['gm', 'kg', 'pcs', 'ml', 'liter'];
@@ -318,14 +320,15 @@ export class RestaurantService {
       await this.geminiVision.extractMenuItems(imageUrls);
 
     // Keep the menu photos on the page — the bot sends them to customers who
-    // ask what's available (latest scan wins).
-    const relative = imageUrls.map((u) =>
-      String(u).replace(/^https?:\/\/[^/]+/, ''),
-    );
+    // ask what's available (latest scan wins). All active by default; the
+    // merchant can toggle individual photos off from the dashboard later.
+    const relative: MenuImageEntry[] = imageUrls
+      .map((u) => ({ url: String(u).replace(/^https?:\/\/[^/]+/, ''), active: true }))
+      .slice(0, MAX_MENU_GALLERY_IMAGES);
     void this.prisma.page
       .update({
         where: { id: pageId },
-        data: { menuImagesJson: JSON.stringify(relative.slice(0, MAX_MENU_GALLERY_IMAGES)) },
+        data: { menuImagesJson: JSON.stringify(relative) },
       })
       .catch(() => {});
 
@@ -356,25 +359,27 @@ export class RestaurantService {
 
   // ── Menu photos shown/sent to customers ─────────────────────────────────────
 
-  async getMenuImages(pageId: number): Promise<string[]> {
+  async getMenuImages(pageId: number): Promise<MenuImageEntry[]> {
     const page = await this.prisma.page.findUnique({
       where: { id: pageId },
       select: { menuImagesJson: true },
     });
-    try {
-      const raw = JSON.parse(page?.menuImagesJson || '[]');
-      return Array.isArray(raw) ? raw.filter((u) => typeof u === 'string') : [];
-    } catch {
-      return [];
-    }
+    return parseMenuImages(page?.menuImagesJson);
   }
 
-  async setMenuImages(pageId: number, urls: string[]) {
-    if (!Array.isArray(urls))
-      throw new BadRequestException('urls must be an array');
-    const clean = urls
-      .map((u) => String(u).replace(/^https?:\/\/[^/]+/, ''))
-      .filter((u) => /^\/storage\/products\//.test(u))
+  /** images: {url, active}[] — active=false keeps the photo on file (still
+   *  shown in the catalog website gallery) without the bot pushing it. */
+  async setMenuImages(pageId: number, images: any[]) {
+    if (!Array.isArray(images))
+      throw new BadRequestException('images must be an array');
+    const clean: MenuImageEntry[] = images
+      .map((item) => {
+        const raw = typeof item === 'string' ? item : item?.url;
+        const url = String(raw ?? '').replace(/^https?:\/\/[^/]+/, '');
+        const active = typeof item === 'string' ? true : item?.active !== false;
+        return { url, active };
+      })
+      .filter((e) => /^\/storage\/products\//.test(e.url))
       .slice(0, MAX_MENU_GALLERY_IMAGES);
     await this.prisma.page.update({
       where: { id: pageId },

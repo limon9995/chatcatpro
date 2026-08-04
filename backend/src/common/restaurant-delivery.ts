@@ -426,6 +426,37 @@ export function sanitizeOfferHours(
   return { hoursMode: null, hoursJson: null };
 }
 
+// ── Menu photos (sent to customers) ──────────────────────────────────────
+
+export interface MenuImageEntry {
+  url: string;
+  /** Whether the bot pushes this photo when a customer asks "কি বিক্রি করেন"
+   *  etc. false = kept on file but not sent (merchant toggled it off without
+   *  deleting it — e.g. a seasonal flyer). The catalog website's own gallery
+   *  always shows every uploaded photo regardless of this flag. */
+  active: boolean;
+}
+
+/** Parses Page.menuImagesJson — accepts both the legacy plain string[] format
+ *  and the current {url, active}[] format. */
+export function parseMenuImages(json: string | null | undefined): MenuImageEntry[] {
+  try {
+    const raw = JSON.parse(json || '[]');
+    if (!Array.isArray(raw)) return [];
+    return raw
+      .map((item: any): MenuImageEntry | null => {
+        if (typeof item === 'string') return { url: item, active: true };
+        if (item && typeof item.url === 'string') {
+          return { url: item.url, active: item.active !== false };
+        }
+        return null;
+      })
+      .filter((x: MenuImageEntry | null): x is MenuImageEntry => x !== null);
+  } catch {
+    return [];
+  }
+}
+
 // ── Order status labels ──────────────────────────────────────────────────
 // The codebase used to have 4 independently-maintained Bengali status-label
 // maps (orders.service.ts, smart-bot.service.ts x2, webhook.service.ts)

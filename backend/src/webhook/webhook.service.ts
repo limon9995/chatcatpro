@@ -30,7 +30,7 @@ import { VisionOpsService } from '../vision-ops/vision-ops.service';
 import { BillingService } from '../billing/billing.service';
 import { WalletService, AiStatus } from '../wallet/wallet.service';
 import { WhisperService } from '../whisper/whisper.service';
-import { SmartBotService } from '../bot/smart-bot.service';
+import { SmartBotService, AGENT_CHECKIN_MINUTES } from '../bot/smart-bot.service';
 import { ProductNameMatchService } from '../product-name-match/product-name-match.service';
 import { UniversityBotService } from '../university/university-bot.service';
 import { TelegramNotificationService } from '../telegram/telegram-notification.service';
@@ -43,6 +43,7 @@ import {
   isRestaurantReady,
   orderStatusLabel,
   parseMapsPoint,
+  parseMenuImages,
   parsePriceVariants,
   parseSlabs,
   priceRangeText,
@@ -768,9 +769,23 @@ export class WebhookService implements OnModuleDestroy {
       return;
     }
 
-    // Agent handling mode — bot stays silent until agent resumes bot from dashboard
+    // Agent handling mode — bot stays quiet while a human agent is expected
+    // to reply, but never leaves the customer talking to total silence: if
+    // they message again after AGENT_CHECKIN_MINUTES with no resolution yet,
+    // send one check-in ("have you been helped?") and go quiet for another
+    // window (setAgentHandling(true) refreshes agentHandlingAt) rather than
+    // repeating it on every message.
     const agentHandling = await this.ctx.isAgentHandling(pageId, psid);
     if (agentHandling) {
+      const since = await this.ctx.getAgentHandlingAt(pageId, psid);
+      const minutesWaiting = since ? (Date.now() - since.getTime()) / 60000 : 0;
+      if (minutesWaiting >= AGENT_CHECKIN_MINUTES) {
+        await this.ctx.setAgentHandling(pageId, psid, true);
+        const checkinMsg = await this.botKnowledge
+          .resolveSystemReply(pageId, 'agent_checkin', undefined, page.agentType)
+          .catch(() => '');
+        if (checkinMsg) await this.safeSend(token, psid, checkinMsg);
+      }
       this.logger.log(
         `[Webhook] Bot muted (agent mode) — ignoring message. psid=${psid} page=${page.pageId}`,
       );
@@ -2243,16 +2258,15 @@ export class WebhookService implements OnModuleDestroy {
     const slug = page.catalogSlug || String(page.id);
 
     // Restaurant: lead with the actual menu photo(s) — that's what a food
-    // customer wants to see first.
-    try {
-      const menuImages: string[] = JSON.parse((page as any).menuImagesJson || '[]');
-      if (Array.isArray(menuImages) && menuImages.length) {
-        for (const u of menuImages.slice(0, 3)) {
-          const full = getFullImageUrl(u);
-          if (full) await this.messenger.sendImage(token, psid, full);
-        }
-      }
-    } catch { /* no menu images */ }
+    // customer wants to see first. Only photos the merchant left toggled on
+    // (Restaurant panel → Menu photos) get pushed here.
+    const activeMenuImages = parseMenuImages((page as any).menuImagesJson)
+      .filter((e) => e.active)
+      .map((e) => e.url);
+    for (const u of activeMenuImages.slice(0, 3)) {
+      const full = getFullImageUrl(u);
+      if (full) await this.messenger.sendImage(token, psid, full);
+    }
 
     // Fetch top active products with stock — trackStock=false food items are
     // always available (BOM is their real inventory), stockQty is meaningless

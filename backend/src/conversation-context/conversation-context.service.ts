@@ -191,6 +191,17 @@ export class ConversationContextService {
     return true;
   }
 
+  /** When agent-handling mode started (most recently refreshed) — null if not
+   *  currently in that mode. Used to decide when a "still there?" check-in is due. */
+  async getAgentHandlingAt(
+    pageIdRef: number,
+    customerPsid: string,
+  ): Promise<Date | null> {
+    const session = await this.getSession(pageIdRef, customerPsid);
+    if (!session?.agentHandling || !session.agentHandlingAt) return null;
+    return new Date(session.agentHandlingAt);
+  }
+
   async clearDraft(pageIdRef: number, customerPsid: string) {
     await this.upsertSession(pageIdRef, customerPsid, {
       activeDraftJson: null,

@@ -31,6 +31,7 @@ import {
   isValidLat,
   isValidLng,
   parseMapsPoint,
+  parseMenuImages,
   parsePriceVariants,
   parseSlabs,
   priceRangeText,
@@ -1013,16 +1014,10 @@ export class CatalogController {
             return [];
           }
         })(),
-        menuImages: (() => {
-          try {
-            const raw = JSON.parse((page as any).menuImagesJson || '[]');
-            return Array.isArray(raw)
-              ? raw.filter((u: any) => typeof u === 'string')
-              : [];
-          } catch {
-            return [];
-          }
-        })(),
+        // Website gallery shows every uploaded photo regardless of the
+        // bot-send toggle — that toggle only controls what gets pushed
+        // proactively in Messenger (see sendCatalogFallback).
+        menuImages: parseMenuImages((page as any).menuImagesJson).map((e) => e.url),
         // null when the merchant hasn't set hours yet — hides the badge
         businessHours: (() => {
           const raw = (page as any).businessHoursJson;

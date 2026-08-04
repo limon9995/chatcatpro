@@ -36,6 +36,7 @@ export interface DualProduct {
 
 export interface BusinessContext {
   businessName: string | null;
+  businessAddress: string | null;
   deliveryInsideFee: number;
   deliveryOutsideFee: number;
   // V24: Restaurant mode — when true, inside/outside Dhaka fees don't apply;
@@ -77,6 +78,7 @@ export class BotContextService {
         where: { id: pageId },
         select: {
           businessName: true,
+          businessAddress: true,
           deliveryFeeInsideDhaka: true,
           deliveryFeeOutsideDhaka: true,
           deliveryTimeText: true,
@@ -155,6 +157,7 @@ export class BotContextService {
 
     return {
       businessName: page?.businessName ?? null,
+      businessAddress: (page as any)?.businessAddress?.trim() || null,
       deliveryInsideFee: (page as any)?.deliveryFeeInsideDhaka ?? 80,
       deliveryOutsideFee: (page as any)?.deliveryFeeOutsideDhaka ?? 130,
       restaurantMode: isRestaurantReady(page as any),

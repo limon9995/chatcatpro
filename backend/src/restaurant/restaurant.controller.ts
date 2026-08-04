@@ -116,7 +116,7 @@ export class RestaurantController {
 
   @Put(':pageId/menu-images')
   setMenuImages(@Param('pageId') p: string, @Body() b: any, @Req() r: any) {
-    return this.svc.setMenuImages(this.pid(r, p), b?.urls ?? []);
+    return this.svc.setMenuImages(this.pid(r, p), b?.images ?? b?.urls ?? []);
   }
 
   // ── Business hours ───────────────────────────────────────────────────────────

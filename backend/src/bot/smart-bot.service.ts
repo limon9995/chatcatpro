@@ -14,11 +14,18 @@ import { MessengerService } from '../messenger/messenger.service';
 import { isInsideDhakaAddress } from '../webhook/handlers/dhaka-areas';
 import { AiUsageService } from '../common/ai-usage.service';
 import { isRestaurantReady, orderStatusLabel } from '../common/restaurant-delivery';
+import { FollowUpService } from '../followup/followup.service';
 import {
   formatSlabsBn,
   parsePriceVariants,
   variantsSummaryText,
 } from '../common/restaurant-delivery';
+
+// How long a customer waits in AGENT handoff mode before the bot checks in
+// on them once ("have you been helped yet?") — proactively via a scheduled
+// FollowUp (see case 'AGENT' below), or reactively if they message again
+// while still waiting (see webhook.service.ts's agentHandling gate).
+export const AGENT_CHECKIN_MINUTES = 10;
 
 // Verbatim defaults — used whenever an agent type has no AgentBehaviorConfig
 // personaPrompt/toneRules override, so agentType='commerce' pages (the vast
@@ -37,9 +44,11 @@ const DEFAULT_SMART_BOT_TONE_BLOCK = `
 - নাম জানলে নাম ধরে ডাকো।
 - "আপনার ফোন নম্বরটি উল্লেখ করলে আমরা আপনার জন্য অর্ডার প্রসেস করতে পারব" — এই ধরনের লম্বা বাক্য নয়। সরাসরি বলো: "ফোন নম্বরটা দিন 😊"
 - Customer "Assalamu Alaikum" / "Salam" / "আসসালামু আলাইকুম" / "সালাম" দিয়ে message শুরু করলে reply-ও "ওয়ালাইকুম আসসালাম" দিয়ে শুরু করো, তারপর স্বাভাবিকভাবে বাকি কথা বলো।
+- এটাই যদি এই কথোপকথনের প্রথম customer message হয় (উপরে conversation history-তে কোনো আগের bot reply না থাকে), reply শুরু করো ছোট্ট একটা পরিচয় দিয়ে — "আসসালামু আলাইকুম! আমি [দোকানের নাম, উপরের বর্ণনা থেকে]-এর chatbot বলছি 😊", তারপর জিজ্ঞেস করো "আপনাকে আজ কীভাবে সাহায্য করতে পারি?"। এই পরিচয় শুধু প্রথম reply-তেই দেবে, তারপরের কোনো reply-তে আর repeat করবে না।
 
 ⛔ HARD BAN: "আমাদের সাথে যোগাযোগ করুন" / "আরও জানতে যোগাযোগ করুন" — কখনো না।
-⛔ HARD BAN: একই কথা দুইবার বলা, unnecessary ব্যাখ্যা, filler বাক্য।`;
+⛔ HARD BAN: একই কথা দুইবার বলা, unnecessary ব্যাখ্যা, filler বাক্য।
+⛔ HARD BAN: reply পাঠানোর আগে conversation history-তে দেখো তুমি নিজে একটু আগেই একই তথ্য/লাইন বলেছো কিনা (এমনকি ভিন্ন শব্দে হলেও) — বলে থাকলে সেটা আবার বলবে না, শুধু customer-এর আসল প্রশ্নের সরাসরি উত্তর দাও।`;
 
 export interface IDraftOrderHandler {
   finalizeDraftOrder(
@@ -115,6 +124,7 @@ export class SmartBotService {
     private readonly geminiRotator: GeminiKeyRotatorService,
     private readonly messenger: MessengerService,
     private readonly aiUsage: AiUsageService,
+    private readonly followUp: FollowUpService,
   ) {
     this.openAiKey = process.env.OPENAI_API_KEY ?? '';
     this.model = process.env.AI_INTENT_MODEL ?? 'gemini-2.5-flash-lite';
@@ -357,7 +367,35 @@ export class SmartBotService {
 
       case 'AGENT': {
         await this.ctx.setAgentHandling(pageId, psid, true);
-        return parsed.reply;
+        const phone = String(page.businessPhone || '').trim();
+        const hotlineBlock = phone
+          ? `, অথবা সরাসরি আমাদের হটলাইনে কল করুন: ${phone} 📞`
+          : '।';
+        const handoffMsg = await this.botKnowledge
+          .resolveSystemReply(pageId, 'agent_handoff', { hotlineBlock }, page.agentType)
+          .catch(() => parsed.reply);
+        // Proactive check-in even if the customer never messages again —
+        // the reactive check (webhook.service.ts's agentHandling gate)
+        // only fires when they send another message.
+        try {
+          const checkinMsg = await this.botKnowledge.resolveSystemReply(
+            pageId,
+            'agent_checkin',
+            undefined,
+            page.agentType,
+          );
+          if (checkinMsg) {
+            await this.followUp.schedule(pageId, {
+              psid,
+              triggerType: 'agent_checkin',
+              message: checkinMsg,
+              delayHours: AGENT_CHECKIN_MINUTES / 60,
+            });
+          }
+        } catch (err: any) {
+          this.logger.error(`[SmartBot] agent_checkin schedule failed: ${err?.message}`);
+        }
+        return handoffMsg || parsed.reply;
       }
 
       case 'CAPTURE_LEAD': {
@@ -540,6 +578,13 @@ export class SmartBotService {
 
 ⚠️ Customer-এর address দেখে zone বুঝো: ঢাকার ভেতরে হলে inside row, বাইরে হলে outside row এর সময় বলো।
 ⚠️ Product Catalog-এ যে product-এর পাশে "🚚 Home Delivery FREE" লেখা আছে, সেই product-এর delivery charge সবসময় ফ্রি — ঢাকার ভিতরে/বাইরে rate এখানে apply হবে না। এই মার্ক না থাকলে উপরের normal rate অনুযায়ী চার্জ বলবে।`;
+
+    // Real saved address — grounds "তোমাদের দোকান/রেস্টুরেন্ট কোথায়" questions
+    // in actual data instead of the model guessing/inventing something (e.g.
+    // claiming "ঢাকার বাইরে" with no basis).
+    const locationCtx = `\n\n## Business Location (সেভ করা প্রকৃত ঠিকানা)
+${ctx.businessAddress || '(ঠিকানা সেভ করা নেই)'}
+⚠️ Customer "তোমাদের দোকান/রেস্টুরেন্ট/shop কোথায়" জিজ্ঞেস করলে উপরের ঠিকানাটাই হুবহু দাও — নিজে থেকে "ঢাকার ভিতরে/বাইরে" বা এলাকার নাম অনুমান/আবিষ্কার করবে না। ঠিকানা সেভ করা না থাকলে বলো "সঠিক ঠিকানা এখনই বলতে পারছি না, আমাদের হটলাইনে জিজ্ঞেস করুন" — কখনো বানিয়ে বলবে না।`;
 
     // Effective payment rules. The merchant's real setting lives on the Page
     // record (Settings → paymentMode/advanceAmount/codEnabled); the legacy
@@ -844,7 +889,7 @@ status reply-এর পরে, যদি "Delivery সময়:" সেটি�
       : DEFAULT_SMART_BOT_TONE_BLOCK;
 
     return `${intro}${toneBlock}
-${deliveryCtx}${paymentCtx}${productCtx}${pricingPolicyCtx}${knowledgeCtx}${pricingCtx}${catalogCtx}${customerCtx}${greetingCtx}${lastPresentedCtx}${draftCtx}${orderTrackCtx}${orderByIdCtx}${taskRules}`;
+${deliveryCtx}${locationCtx}${paymentCtx}${productCtx}${pricingPolicyCtx}${knowledgeCtx}${pricingCtx}${catalogCtx}${customerCtx}${greetingCtx}${lastPresentedCtx}${draftCtx}${orderTrackCtx}${orderByIdCtx}${taskRules}`;
   }
 
   private async callOpenAI(

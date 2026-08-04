@@ -1134,8 +1134,10 @@ export function RestaurantPage({ th, pageId, onToast }: {
   const [invRecipeCode, setInvRecipeCode] = useState('');
   const [showInvGuide, setShowInvGuide] = useState(() => localStorage.getItem(`chatcat_inv_guide_${pageId}`) !== '0');
 
-  // menu photos (sent to customers in Messenger)
-  const [menuImages, setMenuImages] = useState<string[]>([]);
+  // menu photos (sent to customers in Messenger) — active=false keeps the
+  // photo on file (still shown on the catalog website) without the bot
+  // pushing it in chat.
+  const [menuImages, setMenuImages] = useState<{ url: string; active: boolean }[]>([]);
 
   // delivery
   const [delivery, setDelivery] = useState<{ lat: number | null; lng: number | null; slabs: DeliverySlab[] }>({ lat: null, lng: null, slabs: [] });
@@ -1163,7 +1165,7 @@ export function RestaurantPage({ th, pageId, onToast }: {
         request<Ingredient[]>(`${RBASE}/ingredients`).catch(() => []),
         request<string[]>(`${RBASE}/categories`).catch(() => []),
         request<any[]>(`${RBASE}/packaging`).catch(() => []),
-        request<string[]>(`${RBASE}/menu-images`).catch(() => []),
+        request<{ url: string; active: boolean }[]>(`${RBASE}/menu-images`).catch(() => []),
         request<HoursRow[]>(`${RBASE}/hours`).catch(() => []),
         request<any[]>(`${RBASE}/combos`).catch(() => []),
         request<any[]>(`${RBASE}/milestones`).catch(() => []),
@@ -1183,7 +1185,7 @@ export function RestaurantPage({ th, pageId, onToast }: {
       setIngredients(Array.isArray(ings) ? ings : []);
       setCategories(Array.isArray(cats) ? (cats as string[]) : []);
       setPackaging((Array.isArray(pack) ? pack : []).map((p: any) => ({ ingredientId: p.ingredientId, qty: p.qty })));
-      setMenuImages(Array.isArray(mImgs) ? (mImgs as string[]) : []);
+      setMenuImages(Array.isArray(mImgs) ? mImgs : []);
       setHours(Array.isArray(hrs) && hrs.length === 7 ? hrs : defaultHours());
       setCombos(Array.isArray(combosList) ? combosList : []);
       setMilestones(Array.isArray(milestonesList) ? milestonesList : []);
@@ -1523,17 +1525,35 @@ export function RestaurantPage({ th, pageId, onToast }: {
         </div>
         {menuImages.length > 0 && (
           <div style={{ ...th.card }}>
-            <CardHeader th={th} title={copy('📖 Menu-র ছবি (customer-দের পাঠানো হয়)', '📖 Menu photos (sent to customers)')}
-              sub={copy('Messenger-এ কেউ "কি কি আছে" জিজ্ঞেস করলে bot এই ছবিগুলোই পাঠায়। Menu Scan করলেই auto আপডেট হয়।', 'When someone asks what\'s available in Messenger, the bot sends these. Auto-updated on Menu Scan.')} />
+            <CardHeader th={th} title={copy('📖 Menu-র ছবি', '📖 Menu photos')}
+              sub={copy('✅ চেক করা ছবিগুলোই Messenger-এ "কি কি আছে" জিজ্ঞেস করলে bot পাঠায় — বাকিগুলো website-এ থাকবে কিন্তু চ্যাটে যাবে না। Menu Scan করলেই নতুনগুলো auto যোগ হয় (✅ সহ)।', 'Only ✅ checked photos get pushed in Messenger when someone asks what\'s available — unchecked ones still show on the website but not in chat. Menu Scan auto-adds new ones (checked by default).')} />
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-              {menuImages.map((u, i) => (
+              {menuImages.map((m, i) => (
                 <div key={i} style={{ position: 'relative' }}>
-                  <img src={u.startsWith('http') ? u : `${API_BASE}${u}`} alt="menu" style={{ width: 90, height: 90, objectFit: 'cover', borderRadius: 10, border: `1px solid ${th.border}` }} />
+                  <img src={m.url.startsWith('http') ? m.url : `${API_BASE}${m.url}`} alt="menu" style={{ width: 90, height: 90, objectFit: 'cover', borderRadius: 10, border: `1px solid ${th.border}`, opacity: m.active ? 1 : 0.4 }} />
+                  <label
+                    title={copy('চ্যাটে পাঠানো হবে কিনা', 'Send in chat')}
+                    style={{ position: 'absolute', bottom: -6, left: -6, width: 22, height: 22, borderRadius: 11, background: m.active ? '#16a34a' : th.panel, border: `1.5px solid ${m.active ? '#16a34a' : th.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 12 }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={m.active}
+                      onChange={async () => {
+                        const next = menuImages.map((x, j) => j === i ? { ...x, active: !x.active } : x);
+                        try {
+                          await request(`${RBASE}/menu-images`, { method: 'PUT', body: JSON.stringify({ images: next }) });
+                          setMenuImages(next);
+                        } catch (e: any) { onToast(e.message, 'error'); }
+                      }}
+                      style={{ display: 'none' }}
+                    />
+                    <span style={{ color: m.active ? '#fff' : 'transparent' }}>✓</span>
+                  </label>
                   <button
                     onClick={async () => {
                       const next = menuImages.filter((_, j) => j !== i);
                       try {
-                        await request(`${RBASE}/menu-images`, { method: 'PUT', body: JSON.stringify({ urls: next }) });
+                        await request(`${RBASE}/menu-images`, { method: 'PUT', body: JSON.stringify({ images: next }) });
                         setMenuImages(next);
                       } catch (e: any) { onToast(e.message, 'error'); }
                     }}
