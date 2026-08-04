@@ -6,13 +6,32 @@ import 'leaflet/dist/leaflet.css';
 const DEFAULT_CENTER: [number, number] = [23.8103, 90.4125];
 
 // Emoji divIcons — avoids Leaflet's default marker images 404-ing under Vite
-function emojiIcon(emoji: string, size: number) {
+function emojiIcon(emoji: string, size: number, opacity = 1) {
   return L.divIcon({
     className: '',
-    html: `<div style="font-size:${size}px;line-height:1;filter:drop-shadow(0 2px 3px rgba(0,0,0,.4))">${emoji}</div>`,
+    html: `<div style="font-size:${size}px;line-height:1;opacity:${opacity};filter:drop-shadow(0 2px 3px rgba(0,0,0,.4))">${emoji}</div>`,
     iconSize: [size, size],
     iconAnchor: [size / 2, size - 2],
   });
+}
+
+// Free, no-key reverse geocoding — best-effort only. Never blocks the
+// confirm flow: a failed/slow lookup just falls back to raw coordinates.
+async function reverseGeocode(lat: number, lng: number): Promise<string | null> {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 6000);
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&zoom=18&addressdetails=0`,
+      { headers: { 'Accept-Language': 'bn,en' }, signal: controller.signal },
+    );
+    clearTimeout(timeout);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return typeof data?.display_name === 'string' ? data.display_name : null;
+  } catch {
+    return null;
+  }
 }
 
 interface LocationPickerMapProps {
@@ -25,6 +44,14 @@ interface LocationPickerMapProps {
   referencePin?: { lat: number; lng: number; emoji?: string } | null;
   /** Radius circle around referencePin (or the marker itself), in km */
   radiusKm?: number | null;
+  /**
+   * When true, every pick (GPS detect / map click / marker drag) shows a
+   * "is this correct?" overview with a reverse-geocoded address before
+   * onChange actually fires — nothing is committed until confirmed.
+   */
+  confirmPick?: boolean;
+  /** Heading shown on the confirm overview card. */
+  confirmLabel?: string;
 }
 
 export default function LocationPickerMap({
@@ -35,15 +62,27 @@ export default function LocationPickerMap({
   markerEmoji = '📍',
   referencePin = null,
   radiusKm = null,
+  confirmPick = false,
+  confirmLabel = 'এটা কি সঠিক Location?',
 }: LocationPickerMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markerRef = useRef<L.Marker | null>(null);
+  const pendingMarkerRef = useRef<L.Marker | null>(null);
   const circleRef = useRef<L.Circle | null>(null);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
+  const confirmPickRef = useRef(confirmPick);
+  confirmPickRef.current = confirmPick;
+  const latRef = useRef(lat);
+  latRef.current = lat;
+  const lngRef = useRef(lng);
+  lngRef.current = lng;
   const [gpsBusy, setGpsBusy] = useState(false);
   const [gpsError, setGpsError] = useState('');
+  const [pending, setPending] = useState<{ lat: number; lng: number; fromDrag: boolean } | null>(null);
+  const [pendingAddress, setPendingAddress] = useState<string | null>(null);
+  const [addressLoading, setAddressLoading] = useState(false);
 
   const placeMarker = (map: L.Map, la: number, ln: number) => {
     if (!markerRef.current) {
@@ -53,11 +92,72 @@ export default function LocationPickerMap({
       }).addTo(map);
       markerRef.current.on('dragend', () => {
         const ll = markerRef.current!.getLatLng();
-        onChangeRef.current(ll.lat, ll.lng);
+        if (confirmPickRef.current) {
+          beginPending(ll.lat, ll.lng, true);
+        } else {
+          onChangeRef.current(ll.lat, ll.lng);
+        }
       });
     } else {
       markerRef.current.setLatLng([la, ln]);
     }
+  };
+
+  const clearPendingMarker = () => {
+    pendingMarkerRef.current?.remove();
+    pendingMarkerRef.current = null;
+  };
+
+  // Starts (or replaces) an unconfirmed pick — shows the overview card and
+  // kicks off a best-effort reverse-geocode. Nothing is saved yet.
+  const beginPending = (la: number, ln: number, fromDrag: boolean) => {
+    const map = mapRef.current;
+    if (!map) return;
+    setPending({ lat: la, lng: ln, fromDrag });
+    setPendingAddress(null);
+    setAddressLoading(true);
+    if (!fromDrag) {
+      // GPS / map-click pick: show a distinct "unconfirmed" marker so the
+      // merchant can compare it against their already-confirmed pin (if any).
+      if (!pendingMarkerRef.current) {
+        pendingMarkerRef.current = L.marker([la, ln], {
+          icon: emojiIcon(markerEmoji, 30, 0.5),
+          interactive: false,
+        }).addTo(map);
+      } else {
+        pendingMarkerRef.current.setLatLng([la, ln]);
+      }
+    }
+    // A drag already moves the real marker itself — no second marker needed.
+    reverseGeocode(la, ln).then((addr) => {
+      setAddressLoading(false);
+      setPendingAddress(addr);
+    });
+  };
+
+  const confirmPending = () => {
+    if (!pending || !mapRef.current) return;
+    placeMarker(mapRef.current, pending.lat, pending.lng);
+    onChangeRef.current(pending.lat, pending.lng);
+    clearPendingMarker();
+    setPending(null);
+    setPendingAddress(null);
+  };
+
+  const cancelPending = () => {
+    if (pending?.fromDrag) {
+      // Snap the real marker back to the last CONFIRMED spot (props are only
+      // ever updated by an actual onChange, i.e. a confirmed pick).
+      if (latRef.current != null && lngRef.current != null) {
+        markerRef.current?.setLatLng([latRef.current, lngRef.current]);
+      } else {
+        markerRef.current?.remove();
+        markerRef.current = null;
+      }
+    }
+    clearPendingMarker();
+    setPending(null);
+    setPendingAddress(null);
   };
 
   // Init once
@@ -81,8 +181,12 @@ export default function LocationPickerMap({
       }).addTo(map);
     }
     map.on('click', (e: L.LeafletMouseEvent) => {
-      placeMarker(map, e.latlng.lat, e.latlng.lng);
-      onChangeRef.current(e.latlng.lat, e.latlng.lng);
+      if (confirmPickRef.current) {
+        beginPending(e.latlng.lat, e.latlng.lng, false);
+      } else {
+        placeMarker(map, e.latlng.lat, e.latlng.lng);
+        onChangeRef.current(e.latlng.lat, e.latlng.lng);
+      }
     });
     if (lat != null && lng != null) placeMarker(map, lat, lng);
     mapRef.current = map;
@@ -92,6 +196,7 @@ export default function LocationPickerMap({
       map.remove();
       mapRef.current = null;
       markerRef.current = null;
+      pendingMarkerRef.current = null;
       circleRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -152,8 +257,12 @@ export default function LocationPickerMap({
         setGpsBusy(false);
         const { latitude, longitude } = pos.coords;
         mapRef.current?.setView([latitude, longitude], 16);
-        if (mapRef.current) placeMarker(mapRef.current, latitude, longitude);
-        onChangeRef.current(latitude, longitude);
+        if (confirmPickRef.current) {
+          beginPending(latitude, longitude, false);
+        } else {
+          if (mapRef.current) placeMarker(mapRef.current, latitude, longitude);
+          onChangeRef.current(latitude, longitude);
+        }
       },
       () => {
         if (done) return;
@@ -200,6 +309,64 @@ export default function LocationPickerMap({
       </button>
       {gpsError && (
         <div style={{ marginTop: 6, fontSize: 12.5, color: '#dc2626' }}>{gpsError}</div>
+      )}
+      {pending && (
+        <div
+          style={{
+            marginTop: 8,
+            padding: 12,
+            borderRadius: 10,
+            border: '1.5px solid #059669',
+            background: 'rgba(5,150,105,.07)',
+          }}
+        >
+          <div style={{ fontSize: 12.5, fontWeight: 800, color: '#065f46', marginBottom: 4 }}>
+            {confirmLabel}
+          </div>
+          <div style={{ fontSize: 12, color: '#334155', marginBottom: 10, lineHeight: 1.5 }}>
+            {addressLoading
+              ? 'ঠিকানা খোঁজা হচ্ছে...'
+              : pendingAddress || `📍 ${pending.lat.toFixed(5)}, ${pending.lng.toFixed(5)}`}
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              type="button"
+              onClick={confirmPending}
+              style={{
+                flex: 1,
+                padding: '8px 12px',
+                borderRadius: 8,
+                border: 'none',
+                background: '#059669',
+                color: '#fff',
+                fontSize: 12.5,
+                fontWeight: 700,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+              }}
+            >
+              ✓ হ্যাঁ, এটাই ঠিক
+            </button>
+            <button
+              type="button"
+              onClick={cancelPending}
+              style={{
+                flex: 1,
+                padding: '8px 12px',
+                borderRadius: 8,
+                border: '1px solid var(--border, #e5e7eb)',
+                background: 'transparent',
+                color: 'inherit',
+                fontSize: 12.5,
+                fontWeight: 700,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+              }}
+            >
+              ✕ বাতিল / আবার চেষ্টা করুন
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

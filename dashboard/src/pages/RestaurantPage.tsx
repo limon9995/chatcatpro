@@ -1416,6 +1416,7 @@ export function RestaurantPage({ th, pageId, onToast }: {
           <div style={{ maxWidth: 560 }}>
             <LocationPickerMap lat={delivery.lat} lng={delivery.lng} markerEmoji="🏪"
               onChange={(la, ln) => setDelivery(d => ({ ...d, lat: la, lng: ln }))}
+              confirmPick confirmLabel={copy('এটা কি আপনার Restaurant-এর Location?', "Is this your restaurant's location?")}
               radiusKm={delivery.slabs.length ? [...delivery.slabs].sort((a, b) => a.maxKm - b.maxKm).slice(-1)[0].maxKm : null} />
             <div style={{ marginTop: 14 }}>
               <SlabEditor th={th} cur={cur} slabs={delivery.slabs} onChange={s => setDelivery(d => ({ ...d, slabs: s }))} />
@@ -1816,6 +1817,7 @@ export function RestaurantPage({ th, pageId, onToast }: {
           <div style={{ maxWidth: 560 }}>
             <LocationPickerMap lat={delivery.lat} lng={delivery.lng} markerEmoji="🏪"
               onChange={(la, ln) => setDelivery(d => ({ ...d, lat: la, lng: ln }))}
+              confirmPick confirmLabel={copy('এটা কি আপনার Restaurant-এর Location?', "Is this your restaurant's location?")}
               radiusKm={delivery.slabs.length ? [...delivery.slabs].sort((a, b) => a.maxKm - b.maxKm).slice(-1)[0].maxKm : null} />
             <div style={{ marginTop: 14 }}>
               <SlabEditor th={th} cur={cur} slabs={delivery.slabs} onChange={s => setDelivery(d => ({ ...d, slabs: s }))} />
