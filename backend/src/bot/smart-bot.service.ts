@@ -1210,8 +1210,53 @@ ${deliveryCtx}${locationCtx}${paymentCtx}${productCtx}${pricingPolicyCtx}${knowl
   }
 
   private parseResponse(raw: string): SmartBotResponse | null {
+    const cleaned = (raw || '').trim();
+    let parsed: any;
     try {
-      const parsed = JSON.parse(raw);
+      parsed = JSON.parse(cleaned);
+    } catch {
+      // Model sometimes wraps the JSON in stray prose — try to pull the
+      // object out before giving up.
+      const match = cleaned.match(/\{[\s\S]*\}/);
+      if (match) {
+        try {
+          parsed = JSON.parse(match[0]);
+        } catch {
+          parsed = null;
+        }
+      }
+    }
+    if (!parsed || typeof parsed !== 'object') {
+      // Model skipped the required JSON envelope entirely and just replied
+      // in plain text (seen live: "Hi! 😊" with no wrapper at all). That
+      // text is a perfectly usable reply — recover it as a normal CHAT
+      // turn instead of discarding it and telling the customer the bot is
+      // "busy" for what was actually a working answer. Only count this as
+      // a real failure (toward the AI-unavailable cooldown) when there's
+      // nothing usable to recover.
+      if (cleaned && cleaned.length < 600) {
+        this.logger.warn(
+          `[SmartBot] Non-JSON reply recovered as CHAT: "${cleaned.slice(0, 80)}"`,
+        );
+        return {
+          reply: cleaned,
+          action: 'CHAT',
+          calculatePricing: null,
+          collected: {
+            productCodes: [],
+            qty: {},
+            customerName: null,
+            phone: null,
+            address: null,
+            paymentProof: null,
+          },
+        };
+      }
+      this.logger.warn(`[SmartBot] JSON parse failed: ${cleaned.slice(0, 80)}`);
+      this.recordFailure();
+      return null;
+    }
+    {
       const reply = String(parsed?.reply ?? '').trim();
       const action = String(parsed?.action ?? '')
         .toUpperCase()
@@ -1263,10 +1308,6 @@ ${deliveryCtx}${locationCtx}${paymentCtx}${productCtx}${pricingPolicyCtx}${knowl
               : null,
         },
       };
-    } catch (err: any) {
-      this.logger.warn(`[SmartBot] JSON parse failed: ${raw.slice(0, 80)}`);
-      this.recordFailure();
-      return null;
     }
   }
 
