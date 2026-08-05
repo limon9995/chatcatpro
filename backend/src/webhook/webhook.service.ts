@@ -30,7 +30,10 @@ import { VisionOpsService } from '../vision-ops/vision-ops.service';
 import { BillingService } from '../billing/billing.service';
 import { WalletService, AiStatus } from '../wallet/wallet.service';
 import { WhisperService } from '../whisper/whisper.service';
-import { SmartBotService, AGENT_CHECKIN_MINUTES } from '../bot/smart-bot.service';
+import {
+  SmartBotService,
+  AGENT_CHECKIN_MINUTES,
+} from '../bot/smart-bot.service';
 import { ProductNameMatchService } from '../product-name-match/product-name-match.service';
 import { UniversityBotService } from '../university/university-bot.service';
 import { TelegramNotificationService } from '../telegram/telegram-notification.service';
@@ -260,9 +263,13 @@ export class WebhookService implements OnModuleDestroy {
               }
             }
             if (kind === 'details') {
-              this.handleProductDetails(resolvedPage, psid, productCode).catch(() => {});
+              this.handleProductDetails(resolvedPage, psid, productCode).catch(
+                () => {},
+              );
             } else {
-              this.handleCatalogReferral(resolvedPage, psid, productCode).catch(() => {});
+              this.handleCatalogReferral(resolvedPage, psid, productCode).catch(
+                () => {},
+              );
             }
           }
           continue;
@@ -586,7 +593,7 @@ export class WebhookService implements OnModuleDestroy {
     if (product.variantOptions) {
       try {
         variantOptions = this.draftHandler.normalizeVariantOptions(
-          JSON.parse(product.variantOptions as string),
+          JSON.parse(product.variantOptions),
         );
       } catch {}
     }
@@ -601,7 +608,11 @@ export class WebhookService implements OnModuleDestroy {
 
     if (!inStock) {
       await this.messenger
-        .sendText(tok, psid, `🛍️ ${product.name || product.code}\n\n💰 মূল্য: ${currency}${priceFormatted}\n❌ এই product এর stock শেষ।\n\nআমাদের অন্য product দেখতে চাইলে বলুন।`)
+        .sendText(
+          tok,
+          psid,
+          `🛍️ ${product.name || product.code}\n\n💰 মূল্য: ${currency}${priceFormatted}\n❌ এই product এর stock শেষ।\n\nআমাদের অন্য product দেখতে চাইলে বলুন।`,
+        )
         .catch(() => {});
       return;
     }
@@ -687,11 +698,14 @@ export class WebhookService implements OnModuleDestroy {
     const currency = page.currencySymbol || '৳';
     const priceFormatted = Number(product.price).toLocaleString();
     const offerLine =
-      product.originalPrice && Number(product.originalPrice) > Number(product.price)
+      product.originalPrice &&
+      Number(product.originalPrice) > Number(product.price)
         ? ` (আগের দাম ${currency}${Number(product.originalPrice).toLocaleString()})`
         : '';
     const stockLine =
-      product.trackStock === false || product.stockQty > 0 ? '✅ Stock আছে' : '❌ Stock শেষ';
+      product.trackStock === false || product.stockQty > 0
+        ? '✅ Stock আছে'
+        : '❌ Stock শেষ';
     const deliveryLine =
       product.deliveryCharge === 'FREE' ? '\n🚚 Home Delivery ফ্রি' : '';
     const descLine = product.description ? `\n\n${product.description}` : '';
@@ -703,7 +717,9 @@ export class WebhookService implements OnModuleDestroy {
         `🛍️ ${product.name || product.code}\n💰 ${currency}${priceFormatted}${offerLine}\n${stockLine}${deliveryLine}${descLine}`,
       )
       .catch((err) =>
-        this.logger.error(`[ProductDetails] sendText failed psid=${psid}: ${err}`),
+        this.logger.error(
+          `[ProductDetails] sendText failed psid=${psid}: ${err}`,
+        ),
       );
   }
 
@@ -782,7 +798,12 @@ export class WebhookService implements OnModuleDestroy {
       if (minutesWaiting >= AGENT_CHECKIN_MINUTES) {
         await this.ctx.setAgentHandling(pageId, psid, true);
         const checkinMsg = await this.botKnowledge
-          .resolveSystemReply(pageId, 'agent_checkin', undefined, page.agentType)
+          .resolveSystemReply(
+            pageId,
+            'agent_checkin',
+            undefined,
+            page.agentType,
+          )
           .catch(() => '');
         if (checkinMsg) await this.safeSend(token, psid, checkinMsg);
       }
@@ -976,6 +997,7 @@ export class WebhookService implements OnModuleDestroy {
           text,
           pageId,
           psid,
+          page.businessName || page.pageName || '',
         );
         if (reply) {
           await this.safeSend(token, psid, reply);
@@ -1002,7 +1024,9 @@ export class WebhookService implements OnModuleDestroy {
       const activeOrder = await this.findRecentCustomerOrder(pageId, psid);
       if (!activeOrder) {
         const wantsNewOrder =
-          /notun|new\s*or?der|abar\s*or?der|নতুন\s*অর্ডার|আবার\s*অর্ডার/i.test(text) ||
+          /notun|new\s*or?der|abar\s*or?der|নতুন\s*অর্ডার|আবার\s*অর্ডার/i.test(
+            text,
+          ) ||
           ['ORDER_INTENT', 'CATALOG_REQUEST'].includes(
             this.botIntent.detectIntent(text, false) || '',
           );
@@ -1012,36 +1036,59 @@ export class WebhookService implements OnModuleDestroy {
         if (cancelledOrder) {
           const pageInfo = await this.prisma.page.findUnique({
             where: { id: pageId },
-            select: { telegramBotToken: true, telegramChatId: true, currencySymbol: true },
+            select: {
+              telegramBotToken: true,
+              telegramChatId: true,
+              currencySymbol: true,
+            },
           });
 
           // ── ADVANCE REFUND REQUEST ──────────────────────────────────────────
           if (this.isAdvanceRefundRequest(text)) {
             const advanceCollections = cancelledOrder.collections ?? [];
-            const totalAdvance = advanceCollections.reduce((s: number, c: { amount: number }) => s + c.amount, 0);
-            const hasAdvance = totalAdvance > 0 || cancelledOrder.paymentStatus === 'advance_paid';
+            const totalAdvance = advanceCollections.reduce(
+              (s: number, c: { amount: number }) => s + c.amount,
+              0,
+            );
+            const hasAdvance =
+              totalAdvance > 0 ||
+              cancelledOrder.paymentStatus === 'advance_paid';
 
             if (!hasAdvance) {
-              await this.safeSend(token, psid, `❌ আপনার অর্ডার #${cancelledOrder.id} এ কোনো অগ্রিম পেমেন্ট পাওয়া যায়নি।`);
+              await this.safeSend(
+                token,
+                psid,
+                `❌ আপনার অর্ডার #${cancelledOrder.id} এ কোনো অগ্রিম পেমেন্ট পাওয়া যায়নি।`,
+              );
               return;
             }
 
             // Check if already refunded
             const existingReturn = (cancelledOrder.returnEntries ?? []).find(
-              (r: { id: number; refundStatus: string }) => r.refundStatus === 'given'
+              (r: { id: number; refundStatus: string }) =>
+                r.refundStatus === 'given',
             );
             if (existingReturn) {
               const sym = pageInfo?.currencySymbol || '৳';
-              await this.safeSend(token, psid, `✅ আপনার অগ্রিম ${sym}${totalAdvance} আগেই ফেরত দেওয়া হয়েছে। আর কোনো রিফান্ড সম্ভব নয়।`);
+              await this.safeSend(
+                token,
+                psid,
+                `✅ আপনার অগ্রিম ${sym}${totalAdvance} আগেই ফেরত দেওয়া হয়েছে। আর কোনো রিফান্ড সম্ভব নয়।`,
+              );
               return;
             }
 
             // Check if refund already requested (pending)
             const pendingReturn = (cancelledOrder.returnEntries ?? []).find(
-              (r: { id: number; refundStatus: string }) => r.refundStatus === 'pending'
+              (r: { id: number; refundStatus: string }) =>
+                r.refundStatus === 'pending',
             );
             if (pendingReturn) {
-              await this.safeSend(token, psid, `⏳ আপনার অগ্রিম ফেরতের অনুরোধ ইতিমধ্যে পাঠানো হয়েছে। শীঘ্রই যোগাযোগ করা হবে।`);
+              await this.safeSend(
+                token,
+                psid,
+                `⏳ আপনার অগ্রিম ফেরতের অনুরোধ ইতিমধ্যে পাঠানো হয়েছে। শীঘ্রই যোগাযোগ করা হবে।`,
+              );
               return;
             }
 
@@ -1071,14 +1118,26 @@ export class WebhookService implements OnModuleDestroy {
                   `💰 Advance Paid: ${sym}${totalAdvance}`,
                   `\n✅ Click below after sending refund:`,
                 ].join('\n'),
-                [[
-                  { text: `✅ Refund দিয়েছি (${sym}${totalAdvance})`, callback_data: `advrefund_confirm_${returnEntry.id}` },
-                  { text: `❌ Skip`, callback_data: `advrefund_skip_${returnEntry.id}` },
-                ]],
+                [
+                  [
+                    {
+                      text: `✅ Refund দিয়েছি (${sym}${totalAdvance})`,
+                      callback_data: `advrefund_confirm_${returnEntry.id}`,
+                    },
+                    {
+                      text: `❌ Skip`,
+                      callback_data: `advrefund_skip_${returnEntry.id}`,
+                    },
+                  ],
+                ],
               );
             }
 
-            await this.safeSend(token, psid, `✅ আপনার অগ্রিম ফেরতের অনুরোধ পাঠানো হয়েছে। শীঘ্রই আপনার সাথে যোগাযোগ করা হবে।`);
+            await this.safeSend(
+              token,
+              psid,
+              `✅ আপনার অগ্রিম ফেরতের অনুরোধ পাঠানো হয়েছে। শীঘ্রই আপনার সাথে যোগাযোগ করা হবে।`,
+            );
             return;
           }
           // Not an advance-refund request — nothing more to intercept here;
@@ -1097,7 +1156,15 @@ export class WebhookService implements OnModuleDestroy {
       const phone = this.extractTrackingPhone(text);
       const orders = await this.findOrdersForTrackingQuery(pageId, psid, phone);
       if (orders.length > 0) {
-        await this.safeSend(token, psid, await this.buildOrderStatusReply(pageId, orders, isRestaurantReady(page)));
+        await this.safeSend(
+          token,
+          psid,
+          await this.buildOrderStatusReply(
+            pageId,
+            orders,
+            isRestaurantReady(page),
+          ),
+        );
         return;
       }
     }
@@ -1107,7 +1174,10 @@ export class WebhookService implements OnModuleDestroy {
     // decide when to show the catalog (SHOW_CATALOG action), so no keyword
     // matching runs for them.
     if (!page.smartBotOn) {
-      const preSmartBotIntent = this.botIntent.detectIntent(text, awaitingConfirm);
+      const preSmartBotIntent = this.botIntent.detectIntent(
+        text,
+        awaitingConfirm,
+      );
       if (preSmartBotIntent === 'CATALOG_REQUEST') {
         await this.sendCatalogFallback(token, psid, page);
         return;
@@ -1173,7 +1243,12 @@ export class WebhookService implements OnModuleDestroy {
             draft!.currentStep === 'confirm' &&
             this.botIntent.detectIntent(text, true) === 'CONFIRM';
           const key = wasConfirm ? 'order_received' : 'order_cancelled';
-          const msg = await this.botKnowledge.resolveSystemReply(pageId, key, undefined, page.agentType);
+          const msg = await this.botKnowledge.resolveSystemReply(
+            pageId,
+            key,
+            undefined,
+            page.agentType,
+          );
           await this.safeSend(token, psid, msg);
         }
         return;
@@ -1556,12 +1631,18 @@ export class WebhookService implements OnModuleDestroy {
         ? await this.findRecentCustomerOrder(pageId, psid)
         : null;
       if (recentEditOrder) {
-        await this.handlePostOrderEdit(page, psid, text, recentEditOrder, draft);
+        await this.handlePostOrderEdit(
+          page,
+          psid,
+          text,
+          recentEditOrder,
+          draft,
+        );
         return;
       }
     }
 
-        // ── ACTIVE DRAFT: capture next field ──────────────────────────────────
+    // ── ACTIVE DRAFT: capture next field ──────────────────────────────────
     if (draft && page.orderModeOn) {
       const result = await this.draftHandler.captureField(
         pageId,
@@ -1578,7 +1659,12 @@ export class WebhookService implements OnModuleDestroy {
             draft.currentStep === 'confirm' &&
             this.botIntent.detectIntent(text, true) === 'CONFIRM';
           const key = wasConfirm ? 'order_received' : 'order_cancelled';
-          const msg = await this.botKnowledge.resolveSystemReply(pageId, key, undefined, page.agentType);
+          const msg = await this.botKnowledge.resolveSystemReply(
+            pageId,
+            key,
+            undefined,
+            page.agentType,
+          );
           await this.safeSend(token, psid, msg);
         }
         return;
@@ -1680,7 +1766,10 @@ export class WebhookService implements OnModuleDestroy {
             );
             return;
           }
-          if (product && (product.trackStock === false || product.stockQty > 0)) {
+          if (
+            product &&
+            (product.trackStock === false || product.stockQty > 0)
+          ) {
             let variantOptions: any[] = [];
             try {
               if (product.variantOptions)
@@ -1989,7 +2078,12 @@ export class WebhookService implements OnModuleDestroy {
     // Use AI-generated cancel reply if available, else knowledge base
     const reply =
       aiReply ??
-      (await this.botKnowledge.resolveSystemReply(page.id, 'order_cancelled', undefined, page.agentType));
+      (await this.botKnowledge.resolveSystemReply(
+        page.id,
+        'order_cancelled',
+        undefined,
+        page.agentType,
+      ));
     await this.safeSend(page.pageToken, psid, reply);
   }
 
@@ -2228,7 +2322,10 @@ export class WebhookService implements OnModuleDestroy {
       Math.round(
         haversineKm(page.restaurantLat, page.restaurantLng, lat, lng) * 100,
       ) / 100;
-    const slab = resolveDeliveryFee(parseSlabs(page.deliverySlabsJson), distanceKm);
+    const slab = resolveDeliveryFee(
+      parseSlabs(page.deliverySlabsJson),
+      distanceKm,
+    );
     const sym = page.currencySymbol || '৳';
     const orderUrl = this.buildCatalogUrl(page);
     if (!slab) {
@@ -2254,13 +2351,15 @@ export class WebhookService implements OnModuleDestroy {
     const catalogUrl = this.buildCatalogUrl(page);
     const businessName = page.businessName || page.pageName || 'আমাদের';
     const sym = page.currencySymbol || '৳';
-    const base = (process.env.CATALOG_BASE_URL || 'https://chatcat.pro').replace(/\/$/, '');
+    const base = (
+      process.env.CATALOG_BASE_URL || 'https://chatcat.pro'
+    ).replace(/\/$/, '');
     const slug = page.catalogSlug || String(page.id);
 
     // Restaurant: lead with the actual menu photo(s) — that's what a food
     // customer wants to see first. Only photos the merchant left toggled on
     // (Restaurant panel → Menu photos) get pushed here.
-    const activeMenuImages = parseMenuImages((page as any).menuImagesJson)
+    const activeMenuImages = parseMenuImages(page.menuImagesJson)
       .filter((e) => e.active)
       .map((e) => e.url);
     for (const u of activeMenuImages.slice(0, 3)) {
@@ -2277,14 +2376,24 @@ export class WebhookService implements OnModuleDestroy {
         catalogVisible: true,
         OR: [{ stockQty: { gt: 0 } }, { trackStock: false }],
       },
-      select: { code: true, name: true, price: true, originalPrice: true, imageUrl: true, description: true, category: true, priceVariantsJson: true },
+      select: {
+        code: true,
+        name: true,
+        price: true,
+        originalPrice: true,
+        imageUrl: true,
+        description: true,
+        category: true,
+        priceVariantsJson: true,
+      },
       orderBy: { createdAt: 'desc' },
       take: 10,
     });
 
     let logoUrl = getFullImageUrl(page.logoUrl);
     if (!logoUrl) {
-      logoUrl = 'https://images.unsplash.com/photo-1557821552-17105176677c?q=80&w=1000&auto=format&fit=crop';
+      logoUrl =
+        'https://images.unsplash.com/photo-1557821552-17105176677c?q=80&w=1000&auto=format&fit=crop';
     }
 
     // Merchant has redirected their storefront to their own website
@@ -2312,7 +2421,10 @@ export class WebhookService implements OnModuleDestroy {
           const subtitle = hasOffer
             ? `🔥 আগের দাম ${sym}${orig.toLocaleString()} → এখন ${sym}${price.toLocaleString()} (${pct}% ছাড়)`
             : variants.length
-              ? variants.map((v) => `${v.label} ${sym}${v.price}`).join(' / ').slice(0, 80)
+              ? variants
+                  .map((v) => `${v.label} ${sym}${v.price}`)
+                  .join(' / ')
+                  .slice(0, 80)
               : p.description
                 ? p.description.slice(0, 80)
                 : (p as any).category || '';
@@ -2320,24 +2432,24 @@ export class WebhookService implements OnModuleDestroy {
             title: `${p.name || p.code} — ${priceTxt}${hasOffer ? ' 🔥' : ''}`,
             image_url: getFullImageUrl(p.imageUrl) || logoUrl,
             subtitle,
-          buttons: [
-            usesOwnWebsite
-              ? {
-                  type: 'postback' as const,
-                  title: 'বিস্তারিত দেখুন',
-                  payload: `DETAILS_${p.code}`,
-                }
-              : {
-                  type: 'web_url' as const,
-                  url: `${base}/catalog/${encodeURIComponent(slug)}/product/${encodeURIComponent(p.code)}`,
-                  title: 'বিস্তারিত দেখুন',
-                },
-            {
-              type: 'postback' as const,
-              title: 'Order করব',
-              payload: `ORDER_${p.code}`,
-            },
-          ],
+            buttons: [
+              usesOwnWebsite
+                ? {
+                    type: 'postback' as const,
+                    title: 'বিস্তারিত দেখুন',
+                    payload: `DETAILS_${p.code}`,
+                  }
+                : {
+                    type: 'web_url' as const,
+                    url: `${base}/catalog/${encodeURIComponent(slug)}/product/${encodeURIComponent(p.code)}`,
+                    title: 'বিস্তারিত দেখুন',
+                  },
+              {
+                type: 'postback' as const,
+                title: 'Order করব',
+                payload: `ORDER_${p.code}`,
+              },
+            ],
           };
         });
         await this.messenger.sendGenericTemplate(token, psid, elements);
@@ -2381,15 +2493,15 @@ export class WebhookService implements OnModuleDestroy {
       const p = matches[0];
       const unit = p.unit || 'pcs';
       const inStock = p.trackStock === false || p.stockQty > 0;
-      const stockText = p.trackStock === false
-        ? '✅ আছে'
-        : p.stockQty > 0
-          ? `✅ ${p.stockQty} ${unit} আছে`
-          : '❌ Stock শেষ';
+      const stockText =
+        p.trackStock === false
+          ? '✅ আছে'
+          : p.stockQty > 0
+            ? `✅ ${p.stockQty} ${unit} আছে`
+            : '❌ Stock শেষ';
       let msg = `🛍️ *${p.productName}*\n💰 মূল্য: ${sym}${Number(p.price).toLocaleString()}/${unit}\n📦 ${stockText}`;
       if (p.description) msg += `\n\nℹ️ ${p.description}`;
-      if (p.orderEnabled && inStock)
-        msg += `\n\nOrder করতে চাইলে বলুন 😊`;
+      if (p.orderEnabled && inStock) msg += `\n\nOrder করতে চাইলে বলুন 😊`;
       await this.safeSend(token, psid, msg);
     } else {
       // Multiple matches — list them
@@ -2681,7 +2793,9 @@ export class WebhookService implements OnModuleDestroy {
       where: {
         pageIdRef: pageId,
         customerPsid: psid,
-        status: { in: ['RECEIVED', 'PENDING', 'CONFIRMED', 'PACKED', 'SHIPPED'] },
+        status: {
+          in: ['RECEIVED', 'PENDING', 'CONFIRMED', 'PACKED', 'SHIPPED'],
+        },
       },
       orderBy: { id: 'desc' },
       select: {
@@ -2714,15 +2828,22 @@ export class WebhookService implements OnModuleDestroy {
   private isAdvanceRefundRequest(text: string): boolean {
     const t = text.toLowerCase();
     return (
-      /(tk|taka|টাকা|tk|bdt|payment|pay)/.test(t) &&
-      /(back|ফেরত|ferot|ferat|ফিরত|return|refund|daw|dao|den|দাও|দেন|পাঠান|pathan)/.test(t)
-    ) || /(advance|অগ্রিম|agrim|deposit).*?(back|ফেরত|ferot|return|refund)/.test(t)
-      || /(ফেরত|ferot|refund|back).*?(tk|taka|টাকা|advance|অগ্রিম)/.test(t);
+      (/(tk|taka|টাকা|tk|bdt|payment|pay)/.test(t) &&
+        /(back|ফেরত|ferot|ferat|ফিরত|return|refund|daw|dao|den|দাও|দেন|পাঠান|pathan)/.test(
+          t,
+        )) ||
+      /(advance|অগ্রিম|agrim|deposit).*?(back|ফেরত|ferot|return|refund)/.test(
+        t,
+      ) ||
+      /(ফেরত|ferot|refund|back).*?(tk|taka|টাকা|advance|অগ্রিম)/.test(t)
+    );
   }
 
   /** Pulls a BD phone number out of free-form customer text, if present. */
   private extractTrackingPhone(text: string): string | null {
-    const converted = text.replace(/[০-৯]/g, (d) => String('০১২৩৪৫৬৭৮৯'.indexOf(d)));
+    const converted = text.replace(/[০-৯]/g, (d) =>
+      String('০১২৩৪৫৬৭৮৯'.indexOf(d)),
+    );
     const match = converted.match(/(?:\+?88)?01[3-9]\d{8}/);
     return match ? normalizePhone(match[0]) : null;
   }
@@ -2744,7 +2865,9 @@ export class WebhookService implements OnModuleDestroy {
       where: {
         pageIdRef: pageId,
         OR: or,
-        status: { in: ['RECEIVED', 'CONFIRMED', 'PACKED', 'SHIPPED', 'DELIVERED'] },
+        status: {
+          in: ['RECEIVED', 'CONFIRMED', 'PACKED', 'SHIPPED', 'DELIVERED'],
+        },
       },
       orderBy: { id: 'desc' },
       take: 5,
@@ -2753,15 +2876,21 @@ export class WebhookService implements OnModuleDestroy {
         status: true,
         createdAt: true,
         items: { select: { productCode: true, qty: true } },
-        courierShipment: { select: { trackingId: true, courierName: true, status: true } },
+        courierShipment: {
+          select: { trackingId: true, courierName: true, status: true },
+        },
       },
     });
   }
 
   private isOrderStatusQuery(text: string): boolean {
     const t = text.toLowerCase();
-    return /order|oder|অর্ডার/.test(t) &&
-      /kothay|status|ki holo|ki khbr|khobor|update|কোথায়|আপডেট|কী হলো|খবর|কি হইলো|delivered|deliver|pack|ship|paini|pai ni|পাইনি|পেলাম না|কবে পাবো|kobe pabo|কখন|kakhn/.test(t);
+    return (
+      /order|oder|অর্ডার/.test(t) &&
+      /kothay|status|ki holo|ki khbr|khobor|update|কোথায়|আপডেট|কী হলো|খবর|কি হইলো|delivered|deliver|pack|ship|paini|pai ni|পাইনি|পেলাম না|কবে পাবো|kobe pabo|কখন|kakhn/.test(
+        t,
+      )
+    );
   }
 
   /**
@@ -2775,7 +2904,11 @@ export class WebhookService implements OnModuleDestroy {
       id: number;
       status: string;
       items: { productCode: string; qty: number }[];
-      courierShipment: { trackingId: string | null; courierName: string; status: string } | null;
+      courierShipment: {
+        trackingId: string | null;
+        courierName: string;
+        status: string;
+      } | null;
     }>,
     isRestaurant: boolean,
   ): Promise<string> {
@@ -2789,14 +2922,18 @@ export class WebhookService implements OnModuleDestroy {
     let settings: any = null;
     const lines = await Promise.all(
       orders.map(async (o) => {
-        const items = o.items.map((i) => `${i.productCode}×${i.qty}`).join(', ');
+        const items = o.items
+          .map((i) => `${i.productCode}×${i.qty}`)
+          .join(', ');
         let statusLine = orderStatusLabel(o.status, isRestaurant);
 
         const shipment = o.courierShipment;
         if (shipment?.trackingId && shipment.courierName !== 'manual') {
           try {
             if (!settings) {
-              settings = this.courier.parseSettings(await this.courier.getSettings(pageId));
+              settings = this.courier.parseSettings(
+                await this.courier.getSettings(pageId),
+              );
             }
             const liveStatus = await this.courier.getLiveStatus(
               shipment.courierName as any,
@@ -2818,28 +2955,46 @@ export class WebhookService implements OnModuleDestroy {
 
   private isPostOrderCancel(text: string): boolean {
     const t = text.toLowerCase().trim();
-    return /cancel|বাতিল|নিব না|লাগবে না|দরকার নাই|দরকার নেই|cancel\s*kro|cancel\s*করুন|cancel\s*করো|oder\s*cancel|order\s*cancel/.test(t);
+    return /cancel|বাতিল|নিব না|লাগবে না|দরকার নাই|দরকার নেই|cancel\s*kro|cancel\s*করুন|cancel\s*করো|oder\s*cancel|order\s*cancel/.test(
+      t,
+    );
   }
 
   private async handlePostOrderCancel(
     page: any,
     psid: string,
-    order: { id: number; status: string; orderNote: string | null; createdAt: Date },
+    order: {
+      id: number;
+      status: string;
+      orderNote: string | null;
+      createdAt: Date;
+    },
   ): Promise<void> {
-    const orderAgeHours = (Date.now() - new Date(order.createdAt).getTime()) / 3_600_000;
+    const orderAgeHours =
+      (Date.now() - new Date(order.createdAt).getTime()) / 3_600_000;
     if (order.status === 'CANCELLED') {
-      await this.safeSend(page.pageToken, psid, '❌ আপনার অর্ডারটি আগেই বাতিল হয়েছে।');
+      await this.safeSend(
+        page.pageToken,
+        psid,
+        '❌ আপনার অর্ডারটি আগেই বাতিল হয়েছে।',
+      );
       return;
     }
     if (orderAgeHours > 24) {
-      await this.safeSend(page.pageToken, psid, '⚠️ এই অর্ডারটি ২৪ ঘণ্টার বেশি পুরনো। বাতিল করতে সরাসরি আমাদের সাথে যোগাযোগ করুন।');
+      await this.safeSend(
+        page.pageToken,
+        psid,
+        '⚠️ এই অর্ডারটি ২৪ ঘণ্টার বেশি পুরনো। বাতিল করতে সরাসরি আমাদের সাথে যোগাযোগ করুন।',
+      );
       return;
     }
     const existing = order.orderNote?.trim();
     const cancelNote = '[Customer requested cancel via Messenger]';
     await this.prisma.order.update({
       where: { id: order.id },
-      data: { orderNote: existing ? `${existing} | ${cancelNote}` : cancelNote },
+      data: {
+        orderNote: existing ? `${existing} | ${cancelNote}` : cancelNote,
+      },
     });
     await this.ctx.setAgentHandling(page.id, psid, true);
     await this.safeSend(
@@ -2887,11 +3042,22 @@ export class WebhookService implements OnModuleDestroy {
     field: 'name' | 'phone' | 'address' | 'size' | 'color';
   } | null {
     const t = text.toLowerCase();
-    if (/name|naam/.test(t) || /\u09A8\u09BE\u09AE/.test(text)) return { label: '\u09A8\u09BE\u09AE', field: 'name' };
-    if (/phone|number|mobile/.test(t) || /\u09AB\u09CB\u09A8/.test(text)) return { label: '\u09AB\u09CB\u09A8', field: 'phone' };
-    if (/address|thikana|location/.test(t) || /\u09A0\u09BF\u0995\u09BE\u09A8\u09BE/.test(text)) return { label: '\u09A0\u09BF\u0995\u09BE\u09A8\u09BE', field: 'address' };
-    if (/size/.test(t) || /\u09B8\u09BE\u0987\u099C/.test(text)) return { label: '\u09B8\u09BE\u0987\u099C', field: 'size' };
-    if (/color|colour|rong/.test(t)) return { label: '\u0995\u09BE\u09B2\u09BE\u09B0', field: 'color' };
+    if (/name|naam/.test(t) || /\u09A8\u09BE\u09AE/.test(text))
+      return { label: '\u09A8\u09BE\u09AE', field: 'name' };
+    if (/phone|number|mobile/.test(t) || /\u09AB\u09CB\u09A8/.test(text))
+      return { label: '\u09AB\u09CB\u09A8', field: 'phone' };
+    if (
+      /address|thikana|location/.test(t) ||
+      /\u09A0\u09BF\u0995\u09BE\u09A8\u09BE/.test(text)
+    )
+      return {
+        label: '\u09A0\u09BF\u0995\u09BE\u09A8\u09BE',
+        field: 'address',
+      };
+    if (/size/.test(t) || /\u09B8\u09BE\u0987\u099C/.test(text))
+      return { label: '\u09B8\u09BE\u0987\u099C', field: 'size' };
+    if (/color|colour|rong/.test(t))
+      return { label: '\u0995\u09BE\u09B2\u09BE\u09B0', field: 'color' };
     return null;
   }
 
@@ -2907,9 +3073,16 @@ export class WebhookService implements OnModuleDestroy {
     const patch: Record<string, string> = {};
     patch[field] = value;
     await this.prisma.order.update({ where: { id: orderId }, data: patch });
-    await this.safeSend(pageToken, psid, `✅ আপনার ${fieldLabel} আপডেট হয়েছে: "${value}" 💖`);
+    await this.safeSend(
+      pageToken,
+      psid,
+      `✅ আপনার ${fieldLabel} আপডেট হয়েছে: "${value}" 💖`,
+    );
     this.telegram
-      .notify(pageId, `✏️ Order #${orderId} — Customer ${fieldLabel} পরিবর্তন করেছে:\n"${value}"`)
+      .notify(
+        pageId,
+        `✏️ Order #${orderId} — Customer ${fieldLabel} পরিবর্তন করেছে:\n"${value}"`,
+      )
       .catch(() => {});
   }
 
@@ -2921,19 +3094,38 @@ export class WebhookService implements OnModuleDestroy {
     draft: DraftSession | null,
   ): Promise<void> {
     if (['SHIPPED', 'DELIVERED', 'CANCELLED'].includes(order.status)) {
-      await this.safeSend(page.pageToken, psid, 'দুঃখিত 😔 এই পর্যায়ে অর্ডার পরিবর্তন করা সম্ভব নয়।');
+      await this.safeSend(
+        page.pageToken,
+        psid,
+        'দুঃখিত 😔 এই পর্যায়ে অর্ডার পরিবর্তন করা সম্ভব নয়।',
+      );
       return;
     }
 
     // ── If we were waiting for a value from previous message ──────────────────
-    if (draft?.pendingEditField && ['name', 'phone', 'address'].includes(draft.pendingEditField)) {
+    if (
+      draft?.pendingEditField &&
+      ['name', 'phone', 'address'].includes(draft.pendingEditField)
+    ) {
       const field = draft.pendingEditField as 'name' | 'phone' | 'address';
-      const labels: Record<string, string> = { name: 'নাম', phone: 'ফোন', address: 'ঠিকানা' };
+      const labels: Record<string, string> = {
+        name: 'নাম',
+        phone: 'ফোন',
+        address: 'ঠিকানা',
+      };
       const value = text.trim();
       if (value.length > 0) {
         draft.pendingEditField = undefined;
         await this.ctx.saveDraft(page.id, psid, draft);
-        await this.applyOrderFieldUpdate(page.id, order.id, field, value, labels[field], page.pageToken, psid);
+        await this.applyOrderFieldUpdate(
+          page.id,
+          order.id,
+          field,
+          value,
+          labels[field],
+          page.pageToken,
+          psid,
+        );
         return;
       }
     }
@@ -2941,7 +3133,11 @@ export class WebhookService implements OnModuleDestroy {
     // ── Detect which field customer wants to change ───────────────────────────
     const detected = this.detectPostOrderEditField(text);
     if (!detected) {
-      await this.safeSend(page.pageToken, psid, 'কোনটা বদলাতে চান? নাম, ফোন নম্বর, নাকি ঠিকানা?');
+      await this.safeSend(
+        page.pageToken,
+        psid,
+        'কোনটা বদলাতে চান? নাম, ফোন নম্বর, নাকি ঠিকানা?',
+      );
       return;
     }
 
@@ -2949,10 +3145,20 @@ export class WebhookService implements OnModuleDestroy {
     const extracted = this.extractPostOrderEditValue(text);
     if (
       extracted &&
-      (extracted.field === 'name' || extracted.field === 'phone' || extracted.field === 'address') &&
+      (extracted.field === 'name' ||
+        extracted.field === 'phone' ||
+        extracted.field === 'address') &&
       (extracted.field as string) === detected.field
     ) {
-      await this.applyOrderFieldUpdate(page.id, order.id, extracted.field, extracted.value, detected.label, page.pageToken, psid);
+      await this.applyOrderFieldUpdate(
+        page.id,
+        order.id,
+        extracted.field,
+        extracted.value,
+        detected.label,
+        page.pageToken,
+        psid,
+      );
       return;
     }
 
@@ -2967,11 +3173,21 @@ export class WebhookService implements OnModuleDestroy {
 
     if (['name', 'phone', 'address'].includes(detected.field)) {
       // Save pending state so next message is treated as the new value
-      const currentDraft = draft ?? { items: [], customerName: null, phone: null, address: null, currentStep: 'idle' };
+      const currentDraft = draft ?? {
+        items: [],
+        customerName: null,
+        phone: null,
+        address: null,
+        currentStep: 'idle',
+      };
       currentDraft.pendingEditField = detected.field as any;
       await this.ctx.saveDraft(page.id, psid, currentDraft);
     }
-    await this.safeSend(page.pageToken, psid, prompts[detected.field] || 'নতুন তথ্য লিখুন 💖');
+    await this.safeSend(
+      page.pageToken,
+      psid,
+      prompts[detected.field] || 'নতুন তথ্য লিখুন 💖',
+    );
   }
 
   private async handlePaymentScreenshot(
@@ -3072,7 +3288,12 @@ export class WebhookService implements OnModuleDestroy {
           const tok = entry.page.pageToken as string;
           const pid = entry.page.id as number;
           void this.botKnowledge
-            .resolveSystemReply(pid, 'ocr_fail', undefined, entry.page.agentType)
+            .resolveSystemReply(
+              pid,
+              'ocr_fail',
+              undefined,
+              entry.page.agentType,
+            )
             .then((r) => this.safeSend(tok, psid, r))
             .then(() => this.sendCatalogFallback(tok, psid, entry.page))
             .catch(() => {});
@@ -3471,7 +3692,12 @@ export class WebhookService implements OnModuleDestroy {
         const isLowConf =
           ocrResult.confidence < 30 && ocrResult.ocrConfidence === 'NONE';
         const key = isLowConf ? 'ocr_low_confidence' : 'ocr_fail';
-        const reply = await this.botKnowledge.resolveSystemReply(pageId, key, undefined, page.agentType);
+        const reply = await this.botKnowledge.resolveSystemReply(
+          pageId,
+          key,
+          undefined,
+          page.agentType,
+        );
         await this.safeSend(token, psid, reply);
         await this.sendCatalogFallback(token, psid, page);
         return;
@@ -4119,7 +4345,8 @@ export class WebhookService implements OnModuleDestroy {
     page: any,
   ): Promise<void> {
     const pageId = page.id as number;
-    const fallback = 'একটু ব্যস্ত আছি 😊 একটু পরে আবার লিখুন, আমি সাহায্য করছি।';
+    const fallback =
+      'একটু ব্যস্ত আছি 😊 একটু পরে আবার লিখুন, আমি সাহায্য করছি।';
     const msg = await this.botKnowledge
       .resolveSystemReply(pageId, 'ai_busy', undefined, page.agentType)
       .catch(() => fallback);
@@ -4369,6 +4596,7 @@ If you cannot match any product with confidence > 0.5, return:
     customerText: string,
     pageId: number,
     psid: string,
+    businessName = '',
   ): Promise<string | null> {
     const geminiKey = process.env.GEMINI_API_KEY;
     const openaiKey = process.env.OPENAI_API_KEY;
@@ -4379,7 +4607,35 @@ If you cannot match any product with confidence > 0.5, return:
       .map((h: any) => `Customer: ${h.customerText}\nBot: ${h.botReply}`)
       .join('\n');
 
-    const systemPrompt = `তুমি একটি business-এর customer service assistant। নিচে এই business সম্পর্কে সব তথ্য দেওয়া আছে। এই তথ্যের ভিত্তিতে customer-এর প্রশ্নের উত্তর দাও।
+    // V30: this bot mode had no self-intro/greeting handling at all — a bare
+    // "hi" got a bare, unbranded reply back from the model with no page name
+    // and nothing to signal which business is replying (reported live).
+    // Same fix as SmartBot: only on the customer's first message, greet in
+    // kind (salam → salam, hi/hello → casual, anything else → neutral) and
+    // name the actual page — never assume a religious greeting that wasn't
+    // there, and never re-introduce on later turns.
+    const isFirstMessage = !historyLines;
+    const shopRef = businessName || 'আমাদের';
+    const contactPhrase = businessName ? `${businessName}-এ` : 'আমাদের সাথে';
+    let greetingRule = '';
+    if (isFirstMessage) {
+      const msg = customerText.toLowerCase();
+      const isSalam =
+        /(assalamu\s*alaikum|assalamualaikum|walaikum\s*assalam|\bsalam\b|salaam|আসসালামু আলাইকুম|ওয়ালাইকুম আসসালাম|সালাম)/i.test(
+          msg,
+        );
+      const isCasualHi =
+        !isSalam &&
+        (/\b(hi+|hello+|hey+)\b/i.test(msg) || /হাই|হ্যালো/.test(msg));
+      const opener = isSalam
+        ? 'ওয়ালাইকুম আসসালাম!'
+        : isCasualHi
+          ? 'Hi!'
+          : 'স্বাগতম!';
+      greetingRule = `\n- এটাই customer-এর প্রথম message (আগের কোনো history নেই) — reply শুরু করো এভাবে: "${opener} ${contactPhrase} যোগাযোগ করার জন্য ধন্যবাদ 😊" তারপর customer-এর আসল প্রশ্নের উত্তর দাও (প্রশ্ন না থাকলে জিজ্ঞেস করো "কীভাবে সাহায্য করতে পারি?")। পরের কোনো reply-তে আর এই পরিচয় repeat করবে না।`;
+    }
+
+    const systemPrompt = `তুমি ${shopRef} business-এর customer service assistant। নিচে এই business সম্পর্কে সব তথ্য দেওয়া আছে। এই তথ্যের ভিত্তিতে customer-এর প্রশ্নের উত্তর দাও।
 
 Business Information:
 ${businessInfo}
@@ -4391,7 +4647,7 @@ ${businessInfo}
 - "কীভাবে যোগাযোগ করব?" জিজ্ঞেস করলে বলো: "এই page-এ message করেই কথা বলতে পারেন, আমরা reply দিচ্ছি 😊"
 - Business info-এ উত্তর না থাকলে বলো: "এই বিষয়ে আমাদের টিম আপনাকে সাহায্য করবে। একটু বিস্তারিত জানান?"
 - "Na", "Aca", "Ok", "Hmm" এর মতো short reply-তে context বুঝে natural ভাবে respond করো
-- কোনো link বা placeholder লিখবে না`;
+- কোনো link বা placeholder লিখবে না${greetingRule}`;
 
     const userMsg = historyLines
       ? `Previous conversation:\n${historyLines}\n\nCustomer: ${customerText}`
@@ -4410,7 +4666,11 @@ ${businessInfo}
               contents: [{ role: 'user', parts: [{ text: userMsg }] }],
               // thinkingBudget: 0 — gemini-2.5-flash's default "thinking" mode can
               // eat the whole output budget and truncate the reply mid-sentence.
-              generationConfig: { maxOutputTokens: 300, temperature: 0.5, thinkingConfig: { thinkingBudget: 0 } },
+              generationConfig: {
+                maxOutputTokens: 300,
+                temperature: 0.5,
+                thinkingConfig: { thinkingBudget: 0 },
+              },
             }),
             signal: AbortSignal.timeout(10_000),
           },
