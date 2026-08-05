@@ -305,13 +305,14 @@ export class SmartBotService {
     const parsed = this.parseResponse(raw);
     if (!parsed) return false;
 
-    // Safety net: on the first message the model keeps defaulting to an
-    // Islamic-greeting opener ("ওয়ালাইকুম আসসালাম") out of habit even for
-    // messages that are plainly not salam (e.g. "bro", "Hey") — this has
-    // recurred across multiple prompt-wording fixes, so don't trust the
-    // model's own word choice here: reclassify the customer's actual first
-    // message ourselves and correct the opener word if it's wrong.
-    if (history.length === 0 && parsed.reply) {
+    // Safety net: the model keeps defaulting to an Islamic-greeting opener
+    // ("ওয়ালাইকুম আসসালাম") out of habit even for messages that are plainly
+    // not salam (e.g. "bro", "Hey") — seen on the first message AND on later
+    // repeat greetings in the same conversation, and has recurred across
+    // multiple prompt-wording fixes. So don't trust the model's own word
+    // choice here on ANY turn: reclassify the customer's actual message
+    // ourselves and correct the opener word if it's wrong.
+    if (parsed.reply) {
       const msg = (text || '').toLowerCase();
       const isSalam =
         /(assalamu\s*alaikum|assalamualaikum|walaikum\s*assalam|\bsalam\b|salaam|আসসালামু আলাইকুম|ওয়ালাইকুম আসসালাম|সালাম)/i.test(
