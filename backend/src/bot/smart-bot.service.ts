@@ -305,6 +305,36 @@ export class SmartBotService {
     const parsed = this.parseResponse(raw);
     if (!parsed) return false;
 
+    // Safety net: on the first message the model keeps defaulting to an
+    // Islamic-greeting opener ("ওয়ালাইকুম আসসালাম") out of habit even for
+    // messages that are plainly not salam (e.g. "bro", "Hey") — this has
+    // recurred across multiple prompt-wording fixes, so don't trust the
+    // model's own word choice here: reclassify the customer's actual first
+    // message ourselves and correct the opener word if it's wrong.
+    if (history.length === 0 && parsed.reply) {
+      const msg = (text || '').toLowerCase();
+      const isSalam =
+        /(assalamu\s*alaikum|assalamualaikum|walaikum\s*assalam|\bsalam\b|salaam|আসসালামু আলাইকুম|ওয়ালাইকুম আসসালাম|সালাম)/i.test(
+          msg,
+        );
+      const isCasualHi =
+        !isSalam && /\b(hi+|hello+|hey+)\b|হাই|হ্যালো/i.test(msg);
+      const SALAM_OPENER_RE =
+        /^(ওয়ালাইকুম\s*আসসালাম|আসসালামু\s*আলাইকুম|আসসালামুয়ালাইকুম|walaikum\s*assalam|assalamu\s*alaikum)[!।.,\s]*/i;
+      const CASUAL_OPENER_RE = /^(hi+|hello+|hey+|হাই+|হ্যালো+|স্বাগতম)[!।.,\s]*/i;
+      if (!isSalam && SALAM_OPENER_RE.test(parsed.reply)) {
+        parsed.reply = parsed.reply.replace(
+          SALAM_OPENER_RE,
+          `${isCasualHi ? 'Hi' : 'স্বাগতম'}! `,
+        );
+      } else if (isSalam && CASUAL_OPENER_RE.test(parsed.reply)) {
+        parsed.reply = parsed.reply.replace(
+          CASUAL_OPENER_RE,
+          'ওয়ালাইকুম আসসালাম! ',
+        );
+      }
+    }
+
     // Safety net: the model sometimes ignores the "don't stop at a bare
     // greeting" instruction and echoes just "Hi!"/"হাই 😊" with no
     // help-offer question, especially on the very first message. Rather
