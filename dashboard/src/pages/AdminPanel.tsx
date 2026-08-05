@@ -1,9 +1,14 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { CardHeader, EmptyState, FieldWithInfo, InfoButton, Spinner } from '../components/ui';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { CardHeader, EmptyState, FieldWithInfo, InfoButton, Spinner, safeLazy } from '../components/ui';
 import type { Theme } from '../components/ui';
 import { API_BASE, useApi } from '../hooks/useApi';
 
-type AdminTab = 'overview' | 'clients' | 'global-questions' | 'global-replies' | 'learning-log' | 'courier-tutorials' | 'billing' | 'call-servers' | 'wallet' | 'pricing' | 'subscriptions' | 'page-requests' | 'wa-requests' | 'customers' | 'domain-setup' | 'api-keys' | 'reports';
+const MarketingPanel = safeLazy(async () => {
+  const mod = await import('./MarketingPanel');
+  return { default: mod.MarketingPanel };
+});
+
+type AdminTab = 'overview' | 'clients' | 'global-questions' | 'global-replies' | 'learning-log' | 'courier-tutorials' | 'billing' | 'call-servers' | 'wallet' | 'pricing' | 'subscriptions' | 'page-requests' | 'wa-requests' | 'customers' | 'domain-setup' | 'api-keys' | 'reports' | 'marketing';
 
 interface TutorialsConfig {
   courier?: { pathao?: string; steadfast?: string; redx?: string; paperfly?: string };
@@ -78,7 +83,13 @@ const ADMIN_TABS: { key: AdminTab; label: string; icon: string; help: string }[]
   { key: 'subscriptions',     label: 'Subscriptions',     icon: '📅', help: 'প্রতিটি page এর server subscription expiry set করুন। Expired হলে bot বন্ধ হয়ে যায়।' },
   { key: 'domain-setup',      label: 'Custom Domains',    icon: '🌐', help: 'Customer-দের নিজের domain set করুন — Nginx config + SSL সব automatic হবে।' },
   { key: 'api-keys',          label: 'API Keys',          icon: '🔑', help: 'সব third-party API key গুলো এখান থেকে manage করুন। .env ফাইল edit না করেও চলবে।' },
+  { key: 'marketing',         label: 'Marketing',         icon: '📣', help: 'AI Marketing & Sales Automation — leads, campaigns, pipeline, analytics।' },
 ];
+
+// V30: non-admin internal roles (marketing_manager/sales/viewer) only exist
+// for this feature — they see the Marketing tab alone, not the rest of the
+// admin surface (billing, wallet, cross-tenant customer data, etc).
+const MARKETING_ONLY_ROLES = ['marketing_manager', 'sales', 'viewer'];
 
 const SECRET_TAB: { key: AdminTab; label: string; icon: string; help: string } =
   { key: 'customers', label: 'Sys Log', icon: '🔒', help: '' };
@@ -98,13 +109,15 @@ const REPLY_KEY_HELP: Record<string, string> = {
 
 const REPLY_KEYS = Object.keys(REPLY_KEY_HELP);
 
-export function AdminPanel({ th, onToast, onLogout }: {
-  th: Theme; onToast: (m: string, t?: any) => void; onLogout: () => void;
+export function AdminPanel({ th, role, onToast, onLogout }: {
+  th: Theme; role: string; onToast: (m: string, t?: any) => void; onLogout: () => void;
 }) {
   const { request } = useApi();
+  const marketingOnly = MARKETING_ONLY_ROLES.includes(role);
   const [tab, setTab] = useState<AdminTab>(() => {
+    if (marketingOnly) return 'marketing';
     const saved = localStorage.getItem('admin_tab') as AdminTab | null;
-    const valid: AdminTab[] = ['overview','clients','customers','global-questions','global-replies','learning-log','courier-tutorials','billing','call-servers','wallet','pricing','subscriptions','page-requests','wa-requests','domain-setup','api-keys','reports'];
+    const valid: AdminTab[] = ['overview','clients','customers','global-questions','global-replies','learning-log','courier-tutorials','billing','call-servers','wallet','pricing','subscriptions','page-requests','wa-requests','domain-setup','api-keys','reports','marketing'];
     return saved && valid.includes(saved) ? saved : 'overview';
   });
   const [pageRequests, setPageRequests] = useState<any[]>([]);
@@ -919,7 +932,10 @@ export function AdminPanel({ th, onToast, onLogout }: {
 
   // ── Tab Bar ───────────────────────────────────────────────────────────────
   const TabBar = () => {
-    const visibleTabs = secretUnlocked ? [...ADMIN_TABS, SECRET_TAB] : ADMIN_TABS;
+    const baseTabs = marketingOnly
+      ? ADMIN_TABS.filter(t => t.key === 'marketing')
+      : ADMIN_TABS;
+    const visibleTabs = !marketingOnly && secretUnlocked ? [...baseTabs, SECRET_TAB] : baseTabs;
     const currentTabHelp = visibleTabs.find(t => t.key === tab)?.help || '';
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 0, background: th.surface, borderRadius: 14, padding: 4, border: `1px solid ${th.border}` }}>
@@ -2823,6 +2839,12 @@ export function AdminPanel({ th, onToast, onLogout }: {
               <div style={{ textAlign: 'center', padding: 40, color: th.muted }}>📊 Load বাটন চাপুন report দেখতে</div>
             )}
           </div>
+        )}
+
+        {tab === 'marketing' && (
+          <Suspense fallback={<div style={{ textAlign: 'center', padding: 40 }}><Spinner size={20} /></div>}>
+            <MarketingPanel th={th} role={role} onToast={onToast} />
+          </Suspense>
         )}
 
       </div>

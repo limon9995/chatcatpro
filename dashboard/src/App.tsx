@@ -21,6 +21,14 @@ const AdminPanel = safeLazy(async () => {
 type MyPage = { id: number; pageId: string; pageName: string; isActive: boolean; automationOn: boolean; masterPageId?: number | null; isConnected?: boolean; };
 type Screen = 'landing' | 'login' | 'signup' | 'forgot-password' | 'change-password' | 'connect-page' | 'onboarding' | 'dashboard' | 'admin';
 
+// V30: marketing_manager/sales/viewer are internal-staff-only roles (AI
+// Marketing & Sales Automation) — they land on the same internal `admin`
+// screen as 'admin'; AdminPanel itself gates which tabs each role can see.
+const INTERNAL_STAFF_ROLES = ['admin', 'marketing_manager', 'sales', 'viewer'];
+function isInternalStaff(role?: string) {
+  return !!role && INTERNAL_STAFF_ROLES.includes(role);
+}
+
 function normalizePathname(pathname: string) {
   const cleaned = String(pathname || '/')
     .replace(/\/+(null|undefined)(?=\/|$)/gi, '')
@@ -161,7 +169,7 @@ export function AppContent() {
       setScreen('change-password');
       return;
     }
-    if (user.role === 'admin') {
+    if (isInternalStaff(user.role)) {
       setScreen('admin');
       return;
     }
@@ -234,7 +242,7 @@ export function AppContent() {
       setScreen('change-password');
       return;
     }
-    if (result.user?.role === 'admin') {
+    if (isInternalStaff(result.user?.role)) {
       setScreen('admin');
       return;
     }
@@ -251,7 +259,7 @@ export function AppContent() {
     (async () => {
       try {
         const result = await completeGoogleLogin(googleAuth);
-        if (result.user?.role === 'admin') {
+        if (isInternalStaff(result.user?.role)) {
           setScreen('admin');
         } else {
           await loadMyPages();
@@ -365,11 +373,11 @@ export function AppContent() {
     );
   }
 
-  if (screen === 'admin' && user?.role === 'admin') {
+  if (screen === 'admin' && isInternalStaff(user?.role)) {
     return (
       <Suspense fallback={<ScreenFallback dark={dark} />}>
         <>
-          <AdminPanel th={th} onToast={showToast} onLogout={handleLogout} />
+          <AdminPanel th={th} role={user?.role || 'viewer'} onToast={showToast} onLogout={handleLogout} />
           {ToastNode}
         </>
       </Suspense>

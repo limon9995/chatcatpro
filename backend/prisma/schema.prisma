@@ -1472,3 +1472,222 @@ model GroupLink {
   @@index([configId])
   @@index([pageId])
 }
+
+// ── AI Marketing & Sales Automation (Phase 0 — foundation) ──────────────────
+// Internal-only: leads/prospects for ChatCat itself, not a merchant's own
+// customers (that's the existing Customer/CRM module). "userId"-shaped
+// fields below (assignedUserId, createdByUserId, etc.) are deliberately
+// plain columns with no Prisma @relation to User — same soft-reference
+// style already used by Payment.confirmedBy — so this feature never has to
+// touch the User model.
+
+model MarketingLead {
+  id                     Int       @id @default(autoincrement())
+  businessName           String
+  category               String?
+  location               String?
+  phone                  String?
+  email                  String?
+  website                String?
+  facebookUrl            String?
+  instagramUrl           String?
+  followerCount          Int?
+  reviewCount            Int?
+  rating                 Float?
+  estimatedMessageVolume String?   // "low" | "medium" | "high" — descriptive estimate, not exact
+  onlineOrderPresence    Boolean   @default(false)
+  leadScore              Int       @default(0)
+  leadTemperature        String    @default("LOW_PRIORITY") // HOT | WARM | POTENTIAL | LOW_PRIORITY
+  painPointsJson         String?   // JSON array of {painPoint, evidence, confidence, solution}
+  aiSummary              String?
+  source                 String    // "manual" | "csv_import" | "referral" | "google_places" | ...
+  sourceUrl              String?
+  pipelineStatus         String    @default("NEW")
+  // NEW → RESEARCHED → QUALIFIED → CONTACTED → REPLIED → INTERESTED →
+  // DEMO_BOOKED → TRIAL_STARTED → TRIAL_ACTIVE → CONVERTED → PAID_CUSTOMER
+  // side states: NOT_INTERESTED | OPTED_OUT | LOST | FOLLOW_UP_LATER
+  contactStatus          String    @default("NOT_CONTACTED")
+  outreachStatus         String    @default("NONE")
+  lastContactAt          DateTime?
+  nextFollowupAt         DateTime?
+  assignedUserId         String?
+  convertedUserId        String?   // set once this lead signs up as a real ChatCat User
+  campaignId             Int?
+  campaign               MarketingCampaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  notes                  String?
+  isTest                 Boolean   @default(false)
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  outreachMessages OutreachMessage[]
+  followUps        LeadFollowUp[]
+  demoBookings     DemoBooking[]
+  salesConversation SalesConversation?
+
+  @@index([pipelineStatus])
+  @@index([leadTemperature])
+  @@index([campaignId])
+  @@index([businessName])
+  @@index([phone])
+  @@index([website])
+  @@index([facebookUrl])
+  @@index([instagramUrl])
+}
+
+model MarketingCampaign {
+  id                   Int      @id @default(autoincrement())
+  name                 String
+  targetIndustry       String?
+  targetLocation       String?
+  minLeadScore         Int      @default(0)
+  status               String   @default("DRAFT") // DRAFT | ACTIVE | PAUSED | COMPLETED
+  dailyLimit           Int      @default(20)
+  outreachSequenceJson String?  // ordered [{dayOffset, channel, template}]
+  createdByUserId      String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  leads            MarketingLead[]
+  outreachMessages OutreachMessage[]
+  followUps        LeadFollowUp[]
+}
+
+model OutreachMessage {
+  id               Int       @id @default(autoincrement())
+  leadId           Int
+  lead             MarketingLead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  campaignId       Int?
+  campaign         MarketingCampaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  channel          String    // email | facebook | whatsapp | instagram | website
+  message          String
+  status           String    @default("DRAFT") // DRAFT | PENDING_APPROVAL | APPROVED | SENT | FAILED | REPLIED
+  approvedByUserId String?
+  sentAt           DateTime?
+  response         String?
+  respondedAt      DateTime?
+  createdAt        DateTime  @default(now())
+
+  @@index([leadId])
+  @@index([campaignId])
+  @@index([status])
+}
+
+model LeadFollowUp {
+  id           Int       @id @default(autoincrement())
+  leadId       Int
+  lead         MarketingLead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  campaignId   Int?
+  campaign     MarketingCampaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  sequenceStep Int       @default(0)
+  channel      String
+  message      String
+  status       String    @default("pending") // pending | sent | failed | cancelled | processing
+  scheduledAt  DateTime
+  sentAt       DateTime?
+  error        String?
+  createdAt    DateTime  @default(now())
+
+  @@index([status, scheduledAt])
+  @@index([leadId])
+  @@index([campaignId])
+}
+
+model SalesConversation {
+  id             Int      @id @default(autoincrement())
+  leadId         Int      @unique
+  lead           MarketingLead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  transcriptJson String   @default("[]")
+  status         String   @default("OPEN") // OPEN | ESCALATED | CLOSED
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model DemoBooking {
+  id             Int      @id @default(autoincrement())
+  leadId         Int
+  lead           MarketingLead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  scheduledAt    DateTime
+  assignedUserId String?
+  status         String   @default("SCHEDULED") // SCHEDULED | COMPLETED | CANCELLED | NO_SHOW
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([scheduledAt])
+  @@index([leadId])
+}
+
+model Competitor {
+  id           Int      @id @default(autoincrement())
+  name         String
+  website      String?
+  pricingJson  String?
+  featuresJson String?
+  strengths    String?
+  weaknesses   String?
+  targetMarket String?
+  threatLevel  String?  // LOW | MEDIUM | HIGH
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Referral {
+  id             Int       @id @default(autoincrement())
+  referrerUserId String
+  code           String    @unique
+  referredLeadId Int?
+  referredUserId String?
+  status         String    @default("PENDING") // PENDING | SIGNED_UP | CONVERTED | REWARDED
+  rewardAmount   Float?
+  rewardedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([referrerUserId])
+  @@index([referredUserId])
+}
+
+model ContentDraft {
+  id               Int       @id @default(autoincrement())
+  category         String    // educational | tips | feature | case_study | testimonial | reel_idea | faq
+  title            String
+  content          String
+  mediaUrl         String?
+  status           String    @default("DRAFT") // DRAFT | APPROVED | SCHEDULED | PUBLISHED | REJECTED
+  scheduledAt      DateTime?
+  publishedAt      DateTime?
+  createdByUserId  String?
+  approvedByUserId String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([status])
+}
+
+// Singleton settings row (id fixed at 1) — admin-editable scoring weights,
+// sequence config, and the marketing automation kill switch.
+model MarketingSettings {
+  id                       Int      @id @default(1)
+  killSwitchEnabled        Boolean  @default(false)
+  scoringWeightsJson       String   @default("{}")
+  sequenceConfigJson       String   @default("[]")
+  dailyOutreachLimit       Int      @default(50)
+  outreachRequiresApproval Boolean  @default(true)
+  updatedByUserId          String?
+  updatedAt                DateTime @updatedAt
+}
+
+model MarketingAuditLog {
+  id           Int      @id @default(autoincrement())
+  eventType    String   // lead.discovered | lead.scored | research.completed | message.generated | message.approved | message.sent | reply.received | followup.scheduled | followup.cancelled | lead.escalated | trial.started | lead.converted | settings.updated | kill_switch.toggled | ...
+  entityType   String   // MarketingLead | OutreachMessage | MarketingCampaign | MarketingSettings | ...
+  entityId     Int?
+  actorUserId  String?
+  metadataJson String?
+  createdAt    DateTime @default(now())
+
+  @@index([eventType])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}

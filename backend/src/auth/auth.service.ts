@@ -10,7 +10,22 @@ import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { OtpService } from './otp.service';
 
-export type AuthRole = 'admin' | 'client';
+// V30: marketing_manager/sales/viewer are internal-staff-only roles for the
+// AI Marketing & Sales Automation feature — never assignable via public
+// signup (see register() below), only via adminUpdateUser().
+export type AuthRole =
+  | 'admin'
+  | 'client'
+  | 'marketing_manager'
+  | 'sales'
+  | 'viewer';
+
+export const INTERNAL_STAFF_ROLES: AuthRole[] = [
+  'admin',
+  'marketing_manager',
+  'sales',
+  'viewer',
+];
 
 // ── Public user shape returned to callers ─────────────────────────────────────
 export interface PublicUser {
@@ -319,7 +334,9 @@ export class AuthService {
     if (body.name !== undefined) data.name = String(body.name).trim();
     if (body.isActive !== undefined) data.isActive = Boolean(body.isActive);
     if (body.role !== undefined)
-      data.role = body.role === 'admin' ? 'admin' : 'client';
+      data.role = (INTERNAL_STAFF_ROLES as string[]).includes(body.role)
+        ? body.role
+        : 'client';
     if (body.pageIds !== undefined)
       data.pageIds = JSON.stringify(this.normalizePageIds(body.pageIds));
     if (body.forcePasswordChange !== undefined)
@@ -531,7 +548,9 @@ export class AuthService {
       }),
     });
     if (!tokenRes.ok) {
-      this.logger.error(`[GoogleAuth] Token exchange failed: ${await tokenRes.text()}`);
+      this.logger.error(
+        `[GoogleAuth] Token exchange failed: ${await tokenRes.text()}`,
+      );
       throw new ForbiddenException('Google authentication failed');
     }
     const tokenData: any = await tokenRes.json();
@@ -572,8 +591,7 @@ export class AuthService {
 
   consumeGoogleLoginResult(id: string) {
     const item = this.pendingGoogleLogins.get(id);
-    if (!item)
-      throw new NotFoundException('Login result not found or expired');
+    if (!item) throw new NotFoundException('Login result not found or expired');
     this.pendingGoogleLogins.delete(id);
     return { token: item.token, user: item.user };
   }
@@ -755,7 +773,9 @@ export class AuthService {
     try {
       return JSON.parse(raw || '[]');
     } catch (err) {
-      this.logger.error(`[Auth] Malformed pageIds JSON in DB — defaulting to []. Value: ${raw?.slice(0, 100)} Error: ${err}`);
+      this.logger.error(
+        `[Auth] Malformed pageIds JSON in DB — defaulting to []. Value: ${raw?.slice(0, 100)} Error: ${err}`,
+      );
       return [];
     }
   }
