@@ -271,7 +271,12 @@ export class CatalogController {
     }
 
     // Independent lookups — run in parallel instead of one-after-another.
-    const [productWithReferenceImages, reviewSummary, offerPreview, deliveryOfferOptions] = await Promise.all([
+    const [
+      productWithReferenceImages,
+      reviewSummary,
+      offerPreview,
+      deliveryOfferOptions,
+    ] = await Promise.all([
       this.productsService.attachReferenceImages(page.id, product),
       this.reviews
         .listForProduct(page.id, product.code)
@@ -478,39 +483,98 @@ export class CatalogController {
       price,
       productName,
       orderNote,
+      items: rawItems,
     } = body;
     if (!customerName?.trim()) throw new BadRequestException('নাম দিন');
     if (!phone?.trim()) throw new BadRequestException('ফোন নম্বর দিন');
     if (!address?.trim()) throw new BadRequestException('ঠিকানা দিন');
-    if (!productCode) throw new BadRequestException('Product code required');
 
-    // V25: Server-authoritative pricing. The client's `price` is only a
+    // V30: multi-item cart. `items` (array) is the cart shape used by the
+    // restaurant-mode menu's "Add to Cart" flow; a bare productCode is the
+    // legacy single-item shape still used by the classic product page's
+    // instant "Buy Now". Both resolve through the same per-item price/variant
+    // validation below, so a cart order and a single-item order are priced
+    // identically and share one delivery fee.
+    const cartInput: Array<{
+      productCode: string;
+      qty?: number;
+      price?: number;
+      productName?: string;
+      variantLabel?: string;
+    }> =
+      Array.isArray(rawItems) && rawItems.length > 0
+        ? rawItems
+        : productCode
+          ? [
+              {
+                productCode,
+                qty,
+                price,
+                productName,
+                variantLabel: body.variantLabel,
+              },
+            ]
+          : [];
+    if (!cartInput.length)
+      throw new BadRequestException('Product code required');
+    if (cartInput.length > 40)
+      throw new BadRequestException('একবারে সর্বোচ্চ ৪০টা item order করা যাবে');
+
+    // V25/V30: Server-authoritative pricing. The client's `price` is only a
     // display value — the real unit price comes from the product row, and for
     // size/portion products from the chosen variant.
-    const product = await this.prisma.product.findFirst({
-      where: {
-        pageId: page.id,
-        code: String(productCode).toUpperCase(),
-        isActive: true,
-      },
-      select: { price: true, name: true, priceVariantsJson: true },
+    const codes = [
+      ...new Set(
+        cartInput
+          .map((it) => String(it.productCode || '').toUpperCase())
+          .filter(Boolean),
+      ),
+    ];
+    if (!codes.length) throw new BadRequestException('Product code required');
+    const productRows = await this.prisma.product.findMany({
+      where: { pageId: page.id, code: { in: codes }, isActive: true },
+      select: { code: true, price: true, name: true, priceVariantsJson: true },
     });
-    if (!product) throw new BadRequestException('Product পাওয়া যায়নি');
-    const priceVariants = parsePriceVariants(product.priceVariantsJson);
-    let unitPrice = Number(product.price) || Number(price) || 0;
-    let itemMetaJson: string | null = null;
-    let itemName = productName || product.name || undefined;
-    if (priceVariants.length > 0) {
-      const chosen = priceVariants.find(
-        (v) => v.label === String(body.variantLabel ?? '').trim(),
-      );
-      if (!chosen) throw new BadRequestException('সাইজ/পরিমাণ বেছে নিন');
-      unitPrice = chosen.price;
-      itemMetaJson = JSON.stringify({
-        variantLabel: chosen.label,
-        ...(chosen.pieces ? { pieces: chosen.pieces } : {}),
+    const productByCode = new Map(productRows.map((row) => [row.code, row]));
+
+    const resolvedItems: {
+      productCode: string;
+      qty: number;
+      unitPrice: number;
+      productName?: string;
+      metaJson?: string | null;
+    }[] = [];
+    for (const raw of cartInput) {
+      const code = String(raw.productCode || '').toUpperCase();
+      const product = productByCode.get(code);
+      if (!product)
+        throw new BadRequestException(`Product পাওয়া যায়নি: ${code}`);
+      const priceVariants = parsePriceVariants(product.priceVariantsJson);
+      let unitPrice = Number(product.price) || Number(raw.price) || 0;
+      let itemMetaJson: string | null = null;
+      let itemName = raw.productName || product.name || undefined;
+      if (priceVariants.length > 0) {
+        const chosen = priceVariants.find(
+          (v) => v.label === String(raw.variantLabel ?? '').trim(),
+        );
+        if (!chosen)
+          throw new BadRequestException(
+            `"${product.name || code}" এর সাইজ/পরিমাণ বেছে নিন`,
+          );
+        unitPrice = chosen.price;
+        itemMetaJson = JSON.stringify({
+          variantLabel: chosen.label,
+          ...(chosen.pieces ? { pieces: chosen.pieces } : {}),
+        });
+        itemName = `${product.name || code} (${chosen.label})`;
+      }
+      resolvedItems.push({
+        productCode: code,
+        qty: Math.max(1, Number(raw.qty) || 1),
+        unitPrice,
+        productName: itemName,
+        metaJson: itemMetaJson,
       });
-      itemName = `${product.name || productCode} (${chosen.label})`;
     }
 
     // V24: Restaurant mode — fee is ALWAYS recomputed here from the customer's
@@ -553,15 +617,7 @@ export class CatalogController {
       phone: String(phone).trim(),
       address: String(address).trim(),
       orderNote: orderNote?.trim() || undefined,
-      items: [
-        {
-          productCode: String(productCode).toUpperCase(),
-          qty: Math.max(1, Number(qty) || 1),
-          unitPrice,
-          productName: itemName,
-          metaJson: itemMetaJson,
-        },
-      ],
+      items: resolvedItems,
       paymentMode: page.paymentMode,
       ...(restaurantDelivery ?? {}),
     });
@@ -895,6 +951,16 @@ export class CatalogController {
         businessInfo: true,
         menuLayoutMode: true,
         menuCategoryOrderJson: true,
+        webOrderEnabled: true,
+        restaurantLat: true,
+        restaurantLng: true,
+        deliverySlabsJson: true,
+        paymentMode: true,
+        advanceAmount: true,
+        advanceBkash: true,
+        advanceNagad: true,
+        advanceRocket: true,
+        advancePaymentMessage: true,
         owner: { select: { isActive: true } },
       },
     });
@@ -1002,6 +1068,18 @@ export class CatalogController {
         customDomainActive: Boolean((page as any).customDomainActive),
         websiteUrl: page.websiteUrl || null,
         restaurantMode: Boolean((page as any).restaurantModeEnabled),
+        // V30: needed by the menu page's cart checkout (map-pin delivery fee
+        // + payment step) — mirrors what the single-product page already gets.
+        webOrderEnabled: (page as any).webOrderEnabled ?? false,
+        restaurantLat: (page as any).restaurantLat ?? null,
+        restaurantLng: (page as any).restaurantLng ?? null,
+        deliverySlabs: parseSlabs((page as any).deliverySlabsJson),
+        paymentMode: (page as any).paymentMode ?? 'cod',
+        advanceAmount: (page as any).advanceAmount ?? 0,
+        advanceBkash: (page as any).advanceBkash ?? '',
+        advanceNagad: (page as any).advanceNagad ?? '',
+        advanceRocket: (page as any).advanceRocket ?? '',
+        advancePaymentMessage: (page as any).advancePaymentMessage ?? '',
         // V29: "single" = one page, JS category tabs (today's default,
         // unchanged behavior). "pages" = each category is its own page load.
         menuLayoutMode:
@@ -1019,7 +1097,9 @@ export class CatalogController {
         // Website gallery shows every uploaded photo regardless of the
         // bot-send toggle — that toggle only controls what gets pushed
         // proactively in Messenger (see sendCatalogFallback).
-        menuImages: parseMenuImages((page as any).menuImagesJson).map((e) => e.url),
+        menuImages: parseMenuImages((page as any).menuImagesJson).map(
+          (e) => e.url,
+        ),
         // null when the merchant hasn't set hours yet — hides the badge
         businessHours: (() => {
           const raw = (page as any).businessHoursJson;
@@ -1046,7 +1126,12 @@ export class CatalogController {
       shortlistCodes?: string[];
       reviewSummary?: { avgRating: number; count: number; reviews: any[] };
       offerPreview?: { percent: number; label: string; offerId: number } | null;
-      deliveryOfferOptions?: { id: number; title: string; type: string; value: number }[];
+      deliveryOfferOptions?: {
+        id: number;
+        title: string;
+        type: string;
+        value: number;
+      }[];
     },
   ): string {
     const primary = esc(page.primaryColor);
@@ -1066,7 +1151,11 @@ export class CatalogController {
       ? `/catalog/${esc(page.id)}${shortlistQuery}`
       : `/catalog/${esc(page.id)}`;
 
-    const reviewSummary = opts?.reviewSummary || { avgRating: 0, count: 0, reviews: [] };
+    const reviewSummary = opts?.reviewSummary || {
+      avgRating: 0,
+      count: 0,
+      reviews: [],
+    };
     const offerPreview = opts?.offerPreview;
     const deliveryOfferOptions = opts?.deliveryOfferOptions || [];
     const stars = (n: number) =>
@@ -1081,7 +1170,9 @@ export class CatalogController {
           ${reviewSummary.reviews
             .slice(0, 10)
             .map(
-              (r: any) => `<div style="border:1px solid #e5e7eb;border-radius:9px;padding:8px 10px;">
+              (
+                r: any,
+              ) => `<div style="border:1px solid #e5e7eb;border-radius:9px;padding:8px 10px;">
                 <div style="display:flex;justify-content:space-between;gap:8px;">
                   <span style="font-weight:700;font-size:12.5px;">${esc(r.customerName || 'Customer')}</span>
                   <span style="color:#f59e0b;font-size:12px;">${stars(r.rating)}</span>
@@ -1567,6 +1658,13 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:radial-
               ? `<button class="btn-order" style="background:linear-gradient(135deg,#059669,#047857);box-shadow:0 4px 18px rgba(5,150,105,.35)" onclick="woOpen()">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
             Website থেকে Order করুন
+          </button>`
+              : ''
+          }
+          ${
+            page.restaurantMode && inStock
+              ? `<button class="btn-order" type="button" style="background:linear-gradient(135deg,var(--p),var(--p-dark))" onclick="ccAddFromProductPage()">
+            🛒 কার্টে যোগ করুন — আরো খাবার একসাথে অর্ডার করুন
           </button>`
               : ''
           }
@@ -2309,6 +2407,20 @@ function setGalleryMode(mode, button, url) {
   if (button) button.classList.add('active');
 }
 </script>
+${
+  page.restaurantMode
+    ? `<script>
+// Reads the currently selected size/variant (tracked by the wo* wizard's
+// own chip/select handlers above) so "Add to Cart" always matches what's
+// shown on the page, without needing its own separate variant picker.
+function ccAddFromProductPage(){
+  ccAddToCart(WO_CODE, WO_NAME, WO_PRICE, (WO_VARIANTS.length ? woVarLabel : ''), ${JSON.stringify(primaryImage || '')}, 1);
+  ccOpenDrawer();
+}
+</script>
+${this.restaurantCartWidget(page, { liftBar: true })}`
+    : ''
+}
 ${poweredByBadge()}
 </body>
 </html>`;
@@ -2324,7 +2436,9 @@ ${poweredByBadge()}
     counts: Map<string, number>,
     savedOrder: string[],
   ): [string, number][] {
-    const savedLower = savedOrder.map((s) => s.trim().toLowerCase()).filter(Boolean);
+    const savedLower = savedOrder
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean);
     const allKeys = [...counts.keys()];
     const orderedKeys: string[] = [];
     for (const wanted of savedLower) {
@@ -2339,11 +2453,516 @@ ${poweredByBadge()}
     return [...orderedKeys, ...remaining].map((k) => [k, counts.get(k)!]);
   }
 
+  // ── V30: Restaurant-mode cart — bar + drawer + checkout wizard ───────────
+  // Shared between the menu listing (buildHtml) and the single-product page
+  // (buildProductHtml) so a customer can add several different dishes across
+  // both pages and check out once, instead of one order per dish. Reuses the
+  // .wo-* CSS class names already defined by the product page's existing
+  // single-item "Buy Now" wizard (harmless if redefined twice on the same
+  // document) but every element id is cc-prefixed so this never collides
+  // with that wizard when both are present on the product page.
+  private restaurantCartWidget(
+    page: any,
+    opts?: { liftBar?: boolean },
+  ): string {
+    const barBottom = opts?.liftBar ? '92px' : '16px';
+    return `
+<style>
+.cc-bar{display:none;position:fixed;left:16px;right:16px;bottom:${barBottom};z-index:550;max-width:480px;margin:0 auto;align-items:center;gap:10px;background:linear-gradient(135deg,var(--p),color-mix(in srgb,var(--p) 78%,#000));color:#fff;padding:13px 16px;border-radius:16px;box-shadow:0 12px 32px rgba(15,23,42,.3);cursor:pointer;font-family:inherit;border:none}
+.cc-bar.show{display:flex}
+.cc-bar-count{background:rgba(255,255,255,.25);border-radius:999px;min-width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:800;padding:0 7px}
+.cc-bar-label{flex:1;text-align:left;font-weight:700;font-size:13.5px}
+.cc-bar-total{font-weight:900;font-size:14px}
+.cc-overlay{display:none;position:fixed;inset:0;z-index:601;background:rgba(0,0,0,.55);backdrop-filter:blur(4px);align-items:flex-end;justify-content:center}
+@media(min-width:480px){.cc-overlay{align-items:center;padding:16px}}
+.cc-overlay.open{display:flex}
+.cc-drawer{background:var(--surface,#fff);border-radius:22px 22px 0 0;width:100%;max-width:480px;max-height:88vh;display:flex;flex-direction:column;overflow:hidden;animation:slideUp .28s ease both}
+@media(min-width:480px){.cc-drawer{border-radius:22px}}
+.cc-drawer-head{padding:16px 18px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border,#e5e7eb);font-weight:800;font-size:15px;color:var(--text,#0f172a)}
+.cc-drawer-close{width:30px;height:30px;border-radius:50%;border:1.5px solid var(--border,#e5e7eb);background:var(--bg,#f4f6fb);cursor:pointer;font-size:15px;color:var(--muted,#94a3b8)}
+.cc-drawer-body{overflow-y:auto;padding:8px 16px;flex:1}
+.cc-line{display:flex;gap:10px;align-items:center;padding:11px 2px;border-bottom:1px solid #f1f5f9}
+.cc-line img{width:46px;height:46px;border-radius:10px;object-fit:cover;flex-shrink:0;background:#f1f5f9}
+.cc-line-ph{width:46px;height:46px;border-radius:10px;background:var(--p-soft,#f1f5f9);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.cc-line-body{flex:1;min-width:0}
+.cc-line-name{font-weight:700;font-size:13px;color:var(--text,#0f172a);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cc-line-meta{font-size:11.5px;color:var(--sub,#64748b);margin-top:1px}
+.cc-line-qty{display:flex;align-items:center;gap:7px}
+.cc-qbtn{width:25px;height:25px;border-radius:8px;border:1px solid var(--border,#e2e8f0);background:#fff;cursor:pointer;font-weight:800;font-size:14px;line-height:1;font-family:inherit}
+.cc-line-price{font-weight:800;font-size:13px;min-width:58px;text-align:right;color:var(--text,#0f172a)}
+.cc-remove{background:none;border:none;color:#dc2626;font-size:16px;cursor:pointer;padding:2px 4px 2px 8px}
+.cc-empty{padding:40px 10px;text-align:center;color:var(--muted,#94a3b8);font-size:13px}
+.cc-drawer-foot{padding:12px 16px 16px;border-top:1px solid var(--border,#e5e7eb)}
+.cc-subtotal{display:flex;justify-content:space-between;font-size:14px;font-weight:800;margin-bottom:10px;color:var(--text,#0f172a)}
+.cc-go-btn{width:100%;padding:13px;border:none;border-radius:13px;background:linear-gradient(135deg,#059669,#047857);color:#fff;font-weight:800;font-size:14.5px;cursor:pointer;font-family:inherit;box-shadow:0 4px 18px rgba(5,150,105,.35)}
+.cc-go-btn:disabled{opacity:.5;cursor:not-allowed}
+.c-cart-add{margin-top:6px;padding:8px 14px;border-radius:999px;border:none;background:var(--p);color:#fff;font-weight:700;font-size:12px;cursor:pointer;font-family:inherit;white-space:nowrap}
+.c-cart-add:active{transform:scale(.97)}
+.cc-added-flash{animation:ccFlash .5s ease}
+@keyframes ccFlash{0%{transform:scale(1)}30%{transform:scale(1.12)}100%{transform:scale(1)}}
+</style>
+
+<button type="button" class="cc-bar" id="ccBar" onclick="ccOpenDrawer()">
+  <span class="cc-bar-count" id="ccBarCount">0</span>
+  <span class="cc-bar-label">কার্ট দেখুন</span>
+  <span class="cc-bar-total" id="ccBarTotal"></span>
+</button>
+
+<div class="cc-overlay" id="ccDrawerOverlay" onclick="if(event.target===this)ccCloseDrawer()">
+  <div class="cc-drawer">
+    <div class="cc-drawer-head">
+      <span>🛒 আপনার কার্ট</span>
+      <button class="cc-drawer-close" type="button" onclick="ccCloseDrawer()">✕</button>
+    </div>
+    <div class="cc-drawer-body" id="ccDrawerBody"></div>
+    <div class="cc-drawer-foot" id="ccDrawerFoot"></div>
+  </div>
+</div>
+
+<div class="wo-overlay" id="ccModal" onclick="if(event.target===this)ccModalClose()">
+  <div class="wo-sheet">
+    <div class="wo-head">
+      <span class="wo-title" id="ccTitle">🛒 Checkout</span>
+      <button class="wo-close" type="button" onclick="ccModalClose()">✕</button>
+    </div>
+    <div class="wo-progress-track"><div class="wo-progress-fill" id="ccProgressFill"></div></div>
+    <div class="wo-progress-labels">
+      <span id="ccProgLbl1" class="on">তথ্য</span>
+      <span id="ccProgLbl2">পেমেন্ট</span>
+      <span id="ccProgLbl3">সম্পন্ন</span>
+    </div>
+    <div class="wo-body">
+
+      <div class="wo-step active" id="ccStep0">
+        <div class="wo-product-info" id="ccOrderSummary"></div>
+        <div><div class="wo-lbl">আপনার নাম *</div><input class="wo-inp" id="ccName" type="text" placeholder="পুরো নাম"></div>
+        <div><div class="wo-lbl">ফোন নম্বর *</div><input class="wo-inp" id="ccPhone" type="tel" placeholder="01XXXXXXXXX"></div>
+        <div class="wo-addr-lbl-row"><div class="wo-lbl" style="margin-bottom:0">ডেলিভারি লোকেশন * (ম্যাপে pin করুন)</div></div>
+        <div id="ccMap"></div>
+        <button type="button" class="wo-gps-btn" id="ccGpsBtn" onclick="ccUseGps()">📍 আমার লোকেশন ব্যবহার করুন (GPS)</button>
+        <div style="display:flex;gap:6px;margin-top:6px">
+          <input class="wo-inp" id="ccMapsLink" type="text" style="flex:1" placeholder="অথবা Google Maps link / 23.79, 90.41 paste করুন">
+          <button type="button" class="wo-gps-btn" style="width:auto;padding:0 14px;margin:0" id="ccMapsLinkBtn" onclick="ccPasteLocation()">✔</button>
+        </div>
+        <div class="wo-fee-box" id="ccFeeBox">ম্যাপে আপনার ডেলিভারি লোকেশন pin করুন — delivery charge দেখাবে</div>
+        <div><textarea class="wo-inp" id="ccAddrDetail" rows="2" placeholder="বাসা/রোড/ফ্লোর — বিস্তারিত ঠিকানা"></textarea></div>
+        <div><div class="wo-lbl">নোট (ঐচ্ছিক)</div><input class="wo-inp" id="ccNote" type="text" placeholder="কোনো বিশেষ নির্দেশনা"></div>
+        <div class="wo-err" id="ccErr0"></div>
+        <button class="wo-btn" id="ccBtnSubmit" type="button" onclick="ccSubmit()">অর্ডার দিন →</button>
+      </div>
+
+      <div class="wo-step" id="ccStep1a">
+        <div class="wo-payment-box">
+          <div style="font-size:13px;font-weight:700;margin-bottom:8px">💳 Payment করুন</div>
+          <div style="font-size:13px;margin-bottom:12px">Advance: <strong id="ccGwAmount"></strong></div>
+        </div>
+        <button class="wo-btn" type="button" id="ccBtnGw" onclick="ccGoGateway()">পেমেন্ট করুন →</button>
+      </div>
+
+      <div class="wo-step" id="ccStepM">
+        <div style="text-align:center;margin-bottom:18px">
+          <div style="font-size:16px;font-weight:700;margin-bottom:4px">💸 Advance Payment</div>
+          <div style="font-size:13px;color:var(--muted,#94a3b8)">পরিমাণ: <strong id="ccMethodAmt" style="color:var(--fg)"></strong></div>
+        </div>
+        <div style="font-size:12px;color:var(--muted,#64748b);margin-bottom:14px;text-align:center">কোন মেথডে পাঠাবেন বেছে নিন</div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <button id="ccBtnBkash" class="wo-method-btn" type="button" onclick="ccSelectMethod('bkash')" style="display:none">
+            <span style="font-size:20px">📱</span>
+            <div><div style="font-weight:700;font-size:14px">বিকাশ</div><div id="ccMBkashNum" style="font-size:12px;opacity:.8"></div></div>
+          </button>
+          <button id="ccBtnNagad" class="wo-method-btn" type="button" onclick="ccSelectMethod('nagad')" style="display:none">
+            <span style="font-size:20px">📱</span>
+            <div><div style="font-weight:700;font-size:14px">নগদ</div><div id="ccMNagadNum" style="font-size:12px;opacity:.8"></div></div>
+          </button>
+          <button id="ccBtnRocket" class="wo-method-btn" type="button" onclick="ccSelectMethod('rocket')" style="display:none">
+            <span style="font-size:20px">🚀</span>
+            <div><div style="font-weight:700;font-size:14px">রকেট</div><div id="ccMRocketNum" style="font-size:12px;opacity:.8"></div></div>
+          </button>
+        </div>
+      </div>
+
+      <div class="wo-step" id="ccStepP">
+        <div class="wo-payment-box" style="text-align:center;padding:16px">
+          <div id="ccPIcon" style="font-size:28px;margin-bottom:6px"></div>
+          <div id="ccPName" style="font-size:13px;font-weight:700;margin-bottom:10px"></div>
+          <div style="font-size:12px;color:var(--muted,#94a3b8);margin-bottom:4px">এই নম্বরে পাঠান</div>
+          <div id="ccPNum" style="font-size:20px;font-weight:800;letter-spacing:1px;color:var(--p,#6366f1);margin-bottom:8px"></div>
+          <div style="font-size:13px">পরিমাণ: <strong id="ccPAmt" style="font-size:16px"></strong></div>
+        </div>
+        <div style="font-size:12px;color:var(--muted,#64748b);background:var(--surface-2,#f1f5f9);padding:9px 12px;border-radius:8px;margin-bottom:12px;line-height:1.6">
+          ✅ Payment পাঠানোর পর নিচে <strong>Transaction ID</strong> দিন।
+        </div>
+        <div style="margin-bottom:10px"><div class="wo-lbl">TRANSACTION ID *</div><input class="wo-inp" id="ccFinalTxId" type="text" placeholder="যেমন: 8N7XXXXXX" autocomplete="off"></div>
+        <div style="margin-bottom:10px">
+          <div class="wo-lbl" style="display:flex;align-items:center;justify-content:space-between">
+            <span>PAYMENT SCREENSHOT</span><span style="font-size:11px;font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted,#94a3b8)">(optional — Telegram এ যাবে)</span>
+          </div>
+          <label class="wo-file-area" for="ccPScreenshot" id="ccPFileArea">
+            <span id="ccPFileLabel">📷 Screenshot বেছে নিন</span>
+          </label>
+          <input type="file" id="ccPScreenshot" accept="image/*" style="display:none" onchange="ccPFileChosen(this)">
+        </div>
+        <div class="wo-err" id="ccErrP"></div>
+        <div style="display:flex;gap:8px;margin-top:4px">
+          <button class="wo-btn" type="button" style="background:var(--surface-2,#e2e8f0);color:var(--fg,#1e293b);flex:0 0 auto;width:44px;font-size:18px;padding:0" onclick="ccShowStep('M')">←</button>
+          <button class="wo-btn" type="button" id="ccBtnPaySubmit" style="flex:1" onclick="ccPaySubmit()">Submit করুন →</button>
+        </div>
+      </div>
+
+      <div class="wo-step" id="ccStep2">
+        <div class="wo-success">
+          <div class="wo-icon">🎉</div>
+          <h3>অর্ডার সম্পন্ন!</h3>
+          <div class="wo-lbl" style="text-align:center">Order ID</div>
+          <div class="wo-oid" id="ccOrderId"></div>
+          <div class="wo-msg">
+            📱 <strong>Delivery update পেতে:</strong> Facebook Messenger এ <strong id="ccMsgId"></strong> লিখে পাঠান — bot আপনাকে status জানাবে।
+          </div>
+          <a href="/catalog/${esc(String(page.id))}/track" style="display:block;margin-top:12px;text-align:center;font-size:13px;color:var(--p);text-decoration:none">📦 Order Track করুন →</a>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+var CC_PAGE_ID = ${JSON.stringify(String(page.id))};
+var CC_CURRENCY = ${JSON.stringify(String(page.currency || '৳'))};
+var CC_ADV_AMT = ${Number(page.advanceAmount || 0)};
+var CC_BKASH = ${JSON.stringify(String(page.advanceBkash || ''))};
+var CC_NAGAD = ${JSON.stringify(String(page.advanceNagad || ''))};
+var CC_ROCKET = ${JSON.stringify(String(page.advanceRocket || ''))};
+var CC_RLAT = ${Number(page.restaurantLat) || 0};
+var CC_RLNG = ${Number(page.restaurantLng) || 0};
+var CC_SLABS = ${JSON.stringify(page.deliverySlabs || [])};
+var ccOrderIdVal = null;
+var ccPaymentUrl = null;
+var ccAdvData = {};
+
+function ccStorageKey(){ return 'cc_cart_' + CC_PAGE_ID; }
+function ccLoad(){
+  try { var raw = localStorage.getItem(ccStorageKey()); var arr = raw ? JSON.parse(raw) : []; return Array.isArray(arr) ? arr : []; }
+  catch(e){ return []; }
+}
+function ccLineKey(it){ return it.code + '::' + (it.variantLabel || ''); }
+function ccSave(items){
+  try { localStorage.setItem(ccStorageKey(), JSON.stringify(items)); } catch(e){}
+  ccRenderBar(); ccRenderDrawer();
+}
+function ccAddToCart(code, name, price, variantLabel, imageUrl, qty){
+  var items = ccLoad();
+  var key = code + '::' + (variantLabel || '');
+  var found = null;
+  for (var i=0;i<items.length;i++){ if (ccLineKey(items[i])===key){ found=items[i]; break; } }
+  if (found) { found.qty = (Number(found.qty)||1) + (Number(qty)||1); }
+  else { items.push({ code: code, name: name, price: Number(price)||0, qty: Number(qty)||1, variantLabel: variantLabel || '', imageUrl: imageUrl || '' }); }
+  ccSave(items);
+  return items;
+}
+function ccQuickAdd(code, name, price, imageUrl, btnEl){
+  ccAddToCart(code, name, price, '', imageUrl, 1);
+  if (btnEl){
+    var orig = btnEl.textContent;
+    btnEl.textContent = '✓ যোগ হয়েছে';
+    btnEl.classList.add('cc-added-flash');
+    setTimeout(function(){ btnEl.textContent = orig; btnEl.classList.remove('cc-added-flash'); }, 1100);
+  }
+}
+function ccSetQty(idx, qty){
+  var items = ccLoad();
+  if (!items[idx]) return;
+  qty = Math.max(0, Math.floor(Number(qty)||0));
+  if (qty <= 0) items.splice(idx,1); else items[idx].qty = qty;
+  ccSave(items);
+}
+function ccRemove(idx){
+  var items = ccLoad();
+  items.splice(idx,1);
+  ccSave(items);
+}
+function ccSubtotal(items){
+  var s = 0;
+  for (var i=0;i<items.length;i++) s += (Number(items[i].price)||0) * (Number(items[i].qty)||0);
+  return s;
+}
+function ccCount(items){
+  var n = 0;
+  for (var i=0;i<items.length;i++) n += Number(items[i].qty)||0;
+  return n;
+}
+function ccEsc(s){
+  var d = document.createElement('div'); d.textContent = String(s||''); return d.innerHTML;
+}
+function ccRenderBar(){
+  var items = ccLoad();
+  var bar = document.getElementById('ccBar');
+  if (!bar) return;
+  var n = ccCount(items);
+  if (n <= 0) { bar.classList.remove('show'); return; }
+  bar.classList.add('show');
+  document.getElementById('ccBarCount').textContent = n;
+  document.getElementById('ccBarTotal').textContent = CC_CURRENCY + ccSubtotal(items).toLocaleString();
+}
+function ccRenderDrawer(){
+  var items = ccLoad();
+  var body = document.getElementById('ccDrawerBody');
+  var foot = document.getElementById('ccDrawerFoot');
+  if (!body || !foot) return;
+  if (!items.length) {
+    body.innerHTML = '<div class="cc-empty">🛒 কার্ট খালি — মেনু থেকে খাবার যোগ করুন</div>';
+    foot.innerHTML = '';
+    return;
+  }
+  var html = '';
+  for (var i=0;i<items.length;i++){
+    var it = items[i];
+    var img = it.imageUrl ? ('<img src="'+ccEsc(it.imageUrl)+'" alt="">') : '<div class="cc-line-ph">🍽️</div>';
+    html += '<div class="cc-line">'+img
+      + '<div class="cc-line-body"><div class="cc-line-name">'+ccEsc(it.name)+'</div>'
+      + (it.variantLabel ? ('<div class="cc-line-meta">'+ccEsc(it.variantLabel)+'</div>') : '')
+      + '</div>'
+      + '<div class="cc-line-qty">'
+      + '<button type="button" class="cc-qbtn" onclick="ccSetQty('+i+','+(it.qty-1)+')">−</button>'
+      + '<span>'+it.qty+'</span>'
+      + '<button type="button" class="cc-qbtn" onclick="ccSetQty('+i+','+(it.qty+1)+')">+</button>'
+      + '</div>'
+      + '<div class="cc-line-price">'+CC_CURRENCY+((it.price*it.qty).toLocaleString())+'</div>'
+      + '<button type="button" class="cc-remove" onclick="ccRemove('+i+')">✕</button>'
+      + '</div>';
+  }
+  body.innerHTML = html;
+  foot.innerHTML = '<div class="cc-subtotal"><span>সাবটোটাল</span><span>'+CC_CURRENCY+ccSubtotal(items).toLocaleString()+'</span></div>'
+    + '<button type="button" class="cc-go-btn" onclick="ccOpenCheckout()">Checkout করুন →</button>';
+}
+function ccOpenDrawer(){ var o=document.getElementById('ccDrawerOverlay'); if(o){o.classList.add('open'); document.body.style.overflow='hidden';} ccRenderDrawer(); }
+function ccCloseDrawer(){ var o=document.getElementById('ccDrawerOverlay'); if(o){o.classList.remove('open'); document.body.style.overflow='';} }
+
+// ── Checkout modal (map-pin delivery + payment) ─────────────────────────────
+var ccMap=null, ccCustMarker=null, ccLat=null, ccLng=null, ccFee=null;
+function ccHaversineKm(lat1,lng1,lat2,lng2){
+  var R=6371, toRad=function(d){ return d*Math.PI/180; };
+  var dLat=toRad(lat2-lat1), dLng=toRad(lng2-lng1);
+  var a=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLng/2)*Math.sin(dLng/2);
+  return 2*R*Math.asin(Math.sqrt(a));
+}
+function ccInitMap(){
+  if (ccMap || typeof L === 'undefined') { if (ccMap) setTimeout(function(){ ccMap.invalidateSize(); }, 80); return; }
+  ccMap = L.map('ccMap').setView([CC_RLAT, CC_RLNG], 15);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:19, attribution:'&copy; OpenStreetMap' }).addTo(ccMap);
+  var restoIcon = L.divIcon({ className:'', html:'<div style="font-size:26px;line-height:1;filter:drop-shadow(0 2px 3px rgba(0,0,0,.4))">🏪</div>', iconSize:[26,26], iconAnchor:[13,24] });
+  L.marker([CC_RLAT, CC_RLNG], { icon: restoIcon, interactive:false }).addTo(ccMap);
+  var maxKm = CC_SLABS.length ? CC_SLABS[CC_SLABS.length-1].maxKm : 0;
+  if (maxKm > 0) { L.circle([CC_RLAT, CC_RLNG], { radius:maxKm*1000, color:'#059669', weight:1.5, fillOpacity:.06 }).addTo(ccMap); }
+  ccMap.on('click', function(e){ ccPlacePin(e.latlng.lat, e.latlng.lng); });
+  setTimeout(function(){ ccMap.invalidateSize(); }, 80);
+}
+function ccPlacePin(lat,lng){
+  ccLat=lat; ccLng=lng;
+  if (!ccCustMarker){
+    var pinIcon = L.divIcon({ className:'', html:'<div style="font-size:30px;line-height:1;filter:drop-shadow(0 2px 3px rgba(0,0,0,.4))">📍</div>', iconSize:[30,30], iconAnchor:[15,28] });
+    ccCustMarker = L.marker([lat,lng], { icon: pinIcon, draggable:true }).addTo(ccMap);
+    ccCustMarker.on('dragend', function(){ var ll=ccCustMarker.getLatLng(); ccLat=ll.lat; ccLng=ll.lng; ccRecalcFee(); });
+  } else { ccCustMarker.setLatLng([lat,lng]); }
+  ccRecalcFee();
+}
+function ccRecalcFee(){
+  var box = document.getElementById('ccFeeBox'); if (!box) return;
+  if (ccLat === null){ box.className='wo-fee-box'; box.textContent='ম্যাপে আপনার ডেলিভারি লোকেশন pin করুন — delivery charge দেখাবে'; return; }
+  var km = Math.round(ccHaversineKm(CC_RLAT, CC_RLNG, ccLat, ccLng)*100)/100;
+  var slab = null;
+  for (var i=0;i<CC_SLABS.length;i++){ if (km <= CC_SLABS[i].maxKm){ slab = CC_SLABS[i]; break; } }
+  if (!slab){ ccFee=null; box.className='wo-fee-box bad'; box.textContent='দুঃখিত, এই লোকেশন আমাদের ডেলিভারি এলাকার বাইরে ('+km+' km) 😔'; return; }
+  ccFee = slab.fee;
+  var items = ccLoad();
+  var subtotal = ccSubtotal(items);
+  var total = subtotal + ccFee;
+  box.className='wo-fee-box ok';
+  box.innerHTML = '🛵 Delivery charge: <strong>'+CC_CURRENCY+ccFee.toLocaleString()+'</strong> ('+km+' km)<br>মোট: <strong>'+CC_CURRENCY+total.toLocaleString()+'</strong> ('+CC_CURRENCY+subtotal.toLocaleString()+' + delivery)';
+}
+function ccUseGps(){
+  var btn = document.getElementById('ccGpsBtn');
+  if (!navigator.geolocation){ ccSetErr('ccErr0','আপনার browser-এ GPS support নেই — Google Maps link paste করুন বা ম্যাপে ট্যাপ করে pin করুন'); return; }
+  btn.disabled = true; btn.textContent = 'লোকেশন খোঁজা হচ্ছে...';
+  var ccGpsDone = false;
+  var ccGpsWatchdog = setTimeout(function(){
+    if (ccGpsDone) return;
+    ccGpsDone = true;
+    btn.disabled = false; btn.textContent = '📍 আমার লোকেশন ব্যবহার করুন (GPS)';
+    ccSetErr('ccErr0','লোকেশন পেতে বেশি সময় লাগছে। নিচের ঘরে Google Maps link paste করুন বা সরাসরি ম্যাপে ট্যাপ করে pin করুন');
+  }, 12000);
+  navigator.geolocation.getCurrentPosition(function(pos){
+    if (ccGpsDone) return;
+    ccGpsDone = true; clearTimeout(ccGpsWatchdog);
+    btn.disabled = false; btn.textContent = '📍 আমার লোকেশন ব্যবহার করুন (GPS)';
+    ccSetErr('ccErr0','');
+    ccPlacePin(pos.coords.latitude, pos.coords.longitude);
+    ccMap.setView([pos.coords.latitude, pos.coords.longitude], 16);
+  }, function(){
+    if (ccGpsDone) return;
+    ccGpsDone = true; clearTimeout(ccGpsWatchdog);
+    btn.disabled = false; btn.textContent = '📍 আমার লোকেশন ব্যবহার করুন (GPS)';
+    ccSetErr('ccErr0','লোকেশন পাওয়া যায়নি। Messenger-এর ভেতরের browser-এ GPS প্রায়ই কাজ করে না — নিচের ঘরে Google Maps link paste করুন, ম্যাপে ট্যাপ করুন, অথবা Chrome-এ খুলুন (⋯ menu → Open in browser)');
+  }, { enableHighAccuracy:true, timeout:10000 });
+}
+function ccPasteLocation(){
+  var inp = document.getElementById('ccMapsLink');
+  var btn = document.getElementById('ccMapsLinkBtn');
+  var v = (inp && inp.value || '').trim();
+  if (!v){ ccSetErr('ccErr0','Google Maps link বা coordinates দিন'); return; }
+  ccSetErr('ccErr0','');
+  var m = v.match(/@(-?\\d{1,3}\\.\\d+),(-?\\d{1,3}\\.\\d+)/) || v.match(/[?&](?:q|ll|query|destination)=(-?\\d{1,3}\\.\\d+)(?:%2C|,)(-?\\d{1,3}\\.\\d+)/i) || v.match(/(-?\\d{1,3}\\.\\d{3,})\\s*[,;\\s]\\s*(-?\\d{1,3}\\.\\d{3,})/);
+  if (m){ var la=parseFloat(m[1]), ln=parseFloat(m[2]); if (isFinite(la)&&isFinite(ln)){ ccPlacePin(la,ln); ccMap.setView([la,ln],16); return; } }
+  btn.disabled = true; btn.textContent = '...';
+  fetch('/catalog/maps-resolve?u='+encodeURIComponent(v)).then(function(r){ return r.json(); }).then(function(d){
+    btn.disabled = false; btn.textContent = '✔';
+    if (d && isFinite(d.lat) && isFinite(d.lng)){ ccPlacePin(d.lat, d.lng); ccMap.setView([d.lat, d.lng], 16); }
+    else { ccSetErr('ccErr0', (d && d.message) || 'লোকেশন পড়া যায়নি — Google Maps-এর share link দিন'); }
+  }).catch(function(){
+    btn.disabled = false; btn.textContent = '✔';
+    ccSetErr('ccErr0','লোকেশন পড়া যায়নি — Google Maps-এর share link দিন');
+  });
+}
+function ccSetErr(id,msg){ var el=document.getElementById(id); if (el){ el.textContent=msg; el.style.display = msg ? 'block':'none'; } }
+function ccShowStep(n){
+  ['ccStep0','ccStep1a','ccStepM','ccStepP','ccStep2'].forEach(function(id){ var el=document.getElementById(id); if (el) el.classList.remove('active'); });
+  var t = document.getElementById('ccStep'+n); if (t) t.classList.add('active');
+  ccUpdateProgress(n);
+}
+function ccUpdateProgress(n){
+  var phase = (n==='2') ? 3 : (n==='0') ? 1 : 2;
+  var fill = document.getElementById('ccProgressFill'); if (fill) fill.style.width = (phase*100/3)+'%';
+  [['ccProgLbl1',1],['ccProgLbl2',2],['ccProgLbl3',3]].forEach(function(pair){
+    var el = document.getElementById(pair[0]); if (el) el.classList.toggle('on', phase>=pair[1]);
+  });
+}
+function ccOpenCheckout(){
+  var items = ccLoad();
+  if (!items.length) return;
+  ccCloseDrawer();
+  var summary = document.getElementById('ccOrderSummary');
+  if (summary){
+    var lines = items.map(function(it){ return ccEsc(it.name) + (it.variantLabel ? (' ('+ccEsc(it.variantLabel)+')') : '') + ' × ' + it.qty; }).join('<br>');
+    summary.innerHTML = '<strong>'+items.length+'টা আইটেম</strong><br><span style="font-size:13px;color:var(--sub)">'+lines+'</span><br><span style="font-size:13px;color:var(--sub)">সাবটোটাল: '+CC_CURRENCY+ccSubtotal(items).toLocaleString()+'</span>';
+  }
+  ccLat = null; ccLng = null; ccFee = null;
+  var feeBox = document.getElementById('ccFeeBox');
+  if (feeBox){ feeBox.className='wo-fee-box'; feeBox.textContent='ম্যাপে আপনার ডেলিভারি লোকেশন pin করুন — delivery charge দেখাবে'; }
+  document.getElementById('ccModal').classList.add('open');
+  document.body.style.overflow = 'hidden';
+  ccShowStep(0);
+  ccInitMap();
+}
+function ccModalClose(){ document.getElementById('ccModal').classList.remove('open'); document.body.style.overflow=''; }
+
+async function ccSubmit(){
+  var items = ccLoad();
+  if (!items.length){ ccSetErr('ccErr0','কার্ট খালি'); return; }
+  var name = document.getElementById('ccName').value.trim();
+  var phone = document.getElementById('ccPhone').value.trim();
+  var addrDetail = document.getElementById('ccAddrDetail').value.trim();
+  var note = document.getElementById('ccNote').value.trim();
+  if (!name){ ccSetErr('ccErr0','নাম দিন'); return; }
+  if (!phone){ ccSetErr('ccErr0','ফোন নম্বর দিন'); return; }
+  var phoneDigits = phone.replace(/\\D/g,'');
+  if (phoneDigits.length<10 || phoneDigits.length>12){ ccSetErr('ccErr0','সঠিক ফোন নম্বর দিন (যেমন: 01XXXXXXXXX)'); return; }
+  var normPhone = phoneDigits.length===12 && phoneDigits.startsWith('88') ? phoneDigits.slice(2) : phoneDigits;
+  if (normPhone.length!==11 || !normPhone.startsWith('0')){ ccSetErr('ccErr0','সঠিক বাংলাদেশি ফোন নম্বর দিন (01XXXXXXXXX)'); return; }
+  if (ccLat===null || ccLng===null){ ccSetErr('ccErr0','ম্যাপে আপনার ডেলিভারি লোকেশন pin করুন'); return; }
+  if (ccFee===null){ ccSetErr('ccErr0','দুঃখিত, আপনার লোকেশন ডেলিভারি এলাকার বাইরে — কাছের কোনো ঠিকানা দিন'); return; }
+  if (!addrDetail){ ccSetErr('ccErr0','বিস্তারিত ঠিকানা দিন (বাসা/রোড/ফ্লোর)'); return; }
+  ccSetErr('ccErr0','');
+  var btn = document.getElementById('ccBtnSubmit');
+  btn.disabled = true; btn.textContent = 'পাঠানো হচ্ছে...';
+  try {
+    var body = {
+      customerName: name, phone: phone, address: addrDetail, orderNote: note,
+      deliveryLat: ccLat, deliveryLng: ccLng,
+      items: items.map(function(it){ return { productCode: it.code, qty: it.qty, price: it.price, productName: it.name, variantLabel: it.variantLabel || undefined }; }),
+    };
+    var r = await fetch('/catalog/'+CC_PAGE_ID+'/web-order', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    var d = await r.json();
+    if (!r.ok) throw new Error(d.message || 'Error');
+    ccOrderIdVal = d.orderId;
+    ccSave([]);
+    if (!d.paymentRequired){
+      document.getElementById('ccOrderId').textContent = '#'+d.orderId;
+      document.getElementById('ccMsgId').textContent = '#'+d.orderId;
+      ccShowStep(2);
+    } else if (d.method === 'gateway'){
+      ccPaymentUrl = d.paymentUrl;
+      document.getElementById('ccGwAmount').textContent = CC_CURRENCY + (d.advanceAmount || CC_ADV_AMT);
+      ccShowStep('1a'); document.getElementById('ccTitle').textContent = '💳 Payment করুন';
+    } else {
+      var amt = CC_CURRENCY + (d.advanceAmount || CC_ADV_AMT);
+      ccAdvData = { bkash: d.advanceBkash || CC_BKASH, nagad: d.advanceNagad || CC_NAGAD, rocket: d.advanceRocket || CC_ROCKET, amt: amt };
+      document.getElementById('ccMethodAmt').textContent = amt;
+      var bkashBtn = document.getElementById('ccBtnBkash');
+      var nagadBtn = document.getElementById('ccBtnNagad');
+      var rocketBtn = document.getElementById('ccBtnRocket');
+      if (ccAdvData.bkash){ document.getElementById('ccMBkashNum').textContent = ccAdvData.bkash; bkashBtn.style.display='flex'; } else { bkashBtn.style.display='none'; }
+      if (ccAdvData.nagad){ document.getElementById('ccMNagadNum').textContent = ccAdvData.nagad; nagadBtn.style.display='flex'; } else { nagadBtn.style.display='none'; }
+      if (ccAdvData.rocket){ document.getElementById('ccMRocketNum').textContent = ccAdvData.rocket; rocketBtn.style.display='flex'; } else { rocketBtn.style.display='none'; }
+      var available = [ccAdvData.bkash&&'bkash', ccAdvData.nagad&&'nagad', ccAdvData.rocket&&'rocket'].filter(Boolean);
+      if (available.length===1){ ccSelectMethod(available[0]); }
+      else { ccShowStep('M'); document.getElementById('ccTitle').textContent = '💸 Payment করুন'; }
+    }
+  } catch(e){ ccSetErr('ccErr0', e.message || 'কিছু একটা সমস্যা হয়েছে'); }
+  btn.disabled = false; btn.textContent = 'অর্ডার দিন →';
+}
+function ccGoGateway(){ if (ccPaymentUrl) window.location.href = ccPaymentUrl; }
+function ccPFileChosen(inp){ var lbl=document.getElementById('ccPFileLabel'); if (inp.files && inp.files[0]) lbl.textContent = '✅ '+inp.files[0].name; else lbl.textContent = '📷 Screenshot বেছে নিন'; }
+function ccSelectMethod(method){
+  var icons={bkash:'📱',nagad:'📱',rocket:'🚀'};
+  var names={bkash:'বিকাশ',nagad:'নগদ',rocket:'রকেট'};
+  var nums={bkash:ccAdvData.bkash,nagad:ccAdvData.nagad,rocket:ccAdvData.rocket};
+  document.getElementById('ccPIcon').textContent = icons[method]||'📱';
+  document.getElementById('ccPName').textContent = names[method]||method;
+  document.getElementById('ccPNum').textContent = nums[method]||'';
+  document.getElementById('ccPAmt').textContent = ccAdvData.amt||'';
+  document.getElementById('ccFinalTxId').value = '';
+  var ss=document.getElementById('ccPScreenshot'); if (ss) ss.value='';
+  document.getElementById('ccPFileLabel').textContent = '📷 Screenshot বেছে নিন';
+  ccSetErr('ccErrP','');
+  ccShowStep('P'); document.getElementById('ccTitle').textContent = '💸 Payment করুন';
+}
+async function ccPaySubmit(){
+  var txId = document.getElementById('ccFinalTxId').value.trim();
+  var ssFile = document.getElementById('ccPScreenshot').files[0];
+  if (!txId){ ccSetErr('ccErrP','Transaction ID দিন'); return; }
+  ccSetErr('ccErrP','');
+  var btn = document.getElementById('ccBtnPaySubmit');
+  btn.disabled = true; btn.textContent = 'Submit হচ্ছে...';
+  try {
+    var fd = new FormData();
+    fd.append('transactionId', txId);
+    if (ssFile) fd.append('screenshot', ssFile);
+    var r = await fetch('/catalog/'+CC_PAGE_ID+'/web-order/'+ccOrderIdVal+'/payment-proof', { method:'POST', body: fd });
+    var d = await r.json();
+    if (!r.ok) throw new Error(d.message || 'Submit failed');
+    document.getElementById('ccOrderId').textContent = '#'+ccOrderIdVal;
+    document.getElementById('ccMsgId').textContent = '#'+ccOrderIdVal;
+    ccShowStep(2);
+  } catch(e){ ccSetErr('ccErrP', e.message || 'Submit করা যায়নি'); }
+  btn.disabled = false; btn.textContent = 'Submit করুন →';
+}
+document.querySelectorAll('#ccModal .wo-inp').forEach(function(el){
+  el.addEventListener('focus', function(){ setTimeout(function(){ el.scrollIntoView({block:'center', behavior:'smooth'}); }, 300); });
+});
+ccRenderBar();
+</script>
+`;
+  }
+
   // ── Catalog HTML page ──────────────────────────────────────────────────────
   private buildHtml(
     data: any,
     search: string,
-    opts?: { selectionMode?: boolean; shortlistCodes?: string[]; category?: string },
+    opts?: {
+      selectionMode?: boolean;
+      shortlistCodes?: string[];
+      category?: string;
+    },
   ): string {
     const { page, products } = data;
     const primary = esc(page.primaryColor);
@@ -2440,8 +3059,9 @@ ${poweredByBadge()}
     const cardsProducts = effectiveCategory
       ? products.filter(
           (p: any) =>
-            String(p.category || '').trim().toLowerCase() ===
-            effectiveCategory!.toLowerCase(),
+            String(p.category || '')
+              .trim()
+              .toLowerCase() === effectiveCategory.toLowerCase(),
         )
       : products;
 
@@ -2496,7 +3116,14 @@ ${poweredByBadge()}
           ${p.description ? `<div class="c-desc">${esc(p.description)}</div>` : ''}
           <div class="c-footer">
             ${priceBlock}
-            <div class="c-order ${!inStock ? 'c-order-dis' : ''}">${inStock ? (selectionMode ? '✅ Select' : restaurantTabs ? '🛒 Order' : '💬 Order') : 'Out'}</div>
+            ${
+              restaurantTabs &&
+              !selectionMode &&
+              inStock &&
+              !cardVariants.length
+                ? `<button type="button" class="c-cart-add" onclick="event.preventDefault();event.stopPropagation();ccQuickAdd('${esc(p.code)}','${esc(String(p.name || p.code))}',${curPrice},'${esc(p.imageUrl || '')}',this)">+ কার্টে যোগ করুন</button>`
+                : `<div class="c-order ${!inStock ? 'c-order-dis' : ''}">${inStock ? (selectionMode ? '✅ Select' : restaurantTabs ? '🛒 Order' : '💬 Order') : 'Out'}</div>`
+            }
           </div>
         </div>
       </a>`;
@@ -2542,6 +3169,12 @@ ${ogImage ? `<meta property="og:image" content="${esc(ogImage)}"/>` : ''}
 ${ogImage ? `<meta name="twitter:image" content="${esc(ogImage)}"/>` : ''}
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+${
+  restaurantTabs
+    ? `<link rel="stylesheet" href="/vendor/leaflet/leaflet.css"/>
+<script src="/vendor/leaflet/leaflet.js"></script>`
+    : ''
+}
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -3008,6 +3641,7 @@ ${
   </div>
 </footer>
 
+${restaurantTabs ? this.restaurantCartWidget(page) : ''}
 ${poweredByBadge()}
 <script>
 (function(){
@@ -3021,6 +3655,54 @@ ${poweredByBadge()}
   var sortMode = 'all';
   var currentCat = '';
   var currentQuery = (searchBox ? searchBox.value : '').toLowerCase().trim();
+
+  /* ── V30: "pages" layout mode's category tabs are real <a href> links
+     (their own shareable URL) — intercept plain clicks and swap in just the
+     new category's product grid via fetch, instead of a full page reload.
+     Falls back to a real navigation on any error, and a modified click
+     (ctrl/cmd/shift/middle-click) always opens normally. ── */
+  var catNavBusy = false;
+  function catNavRebind(){
+    grid = document.querySelector('.grid');
+    allCards = grid ? Array.from(grid.querySelectorAll('.card')) : [];
+    apply();
+  }
+  function catNavSwap(url){
+    if (catNavBusy) return;
+    catNavBusy = true;
+    var gridWrap = document.querySelector('.grid-wrap');
+    if (gridWrap) gridWrap.style.opacity = '.45';
+    fetch(url)
+      .then(function(r){ if(!r.ok) throw new Error('nav failed'); return r.text(); })
+      .then(function(html){
+        var doc = new DOMParser().parseFromString(html, 'text/html');
+        var newGridWrap = doc.querySelector('.grid-wrap');
+        var newTitle = doc.querySelector('title');
+        if (newGridWrap && gridWrap) gridWrap.parentNode.replaceChild(newGridWrap, gridWrap);
+        if (newTitle) document.title = newTitle.textContent;
+        document.querySelectorAll('#categoryBar a.filter-btn').forEach(function(a){
+          a.classList.toggle('active', a.getAttribute('href') === url);
+        });
+        history.pushState({}, '', url);
+        catNavRebind();
+        var filters = document.querySelector('.filters');
+        if (filters) filters.scrollIntoView({ behavior:'smooth', block:'start' });
+      })
+      .catch(function(){ window.location.href = url; })
+      .then(function(){
+        var gw = document.querySelector('.grid-wrap');
+        if (gw) gw.style.opacity = '';
+        catNavBusy = false;
+      });
+  }
+  document.addEventListener('click', function(e){
+    var link = e.target.closest && e.target.closest('#categoryBar a.filter-btn');
+    if (!link) return;
+    if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+    e.preventDefault();
+    catNavSwap(link.getAttribute('href'));
+  });
+  window.addEventListener('popstate', function(){ window.location.reload(); });
 
   /* ── normalize text for matching ── */
   function norm(s){ return (s||'').toLowerCase().replace(/\s+/g,' ').trim(); }
