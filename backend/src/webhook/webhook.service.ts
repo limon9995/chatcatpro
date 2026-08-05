@@ -1962,27 +1962,34 @@ export class WebhookService implements OnModuleDestroy {
       // reclassify the customer's actual message ourselves and fix the
       // opener word rather than trust the AI's word choice.
       const greetMsg = (text || '').toLowerCase();
+      const greetIsBanglaScript = /[ঀ-৿]/.test(text || '');
       const greetIsSalam =
         /(assalamu\s*alaikum|assalamualaikum|walaikum\s*assalam|\bsalam\b|salaam|আসসালামু আলাইকুম|ওয়ালাইকুম আসসালাম|সালাম)/i.test(
           greetMsg,
         );
       const greetIsCasualHi =
         !greetIsSalam && /\b(hi+|hello+|hey+)\b|হাই|হ্যালো/i.test(greetMsg);
+      const greetCasualOpener = greetIsBanglaScript ? 'হ্যালো' : 'Hi';
+      const greetGenericOpener = greetIsBanglaScript ? 'স্বাগতম' : 'Hello';
       const SALAM_OPENER_RE =
         /^(ওয়ালাইকুম\s*আসসালাম|আসসালামু\s*আলাইকুম|আসসালামুয়ালাইকুম|walaikum\s*assalam|assalamu\s*alaikum)[!।.,\s]*/i;
       const CASUAL_OPENER_RE = /^(hi+|hello+|hey+|হাই+|হ্যালো+|স্বাগতম)[!।.,\s]*/i;
       if (!greetIsSalam && SALAM_OPENER_RE.test(greetReply)) {
         greetReply = greetReply.replace(
           SALAM_OPENER_RE,
-          `${greetIsCasualHi ? 'Hi' : 'স্বাগতম'}! `,
+          `${greetIsCasualHi ? greetCasualOpener : greetGenericOpener}! `,
         );
       } else if (greetIsSalam && CASUAL_OPENER_RE.test(greetReply)) {
         greetReply = greetReply.replace(CASUAL_OPENER_RE, 'ওয়ালাইকুম আসসালাম! ');
       }
       // Safety net: never let a bare "Hi!"/"হাই" echo go out with no
       // help-offer question, regardless of what the AI classifier returned.
+      // Language-matched to whatever script the reply itself is in.
       if (greetReply.trim().length < 25 && !/[?？]/.test(greetReply)) {
-        greetReply = `${greetReply.trim()} আপনাকে আজ কীভাবে সাহায্য করতে পারি? 😊`;
+        const greetReplyIsBangla = /[ঀ-৿]/.test(greetReply);
+        greetReply = greetReplyIsBangla
+          ? `${greetReply.trim()} আপনাকে আজ কীভাবে সাহায্য করতে পারি? 😊`
+          : `${greetReply.trim()} How can I assist you today? 😊`;
       }
       await this.safeSend(token, psid, greetReply);
       return;

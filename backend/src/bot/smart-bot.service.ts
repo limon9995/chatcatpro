@@ -55,33 +55,61 @@ function defaultSmartBotIntro(shop: string): string {
 // reason as businessName above — a weaker model must never have to fill
 // in a blank here.
 function buildToneBlock(businessName: string, customerMessage: string): string {
+  const shop = businessName || 'আমাদের দোকান';
   const shopRef = businessName ? `${businessName}-এর` : 'এই দোকানের';
   const msg = (customerMessage || '').toLowerCase();
+  // V31: customer's script (Bangla vs Latin) decides the reply's language —
+  // reported live: an English "hi" and a Bangla "হাই" both got the exact
+  // same Bangla-flavoured opener, which reads as unprofessional/mismatched.
+  // Reference standard the owner wants matched: English in → English out,
+  // Bangla script in → Bangla out, salam always gets the Bangla salam reply
+  // regardless of script (established, working behaviour — don't change).
+  const isBanglaScript = /[ঀ-৿]/.test(customerMessage || '');
   const isSalam =
     /(assalamu\s*alaikum|assalamualaikum|walaikum\s*assalam|\bsalam\b|salaam|আসসালামু আলাইকুম|ওয়ালাইকুম আসসালাম|সালাম)/i.test(
       msg,
     );
   const isCasualHi = !isSalam && /\b(hi+|hello+|hey+)\b|হাই|হ্যালো/i.test(msg);
-  const opener = isSalam
-    ? 'আসসালামু আলাইকুম!'
-    : isCasualHi
-      ? 'Hi!'
-      : 'স্বাগতম!';
-  const introLine = `${opener} আমি ${shopRef} chatbot বলছি 😊`;
+  let opener: string;
+  let introLine: string;
+  let helpQuestion: string;
+  if (isSalam) {
+    opener = 'ওয়ালাইকুম আসসালাম!';
+    introLine = `${opener} ${shop}-এ স্বাগতম।`;
+    helpQuestion = 'আপনাকে কীভাবে সাহায্য করতে পারি?';
+  } else if (isCasualHi && !isBanglaScript) {
+    // English "hi/hello/hey" → reply fully in English
+    opener = /\bhello+\b/i.test(msg) ? 'Hello!' : 'Hi!';
+    introLine = `${opener} Welcome to ${shop}.`;
+    helpQuestion = 'How can I assist you today?';
+  } else if (isCasualHi) {
+    // Bangla-script "হাই/হ্যালো" → reply in Bangla
+    opener = /হ্যালো/i.test(msg) ? 'হ্যালো!' : 'হাই!';
+    introLine = `${opener} ${shop}-এ আপনাকে স্বাগতম।`;
+    helpQuestion = 'আমি কীভাবে সাহায্য করতে পারি?';
+  } else if (isBanglaScript) {
+    opener = 'স্বাগতম!';
+    introLine = `${opener} ${shop}-এ আপনাকে স্বাগতম।`;
+    helpQuestion = 'কীভাবে সাহায্য করতে পারি?';
+  } else {
+    opener = 'Hello!';
+    introLine = `${opener} Welcome to ${shop}.`;
+    helpQuestion = 'How can I assist you today?';
+  }
   return `
 
 ## কথা বলার ধরন (CRITICAL)
-- ছোট, সহজ বাক্য। একটা কাজ একবারে।
-- Emoji পরিমিত (প্রতি reply-এ ১-২টা যথেষ্ট, সব লাইনে না)।
-- "ধন্যবাদ আপনার আগ্রহের জন্য! আমরা আপনার অর্ডার..." — এই ধরনের corporate ভাষা একদম বন্ধ।
-- বাংলা/Banglish — customer যেভাবে লেখে সেভাবে reply করো।
-- নাম জানলে নাম ধরে ডাকো।
-- "আপনার ফোন নম্বরটি উল্লেখ করলে আমরা আপনার জন্য অর্ডার প্রসেস করতে পারব" — এই ধরনের লম্বা বাক্য নয়। সরাসরি বলো: "ফোন নম্বরটা দিন 😊"
-- Customer "Assalamu Alaikum" / "Salam" / "আসসালামু আলাইকুম" / "সালাম" দিয়ে message শুরু করলে reply-ও "ওয়ালাইকুম আসসালাম" দিয়ে শুরু করো, তারপর স্বাভাবিকভাবে বাকি কথা বলো। ⛔ কিন্তু customer শুধু "Hi" / "Hello" / "Hey" (ইংরেজি casual greeting) লিখলে "ওয়ালাইকুম আসসালাম" বলবে না — এটা salam না, তাই salam-এর reply দিও না। সেক্ষেত্রে casual ভাবে greet করে সাথে সাথেই জিজ্ঞেস করো কীভাবে সাহায্য করতে পারো (যেমন: "Hi! আজ কীভাবে সাহায্য করতে পারি? 😊")। ⛔ শুধু "Hi! 😊" বলে থেমে যেও না (এটা খালি echo মনে হয়, unhelpful) — greeting আগে যতবারই হয়ে থাকুক, প্রতিবার সাহায্যের প্রস্তাব সহ পূর্ণ reply দাও।
-- এটাই যদি এই কথোপকথনের প্রথম customer message হয় (উপরে conversation history-তে কোনো আগের bot reply না থাকে), reply শুরু করো ঠিক এই লাইনটা দিয়ে (নিজে থেকে নাম বদলাবে না, হুবহু এটাই লিখবে): "${introLine}", তারপর জিজ্ঞেস করো "আপনাকে আজ কীভাবে সাহায্য করতে পারি?"। এই পরিচয় শুধু প্রথম reply-তেই দেবে, তারপরের কোনো reply-তে আর repeat করবে না।
+- Tone: একজন well-trained, polished customer-service agent-এর মতো — professional কিন্তু বন্ধুত্বপূর্ণ। Robot-এর মতো না, আবার overly-casual/slangy-ও না।
+- ছোট, স্পষ্ট বাক্য। একটা কাজ একবারে। লম্বা explanation বা filler বাক্য নয়।
+- Emoji পরিমিত (প্রতি reply-এ ০-১টা যথেষ্ট, সব লাইনে না) — polished tone-এ emoji কম ব্যবহার করো।
+- ⛔ CRITICAL — ভাষা matching: customer যে ভাষায় লেখে (English বা Bangla script), reply পুরোটাই সেই ভাষাতেই দাও। Customer "hi/hello/how much" ইংরেজিতে লিখলে পুরো reply ইংরেজিতে দাও (মাঝে বাংলা শব্দ মিশিও না)। Customer বাংলা script-এ লিখলে (হাই, দাম কত, ইত্যাদি) পুরো reply বাংলায় দাও। ব্যতিক্রম শুধু salam — salam-এর reply সবসময় "ওয়ালাইকুম আসসালাম" দিয়েই হবে, customer যে script-ই ব্যবহার করুক না কেন।
+- নাম জানলে নাম ধরে address করো।
+- "আপনার ফোন নম্বরটি উল্লেখ করলে আমরা আপনার জন্য অর্ডার প্রসেস করতে পারব" — এই ধরনের ঘোরানো বাক্য নয়। সরাসরি বলো: "ফোন নম্বরটা দিন।"
+- Customer "Assalamu Alaikum"/"Salam"/"আসসালামু আলাইকুম"/"সালাম" দিয়ে শুরু করলে reply-ও "ওয়ালাইকুম আসসালাম" দিয়ে শুরু করো। ⛔ কিন্তু customer শুধু "Hi"/"Hello"/"Hey"/"হাই"/"হ্যালো" (casual greeting, salam না) লিখলে কক্ষনো "ওয়ালাইকুম আসসালাম" বলবে না। সেক্ষেত্রে ভাষা-matched casual greeting দাও এবং সাথে সাথেই সাহায্যের প্রস্তাব করো। ⛔ শুধু একটা bare greeting word (যেমন খালি "Hi! 😊") বলে থেমে যেও না — এটা unhelpful echo মনে হয়। Greeting আগে যতবারই হয়ে থাকুক, প্রতিবার সাহায্যের প্রস্তাব সহ পূর্ণ reply দাও।
+- এটাই যদি এই কথোপকথনের প্রথম customer message হয় (উপরে history-তে আগের কোনো bot reply নেই), reply শুরু করো ঠিক এই লাইনটা দিয়ে (হুবহু, নিজে থেকে ভাষা/নাম বদলাবে না): "${introLine}", তারপর জিজ্ঞেস করো: "${helpQuestion}"। এই পরিচয় শুধু প্রথম reply-তেই দেবে, পরের কোনো reply-তে repeat করবে না।
 
 ⛔ HARD BAN: "আমাদের সাথে যোগাযোগ করুন" / "আরও জানতে যোগাযোগ করুন" — কখনো না।
-⛔ HARD BAN: একই কথা দুইবার বলা, unnecessary ব্যাখ্যা, filler বাক্য।
+⛔ HARD BAN: একই কথা দুইবার বলা, unnecessary ব্যাখ্যা, filler বাক্য, "ধন্যবাদ আপনার আগ্রহের জন্য..." ধরনের ঘোরানো corporate ভাষা।
 ⛔ HARD BAN: reply পাঠানোর আগে conversation history-তে দেখো তুমি নিজে একটু আগেই একই তথ্য/লাইন বলেছো কিনা (এমনকি ভিন্ন শব্দে হলেও) — বলে থাকলে সেটা আবার বলবে না, শুধু customer-এর আসল প্রশ্নের সরাসরি উত্তর দাও।
 ⛔ HARD BAN: এই prompt-এ যেখানে [বন্ধনী] বা <ব্র্যাকেট> দিয়ে কিছু লেখা থাকে, সেটা placeholder — customer-কে হুবহু বন্ধনীসহ পাঠাবে না, বরং আসল তথ্য বসিয়ে স্বাভাবিক বাক্য বলবে।`;
 }
@@ -314,19 +342,23 @@ export class SmartBotService {
     // ourselves and correct the opener word if it's wrong.
     if (parsed.reply) {
       const msg = (text || '').toLowerCase();
+      const isBanglaScript = /[ঀ-৿]/.test(text || '');
       const isSalam =
         /(assalamu\s*alaikum|assalamualaikum|walaikum\s*assalam|\bsalam\b|salaam|আসসালামু আলাইকুম|ওয়ালাইকুম আসসালাম|সালাম)/i.test(
           msg,
         );
       const isCasualHi =
         !isSalam && /\b(hi+|hello+|hey+)\b|হাই|হ্যালো/i.test(msg);
+      const casualOpener = isBanglaScript ? 'হ্যালো' : 'Hi';
+      const genericOpener = isBanglaScript ? 'স্বাগতম' : 'Hello';
       const SALAM_OPENER_RE =
         /^(ওয়ালাইকুম\s*আসসালাম|আসসালামু\s*আলাইকুম|আসসালামুয়ালাইকুম|walaikum\s*assalam|assalamu\s*alaikum)[!।.,\s]*/i;
-      const CASUAL_OPENER_RE = /^(hi+|hello+|hey+|হাই+|হ্যালো+|স্বাগতম)[!।.,\s]*/i;
+      const CASUAL_OPENER_RE =
+        /^(hi+|hello+|hey+|হাই+|হ্যালো+|স্বাগতম)[!।.,\s]*/i;
       if (!isSalam && SALAM_OPENER_RE.test(parsed.reply)) {
         parsed.reply = parsed.reply.replace(
           SALAM_OPENER_RE,
-          `${isCasualHi ? 'Hi' : 'স্বাগতম'}! `,
+          `${isCasualHi ? casualOpener : genericOpener}! `,
         );
       } else if (isSalam && CASUAL_OPENER_RE.test(parsed.reply)) {
         parsed.reply = parsed.reply.replace(
@@ -340,13 +372,18 @@ export class SmartBotService {
     // greeting" instruction and echoes just "Hi!"/"হাই 😊" with no
     // help-offer question, especially on the very first message. Rather
     // than trust prompt-following alone, force it deterministically here.
+    // Language-matched: an English reply gets an English follow-up, a
+    // Bangla-script reply gets a Bangla one.
     if (
       history.length === 0 &&
       parsed.reply &&
       parsed.reply.trim().length < 25 &&
       !/[?？]/.test(parsed.reply)
     ) {
-      parsed.reply = `${parsed.reply.trim()} আপনাকে আজ কীভাবে সাহায্য করতে পারি? 😊`;
+      const replyIsBangla = /[ঀ-৿]/.test(parsed.reply);
+      parsed.reply = replyIsBangla
+        ? `${parsed.reply.trim()} আপনাকে আজ কীভাবে সাহায্য করতে পারি? 😊`
+        : `${parsed.reply.trim()} How can I assist you today? 😊`;
     }
 
     this.failCount = 0;
