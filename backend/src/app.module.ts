@@ -20,7 +20,6 @@ import { PageModule } from './page/page.module';
 import { PrintModule } from './print/print.module';
 import { MemoModule } from './memo/memo.module';
 import { AdminModule } from './admin/admin.module';
-import { MarketingModule } from './marketing/marketing.module';
 import { ClientDashboardModule } from './client-dashboard/client-dashboard.module';
 import { AuthModule } from './auth/auth.module';
 import { CallModule } from './call/call.module';
@@ -93,7 +92,6 @@ import { PricingModule } from './pricing/pricing.module';
     PrintModule,
     MemoModule,
     AdminModule,
-    MarketingModule,
     ClientDashboardModule,
     AuthModule,
     CallModule,
