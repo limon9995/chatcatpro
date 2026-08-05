@@ -9,11 +9,17 @@ import { WalletService } from '../wallet/wallet.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { GeminiKeyRotatorService } from '../common/gemini-key-rotator.service';
 import { AgentBehaviorConfig } from '../agents/agent-behavior-config.interface';
-import { estimateMonthlyCost, PricingCalcInput } from '../common/pricing-estimator';
+import {
+  estimateMonthlyCost,
+  PricingCalcInput,
+} from '../common/pricing-estimator';
 import { MessengerService } from '../messenger/messenger.service';
 import { isInsideDhakaAddress } from '../webhook/handlers/dhaka-areas';
 import { AiUsageService } from '../common/ai-usage.service';
-import { isRestaurantReady, orderStatusLabel } from '../common/restaurant-delivery';
+import {
+  isRestaurantReady,
+  orderStatusLabel,
+} from '../common/restaurant-delivery';
 import { FollowUpService } from '../followup/followup.service';
 import {
   formatSlabsBn,
@@ -38,10 +44,30 @@ function defaultSmartBotIntro(shop: string): string {
 // — a weaker model will paste a bracketed placeholder into the actual reply
 // verbatim instead of understanding it as "fill this in" (reproduced live:
 // it sent "আমি [দোকানের নাম]-এর chatbot বলছি" word-for-word to a customer).
-function buildToneBlock(businessName: string): string {
-  const introLine = businessName
-    ? `আসসালামু আলাইকুম! আমি ${businessName}-এর chatbot বলছি 😊`
-    : `আসসালামু আলাইকুম! আমি এই দোকানের chatbot বলছি 😊`;
+//
+// V30: the greeting word in this intro line used to be hardcoded to
+// "আসসালামু আলাইকুম" always — so a customer whose first message was just
+// "Hi" still got an Islamic-greeting reply back, which reads as a mismatch
+// (reported live). The opener now matches what the customer actually sent:
+// salam → salam back, casual "hi/hello" → casual back, anything else →
+// a neutral "স্বাগতম" (welcome), never assuming a religious greeting that
+// wasn't there. Still fully pre-rendered (no {{placeholder}}) for the same
+// reason as businessName above — a weaker model must never have to fill
+// in a blank here.
+function buildToneBlock(businessName: string, customerMessage: string): string {
+  const shopRef = businessName ? `${businessName}-এর` : 'এই দোকানের';
+  const msg = (customerMessage || '').toLowerCase();
+  const isSalam =
+    /(assalamu\s*alaikum|assalamualaikum|walaikum\s*assalam|\bsalam\b|salaam|আসসালামু আলাইকুম|ওয়ালাইকুম আসসালাম|সালাম)/i.test(
+      msg,
+    );
+  const isCasualHi = !isSalam && /\b(hi+|hello+|hey+)\b|হাই|হ্যালো/i.test(msg);
+  const opener = isSalam
+    ? 'আসসালামু আলাইকুম!'
+    : isCasualHi
+      ? 'Hi!'
+      : 'স্বাগতম!';
+  const introLine = `${opener} আমি ${shopRef} chatbot বলছি 😊`;
   return `
 
 ## কথা বলার ধরন (CRITICAL)
@@ -51,7 +77,7 @@ function buildToneBlock(businessName: string): string {
 - বাংলা/Banglish — customer যেভাবে লেখে সেভাবে reply করো।
 - নাম জানলে নাম ধরে ডাকো।
 - "আপনার ফোন নম্বরটি উল্লেখ করলে আমরা আপনার জন্য অর্ডার প্রসেস করতে পারব" — এই ধরনের লম্বা বাক্য নয়। সরাসরি বলো: "ফোন নম্বরটা দিন 😊"
-- Customer "Assalamu Alaikum" / "Salam" / "আসসালামু আলাইকুম" / "সালাম" দিয়ে message শুরু করলে reply-ও "ওয়ালাইকুম আসসালাম" দিয়ে শুরু করো, তারপর স্বাভাবিকভাবে বাকি কথা বলো।
+- Customer "Assalamu Alaikum" / "Salam" / "আসসালামু আলাইকুম" / "সালাম" দিয়ে message শুরু করলে reply-ও "ওয়ালাইকুম আসসালাম" দিয়ে শুরু করো, তারপর স্বাভাবিকভাবে বাকি কথা বলো। ⛔ কিন্তু customer শুধু "Hi" / "Hello" / "Hey" (ইংরেজি casual greeting) লিখলে "ওয়ালাইকুম আসসালাম" বলবে না — এটা salam না, তাই salam-এর reply দিও না। সেক্ষেত্রে শুধু casual ভাবে greet করো (যেমন "Hi! 😊")।
 - এটাই যদি এই কথোপকথনের প্রথম customer message হয় (উপরে conversation history-তে কোনো আগের bot reply না থাকে), reply শুরু করো ঠিক এই লাইনটা দিয়ে (নিজে থেকে নাম বদলাবে না, হুবহু এটাই লিখবে): "${introLine}", তারপর জিজ্ঞেস করো "আপনাকে আজ কীভাবে সাহায্য করতে পারি?"। এই পরিচয় শুধু প্রথম reply-তেই দেবে, তারপরের কোনো reply-তে আর repeat করবে না।
 
 ⛔ HARD BAN: "আমাদের সাথে যোগাযোগ করুন" / "আরও জানতে যোগাযোগ করুন" — কখনো না।
@@ -82,7 +108,15 @@ export interface SmartBotCollected {
 
 export interface SmartBotResponse {
   reply: string;
-  action: 'CHAT' | 'COLLECT' | 'CONFIRM_ORDER' | 'CANCEL_ORDER' | 'AGENT' | 'CAPTURE_LEAD' | 'CONFIRM_LEAD' | 'SHOW_CATALOG';
+  action:
+    | 'CHAT'
+    | 'COLLECT'
+    | 'CONFIRM_ORDER'
+    | 'CANCEL_ORDER'
+    | 'AGENT'
+    | 'CAPTURE_LEAD'
+    | 'CONFIRM_LEAD'
+    | 'SHOW_CATALOG';
   collected: SmartBotCollected;
   calculatePricing: PricingCalcInput | null;
 }
@@ -146,7 +180,8 @@ export class SmartBotService {
     // provider, though — if OpenAI is configured, Gemini having a rough patch
     // (or being on cooldown) should still fall through to OpenAI per-message
     // (see callOpenAI below), not silently degrade straight to keyword replies.
-    const geminiUsable = this.geminiRotator.isAvailable() && Date.now() > this.cooldownUntil;
+    const geminiUsable =
+      this.geminiRotator.isAvailable() && Date.now() > this.cooldownUntil;
     return geminiUsable || !!this.openAiKey;
   }
 
@@ -198,7 +233,8 @@ export class SmartBotService {
 
     // If customer sent a specific Order ID (e.g. "#1234" or "1234"), look it up
     let orderById: any = null;
-    const orderIdMatch = text.match(/^#?(\d{1,6})\s*$/) || text.match(/অর্ডার\s*#?(\d{1,6})/i);
+    const orderIdMatch =
+      text.match(/^#?(\d{1,6})\s*$/) || text.match(/অর্ডার\s*#?(\d{1,6})/i);
     if (orderIdMatch) {
       orderById = await this.prisma.order.findFirst({
         where: { id: parseInt(orderIdMatch[1]), pageIdRef: pageId },
@@ -229,7 +265,9 @@ export class SmartBotService {
     // understood without asking "which product?".
     const lastPresented = await this.ctx
       .getLastPresentedProducts(pageId, psid)
-      .catch(() => [] as { code: string; price: number; name?: string | null }[]);
+      .catch(
+        () => [] as { code: string; price: number; name?: string | null }[],
+      );
 
     // Name to greet the customer by. Prefer their CRM/order name; otherwise
     // fetch their Facebook first name so the bot can say "প্রিয় <name>" even
@@ -252,6 +290,7 @@ export class SmartBotService {
       crmCustomer,
       lastPresented,
       greetName,
+      text,
     );
     const messages: { role: string; content: string }[] = [
       { role: 'system', content: systemPrompt },
@@ -382,7 +421,12 @@ export class SmartBotService {
           ? `, অথবা সরাসরি আমাদের হটলাইনে কল করুন: ${phone} 📞`
           : '।';
         const handoffMsg = await this.botKnowledge
-          .resolveSystemReply(pageId, 'agent_handoff', { hotlineBlock }, page.agentType)
+          .resolveSystemReply(
+            pageId,
+            'agent_handoff',
+            { hotlineBlock },
+            page.agentType,
+          )
           .catch(() => parsed.reply);
         // Proactive check-in even if the customer never messages again —
         // the reactive check (webhook.service.ts's agentHandling gate)
@@ -403,7 +447,9 @@ export class SmartBotService {
             });
           }
         } catch (err: any) {
-          this.logger.error(`[SmartBot] agent_checkin schedule failed: ${err?.message}`);
+          this.logger.error(
+            `[SmartBot] agent_checkin schedule failed: ${err?.message}`,
+          );
         }
         return handoffMsg || parsed.reply;
       }
@@ -417,7 +463,8 @@ export class SmartBotService {
           leadDraft.items = [];
         }
         leadDraft.isLead = true;
-        if (parsed.collected.customerName) leadDraft.customerName = parsed.collected.customerName;
+        if (parsed.collected.customerName)
+          leadDraft.customerName = parsed.collected.customerName;
         if (parsed.collected.phone) {
           leadDraft.phone = parsed.collected.phone;
           leadDraft.whatsappNumber = parsed.collected.phone;
@@ -432,7 +479,12 @@ export class SmartBotService {
           return parsed.reply; // Still collecting
         }
         try {
-          await draftHandler.finalizeDraftOrder(pageId, psid, { ...ld, isLead: true }, page);
+          await draftHandler.finalizeDraftOrder(
+            pageId,
+            psid,
+            { ...ld, isLead: true },
+            page,
+          );
           await this.ctx.clearDraft(pageId, psid);
           await this.ctx.clearHistory(pageId, psid);
         } catch (err: any) {
@@ -468,11 +520,11 @@ export class SmartBotService {
         // and a confirm ask, otherwise the flow dies on "অপেক্ষা করছি".
         const proofJustArrived = !!d?.paymentProof && !hadProof;
         if (nowComplete && (!wasComplete || proofJustArrived)) {
-          if (d!.currentStep === 'advance_payment') {
-            return `${parsed.reply}\n\n${draftHandler.buildAdvancePrompt(page, d!)}`;
+          if (d.currentStep === 'advance_payment') {
+            return `${parsed.reply}\n\n${draftHandler.buildAdvancePrompt(page, d)}`;
           }
-          if (d!.currentStep === 'confirm') {
-            return `${parsed.reply}\n\n${await draftHandler.buildSummary(d!, page)}`;
+          if (d.currentStep === 'confirm') {
+            return `${parsed.reply}\n\n${await draftHandler.buildSummary(d, page)}`;
           }
         }
         return parsed.reply;
@@ -498,17 +550,26 @@ export class SmartBotService {
     orderById?: any,
     queriedOrderId?: number | null,
     agentBehavior: AgentBehaviorConfig = {},
-    crmCustomer?: { name?: string | null; totalOrders?: number | null; lastOrderAt?: Date | null } | null,
+    crmCustomer?: {
+      name?: string | null;
+      totalOrders?: number | null;
+      lastOrderAt?: Date | null;
+    } | null,
     lastPresented?: { code: string; price: number; name?: string | null }[],
     greetName?: string | null,
+    customerMessage = '',
   ): string {
     const shop = ctx.businessName
       ? `"${ctx.businessName}" নামের Bangladeshi e-commerce shop`
       : 'একটি Bangladeshi fashion e-commerce shop';
 
     // Product catalog — split coded vs simple
-    const codedProducts = ctx.products.filter((p) => (p as any).productType !== 'SIMPLE');
-    const simpleProducts = ctx.products.filter((p) => (p as any).productType === 'SIMPLE');
+    const codedProducts = ctx.products.filter(
+      (p) => (p as any).productType !== 'SIMPLE',
+    );
+    const simpleProducts = ctx.products.filter(
+      (p) => (p as any).productType === 'SIMPLE',
+    );
 
     // V24: per-product discount/offer note — shown only when originalPrice > price.
     const offerNote = (p: any) => {
@@ -522,18 +583,16 @@ export class SmartBotService {
     // V25: size/portion pricing — "5 pcs ৳120 / 10 pcs ৳220" replaces the
     // single price so the bot can answer "3ta momo koto?" correctly.
     const priceText = (p: any, unitSuffix = '') => {
-      const variants = parsePriceVariants((p as any).priceVariantsJson);
+      const variants = parsePriceVariants(p.priceVariantsJson);
       if (variants.length)
         return `${variantsSummaryText(variants, '৳')} (দাম size/পরিমাণ অনুযায়ী)`;
       return `৳${p.price}${unitSuffix}`;
     };
     const categoryNote = (p: any) =>
-      (p as any).priceVariantsJson && (p as any).category
-        ? ` | Category: ${(p as any).category}`
-        : '';
+      p.priceVariantsJson && p.category ? ` | Category: ${p.category}` : '';
     // trackStock=false food items are always orderable while active
     const stockText = (p: any, inText: string) =>
-      (p as any).trackStock === false || p.stockQty > 0 ? inText : 'Stock শেষ';
+      p.trackStock === false || p.stockQty > 0 ? inText : 'Stock শেষ';
 
     const codedLines = codedProducts
       .slice(0, 30)
@@ -543,7 +602,9 @@ export class SmartBotService {
         // even if a customer asks "koto pis ase".
         const stock = stockText(p, 'Stock আছে');
         const deliveryNote =
-          (p as any).deliveryCharge === 'FREE' ? ' | 🚚 Home Delivery FREE' : '';
+          (p as any).deliveryCharge === 'FREE'
+            ? ' | 🚚 Home Delivery FREE'
+            : '';
         const desc = String((p as any).description || '').trim();
         const descLine = desc ? `\n    বিবরণ: ${desc}` : '';
         return `[${p.code}] ${p.name ?? p.code} — ${priceText(p)} | ${stock}${deliveryNote}${categoryNote(p)}${offerNote(p)}${descLine}`;
@@ -556,7 +617,9 @@ export class SmartBotService {
         // V25: never expose the exact stock count — see codedLines note above.
         const stock = stockText(p, `Stock আছে (${unit})`);
         const deliveryNote =
-          (p as any).deliveryCharge === 'FREE' ? ' | 🚚 Home Delivery FREE' : '';
+          (p as any).deliveryCharge === 'FREE'
+            ? ' | 🚚 Home Delivery FREE'
+            : '';
         const desc = String((p as any).description || '').trim();
         const descLine = desc ? `\n    বিবরণ: ${desc}` : '';
         return `${p.name ?? p.code} — ${priceText(p, `/${unit}`)} | ${stock}${deliveryNote}${categoryNote(p)}${offerNote(p)}${descLine}`;
@@ -606,13 +669,15 @@ ${ctx.businessAddress || '(ঠিকানা সেভ করা নেই)'}
     const paymentRules = (ctx.paymentRules as any) || {};
     const payMode = (page.paymentMode as string) || 'cod';
     const fullAdvance = payMode === 'full_advance';
-    const codOn = page.codEnabled !== false && paymentRules.codEnabled !== false;
+    const codOn =
+      page.codEnabled !== false && paymentRules.codEnabled !== false;
     const insideAdvOn = fullAdvance || !!paymentRules.insideDhakaAdvanceEnabled;
     const outsideAdvOn =
       fullAdvance ||
       payMode === 'advance_outside' ||
       !!paymentRules.outsideDhakaAdvanceEnabled;
-    const fixedAdv = Number(page.advanceAmount) > 0 ? Number(page.advanceAmount) : 0;
+    const fixedAdv =
+      Number(page.advanceAmount) > 0 ? Number(page.advanceAmount) : 0;
     const insideAmtTxt =
       Number(paymentRules.insideDhakaAdvanceAmount) > 0
         ? `৳${paymentRules.insideDhakaAdvanceAmount}`
@@ -648,14 +713,28 @@ ${ctx.businessAddress || '(ঠিকানা সেভ করা নেই)'}
       advThreshold > 0 && (insideAdvOn || outsideAdvOn)
         ? `ℹ️ Order subtotal ৳${advThreshold} পর্যন্ত হলে advance লাগবে না`
         : '';
-    const bkash = page.advanceBkash ? `Bkash (Send Money): ${page.advanceBkash}` : '';
-    const nagad = page.advanceNagad ? `Nagad (Send Money): ${page.advanceNagad}` : '';
-    const rocket = page.advanceRocket ? `Rocket (Send Money): ${page.advanceRocket}` : '';
+    const bkash = page.advanceBkash
+      ? `Bkash (Send Money): ${page.advanceBkash}`
+      : '';
+    const nagad = page.advanceNagad
+      ? `Nagad (Send Money): ${page.advanceNagad}`
+      : '';
+    const rocket = page.advanceRocket
+      ? `Rocket (Send Money): ${page.advanceRocket}`
+      : '';
     const zoneNote =
       insideAdvOn !== outsideAdvOn
         ? `\n⚠️ Zone বুঝতে ঠিকানার জেলা/এলাকা দেখো — ঠিকানায় শুধু "Dhaka" শব্দ থাকলেই ঢাকার ভিতরে না। "Tangail, Dhaka" মানে ঢাকা বিভাগ — এটা ঢাকার **বাইরে**। ঢাকা শহরের এলাকা (Mirpur, Uttara, Dhanmondi, Gulshan...) থাকলে তবেই ভিতরে।`
         : '';
-    const paymentCtx = `\n${[codLine, insideAdv, outsideAdv, thresholdLine, bkash, nagad, rocket]
+    const paymentCtx = `\n${[
+      codLine,
+      insideAdv,
+      outsideAdv,
+      thresholdLine,
+      bkash,
+      nagad,
+      rocket,
+    ]
       .filter(Boolean)
       .join('\n')}${zoneNote}`;
 
@@ -776,7 +855,10 @@ ${
     // Last placed order tracking context
     let orderTrackCtx = '';
     if (lastOrder) {
-      const statusBn = orderStatusLabel(lastOrder.status, isRestaurantReady(page));
+      const statusBn = orderStatusLabel(
+        lastOrder.status,
+        isRestaurantReady(page),
+      );
       const products = lastOrder.items
         .map((i: any) => `${i.productCode} x${i.qty}`)
         .join(', ');
@@ -788,21 +870,27 @@ ${
     let orderByIdCtx = '';
     if (orderById) {
       const snBn = orderStatusLabel(orderById.status, isRestaurantReady(page));
-      const snProds = orderById.items.map((i: any) => `${i.productCode} x${i.qty}`).join(', ');
+      const snProds = orderById.items
+        .map((i: any) => `${i.productCode} x${i.qty}`)
+        .join(', ');
       const snDate = new Date(orderById.createdAt).toLocaleDateString('bn-BD');
       orderByIdCtx = `\n\n## Order ID দিয়ে খোঁজা Order (DB থেকে)\nOrder #${orderById.id} — ${snDate}\nProducts: ${snProds || '?'}\nStatus: **${snBn}**\n\n⚠️ Customer এই specific Order ID টি পাঠিয়েছে। উপরের status দেখে CHAT action দিয়ে reply করো।`;
     } else if (queriedOrderId) {
       orderByIdCtx = `\n\n## Order ID খোঁজার ফলাফল\nএই page-এ Order #${queriedOrderId} পাওয়া যায়নি। Customer-কে জানাও।`;
     }
 
-
     // Returning-customer context (from CRM) — greet known customers by name
     let customerCtx = '';
-    if (crmCustomer && (crmCustomer.name || (crmCustomer.totalOrders ?? 0) > 0)) {
+    if (
+      crmCustomer &&
+      (crmCustomer.name || (crmCustomer.totalOrders ?? 0) > 0)
+    ) {
       const bits: string[] = [];
       if (crmCustomer.name) bits.push(`নাম: ${crmCustomer.name}`);
       if ((crmCustomer.totalOrders ?? 0) > 0)
-        bits.push(`আগে ${crmCustomer.totalOrders} বার order দিয়েছে (পুরনো/চেনা customer)`);
+        bits.push(
+          `আগে ${crmCustomer.totalOrders} বার order দিয়েছে (পুরনো/চেনা customer)`,
+        );
       // Plain data only — addressing behaviour is in the task rules, so the weak
       // model does not echo an inline example back to the customer.
       customerCtx = `\n\n## এই Customer (CRM থেকে চেনা)\n${bits.join(' | ')}\nইনি আগে থেকেই চেনা — নতুন করে নাম জিজ্ঞেস করবে না, order নিলে CRM-এর জানা তথ্য কাজে লাগাও।`;
@@ -896,7 +984,7 @@ status reply-এর পরে, যদি "Delivery সময়:" সেটি�
         : defaultSmartBotIntro(shop);
     const toneBlock = agentBehavior.toneRules
       ? `\n\n${agentBehavior.toneRules}`
-      : buildToneBlock(ctx.businessName || '');
+      : buildToneBlock(ctx.businessName || '', customerMessage);
 
     return `${intro}${toneBlock}
 ${deliveryCtx}${locationCtx}${paymentCtx}${productCtx}${pricingPolicyCtx}${knowledgeCtx}${pricingCtx}${catalogCtx}${customerCtx}${greetingCtx}${lastPresentedCtx}${draftCtx}${orderTrackCtx}${orderByIdCtx}${taskRules}`;
@@ -923,7 +1011,9 @@ ${deliveryCtx}${locationCtx}${paymentCtx}${productCtx}${pricingPolicyCtx}${knowl
     }
     // All Gemini keys exhausted — fall back to OpenAI
     if (this.openAiKey) {
-      this.logger.warn('[SmartBot] All Gemini keys exhausted — falling back to OpenAI');
+      this.logger.warn(
+        '[SmartBot] All Gemini keys exhausted — falling back to OpenAI',
+      );
       return this.callOpenAIApi(messages, usage);
     }
     this.enterCooldown();
@@ -968,24 +1058,32 @@ ${deliveryCtx}${locationCtx}${paymentCtx}${productCtx}${pricingPolicyCtx}${knowl
       const latency = Date.now() - start;
 
       if (res.status === 429 || res.status === 402) {
-        this.logger.warn(`[SmartBot] Gemini key ...${geminiKey.slice(-6)} quota/limit (${res.status})`);
+        this.logger.warn(
+          `[SmartBot] Gemini key ...${geminiKey.slice(-6)} quota/limit (${res.status})`,
+        );
         this.geminiRotator.markError(geminiKey, res.status);
         return 'QUOTA_EXCEEDED';
       }
       if (res.status === 500 || res.status === 503 || res.status === 504) {
-        this.logger.warn(`[SmartBot] Gemini key ...${geminiKey.slice(-6)} server error (${res.status})`);
+        this.logger.warn(
+          `[SmartBot] Gemini key ...${geminiKey.slice(-6)} server error (${res.status})`,
+        );
         this.geminiRotator.markError(geminiKey, res.status);
         return 'SERVER_ERROR';
       }
       if (res.status === 400 || res.status === 401 || res.status === 403) {
         const errText = await res.text();
-        this.logger.error(`[SmartBot] Gemini key ...${geminiKey.slice(-6)} invalid/permission error (${res.status}): ${errText}`);
+        this.logger.error(
+          `[SmartBot] Gemini key ...${geminiKey.slice(-6)} invalid/permission error (${res.status}): ${errText}`,
+        );
         this.geminiRotator.markError(geminiKey, res.status, errText);
         return 'DISABLED';
       }
       if (!res.ok) {
         const errText = await res.text();
-        this.logger.error(`[SmartBot] Gemini error ${res.status}: ${errText.slice(0, 200)}`);
+        this.logger.error(
+          `[SmartBot] Gemini error ${res.status}: ${errText.slice(0, 200)}`,
+        );
         this.geminiRotator.markError(geminiKey, res.status, errText);
         this.recordFailure();
         return null;
@@ -997,9 +1095,13 @@ ${deliveryCtx}${locationCtx}${paymentCtx}${productCtx}${pricingPolicyCtx}${knowl
       usage.model = this.model;
       usage.promptTokens = data?.usageMetadata?.promptTokenCount ?? 0;
       usage.outputTokens = data?.usageMetadata?.candidatesTokenCount ?? 0;
-      return (data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '').trim() || null;
+      return (
+        (data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '').trim() || null
+      );
     } catch (err: any) {
-      this.logger.warn(`[SmartBot] Gemini network error: ${err?.message ?? err}`);
+      this.logger.warn(
+        `[SmartBot] Gemini network error: ${err?.message ?? err}`,
+      );
       this.geminiRotator.markError(geminiKey, 500, err?.message ?? String(err));
       this.recordFailure();
       return null;
@@ -1035,7 +1137,9 @@ ${deliveryCtx}${locationCtx}${paymentCtx}${productCtx}${pricingPolicyCtx}${knowl
       }
       if (!res.ok) {
         const errText = await res.text();
-        this.logger.error(`[SmartBot] OpenAI error ${res.status}: ${errText.slice(0, 200)}`);
+        this.logger.error(
+          `[SmartBot] OpenAI error ${res.status}: ${errText.slice(0, 200)}`,
+        );
         this.recordFailure();
         return null;
       }
@@ -1048,7 +1152,9 @@ ${deliveryCtx}${locationCtx}${paymentCtx}${productCtx}${pricingPolicyCtx}${knowl
       usage.outputTokens = data?.usage?.completion_tokens ?? 0;
       return (data?.choices?.[0]?.message?.content ?? '').trim() || null;
     } catch (err: any) {
-      this.logger.warn(`[SmartBot] OpenAI network error: ${err?.message ?? err}`);
+      this.logger.warn(
+        `[SmartBot] OpenAI network error: ${err?.message ?? err}`,
+      );
       this.recordFailure();
       return null;
     }

@@ -106,12 +106,16 @@ export class AiIntentService {
     this.ollamaBaseUrl = (
       apiKeysService.getSync('ollamaBaseUrl') || 'http://localhost:11434'
     ).replace(/\/$/, '');
-    this.ollamaModel = apiKeysService.getSync('ollamaChatModel') || 'qwen2:1.5b';
+    this.ollamaModel =
+      apiKeysService.getSync('ollamaChatModel') || 'qwen2:1.5b';
 
-    const providerEnv = (apiKeysService.getSync('aiIntentProvider')).toLowerCase();
+    const providerEnv = apiKeysService
+      .getSync('aiIntentProvider')
+      .toLowerCase();
     if (providerEnv === 'gemini' || (!providerEnv && this.geminiApiKey)) {
       this.provider = 'gemini';
-      this.model = apiKeysService.getSync('aiIntentModel') || 'gemini-2.5-flash-lite';
+      this.model =
+        apiKeysService.getSync('aiIntentModel') || 'gemini-2.5-flash-lite';
     } else {
       this.provider = 'openai';
       this.model = apiKeysService.getSync('aiIntentModel') || 'gpt-4o-mini';
@@ -271,9 +275,14 @@ export class AiIntentService {
         }));
         const body: any = {
           contents,
-          generationConfig: { temperature, maxOutputTokens: maxTokens, responseMimeType: 'application/json' },
+          generationConfig: {
+            temperature,
+            maxOutputTokens: maxTokens,
+            responseMimeType: 'application/json',
+          },
         };
-        if (systemMsg) body.systemInstruction = { parts: [{ text: systemMsg.content }] };
+        if (systemMsg)
+          body.systemInstruction = { parts: [{ text: systemMsg.content }] };
 
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent?key=${key}`;
         const res = await fetch(url, {
@@ -286,24 +295,32 @@ export class AiIntentService {
         const latency = Date.now() - start;
 
         if (res.status === 429 || res.status === 402) {
-          this.logger.warn(`[AiIntent] Gemini key ...${key.slice(-6)} quota (${res.status}) — trying next`);
+          this.logger.warn(
+            `[AiIntent] Gemini key ...${key.slice(-6)} quota (${res.status}) — trying next`,
+          );
           this.geminiRotator.markError(key, res.status);
           continue;
         }
         if (res.status === 500 || res.status === 503 || res.status === 504) {
-          this.logger.warn(`[AiIntent] Gemini key ...${key.slice(-6)} server error (${res.status}) — trying next`);
+          this.logger.warn(
+            `[AiIntent] Gemini key ...${key.slice(-6)} server error (${res.status}) — trying next`,
+          );
           this.geminiRotator.markError(key, res.status);
           continue;
         }
         if (res.status === 400 || res.status === 401 || res.status === 403) {
           const errText = await res.text();
-          this.logger.error(`[AiIntent] Gemini key ...${key.slice(-6)} invalid/permission error (${res.status}): ${errText}`);
+          this.logger.error(
+            `[AiIntent] Gemini key ...${key.slice(-6)} invalid/permission error (${res.status}): ${errText}`,
+          );
           this.geminiRotator.markError(key, res.status, errText);
           continue;
         }
         if (!res.ok) {
           const errText = await res.text();
-          this.logger.error(`[AiIntent] Gemini error ${res.status}: ${errText.slice(0, 100)}`);
+          this.logger.error(
+            `[AiIntent] Gemini error ${res.status}: ${errText.slice(0, 100)}`,
+          );
           this.geminiRotator.markError(key, res.status, errText);
           this.recordFailure();
           continue;
@@ -314,9 +331,14 @@ export class AiIntentService {
         usage.model = this.model;
         usage.promptTokens = data?.usageMetadata?.promptTokenCount ?? 0;
         usage.outputTokens = data?.usageMetadata?.candidatesTokenCount ?? 0;
-        return (data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '').trim() || null;
+        return (
+          (data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '').trim() ||
+          null
+        );
       } catch (err: any) {
-        this.logger.warn(`[AiIntent] Gemini network error: ${err?.message ?? err}`);
+        this.logger.warn(
+          `[AiIntent] Gemini network error: ${err?.message ?? err}`,
+        );
         this.geminiRotator.markError(key, 500, err?.message ?? String(err));
         this.recordFailure();
         continue;
@@ -357,14 +379,23 @@ export class AiIntentService {
 
     if (this.provider === 'gemini') {
       if (!this.geminiRotator.isAvailable()) {
-        this.logger.warn(`[AiIntent] No Gemini key available — keyword fallback`);
+        this.logger.warn(
+          `[AiIntent] No Gemini key available — keyword fallback`,
+        );
         return null;
       }
       this.logger.log(`[AiIntent] ${label} — Gemini rotation (${this.model})`);
-      const geminiRaw = await this.attemptGemini(messages, maxTokens, temperature, usage);
+      const geminiRaw = await this.attemptGemini(
+        messages,
+        maxTokens,
+        temperature,
+        usage,
+      );
       if (geminiRaw) return { raw: geminiRaw, usedProvider: 'gemini', usage };
       // All Gemini keys exhausted — fall through to OpenAI
-      this.logger.warn(`[AiIntent] All Gemini keys exhausted — trying OpenAI fallback`);
+      this.logger.warn(
+        `[AiIntent] All Gemini keys exhausted — trying OpenAI fallback`,
+      );
     }
 
     if (!this.apiKey) {
@@ -372,7 +403,12 @@ export class AiIntentService {
       return null;
     }
     this.logger.log(`[AiIntent] ${label} — OpenAI (${this.model})`);
-    const raw = await this.attemptOpenAI(messages, maxTokens, temperature, usage);
+    const raw = await this.attemptOpenAI(
+      messages,
+      maxTokens,
+      temperature,
+      usage,
+    );
     if (!raw) return null;
     return { raw, usedProvider: 'openai', usage };
   }
@@ -411,7 +447,12 @@ export class AiIntentService {
       ...historyMessages,
       {
         role: 'user',
-        content: this.buildUserMessage(text, awaitingConfirm, draftStep, context),
+        content: this.buildUserMessage(
+          text,
+          awaitingConfirm,
+          draftStep,
+          context,
+        ),
       },
     ];
 
@@ -469,7 +510,9 @@ export class AiIntentService {
         }
       }
 
-      await this.walletService.deductUsage(pageId, 'TEXT', { provider: resolved.usedProvider });
+      await this.walletService.deductUsage(pageId, 'TEXT', {
+        provider: resolved.usedProvider,
+      });
       this.recordAiUsage(pageId, resolved.usage);
       this.logger.log(
         `[AiIntent] intent=${intent} reply="${reply?.slice(0, 60) ?? 'none'}"`,
@@ -544,7 +587,9 @@ export class AiIntentService {
       }
 
       this.failCount = 0;
-      await this.walletService.deductUsage(pageId, 'TEXT', { provider: resolved.usedProvider });
+      await this.walletService.deductUsage(pageId, 'TEXT', {
+        provider: resolved.usedProvider,
+      });
       this.recordAiUsage(pageId, resolved.usage);
       this.logger.log(`[AiIntent] draft action=${action}`);
       return {
@@ -609,7 +654,12 @@ Rules:
       : 'একটি Bangladeshi fashion e-commerce shop';
 
     const stepLabels = agentBehavior.coreFields?.length
-      ? { ...STEP_LABELS, ...Object.fromEntries(agentBehavior.coreFields.map((f) => [f.key, f.label])) }
+      ? {
+          ...STEP_LABELS,
+          ...Object.fromEntries(
+            agentBehavior.coreFields.map((f) => [f.key, f.label]),
+          ),
+        }
       : STEP_LABELS;
 
     const stepCtx = draftStep
@@ -722,9 +772,10 @@ Customer-এর message দেখে JSON return করো:
 
 ━━ REPLY RULES — কোন তথ্য কোথা থেকে নেবে ━━
 
-GREETING reply:
+GREETING reply — customer কী শব্দ ব্যবহার করেছে সেটার সাথে মিলিয়ে reply দাও, mismatch করো না:
   • "valo asen / kemon achen / how are you" → নিজের কথা বলো ("আলহামদুলিল্লাহ, ভালো আছি 😊 আপনি কেমন আছেন?"), তারপর help offer করো। Products/code একদম mention করো না।
-  • "hi / hello / salam / assalamu alaikum" → warmly greet, shop-এর নাম বলো, কীভাবে help করতে পারো জিজ্ঞেস করো। Product list দিও না।
+  • "hi / hello / hey" (ইংরেজি casual greeting, salam না) → শুধু casual/neutral ভাবে greet করো (যেমন "Hi! [shop]-এ স্বাগতম 😊"), shop-এর নাম বলো, কীভাবে help করতে পারো জিজ্ঞেস করো। কক্ষনো "ওয়ালাইকুম আসসালাম" বা কোনো salam-জাতীয় reply দিও না — customer salam দেয়নি, শুধু "hi/hello" বলেছে।
+  • "salam / assalamu alaikum / আসসালামু আলাইকুম" (ধর্মীয় greeting) → "ওয়ালাইকুম আসসালাম" দিয়ে শুরু করো, তারপর shop-এর নাম বলো, কীভাবে help করতে পারো জিজ্ঞেস করো।
 
 DELIVERY_FEE reply:
   → উপরের Delivery section থেকে EXACT fee নাও। ঢাকার ভিতরে: ৳{insideFee}, বাইরে: ৳{outsideFee}। নিজে থেকে fee বানাবে না।
@@ -766,11 +817,16 @@ UNKNOWN + no draft → তারা কী বলতে চাইছে acknowle
     // Inject last bot reply and shown products so AI understands "ok"/soft replies
     const extraLines: string[] = [];
     if (context?.lastBotReply) {
-      extraLines.push(`[Bot এর আগের reply: "${context.lastBotReply.slice(0, 200)}"]`);
+      extraLines.push(
+        `[Bot এর আগের reply: "${context.lastBotReply.slice(0, 200)}"]`,
+      );
     }
     if (context?.lastPresentedProducts?.length) {
       const shown = context.lastPresentedProducts
-        .map((p) => `${p.name ?? p.code} (${p.code})${p.price ? ` ৳${p.price}` : ''}`)
+        .map(
+          (p) =>
+            `${p.name ?? p.code} (${p.code})${p.price ? ` ৳${p.price}` : ''}`,
+        )
         .join(', ');
       extraLines.push(`[সর্বশেষ দেখানো product: ${shown}]`);
     }
