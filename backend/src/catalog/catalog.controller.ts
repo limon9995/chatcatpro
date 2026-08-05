@@ -2496,6 +2496,8 @@ ${poweredByBadge()}
 .cc-subtotal{display:flex;justify-content:space-between;font-size:14px;font-weight:800;margin-bottom:10px;color:var(--text,#0f172a)}
 .cc-go-btn{width:100%;padding:13px;border:none;border-radius:13px;background:linear-gradient(135deg,#059669,#047857);color:#fff;font-weight:800;font-size:14.5px;cursor:pointer;font-family:inherit;box-shadow:0 4px 18px rgba(5,150,105,.35)}
 .cc-go-btn:disabled{opacity:.5;cursor:not-allowed}
+.cc-continue-btn{width:100%;padding:11px;margin-top:8px;border-radius:13px;border:1.5px solid var(--border,#e2e8f0);background:transparent;color:var(--sub,#475569);font-weight:700;font-size:13.5px;cursor:pointer;font-family:inherit}
+.cc-continue-btn:hover{background:var(--bg,#f4f6fb)}
 .c-cart-add{margin-top:6px;padding:8px 14px;border-radius:999px;border:none;background:var(--p);color:#fff;font-weight:700;font-size:12px;cursor:pointer;font-family:inherit;white-space:nowrap}
 .c-cart-add:active{transform:scale(.97)}
 .cc-added-flash{animation:ccFlash .5s ease}
@@ -2733,10 +2735,21 @@ function ccRenderDrawer(){
   }
   body.innerHTML = html;
   foot.innerHTML = '<div class="cc-subtotal"><span>সাবটোটাল</span><span>'+CC_CURRENCY+ccSubtotal(items).toLocaleString()+'</span></div>'
-    + '<button type="button" class="cc-go-btn" onclick="ccOpenCheckout()">Checkout করুন →</button>';
+    + '<button type="button" class="cc-go-btn" onclick="ccOpenCheckout()">Checkout করুন →</button>'
+    + '<button type="button" class="cc-continue-btn" onclick="ccContinueShopping()">🍽️ আরও খাবার দেখুন</button>';
 }
 function ccOpenDrawer(){ var o=document.getElementById('ccDrawerOverlay'); if(o){o.classList.add('open'); document.body.style.overflow='hidden';} ccRenderDrawer(); }
 function ccCloseDrawer(){ var o=document.getElementById('ccDrawerOverlay'); if(o){o.classList.remove('open'); document.body.style.overflow='';} }
+// Adding an item from the single-product page opens the drawer right away
+// (so the customer sees it landed in the cart) — this lets them dismiss it
+// and go back to the full menu to keep adding more dishes, instead of being
+// stuck choosing between "checkout now" or manually hitting the back button.
+function ccContinueShopping(){
+  ccCloseDrawer();
+  if (window.location.pathname.indexOf('/product/') !== -1) {
+    window.location.href = '/catalog/' + CC_PAGE_ID;
+  }
+}
 
 // ── Checkout modal (map-pin delivery + payment) ─────────────────────────────
 var ccMap=null, ccCustMarker=null, ccLat=null, ccLng=null, ccFee=null;
