@@ -15,6 +15,8 @@ export function CatalogPage({ th, pageId, onToast }: {
   const [customDomain, setCustomDomain]   = useState('');
   const [savingDomain, setSavingDomain]   = useState(false);
   const [domainSaved, setDomainSaved]     = useState(false);
+  const [activatingDomain, setActivatingDomain] = useState(false);
+  const [activationResult, setActivationResult] = useState<{ status: string; message: string } | null>(null);
   const [slugInput, setSlugInput]         = useState('');
   const [savingSlug, setSavingSlug]       = useState(false);
   const [slugError, setSlugError]         = useState('');
@@ -104,13 +106,35 @@ export function CatalogPage({ th, pageId, onToast }: {
 
   const saveCustomDomain = async () => {
     setSavingDomain(true);
+    setActivationResult(null);
     try {
       await patchSettings({ customDomain: customDomain.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/$/, '') || null });
       setDomainSaved(true);
-      onToast('✅ Custom domain saved!', 'success');
+      onToast('✅ Domain সেভ হয়েছে! এখন নিচের ধাপ অনুযায়ী DNS সেট করুন।', 'success');
       setTimeout(() => setDomainSaved(false), 3000);
+      await loadPreview();
     } catch (e: any) { onToast(e.message, 'error'); }
     finally { setSavingDomain(false); }
+  };
+
+  const activateDomain = async () => {
+    setActivatingDomain(true);
+    setActivationResult(null);
+    try {
+      const res = await fetch(`${API_BASE}/client-dashboard/${pageId}/custom-domain/activate`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${localStorage.getItem('dfbot_token')}` },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.message || `HTTP ${res.status}`);
+      setActivationResult({ status: data.status, message: data.message });
+      if (data.status === 'active') {
+        onToast('✅ ' + data.message, 'success');
+        await loadPreview();
+      }
+    } catch (e: any) {
+      setActivationResult({ status: 'error', message: e.message || 'সমস্যা হয়েছে, আবার চেষ্টা করুন।' });
+    } finally { setActivatingDomain(false); }
   };
 
   const handleSlugInput = (val: string) => {
@@ -476,8 +500,11 @@ export function CatalogPage({ th, pageId, onToast }: {
                     {savingDomain ? '...' : domainSaved ? '✅ Saved' : copy('💾 Save', 'Save')}
                   </button>
                 </div>
-                <div style={{ fontSize: 11.5, color: th.muted, marginTop: 8, lineHeight: 1.6 }}>
-                  {copy('নিজের domain ব্যবহার করতে চাইলে domain টি এখানে enter করুন। তারপর DNS-এ CNAME করুন:', 'To use your own domain, enter it here, then set a DNS CNAME record:')}
+                <div style={{ fontSize: 11.5, color: th.muted, marginTop: 8, lineHeight: 1.7 }}>
+                  {copy(
+                    '১. আপনার domain provider (Namecheap / GoDaddy / Cloudflare ইত্যাদি)-এর DNS settings-এ যান।\n২. একটা "A record" যোগ করুন — Host/Name: @ (অথবা আপনার subdomain, যেমন "shop"), Value/Points to: 200.97.166.34\n৩. উপরে domain লিখে "Save" চাপুন।\n৪. DNS change হতে ৫-৩০ মিনিট (কখনো কয়েক ঘন্টা) লাগতে পারে — তারপর নিচের "Activate" বাটনে চাপুন।\n৫. Activate সফল হলে https সহ আপনার নিজের domain-এই website live হয়ে যাবে।',
+                    '1. Go to your domain provider\'s (Namecheap / GoDaddy / Cloudflare etc.) DNS settings.\n2. Add an "A record" — Host/Name: @ (or your subdomain, e.g. "shop"), Value/Points to: 200.97.166.34\n3. Enter the domain above and click "Save".\n4. DNS changes usually take 5-30 minutes (occasionally a few hours) — then click "Activate" below.\n5. Once activated, your website will be live on your own domain with https automatically.'
+                  ).split('\n').map((line, i) => <div key={i}>{line}</div>)}
                 </div>
                 {(customDomain || activeCustomDomain) && (
                   <div style={{
@@ -485,16 +512,43 @@ export function CatalogPage({ th, pageId, onToast }: {
                     background: `${th.accent}0d`, border: `1px dashed ${th.accent}44`,
                     fontFamily: 'monospace', fontSize: 12, lineHeight: 1.8,
                   }}>
-                    <div style={{ color: th.muted }}>DNS Record (CNAME):</div>
+                    <div style={{ color: th.muted }}>DNS Record (A):</div>
                     <div style={{ color: th.accent }}>
-                      {customDomain || activeCustomDomain} <span style={{ color: th.muted }}>→</span> api.chatcat.pro
+                      {customDomain || activeCustomDomain} <span style={{ color: th.muted }}>→</span> 200.97.166.34
                     </div>
                   </div>
                 )}
                 {activeCustomDomain && (
-                  <div style={{ marginTop: 8, display: 'flex', gap: 6, alignItems: 'center', fontSize: 12, color: '#16a34a', fontWeight: 700 }}>
-                    <span>✅</span>
-                    <span>{copy(`${activeCustomDomain} — active আছে`, `${activeCustomDomain} — active`)}</span>
+                  <div style={{ marginTop: 10, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                    {page?.customDomainActive ? (
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12, color: '#16a34a', fontWeight: 700 }}>
+                        <span>✅</span>
+                        <span>{copy(`${activeCustomDomain} — active আছে`, `${activeCustomDomain} — active`)}</span>
+                      </div>
+                    ) : (
+                      <>
+                        <button
+                          style={{ ...th.btnPrimary, whiteSpace: 'nowrap', opacity: activatingDomain ? 0.5 : 1 }}
+                          onClick={activateDomain}
+                          disabled={activatingDomain}
+                        >
+                          {activatingDomain ? copy('Activate হচ্ছে...', 'Activating...') : copy('⚡ Activate', '⚡ Activate')}
+                        </button>
+                        <span style={{ fontSize: 12, color: '#d97706', fontWeight: 600 }}>
+                          {copy('⏳ এখনো active হয়নি', '⏳ Not active yet')}
+                        </span>
+                      </>
+                    )}
+                  </div>
+                )}
+                {activationResult && activationResult.status !== 'active' && (
+                  <div style={{
+                    marginTop: 8, padding: '10px 14px', borderRadius: 10,
+                    background: activationResult.status === 'error' ? '#ef444422' : '#d9770622',
+                    border: `1px solid ${activationResult.status === 'error' ? '#ef4444' : '#d97706'}55`,
+                    fontSize: 12, color: th.text, lineHeight: 1.6,
+                  }}>
+                    {activationResult.message}
                   </div>
                 )}
               </div>

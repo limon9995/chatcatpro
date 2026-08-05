@@ -2,10 +2,16 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
+
+const execFileAsync = promisify(execFile);
+const DOMAIN_RE = /^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/;
 import { PrismaService } from '../prisma/prisma.service';
 import { PageService } from '../page/page.service';
 import { ProductsService } from '../products/products.service';
@@ -40,6 +46,7 @@ import {
 
 @Injectable()
 export class ClientDashboardService {
+  private readonly logger = new Logger(ClientDashboardService.name);
   private readonly modeAccessMap: Record<string, string> = {
     automationOn: 'automationAllowed',
     ocrOn: 'ocrAllowed',
@@ -1468,6 +1475,8 @@ Return ONLY valid JSON (no markdown):
       catalogMessengerUrl: page.catalogMessengerUrl ?? '',
       catalogSlug: page.catalogSlug ?? '',
       customDomain: page.customDomain ?? '',
+      customDomainActive: Boolean((page as any).customDomainActive),
+      customDomainCheckedAt: (page as any).customDomainCheckedAt ?? null,
       fbPageId: page.pageId ?? '',
       // Feature flags
       automationOn: Boolean(page.automationOn),
@@ -1656,6 +1665,29 @@ Return ONLY valid JSON (no markdown):
       }
       pagePatch[k] = nextVal;
     }
+    // Custom domain — explicit sanitization (never trust the raw whitelist
+    // value: must be normalized the same way the DNS/activation check reads
+    // it, and clearing/changing the domain must reset activation status so a
+    // stale nginx+SSL setup isn't reported as "active" for a new domain).
+    if ('customDomain' in pagePatch) {
+      const raw = String(pagePatch.customDomain || '')
+        .trim()
+        .toLowerCase()
+        .replace(/^https?:\/\//, '')
+        .replace(/\/.*$/, '');
+      if (!raw) {
+        pagePatch.customDomain = null;
+        pagePatch.customDomainActive = false;
+        pagePatch.customDomainCheckedAt = null;
+      } else {
+        if (!DOMAIN_RE.test(raw)) {
+          throw new BadRequestException('Domain ফরম্যাট সঠিক না। যেমন: shop.yourbrand.com');
+        }
+        pagePatch.customDomain = raw;
+        pagePatch.customDomainActive = false;
+        pagePatch.customDomainCheckedAt = null;
+      }
+    }
     // V24: Restaurant mode fields — explicit sanitization (never through the
     // generic whitelist: coordinates and slabs need validation, and the flag
     // must not turn on while the page is unconfigured)
@@ -1757,6 +1789,18 @@ Return ONLY valid JSON (no markdown):
         );
       }
     }
+    // Custom domain uniqueness pre-check: same reason as catalogSlug above
+    if (typeof pagePatch.customDomain === 'string' && pagePatch.customDomain) {
+      const conflict = await this.prisma.page.findUnique({
+        where: { customDomain: pagePatch.customDomain },
+        select: { id: true },
+      });
+      if (conflict && conflict.id !== pageId) {
+        throw new ConflictException(
+          'এই domain অন্য কোনো account-এ যোগ করা আছে। অন্য domain দিন।',
+        );
+      }
+    }
     if (Object.keys(pagePatch).length > 0) {
       try {
         await this.prisma.page.update({
@@ -1770,6 +1814,14 @@ Return ONLY valid JSON (no markdown):
         ) {
           throw new ConflictException(
             'এই URL slug অন্য কেউ ব্যবহার করছে। অন্য নাম দিন।',
+          );
+        }
+        if (
+          err?.code === 'P2002' &&
+          err?.meta?.target?.includes?.('customDomain')
+        ) {
+          throw new ConflictException(
+            'এই domain অন্য কোনো account-এ যোগ করা আছে। অন্য domain দিন।',
           );
         }
         throw err;
@@ -1905,6 +1957,63 @@ Return ONLY valid JSON (no markdown):
       memoTemplateModeOn: page?.memoTemplateModeAllowed !== false,
       autoMemoDesignModeOn: page?.autoMemoDesignModeAllowed !== false,
       callFeatureEnabled: this._readGlobalCallFeatureEnabled(),
+    };
+  }
+
+  // ── Custom domain activation (DNS check + nginx vhost + SSL on the VPS) ────
+  async activateCustomDomain(pageId: number) {
+    const page: any = await this.pageService.getById(pageId);
+    const domain = page?.customDomain ? String(page.customDomain) : '';
+    if (!domain) {
+      throw new BadRequestException('আগে একটা domain সেভ করুন।');
+    }
+    if (!DOMAIN_RE.test(domain)) {
+      throw new BadRequestException('Domain ফরম্যাট সঠিক না। যেমন: shop.yourbrand.com');
+    }
+
+    let stdout = '';
+    let stderr = '';
+    try {
+      const result = await execFileAsync(
+        '/usr/local/bin/chatcat-add-domain.sh',
+        [domain],
+        { timeout: 90_000 },
+      );
+      stdout = result.stdout || '';
+      stderr = result.stderr || '';
+    } catch (err: any) {
+      stdout = err?.stdout || '';
+      stderr = err?.stderr || err?.message || '';
+    }
+    const out = `${stdout}\n${stderr}`;
+    await this.prisma.page.update({
+      where: { id: pageId },
+      data: { customDomainCheckedAt: new Date() },
+    });
+
+    if (out.includes('STATUS=OK')) {
+      await this.prisma.page.update({
+        where: { id: pageId },
+        data: { customDomainActive: true },
+      });
+      return {
+        status: 'active',
+        message: `${domain} সফলভাবে activate হয়েছে! এখন এই domain-এ আপনার catalog দেখা যাবে। 🎉`,
+      };
+    }
+    if (out.includes('STATUS=DNS_NOT_POINTING')) {
+      return {
+        status: 'dns_pending',
+        message: `DNS এখনো ${domain} → 200.97.166.34 point করছে না। DNS provider-এ A record ঠিকভাবে বসিয়েছেন কিনা check করুন। DNS propagate হতে কিছুক্ষণ (৫ মিনিট থেকে কয়েক ঘন্টা) সময় লাগতে পারে — একটু পর আবার "Activate" চাপুন।`,
+      };
+    }
+    if (out.includes('STATUS=INVALID_DOMAIN')) {
+      return { status: 'error', message: 'Domain ফরম্যাট সঠিক না।' };
+    }
+    this.logger.error(`Custom domain activation failed for ${domain}: ${out}`);
+    return {
+      status: 'error',
+      message: 'Activation-এ সমস্যা হয়েছে। একটু পর আবার চেষ্টা করুন, অথবা সাপোর্টে যোগাযোগ করুন।',
     };
   }
 

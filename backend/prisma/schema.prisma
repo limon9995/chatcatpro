@@ -117,7 +117,9 @@ model Page {
   primaryColor            String?
   catalogMessengerUrl     String? // Custom link for catalog "Order on Messenger" button
   catalogSlug             String? @unique // e.g. "limon-tech-diary" → /catalog/limon-tech-diary
-  customDomain            String? @unique // e.g. "shop.mybrand.com" — customer's personal domain
+  customDomain            String?   @unique // e.g. "shop.mybrand.com" — customer's personal domain
+  customDomainActive      Boolean   @default(false) // DNS-verified + SSL provisioned on the VPS
+  customDomainCheckedAt   DateTime? // last activation attempt timestamp
   // V21: Catalog analytics
   catalogViews            Int     @default(0)
   websiteUrl              String? // Optional external store/website URL; bot can send this instead of hosted catalog

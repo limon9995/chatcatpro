@@ -433,6 +433,12 @@ export class ClientDashboardController {
   ) {
     return this.svc.updateBusinessSettings(this.pid(r, p), b || {});
   }
+  @Post(':pageId/custom-domain/activate') activateCustomDomain(
+    @Param('pageId') p: string,
+    @Req() r: any,
+  ) {
+    return this.svc.activateCustomDomain(this.pid(r, p));
+  }
 
   // ── Voice ─────────────────────────────────────────────────────────────────
   @Post(':pageId/voice/generate') generateVoice(
