@@ -46,8 +46,17 @@ interface Lead {
   pipelineStatus: string;
   source: string;
   notes: string | null;
+  aiSummary: string | null;
+  painPointsJson: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+interface PainPoint {
+  painPoint: string;
+  evidence: string;
+  confidence: number;
+  solution: string;
 }
 
 const PIPELINE_STATUSES = [
@@ -407,9 +416,16 @@ function LeadDetailModal({ th, lead, canEdit, canDelete, onClose, onToast, onSav
   onSaved: (l: Lead) => void; onDeleted: () => void;
 }) {
   const { request } = useApi();
+  const [current, setCurrent] = useState(lead);
   const [notes, setNotes] = useState(lead.notes || '');
   const [status, setStatus] = useState(lead.pipelineStatus);
   const [saving, setSaving] = useState(false);
+  const [researching, setResearching] = useState(false);
+
+  const painPoints: PainPoint[] = (() => {
+    if (!current.painPointsJson) return [];
+    try { return JSON.parse(current.painPointsJson); } catch { return []; }
+  })();
 
   const save = async () => {
     setSaving(true);
@@ -419,9 +435,22 @@ function LeadDetailModal({ th, lead, canEdit, canDelete, onClose, onToast, onSav
         body: JSON.stringify({ notes, pipelineStatus: status }),
       });
       onToast('✅ Saved', 'success');
+      setCurrent(updated);
       onSaved(updated);
     } catch (e: any) { onToast(e.message || 'Error', 'error'); }
     finally { setSaving(false); }
+  };
+
+  const runResearch = async () => {
+    setResearching(true);
+    try {
+      const updated = await request<Lead>(`${API_BASE}/marketing/leads/${lead.id}/research`, { method: 'POST' });
+      onToast('✅ AI research সম্পন্ন', 'success');
+      setCurrent(updated);
+      setStatus(updated.pipelineStatus);
+      onSaved(updated);
+    } catch (e: any) { onToast(e.message || 'AI research failed', 'error'); }
+    finally { setResearching(false); }
   };
 
   const remove = async () => {
@@ -468,6 +497,34 @@ function LeadDetailModal({ th, lead, canEdit, canDelete, onClose, onToast, onSav
           {row('Online Ordering', lead.onlineOrderPresence ? 'Yes' : 'No')}
           {row('Source', lead.source)}
           {row('Added', new Date(lead.createdAt).toLocaleString())}
+        </div>
+
+        <div style={{ marginBottom: 14 }}>
+          {canEdit && (
+            <button style={th.btnGhost} onClick={runResearch} disabled={researching}>
+              {researching ? '🔬 Researching…' : '🔬 AI Research চালান'}
+            </button>
+          )}
+          {current.aiSummary && (
+            <div style={{ marginTop: 10, padding: 12, borderRadius: 10, background: th.accentSoft, fontSize: 12.5, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
+              {current.aiSummary}
+            </div>
+          )}
+          {painPoints.length > 0 && (
+            <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ fontSize: 11, color: th.muted, fontWeight: 700 }}>PAIN POINTS</div>
+              {painPoints.map((p, i) => (
+                <div key={i} style={{ padding: 10, borderRadius: 8, border: `1px solid ${th.border}`, fontSize: 12 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700 }}>
+                    <span>{p.painPoint}</span>
+                    <span style={{ color: p.confidence >= 70 ? '#16a34a' : p.confidence >= 40 ? '#f59e0b' : th.muted }}>{p.confidence}%</span>
+                  </div>
+                  <div style={{ color: th.muted, marginTop: 4 }}>📋 {p.evidence}</div>
+                  <div style={{ marginTop: 4 }}>💡 {p.solution}</div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div style={{ marginBottom: 10 }}>
