@@ -1955,8 +1955,13 @@ export class WebhookService implements OnModuleDestroy {
 
     // ── GREETING ───────────────────────────────────────────────────────────
     if (intent === 'GREETING') {
-      const greetReply =
+      let greetReply =
         aiResult.reply ?? 'জি বলুন 😊 কীভাবে সাহায্য করতে পারি?';
+      // Safety net: never let a bare "Hi!"/"হাই" echo go out with no
+      // help-offer question, regardless of what the AI classifier returned.
+      if (greetReply.trim().length < 25 && !/[?？]/.test(greetReply)) {
+        greetReply = `${greetReply.trim()} আপনাকে আজ কীভাবে সাহায্য করতে পারি? 😊`;
+      }
       await this.safeSend(token, psid, greetReply);
       return;
     }

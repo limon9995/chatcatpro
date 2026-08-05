@@ -305,6 +305,19 @@ export class SmartBotService {
     const parsed = this.parseResponse(raw);
     if (!parsed) return false;
 
+    // Safety net: the model sometimes ignores the "don't stop at a bare
+    // greeting" instruction and echoes just "Hi!"/"হাই 😊" with no
+    // help-offer question, especially on the very first message. Rather
+    // than trust prompt-following alone, force it deterministically here.
+    if (
+      history.length === 0 &&
+      parsed.reply &&
+      parsed.reply.trim().length < 25 &&
+      !/[?？]/.test(parsed.reply)
+    ) {
+      parsed.reply = `${parsed.reply.trim()} আপনাকে আজ কীভাবে সাহায্য করতে পারি? 😊`;
+    }
+
     this.failCount = 0;
     // Real token usage for the platform profit report (fire-and-forget)
     if (usage.provider && usage.model) {
