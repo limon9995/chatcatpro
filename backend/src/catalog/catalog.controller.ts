@@ -2468,6 +2468,60 @@ ${poweredByBadge()}
     const barBottom = opts?.liftBar ? '92px' : '16px';
     return `
 <style>
+/* V30: the checkout modal below reuses the .wo-* class names from the
+   product page's single-item wizard, but this widget also gets embedded on
+   the menu LISTING page, which never defines those classes on its own — so
+   they're inlined here too, making the widget self-contained regardless of
+   which page it's dropped into. Redefining them a second time on the
+   product page (which already has them) is harmless — same rules either way. */
+.wo-overlay{display:none;position:fixed;inset:0;z-index:600;background:rgba(0,0,0,.55);backdrop-filter:blur(4px);align-items:flex-end;justify-content:center;padding:0}
+@media(min-width:480px){.wo-overlay{align-items:center;padding:16px}}
+.wo-overlay.open{display:flex}
+.wo-sheet{background:var(--surface,#fff);border-radius:22px 22px 0 0;width:100%;max-width:480px;max-height:92vh;overflow-y:auto;box-shadow:0 -8px 40px rgba(0,0,0,.18);animation:slideUp .28s ease both}
+@media(min-width:480px){.wo-sheet{border-radius:22px;animation:fadeUp .25s ease both}}
+@keyframes slideUp{from{transform:translateY(60px);opacity:0}to{transform:none;opacity:1}}
+@keyframes fadeUp{from{transform:translateY(20px);opacity:0}to{transform:none;opacity:1}}
+.wo-head{padding:20px 20px 0;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border,#e5e7eb);padding-bottom:14px}
+.wo-title{font-size:16px;font-weight:800;color:var(--text,#0f172a)}
+.wo-close{width:30px;height:30px;border-radius:50%;border:1.5px solid var(--border,#e5e7eb);background:var(--bg,#f4f6fb);cursor:pointer;font-size:16px;color:var(--muted,#94a3b8);display:flex;align-items:center;justify-content:center}
+.wo-body{padding:18px 20px 24px;display:flex;flex-direction:column;gap:13px}
+.wo-lbl{font-size:11px;font-weight:700;color:var(--muted,#94a3b8);text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px}
+.wo-inp{width:100%;padding:11px 13px;border-radius:11px;border:1.5px solid var(--border,#e5e7eb);background:var(--bg,#f4f6fb);color:var(--text,#0f172a);font-size:14px;font-family:inherit;outline:none;transition:border-color .15s}
+.wo-inp:focus{border-color:var(--p)}
+.wo-row2{display:grid;grid-template-columns:1fr 80px;gap:10px}
+.wo-row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px}
+@media(max-width:380px){.wo-row3{grid-template-columns:1fr}}
+.wo-row3 select:disabled{opacity:.55;cursor:not-allowed}
+.wo-addr-lbl-row{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:5px}
+.wo-addr-loading{font-size:10.5px;color:var(--muted,#94a3b8);display:none}
+.wo-addr-loading.show{display:inline}
+#woMap,#ccMap{height:230px;border-radius:12px;border:1.5px solid var(--border,#e5e7eb);margin-bottom:8px;overflow:hidden;z-index:1}
+.wo-gps-btn{width:100%;padding:10px;border-radius:11px;border:1.5px solid var(--p);background:var(--p-light,color-mix(in srgb,var(--p) 12%,#fff));color:var(--p-dark,var(--p));font-size:13.5px;font-weight:700;cursor:pointer;font-family:inherit;margin-bottom:8px}
+.wo-gps-btn:disabled{opacity:.6;cursor:not-allowed}
+.wo-fee-box{font-size:13.5px;padding:11px 13px;border-radius:11px;border:1.5px solid var(--border,#e5e7eb);background:var(--bg,#f4f6fb);color:var(--sub,#475569);line-height:1.6;margin-bottom:4px}
+.wo-fee-box.ok{border-color:#a7f3d0;background:#ecfdf5;color:#065f46;font-weight:600}
+.wo-fee-box.bad{border-color:#fecaca;background:#fef2f2;color:#991b1b;font-weight:600}
+.wo-product-info{padding:12px 14px;background:var(--bg,#f4f6fb);border-radius:12px;border:1px solid var(--border,#e5e7eb);font-size:13.5px;color:var(--text,#0f172a)}
+.wo-product-info strong{color:var(--p);font-size:15px}
+.wo-btn{width:100%;padding:13px;border-radius:13px;border:none;background:linear-gradient(135deg,#059669,#047857);color:#fff;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 4px 18px rgba(5,150,105,.35)}
+.wo-btn:disabled{opacity:.6;cursor:not-allowed}
+.wo-err{font-size:13px;color:#991b1b;padding:10px 13px;background:#fef2f2;border-radius:10px;border:1.5px solid #fecaca;display:none;line-height:1.5}
+.wo-payment-box{padding:15px;background:color-mix(in srgb,var(--p) 8%,transparent);border:1.5px solid color-mix(in srgb,var(--p) 25%,transparent);border-radius:13px;font-size:13.5px;color:var(--text,#0f172a);line-height:1.7}
+.wo-num{font-size:22px;font-weight:900;color:var(--p);letter-spacing:.04em}
+.wo-file-area{display:flex;align-items:center;justify-content:center;gap:8px;padding:14px;border-radius:12px;border:2px dashed var(--border,#e5e7eb);cursor:pointer;font-size:13.5px;font-weight:600;color:var(--muted,#94a3b8);transition:border-color .15s;background:var(--bg,#f4f6fb)}
+.wo-file-area:hover{border-color:var(--p);color:var(--p)}
+.wo-method-btn{display:flex;align-items:center;gap:14px;width:100%;padding:14px 16px;border-radius:14px;border:2px solid var(--border,#e5e7eb);background:var(--bg,#f4f6fb);color:var(--text,#0f172a);font-family:inherit;cursor:pointer;text-align:left;transition:border-color .15s,background .15s}
+.wo-method-btn:hover{border-color:var(--p);background:color-mix(in srgb,var(--p) 6%,transparent)}
+.wo-success{text-align:center;padding:20px 0 8px}
+.wo-success .wo-icon{font-size:52px;margin-bottom:12px}
+.wo-success h3{font-size:18px;font-weight:800;color:#059669;margin-bottom:6px}
+.wo-success .wo-oid{font-size:32px;font-weight:900;color:var(--p);margin:10px 0}
+.wo-success .wo-msg{font-size:13px;color:var(--sub,#475569);line-height:1.6;padding:12px 14px;background:var(--bg,#f4f6fb);border-radius:10px;border:1px solid var(--border,#e5e7eb);text-align:left;margin-top:10px}
+.wo-step{display:none}.wo-step.active{display:block}
+.wo-progress-track{height:4px;background:var(--border,#e5e7eb);border-radius:2px;margin:0 20px;overflow:hidden}
+.wo-progress-fill{height:100%;width:33%;border-radius:2px;background:linear-gradient(90deg,var(--p),var(--p-dark,color-mix(in srgb,var(--p) 78%,#000)));transition:width .3s ease}
+.wo-progress-labels{display:flex;justify-content:space-between;padding:6px 20px 0;font-size:10.5px;font-weight:600;color:var(--muted,#94a3b8);text-transform:uppercase;letter-spacing:.06em}
+.wo-progress-labels span.on{color:var(--p)}
 .cc-bar{display:none;position:fixed;left:16px;right:16px;bottom:${barBottom};z-index:550;max-width:480px;margin:0 auto;align-items:center;gap:10px;background:linear-gradient(135deg,var(--p),color-mix(in srgb,var(--p) 78%,#000));color:#fff;padding:13px 16px;border-radius:16px;box-shadow:0 12px 32px rgba(15,23,42,.3);cursor:pointer;font-family:inherit;border:none}
 .cc-bar.show{display:flex}
 .cc-bar-count{background:rgba(255,255,255,.25);border-radius:999px;min-width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:800;padding:0 7px}
