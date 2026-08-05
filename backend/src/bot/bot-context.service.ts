@@ -36,6 +36,10 @@ export interface DualProduct {
 
 export interface BusinessContext {
   businessName: string | null;
+  // Facebook page name — fallback when the merchant hasn't set a
+  // businessName, so the bot says the actual page name instead of a
+  // generic "এই দোকানের" (this shop's).
+  pageName: string | null;
   businessAddress: string | null;
   deliveryInsideFee: number;
   deliveryOutsideFee: number;
@@ -78,6 +82,7 @@ export class BotContextService {
         where: { id: pageId },
         select: {
           businessName: true,
+          pageName: true,
           businessAddress: true,
           deliveryFeeInsideDhaka: true,
           deliveryFeeOutsideDhaka: true,
@@ -157,6 +162,7 @@ export class BotContextService {
 
     return {
       businessName: page?.businessName ?? null,
+      pageName: (page as any)?.pageName ?? null,
       businessAddress: (page as any)?.businessAddress?.trim() || null,
       deliveryInsideFee: (page as any)?.deliveryFeeInsideDhaka ?? 80,
       deliveryOutsideFee: (page as any)?.deliveryFeeOutsideDhaka ?? 130,

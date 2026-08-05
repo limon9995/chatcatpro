@@ -649,8 +649,11 @@ Rules:
     draftStep: string | null,
     agentBehavior: AgentBehaviorConfig = {},
   ): string {
-    const shop = context.businessName
-      ? `"${context.businessName}" নামের Bangladeshi e-commerce shop`
+    // V30: fall back to the Facebook page's real name before the generic
+    // phrase — same fix as smart-bot.service.ts.
+    const shopName = context.businessName || context.pageName || '';
+    const shop = shopName
+      ? `"${shopName}" নামের Bangladeshi e-commerce shop`
       : 'একটি Bangladeshi fashion e-commerce shop';
 
     const stepLabels = agentBehavior.coreFields?.length

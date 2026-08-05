@@ -559,8 +559,13 @@ export class SmartBotService {
     greetName?: string | null,
     customerMessage = '',
   ): string {
-    const shop = ctx.businessName
-      ? `"${ctx.businessName}" নামের Bangladeshi e-commerce shop`
+    // V30: fall back to the Facebook page's actual name before the fully
+    // generic phrase — merchants who haven't set a separate "businessName"
+    // shouldn't have the bot call itself "এই দোকানের chatbot" (this shop's
+    // chatbot) when it already knows the real page name.
+    const displayName = ctx.businessName || ctx.pageName || '';
+    const shop = displayName
+      ? `"${displayName}" নামের Bangladeshi e-commerce shop`
       : 'একটি Bangladeshi fashion e-commerce shop';
 
     // Product catalog — split coded vs simple
@@ -984,7 +989,7 @@ status reply-এর পরে, যদি "Delivery সময়:" সেটি�
         : defaultSmartBotIntro(shop);
     const toneBlock = agentBehavior.toneRules
       ? `\n\n${agentBehavior.toneRules}`
-      : buildToneBlock(ctx.businessName || '', customerMessage);
+      : buildToneBlock(displayName, customerMessage);
 
     return `${intro}${toneBlock}
 ${deliveryCtx}${locationCtx}${paymentCtx}${productCtx}${pricingPolicyCtx}${knowledgeCtx}${pricingCtx}${catalogCtx}${customerCtx}${greetingCtx}${lastPresentedCtx}${draftCtx}${orderTrackCtx}${orderByIdCtx}${taskRules}`;
