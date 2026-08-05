@@ -1662,9 +1662,9 @@ body{font-family:"Hind Siliguri","Inter",system-ui,sans-serif;background:radial-
               : ''
           }
           ${
-            page.restaurantMode && inStock
+            (page.webOrderEnabled || page.restaurantMode) && inStock
               ? `<button class="btn-order" type="button" style="background:linear-gradient(135deg,var(--p),var(--p-dark))" onclick="ccAddFromProductPage()">
-            🛒 কার্টে যোগ করুন — আরো খাবার একসাথে অর্ডার করুন
+            🛒 কার্টে যোগ করুন — ${page.restaurantMode ? 'আরো খাবার একসাথে অর্ডার করুন' : 'আরো Product একসাথে অর্ডার করুন'}
           </button>`
               : ''
           }
@@ -2408,7 +2408,7 @@ function setGalleryMode(mode, button, url) {
 }
 </script>
 ${
-  page.restaurantMode
+  page.webOrderEnabled || page.restaurantMode
     ? `<script>
 // Reads the currently selected size/variant (tracked by the wo* wizard's
 // own chip/select handlers above) so "Add to Cart" always matches what's
@@ -2466,6 +2466,7 @@ ${poweredByBadge()}
     opts?: { liftBar?: boolean },
   ): string {
     const barBottom = opts?.liftBar ? '92px' : '16px';
+    const isResto = Boolean(page.restaurantMode);
     return `
 <style>
 /* V30: the checkout modal below reuses the .wo-* class names from the
@@ -2593,7 +2594,9 @@ ${poweredByBadge()}
         <div class="wo-product-info" id="ccOrderSummary"></div>
         <div><div class="wo-lbl">আপনার নাম *</div><input class="wo-inp" id="ccName" type="text" placeholder="পুরো নাম"></div>
         <div><div class="wo-lbl">ফোন নম্বর *</div><input class="wo-inp" id="ccPhone" type="tel" placeholder="01XXXXXXXXX"></div>
-        <div class="wo-addr-lbl-row"><div class="wo-lbl" style="margin-bottom:0">ডেলিভারি লোকেশন * (ম্যাপে pin করুন)</div></div>
+        ${
+          isResto
+            ? `<div class="wo-addr-lbl-row"><div class="wo-lbl" style="margin-bottom:0">ডেলিভারি লোকেশন * (ম্যাপে pin করুন)</div></div>
         <div id="ccMap"></div>
         <button type="button" class="wo-gps-btn" id="ccGpsBtn" onclick="ccUseGps()">📍 আমার লোকেশন ব্যবহার করুন (GPS)</button>
         <div style="display:flex;gap:6px;margin-top:6px">
@@ -2601,7 +2604,15 @@ ${poweredByBadge()}
           <button type="button" class="wo-gps-btn" style="width:auto;padding:0 14px;margin:0" id="ccMapsLinkBtn" onclick="ccPasteLocation()">✔</button>
         </div>
         <div class="wo-fee-box" id="ccFeeBox">ম্যাপে আপনার ডেলিভারি লোকেশন pin করুন — delivery charge দেখাবে</div>
-        <div><textarea class="wo-inp" id="ccAddrDetail" rows="2" placeholder="বাসা/রোড/ফ্লোর — বিস্তারিত ঠিকানা"></textarea></div>
+        <div><textarea class="wo-inp" id="ccAddrDetail" rows="2" placeholder="বাসা/রোড/ফ্লোর — বিস্তারিত ঠিকানা"></textarea></div>`
+            : `<div class="wo-addr-lbl-row"><div class="wo-lbl" style="margin-bottom:0">ঠিকানা *</div><span class="wo-addr-loading" id="ccGeoLoading">এলাকার তালিকা লোড হচ্ছে...</span></div>
+        <div class="wo-row3">
+          <div><select class="wo-inp" id="ccDivision"><option value="">বিভাগ</option></select></div>
+          <div><select class="wo-inp" id="ccDistrict" disabled><option value="">জেলা</option></select></div>
+          <div><select class="wo-inp" id="ccUpazila" disabled><option value="">উপজেলা/থানা</option></select></div>
+        </div>
+        <div><textarea class="wo-inp" id="ccAddrDetail" rows="2" placeholder="বাসা/রোড/গ্রামের নাম, ল্যান্ডমার্ক (বিস্তারিত ঠিকানা)"></textarea></div>`
+        }
         <div><div class="wo-lbl">নোট (ঐচ্ছিক)</div><input class="wo-inp" id="ccNote" type="text" placeholder="কোনো বিশেষ নির্দেশনা"></div>
         <div class="wo-err" id="ccErr0"></div>
         <button class="wo-btn" id="ccBtnSubmit" type="button" onclick="ccSubmit()">অর্ডার দিন →</button>
@@ -2689,6 +2700,7 @@ var CC_ADV_AMT = ${Number(page.advanceAmount || 0)};
 var CC_BKASH = ${JSON.stringify(String(page.advanceBkash || ''))};
 var CC_NAGAD = ${JSON.stringify(String(page.advanceNagad || ''))};
 var CC_ROCKET = ${JSON.stringify(String(page.advanceRocket || ''))};
+var CC_RESTO = ${isResto ? 1 : 0};
 var CC_RLAT = ${Number(page.restaurantLat) || 0};
 var CC_RLNG = ${Number(page.restaurantLng) || 0};
 var CC_SLABS = ${JSON.stringify(page.deliverySlabs || [])};
@@ -2890,6 +2902,58 @@ function ccPasteLocation(){
     ccSetErr('ccErr0','লোকেশন পড়া যায়নি — Google Maps-এর share link দিন');
   });
 }
+// ── Classic (non-restaurant) mode: Division / District / Upazila cascading
+// address selects — mirrors the single-item wizard's woLoadGeo() etc. ────────
+var ccGeoData=null, ccGeoLoaded=false, ccGeoLoading=false;
+function ccLoadGeo(){
+  if (ccGeoLoaded || ccGeoLoading) return;
+  ccGeoLoading = true;
+  var loadingEl = document.getElementById('ccGeoLoading'); if (loadingEl) loadingEl.classList.add('show');
+  fetch('/catalog/bd-geo').then(function(r){ return r.json(); }).then(function(d){
+    ccGeoData = d; ccGeoLoaded = true; ccGeoLoading = false;
+    if (loadingEl) loadingEl.classList.remove('show');
+    var divSel = document.getElementById('ccDivision');
+    if (divSel && divSel.options.length <= 1) {
+      d.divisions.forEach(function(dv){
+        var opt = document.createElement('option'); opt.value = dv.id; opt.textContent = dv.bn+' ('+dv.name+')'; divSel.appendChild(opt);
+      });
+    }
+  }).catch(function(){
+    ccGeoLoading = false;
+    if (loadingEl){ loadingEl.textContent = 'এলাকার তালিকা লোড করা যায়নি — আবার চেষ্টা করুন'; loadingEl.classList.add('show'); }
+  });
+}
+function ccOnDivisionChange(){
+  var distSel = document.getElementById('ccDistrict'), upaSel = document.getElementById('ccUpazila');
+  distSel.innerHTML = '<option value="">জেলা</option>'; upaSel.innerHTML = '<option value="">উপজেলা/থানা</option>';
+  upaSel.disabled = true;
+  var divId = parseInt(document.getElementById('ccDivision').value) || null;
+  if (!divId || !ccGeoData){ distSel.disabled = true; return; }
+  distSel.disabled = false;
+  ccGeoData.districts.filter(function(d){ return d.divisionId===divId; }).forEach(function(d){
+    var opt = document.createElement('option'); opt.value = d.id; opt.textContent = d.bn+' ('+d.name+')'; distSel.appendChild(opt);
+  });
+}
+function ccOnDistrictChange(){
+  var upaSel = document.getElementById('ccUpazila');
+  upaSel.innerHTML = '<option value="">উপজেলা/থানা</option>';
+  var distId = parseInt(document.getElementById('ccDistrict').value) || null;
+  if (!distId || !ccGeoData){ upaSel.disabled = true; return; }
+  upaSel.disabled = false;
+  ccGeoData.upazilas.filter(function(u){ return u.districtId===distId; }).forEach(function(u){
+    var opt = document.createElement('option'); opt.value = u.id; opt.textContent = u.bn+' ('+u.name+')'; upaSel.appendChild(opt);
+  });
+}
+var ccDivEl = document.getElementById('ccDivision'), ccDistEl = document.getElementById('ccDistrict');
+if (ccDivEl) ccDivEl.addEventListener('change', ccOnDivisionChange);
+if (ccDistEl) ccDistEl.addEventListener('change', ccOnDistrictChange);
+function ccGeoLabel(selId, dataKey){
+  var sel = document.getElementById(selId);
+  var id = sel ? (parseInt(sel.value) || null) : null;
+  if (!id || !ccGeoData) return null;
+  var item = ccGeoData[dataKey].find(function(x){ return x.id===id; });
+  return item ? item.bn : null;
+}
 function ccSetErr(id,msg){ var el=document.getElementById(id); if (el){ el.textContent=msg; el.style.display = msg ? 'block':'none'; } }
 function ccShowStep(n){
   ['ccStep0','ccStep1a','ccStepM','ccStepP','ccStep2'].forEach(function(id){ var el=document.getElementById(id); if (el) el.classList.remove('active'); });
@@ -2918,7 +2982,7 @@ function ccOpenCheckout(){
   document.getElementById('ccModal').classList.add('open');
   document.body.style.overflow = 'hidden';
   ccShowStep(0);
-  ccInitMap();
+  if (CC_RESTO) ccInitMap(); else ccLoadGeo();
 }
 function ccModalClose(){ document.getElementById('ccModal').classList.remove('open'); document.body.style.overflow=''; }
 
@@ -2935,18 +2999,31 @@ async function ccSubmit(){
   if (phoneDigits.length<10 || phoneDigits.length>12){ ccSetErr('ccErr0','সঠিক ফোন নম্বর দিন (যেমন: 01XXXXXXXXX)'); return; }
   var normPhone = phoneDigits.length===12 && phoneDigits.startsWith('88') ? phoneDigits.slice(2) : phoneDigits;
   if (normPhone.length!==11 || !normPhone.startsWith('0')){ ccSetErr('ccErr0','সঠিক বাংলাদেশি ফোন নম্বর দিন (01XXXXXXXXX)'); return; }
-  if (ccLat===null || ccLng===null){ ccSetErr('ccErr0','ম্যাপে আপনার ডেলিভারি লোকেশন pin করুন'); return; }
-  if (ccFee===null){ ccSetErr('ccErr0','দুঃখিত, আপনার লোকেশন ডেলিভারি এলাকার বাইরে — কাছের কোনো ঠিকানা দিন'); return; }
-  if (!addrDetail){ ccSetErr('ccErr0','বিস্তারিত ঠিকানা দিন (বাসা/রোড/ফ্লোর)'); return; }
+  var addr;
+  if (CC_RESTO) {
+    if (ccLat===null || ccLng===null){ ccSetErr('ccErr0','ম্যাপে আপনার ডেলিভারি লোকেশন pin করুন'); return; }
+    if (ccFee===null){ ccSetErr('ccErr0','দুঃখিত, আপনার লোকেশন ডেলিভারি এলাকার বাইরে — কাছের কোনো ঠিকানা দিন'); return; }
+    if (!addrDetail){ ccSetErr('ccErr0','বিস্তারিত ঠিকানা দিন (বাসা/রোড/ফ্লোর)'); return; }
+    addr = addrDetail;
+  } else {
+    var divLabel = ccGeoLabel('ccDivision','divisions');
+    var distLabel = ccGeoLabel('ccDistrict','districts');
+    var upaLabel = ccGeoLabel('ccUpazila','upazilas');
+    if (!divLabel){ ccSetErr('ccErr0','বিভাগ বেছে নিন'); return; }
+    if (!distLabel){ ccSetErr('ccErr0','জেলা বেছে নিন'); return; }
+    if (!upaLabel){ ccSetErr('ccErr0','উপজেলা/থানা বেছে নিন'); return; }
+    if (!addrDetail){ ccSetErr('ccErr0','বিস্তারিত ঠিকানা দিন (বাসা/রোড/গ্রাম)'); return; }
+    addr = addrDetail + ', ' + upaLabel + ', ' + distLabel + ', ' + divLabel;
+  }
   ccSetErr('ccErr0','');
   var btn = document.getElementById('ccBtnSubmit');
   btn.disabled = true; btn.textContent = 'পাঠানো হচ্ছে...';
   try {
     var body = {
-      customerName: name, phone: phone, address: addrDetail, orderNote: note,
-      deliveryLat: ccLat, deliveryLng: ccLng,
+      customerName: name, phone: phone, address: addr, orderNote: note,
       items: items.map(function(it){ return { productCode: it.code, qty: it.qty, price: it.price, productName: it.name, variantLabel: it.variantLabel || undefined }; }),
     };
+    if (CC_RESTO) { body.deliveryLat = ccLat; body.deliveryLng = ccLng; }
     var r = await fetch('/catalog/'+CC_PAGE_ID+'/web-order', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
     var d = await r.json();
     if (!r.ok) throw new Error(d.message || 'Error');
@@ -3042,6 +3119,9 @@ ccRenderBar();
 
     // V25: Restaurant pages get burgerbhai-style category tabs (Momo's (6) …)
     const restaurantTabs = Boolean(page.restaurantMode);
+    // V30: cart + "Add to Cart" — restaurant pages always have it (their only
+    // ordering path); classic catalogs get it too once web ordering is on.
+    const cartEnabled = Boolean(page.webOrderEnabled || page.restaurantMode);
     // V29: "pages" mode — every category tab is a real page load (its own
     // shareable URL), landing on the merchant's first-ordered category by
     // default. "single" (default) keeps today's one-page JS-tab behavior.
@@ -3184,12 +3264,9 @@ ccRenderBar();
           <div class="c-footer">
             ${priceBlock}
             ${
-              restaurantTabs &&
-              !selectionMode &&
-              inStock &&
-              !cardVariants.length
+              cartEnabled && !selectionMode && inStock && !cardVariants.length
                 ? `<button type="button" class="c-cart-add" onclick="event.preventDefault();event.stopPropagation();ccQuickAdd('${esc(p.code)}','${esc(String(p.name || p.code))}',${curPrice},'${esc(p.imageUrl || '')}',this)">+ কার্টে যোগ করুন</button>`
-                : `<div class="c-order ${!inStock ? 'c-order-dis' : ''}">${inStock ? (selectionMode ? '✅ Select' : restaurantTabs ? '🛒 Order' : '💬 Order') : 'Out'}</div>`
+                : `<div class="c-order ${!inStock ? 'c-order-dis' : ''}">${inStock ? (selectionMode ? '✅ Select' : cartEnabled ? '🛒 Order' : '💬 Order') : 'Out'}</div>`
             }
           </div>
         </div>
@@ -3708,7 +3785,7 @@ ${
   </div>
 </footer>
 
-${restaurantTabs ? this.restaurantCartWidget(page) : ''}
+${cartEnabled ? this.restaurantCartWidget(page) : ''}
 ${poweredByBadge()}
 <script>
 (function(){
