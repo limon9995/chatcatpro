@@ -77,10 +77,4 @@ export class MarketingLeadController {
   delete(@Req() req: any, @Param('id', ParseIntPipe) id: number) {
     return this.leads.delete(req.authUser.id, id);
   }
-
-  @Post(':id/research')
-  @Roles('admin', 'marketing_manager', 'sales')
-  research(@Req() req: any, @Param('id', ParseIntPipe) id: number) {
-    return this.leads.research(req.authUser.id, id);
-  }
 }

@@ -7,8 +7,6 @@ import { PrismaService } from '../prisma/prisma.service';
 import { normalizePhone } from '../crm/phone.util';
 import { MarketingScoringService } from './marketing-scoring.service';
 import { MarketingAuditLogService } from './marketing-audit-log.service';
-import { MarketingAiService } from './marketing-ai.service';
-import { MarketingSettingsService } from './marketing-settings.service';
 
 export const PIPELINE_STATUSES = [
   'NEW',
@@ -53,8 +51,6 @@ export class MarketingLeadService {
     private readonly prisma: PrismaService,
     private readonly scoring: MarketingScoringService,
     private readonly auditLog: MarketingAuditLogService,
-    private readonly ai: MarketingAiService,
-    private readonly settingsService: MarketingSettingsService,
   ) {}
 
   /** Lowercase, strip protocol/www/trailing slash — makes exact-match dedup reliable. */
@@ -416,75 +412,5 @@ export class MarketingLeadService {
       metadata: { businessName: existing.businessName },
     });
     return { success: true };
-  }
-
-  /**
-   * V30 Phase 2: AI business-research agent. Synthesizes a summary + pain
-   * points from the lead's own structured fields and staff-entered notes —
-   * deliberately does NOT fetch/scrape the lead's Facebook/website itself
-   * (see marketing-ai.service.ts's header comment for why).
-   */
-  async research(actorUserId: string, id: number) {
-    if (await this.settingsService.isKillSwitchEnabled()) {
-      throw new BadRequestException(
-        'Marketing automation kill switch চালু আছে — Settings থেকে বন্ধ করুন প্রথমে',
-      );
-    }
-    const lead = await this.prisma.marketingLead.findUnique({ where: { id } });
-    if (!lead) throw new NotFoundException('Lead not found');
-
-    const result = await this.ai.researchLead({
-      businessName: lead.businessName,
-      category: lead.category,
-      location: lead.location,
-      website: lead.website,
-      facebookUrl: lead.facebookUrl,
-      instagramUrl: lead.instagramUrl,
-      followerCount: lead.followerCount,
-      reviewCount: lead.reviewCount,
-      rating: lead.rating,
-      onlineOrderPresence: lead.onlineOrderPresence,
-      estimatedMessageVolume: lead.estimatedMessageVolume,
-      notes: lead.notes,
-    });
-    if (!result) {
-      throw new BadRequestException(
-        'AI research এখন করা যাচ্ছে না — একটু পর আবার চেষ্টা করুন',
-      );
-    }
-
-    const nextStatus =
-      lead.pipelineStatus === 'NEW' ? 'RESEARCHED' : lead.pipelineStatus;
-    const updated = await this.prisma.marketingLead.update({
-      where: { id },
-      data: {
-        aiSummary: `ChatCat সুযোগ: ${result.opportunity}\n\n${result.summary}`,
-        painPointsJson: JSON.stringify(result.painPoints),
-        pipelineStatus: nextStatus,
-      },
-    });
-
-    void this.auditLog.record({
-      eventType: 'research.completed',
-      entityType: 'MarketingLead',
-      entityId: id,
-      actorUserId,
-      metadata: {
-        opportunity: result.opportunity,
-        painPointCount: result.painPoints.length,
-        model: result.usage.model,
-      },
-    });
-    if (nextStatus !== lead.pipelineStatus) {
-      void this.auditLog.record({
-        eventType: 'lead.status_changed',
-        entityType: 'MarketingLead',
-        entityId: id,
-        actorUserId,
-        metadata: { from: lead.pipelineStatus, to: nextStatus },
-      });
-    }
-
-    return updated;
   }
 }
