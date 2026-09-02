@@ -44,6 +44,7 @@ export class AuthController {
       pageIds: [],
       isActive: true,
       forcePasswordChange: false,
+      signupHost: body.signupHost,
     });
   }
 
@@ -63,6 +64,7 @@ export class AuthController {
       code: body.code,
       name: body.name,
       password: body.password,
+      signupHost: body.signupHost,
     });
   }
 

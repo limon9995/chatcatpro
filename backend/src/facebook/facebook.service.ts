@@ -13,6 +13,7 @@ import { EncryptionService } from '../common/encryption.service';
 import { BillingService } from '../billing/billing.service';
 import { TelegramService } from '../common/telegram.service';
 import { MailerService } from '../common/mailer.service';
+import { readGlobalPricing, resolveWholesaleRate, PricingFields } from '../common/pricing-fields';
 
 type PendingOAuthResult = {
   userId: string;
@@ -25,32 +26,6 @@ type PendingApproval = {
   candidates: FacebookPageInfo[];
   createdAt: number;
 };
-
-const DEFAULT_PRICING = {
-  costPerKeywordReplyBdt: 0.02,
-  costPerTextMsgBdt: 0.05,
-  costPerImageBdt: 0.20,
-  costPerImageLocalBdt: 0.10,
-  costPerOcrLocalBdt: 0.02,
-  costPerOcrAiBdt: 0.05,
-  costPerVoiceMsgBdt: 1.00,
-  costPerAnalyzeBdt: 0.20,
-  costPerAiGenerateBdt: 0.10,
-  costPerBroadcastMsgBdt: 0.05,
-  costPerRecurringNotifBdt: 0.10,
-  costPerCommentReplyBdt: 0.05,
-  costPerMemoPrintBdt: 0.10,
-};
-
-function readGlobalPricing(): typeof DEFAULT_PRICING {
-  try {
-    const file = path.join(process.cwd(), 'storage', 'global-pricing.json');
-    if (fs.existsSync(file)) {
-      return { ...DEFAULT_PRICING, ...JSON.parse(fs.readFileSync(file, 'utf8')) };
-    }
-  } catch {}
-  return { ...DEFAULT_PRICING };
-}
 
 // Reads the same storage/global-config.json file AdminService writes to —
 // avoids a circular module dependency (AdminModule already imports FacebookModule).
@@ -260,7 +235,7 @@ export class FacebookService {
             fbAppId: submittedFbAppId,
             fbAppSecret: encryptedFbAppSecret,
             ...(masterPageId !== undefined ? { masterPageId } : {}),
-            ...readGlobalPricing(),
+            ...(await this.resolveNewPageDefaults(userId)),
           },
         });
 
@@ -286,6 +261,42 @@ export class FacebookService {
       },
       webhookUrl: `${process.env.STORAGE_PUBLIC_URL?.replace('/storage', '') || 'http://localhost:3000'}/webhook`,
       instructions: `Facebook Webhook URL: /webhook | Verify Token: ${page.verifyToken}`,
+    };
+  }
+
+  /**
+   * Default retail pricing + light branding for a brand-new client Page.
+   * Direct platform customers (the only case today) get exactly the same
+   * platform global pricing as before, no branding defaults. When the
+   * owning User belongs to a reseller, retail pricing is instead the
+   * reseller's wholesale rate marked up by Reseller.markupPercent, and the
+   * page's logo/color default to the reseller's branding — the merchant can
+   * still edit any of this afterward, this only seeds sensible starting
+   * values so a reseller doesn't have to hand-configure every new client.
+   */
+  private async resolveNewPageDefaults(ownerId: string): Promise<PricingFields & { logoUrl?: string; primaryColor?: string }> {
+    const owner = await this.prisma.user.findUnique({
+      where: { id: ownerId },
+      select: { resellerId: true },
+    });
+    if (!owner?.resellerId) return readGlobalPricing();
+
+    const reseller = await this.prisma.reseller.findUnique({
+      where: { id: owner.resellerId },
+      select: { wholesaleOverridesJson: true, markupPercent: true, logoUrl: true, primaryColor: true },
+    });
+    if (!reseller) return readGlobalPricing();
+
+    const wholesale = resolveWholesaleRate(reseller.wholesaleOverridesJson);
+    const markup = 1 + (Number(reseller.markupPercent) || 0) / 100;
+    const retail: PricingFields = {};
+    for (const [key, value] of Object.entries(wholesale)) {
+      (retail as any)[key] = Math.round(value * markup * 100) / 100;
+    }
+    return {
+      ...retail,
+      ...(reseller.logoUrl ? { logoUrl: reseller.logoUrl } : {}),
+      ...(reseller.primaryColor ? { primaryColor: reseller.primaryColor } : {}),
     };
   }
 

@@ -16,6 +16,13 @@ import { FacebookService } from '../facebook/facebook.service';
 import { TelegramNotificationService } from '../telegram/telegram-notification.service';
 import { WaConnectRequestService } from '../whatsapp/wa-connect-request.service';
 import { AgentBehaviorConfig } from '../agents/agent-behavior-config.interface';
+import {
+  PricingFields,
+  pickPricingFields,
+  DEFAULT_GLOBAL_PRICING,
+  readGlobalPricing,
+  writeGlobalPricing,
+} from '../common/pricing-fields';
 
 export interface CallServerConfig {
   id: string;
@@ -924,132 +931,35 @@ export class AdminService {
     return { success: true, amountBdt };
   }
 
-  async updatePagePricing(
-    pageId: number,
-    pricing: {
-      costPerTextMsgBdt?: number;
-      costPerVoiceMsgBdt?: number;
-      costPerImageBdt?: number;
-      costPerImageLocalBdt?: number;
-      costPerAnalyzeBdt?: number;
-      costPerOcrLocalBdt?: number;
-      costPerOcrAiBdt?: number;
-      costPerRecurringNotifBdt?: number;
-      costPerBroadcastMsgBdt?: number;
-      costPerKeywordReplyBdt?: number;
-      costPerAiGenerateBdt?: number;
-      costPerMemoPrintBdt?: number;
-      costPerCommentReplyBdt?: number;
-    },
-  ) {
+  async updatePagePricing(pageId: number, pricing: PricingFields) {
     const page = await this.prisma.page.findUnique({
       where: { id: pageId },
       select: { id: true },
     });
     if (!page) throw new NotFoundException('Page not found');
-    const data: any = {};
-    if (pricing.costPerTextMsgBdt !== undefined) data.costPerTextMsgBdt = pricing.costPerTextMsgBdt;
-    if (pricing.costPerVoiceMsgBdt !== undefined) data.costPerVoiceMsgBdt = pricing.costPerVoiceMsgBdt;
-    if (pricing.costPerImageBdt !== undefined) data.costPerImageBdt = pricing.costPerImageBdt;
-    if (pricing.costPerImageLocalBdt !== undefined) data.costPerImageLocalBdt = pricing.costPerImageLocalBdt;
-    if (pricing.costPerAnalyzeBdt !== undefined) data.costPerAnalyzeBdt = pricing.costPerAnalyzeBdt;
-    if (pricing.costPerOcrLocalBdt !== undefined) data.costPerOcrLocalBdt = pricing.costPerOcrLocalBdt;
-    if (pricing.costPerOcrAiBdt !== undefined) data.costPerOcrAiBdt = pricing.costPerOcrAiBdt;
-    if (pricing.costPerRecurringNotifBdt !== undefined) data.costPerRecurringNotifBdt = pricing.costPerRecurringNotifBdt;
-    if (pricing.costPerBroadcastMsgBdt !== undefined) data.costPerBroadcastMsgBdt = pricing.costPerBroadcastMsgBdt;
-    if (pricing.costPerKeywordReplyBdt !== undefined) data.costPerKeywordReplyBdt = pricing.costPerKeywordReplyBdt;
-    if (pricing.costPerAiGenerateBdt !== undefined) data.costPerAiGenerateBdt = pricing.costPerAiGenerateBdt;
-    if (pricing.costPerMemoPrintBdt !== undefined) data.costPerMemoPrintBdt = pricing.costPerMemoPrintBdt;
-    if (pricing.costPerCommentReplyBdt !== undefined) data.costPerCommentReplyBdt = pricing.costPerCommentReplyBdt;
+    const data = pickPricingFields(pricing);
     await this.prisma.page.update({ where: { id: pageId }, data });
     return { success: true };
   }
 
-  private readonly globalPricingFile = path.join(
-    process.cwd(),
-    'storage',
-    'global-pricing.json',
-  );
-
-  private readonly DEFAULT_GLOBAL_PRICING = {
-    costPerKeywordReplyBdt: 0.02,
-    costPerTextMsgBdt: 0.05,
-    costPerImageBdt: 0.20,
-    costPerImageLocalBdt: 0.10,
-    costPerOcrLocalBdt: 0.02,
-    costPerOcrAiBdt: 0.05,
-    costPerVoiceMsgBdt: 1.00,
-    costPerAnalyzeBdt: 0.20,
-    costPerAiGenerateBdt: 0.10,
-    costPerBroadcastMsgBdt: 0.05,
-    costPerRecurringNotifBdt: 0.10,
-    costPerCommentReplyBdt: 0.05,
-    costPerMemoPrintBdt: 0.10,
-  };
-
-  private _readGlobalPricing(): typeof this.DEFAULT_GLOBAL_PRICING {
-    try {
-      if (fs.existsSync(this.globalPricingFile)) {
-        const saved = JSON.parse(fs.readFileSync(this.globalPricingFile, 'utf8'));
-        return { ...this.DEFAULT_GLOBAL_PRICING, ...saved };
-      }
-    } catch {}
-    return { ...this.DEFAULT_GLOBAL_PRICING };
-  }
-
-  private _writeGlobalPricing(pricing: Partial<typeof this.DEFAULT_GLOBAL_PRICING>) {
-    fs.mkdirSync(path.dirname(this.globalPricingFile), { recursive: true });
-    const current = this._readGlobalPricing();
-    const updated = { ...current, ...pricing };
-    fs.writeFileSync(this.globalPricingFile, JSON.stringify(updated, null, 2), 'utf8');
-    return updated;
-  }
-
   async getGlobalPricing() {
-    return this._readGlobalPricing();
+    return readGlobalPricing();
   }
 
   getDefaultPricing() {
-    return { ...this.DEFAULT_GLOBAL_PRICING };
+    return { ...DEFAULT_GLOBAL_PRICING };
   }
 
-  async saveDefaultPricing(pricing: Partial<typeof this.DEFAULT_GLOBAL_PRICING>) {
-    const updated = this._writeGlobalPricing(pricing);
+  async saveDefaultPricing(pricing: Partial<PricingFields>) {
+    const updated = writeGlobalPricing(pricing);
     return { success: true, pricing: updated };
   }
 
-  async applyPricingToAll(pricing: {
-    costPerTextMsgBdt?: number;
-    costPerVoiceMsgBdt?: number;
-    costPerImageBdt?: number;
-    costPerImageLocalBdt?: number;
-    costPerAnalyzeBdt?: number;
-    costPerAiGenerateBdt?: number;
-    costPerOcrLocalBdt?: number;
-    costPerOcrAiBdt?: number;
-    costPerRecurringNotifBdt?: number;
-    costPerBroadcastMsgBdt?: number;
-    costPerKeywordReplyBdt?: number;
-    costPerMemoPrintBdt?: number;
-    costPerCommentReplyBdt?: number;
-  }) {
-    const data: any = {};
-    if (pricing.costPerTextMsgBdt !== undefined) data.costPerTextMsgBdt = pricing.costPerTextMsgBdt;
-    if (pricing.costPerVoiceMsgBdt !== undefined) data.costPerVoiceMsgBdt = pricing.costPerVoiceMsgBdt;
-    if (pricing.costPerImageBdt !== undefined) data.costPerImageBdt = pricing.costPerImageBdt;
-    if (pricing.costPerImageLocalBdt !== undefined) data.costPerImageLocalBdt = pricing.costPerImageLocalBdt;
-    if (pricing.costPerAnalyzeBdt !== undefined) data.costPerAnalyzeBdt = pricing.costPerAnalyzeBdt;
-    if (pricing.costPerAiGenerateBdt !== undefined) data.costPerAiGenerateBdt = pricing.costPerAiGenerateBdt;
-    if (pricing.costPerOcrLocalBdt !== undefined) data.costPerOcrLocalBdt = pricing.costPerOcrLocalBdt;
-    if (pricing.costPerOcrAiBdt !== undefined) data.costPerOcrAiBdt = pricing.costPerOcrAiBdt;
-    if (pricing.costPerRecurringNotifBdt !== undefined) data.costPerRecurringNotifBdt = pricing.costPerRecurringNotifBdt;
-    if (pricing.costPerBroadcastMsgBdt !== undefined) data.costPerBroadcastMsgBdt = pricing.costPerBroadcastMsgBdt;
-    if (pricing.costPerKeywordReplyBdt !== undefined) data.costPerKeywordReplyBdt = pricing.costPerKeywordReplyBdt;
-    if (pricing.costPerMemoPrintBdt !== undefined) data.costPerMemoPrintBdt = pricing.costPerMemoPrintBdt;
-    if (pricing.costPerCommentReplyBdt !== undefined) data.costPerCommentReplyBdt = pricing.costPerCommentReplyBdt;
+  async applyPricingToAll(pricing: PricingFields) {
+    const data = pickPricingFields(pricing);
     if (!Object.keys(data).length) return { success: false, updated: 0 };
     // Save as new global defaults so future pages & UI always show correct values
-    this._writeGlobalPricing(pricing as any);
+    writeGlobalPricing(pricing);
     const result = await this.prisma.page.updateMany({ data });
     return { success: true, updated: result.count };
   }

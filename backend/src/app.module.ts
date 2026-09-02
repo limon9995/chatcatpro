@@ -51,6 +51,7 @@ import { PublicOrderModule } from './public-order/public-order.module';
 import { RestaurantModule } from './restaurant/restaurant.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { PricingModule } from './pricing/pricing.module';
+import { ResellerModule } from './reseller/reseller.module';
 
 @Module({
   imports: [
@@ -123,6 +124,7 @@ import { PricingModule } from './pricing/pricing.module';
     RestaurantModule,
     ReviewsModule,
     PricingModule,
+    ResellerModule,
   ],
   controllers: [AppController],
   providers: [

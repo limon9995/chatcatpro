@@ -7,6 +7,7 @@ import { getTheme, LanguageSwitch, Spinner, Toast, safeLazy } from '../component
 import { ChatbotWidget } from '../components/ChatbotWidget';
 import { API_BASE, useApi } from '../hooks/useApi';
 import { useLanguage } from '../i18n';
+import { useBranding } from '../hooks/useBranding';
 
 // ── Lazy page imports ──────────────────────────────────────────────────────────
 const OrdersPage      = safeLazy(() => import('./OrdersPage').then(m => ({ default: m.OrdersPage })));
@@ -173,6 +174,7 @@ export function DashboardLayout({
   onLogout: () => void;
 }) {
   const { copy, language } = useLanguage();
+  const branding = useBranding();
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activePage, setActivePage] = useState<PageItem | null>(initialActivePage);
@@ -692,8 +694,8 @@ export function DashboardLayout({
           )}
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <img src="/logo.png" alt="Chatcat" style={{ width: 32, height: 32, objectFit: 'cover', borderRadius: '50%' }} />
-            {!isMobile && <span style={{ fontWeight: 800, fontSize: 15, letterSpacing: '-0.03em', color: th.text }}>Chatcat</span>}
+            <img src={branding.logoUrl} alt={branding.companyName} style={{ width: 32, height: 32, objectFit: 'cover', borderRadius: '50%' }} />
+            {!isMobile && <span style={{ fontWeight: 800, fontSize: 15, letterSpacing: '-0.03em', color: th.text }}>{branding.companyName}</span>}
           </div>
 
           {myPages.length > 1 ? (

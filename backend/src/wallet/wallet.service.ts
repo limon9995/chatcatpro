@@ -1,8 +1,25 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { PricingFields, resolveWholesaleRate } from '../common/pricing-fields';
 
 export type AiStatus = 'ok' | 'no_balance' | 'trial_limit_exceeded' | 'suspended';
 const TRIAL_DAILY_AI_LIMIT = 100;
+
+export type UsageType =
+  | 'TEXT'
+  | 'VOICE'
+  | 'IMAGE'
+  | 'IMAGE_LOCAL'
+  | 'IMAGE_OCR'
+  | 'ADMIN_VISION'
+  | 'IMAGE_UNIQUENESS'
+  | 'AI_GENERATE'
+  | 'DUAL_PHOTO_AI'
+  | 'SMART_BOT'
+  | 'MEMO_PRINT'
+  | 'KEYWORD_REPLY'
+  | 'COMMENT_REPLY'
+  | 'BROADCAST';
 
 @Injectable()
 export class WalletService {
@@ -83,25 +100,14 @@ export class WalletService {
    */
   async deductUsage(
     pageId: number,
-    type:
-      | 'TEXT'
-      | 'VOICE'
-      | 'IMAGE'
-      | 'IMAGE_LOCAL'
-      | 'IMAGE_OCR'
-      | 'ADMIN_VISION'
-      | 'IMAGE_UNIQUENESS'
-      | 'AI_GENERATE'
-      | 'DUAL_PHOTO_AI'
-      | 'SMART_BOT'
-      | 'MEMO_PRINT'
-      | 'KEYWORD_REPLY'
-      | 'COMMENT_REPLY'
-      | 'BROADCAST',
+    type: UsageType,
     options?: { photoCount?: number; memoCount?: number; msgCount?: number; provider?: string },
   ): Promise<boolean> {
     try {
-      const page = await this.prisma.page.findUnique({ where: { id: pageId } });
+      const page = await this.prisma.page.findUnique({
+        where: { id: pageId },
+        include: { owner: { select: { resellerId: true } } },
+      });
       if (!page) return false;
 
       let amountToDeduct = 0;
@@ -223,12 +229,100 @@ export class WalletService {
         });
       });
 
+      // Reseller wholesale ledger — best-effort, separate from the retail
+      // deduction above so a ledger hiccup can never block bot replies.
+      // No-op (page.owner.resellerId is null) for every non-reseller page,
+      // i.e. every page in the system today.
+      if (page.owner?.resellerId) {
+        await this.recordResellerWholesaleUsage(
+          page.owner.resellerId,
+          pageId,
+          type,
+          options,
+          description,
+        );
+      }
+
       return true;
     } catch (error) {
       this.logger.error(
         `Failed to deduct usage for page ${pageId} (${type}): ${error}`,
       );
       return false;
+    }
+  }
+
+  /** Mirrors deductUsage's per-type amount logic, but against the reseller's
+   * wholesale rate instead of the client Page's retail costPer*Bdt fields. */
+  private computeWholesaleAmount(
+    type: UsageType,
+    options: { photoCount?: number; memoCount?: number; msgCount?: number } | undefined,
+    rate: Required<PricingFields>,
+  ): number {
+    switch (type) {
+      case 'TEXT':
+        return rate.costPerTextMsgBdt;
+      case 'VOICE':
+        return rate.costPerVoiceMsgBdt;
+      case 'IMAGE':
+        return rate.costPerImageBdt;
+      case 'IMAGE_LOCAL':
+        return rate.costPerImageLocalBdt;
+      case 'IMAGE_OCR':
+        return rate.costPerImageBdt * 0.5;
+      case 'ADMIN_VISION':
+        return rate.costPerAnalyzeBdt * (options?.photoCount ?? 1);
+      case 'IMAGE_UNIQUENESS':
+        return 0.02;
+      case 'AI_GENERATE':
+        return rate.costPerAiGenerateBdt;
+      case 'DUAL_PHOTO_AI':
+        return rate.costPerAnalyzeBdt * (options?.photoCount ?? 3);
+      case 'SMART_BOT':
+        return rate.costPerTextMsgBdt * 2;
+      case 'MEMO_PRINT':
+        return rate.costPerMemoPrintBdt * (options?.memoCount ?? 1);
+      case 'KEYWORD_REPLY':
+        return rate.costPerKeywordReplyBdt;
+      case 'COMMENT_REPLY':
+        return rate.costPerCommentReplyBdt;
+      case 'BROADCAST':
+        return rate.costPerBroadcastMsgBdt * (options?.msgCount ?? 1);
+      default:
+        return 0;
+    }
+  }
+
+  private async recordResellerWholesaleUsage(
+    resellerId: string,
+    pageId: number,
+    type: UsageType,
+    options: { photoCount?: number; memoCount?: number; msgCount?: number } | undefined,
+    description: string,
+  ): Promise<void> {
+    try {
+      const reseller = await this.prisma.reseller.findUnique({
+        where: { id: resellerId },
+        select: { wholesaleOverridesJson: true },
+      });
+      if (!reseller) return;
+      const rate = resolveWholesaleRate(reseller.wholesaleOverridesJson);
+      const amount = this.computeWholesaleAmount(type, options, rate);
+      if (amount <= 0) return;
+
+      await this.prisma.$transaction([
+        this.prisma.resellerLedgerEntry.create({
+          data: { resellerId, pageId, type: 'WHOLESALE_DEBIT', amountBdt: amount, description },
+        }),
+        this.prisma.reseller.update({
+          where: { id: resellerId },
+          data: { walletOwedBdt: { increment: amount } },
+        }),
+      ]);
+    } catch (error) {
+      this.logger.error(
+        `Failed to record reseller wholesale usage (reseller ${resellerId}, page ${pageId}, type ${type}): ${error}`,
+      );
     }
   }
 

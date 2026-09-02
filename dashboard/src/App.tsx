@@ -3,8 +3,10 @@ import { useAuth } from './hooks/useAuth';
 import { API_BASE, useApi } from './hooks/useApi';
 import { getTheme, useToast, safeLazy } from './components/ui';
 import { useLanguage } from './i18n';
+import { useBranding } from './hooks/useBranding';
 import { LoginPage } from './pages/LoginPage';
 import { SignupPageComponent } from './pages/SignupPage';
+import { ResellerSignupPage } from './pages/ResellerSignupPage';
 import { ChangePasswordPage } from './pages/ChangePasswordPage';
 import { ConnectPageScreen } from './pages/ConnectPageScreen';
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
@@ -17,9 +19,13 @@ const AdminPanel = safeLazy(async () => {
   const mod = await import('./pages/AdminPanel');
   return { default: mod.AdminPanel };
 });
+const ResellerSettingsPage = safeLazy(async () => {
+  const mod = await import('./pages/ResellerSettingsPage');
+  return { default: mod.ResellerSettingsPage };
+});
 
 type MyPage = { id: number; pageId: string; pageName: string; isActive: boolean; automationOn: boolean; masterPageId?: number | null; isConnected?: boolean; };
-type Screen = 'landing' | 'login' | 'signup' | 'forgot-password' | 'change-password' | 'connect-page' | 'onboarding' | 'dashboard' | 'admin';
+type Screen = 'landing' | 'login' | 'signup' | 'reseller-signup' | 'forgot-password' | 'change-password' | 'connect-page' | 'onboarding' | 'dashboard' | 'admin' | 'reseller';
 
 function normalizePathname(pathname: string) {
   const cleaned = String(pathname || '/')
@@ -92,6 +98,7 @@ class ErrorBoundary extends Component<{ children: ReactNode; dark: boolean }, { 
 
 export function AppContent() {
   const { copy } = useLanguage();
+  const branding = useBranding();
   const [dark, setDark] = useState(() => {
     try { return localStorage.getItem('dfbot_dark') !== '0'; }
     catch { return true; }
@@ -105,6 +112,7 @@ export function AppContent() {
     const params = new URLSearchParams(window.location.search);
     if (params.get('mode') === 'login') return 'login';
     if (params.get('mode') === 'signup') return 'signup';
+    if (params.get('mode') === 'reseller-signup') return 'reseller-signup';
     if (params.get('mode') === 'forgot-password') return 'forgot-password';
     if (params.get('mode') === 'change-password') return 'change-password';
     if (params.get('mode') === 'connect-page') return 'connect-page';
@@ -148,9 +156,14 @@ export function AppContent() {
     if (!user) {
       setScreen((s) => {
         if (s === 'signup') return 'signup';
+        if (s === 'reseller-signup') return 'reseller-signup';
         if (s === 'login' || s === 'forgot-password') return s;
         return 'landing';
       });
+      return;
+    }
+    if (user.role === 'reseller_owner') {
+      setScreen('reseller');
       return;
     }
     if (screen === 'landing') {
@@ -238,6 +251,10 @@ export function AppContent() {
       setScreen('admin');
       return;
     }
+    if (result.user?.role === 'reseller_owner') {
+      setScreen('reseller');
+      return;
+    }
     await loadMyPages();
   };
 
@@ -271,6 +288,7 @@ export function AppContent() {
     const body: Record<string, string> = {
       password: data.password,
       name: data.name,
+      signupHost: window.location.hostname,
     };
 
     if (isPhone) {
@@ -306,13 +324,19 @@ export function AppContent() {
 
   if (screen === 'landing') {
     if (ready && !user) {
-      window.location.href = 'https://chatcat.pro';
+      // On a resolved reseller domain there is no separate marketing site to
+      // bounce to — stay put and go straight to login instead.
+      if (branding.found) {
+        setScreen('login');
+      } else {
+        window.location.href = 'https://chatcat.pro';
+      }
     }
     return <ScreenFallback dark={dark} />;
   }
 
   if (screen === 'login') {
-    return <LoginPage dark={dark} setDark={setDark} onLogin={handleLogin} onSignup={() => setScreen('signup')} onForgotPassword={() => setScreen('forgot-password')} onGoogleLogin={loginWithGoogle} />;
+    return <LoginPage dark={dark} setDark={setDark} onLogin={handleLogin} onSignup={() => setScreen('signup')} onForgotPassword={() => setScreen('forgot-password')} onGoogleLogin={loginWithGoogle} onResellerSignup={() => setScreen('reseller-signup')} />;
   }
 
   if (screen === 'forgot-password') {
@@ -327,6 +351,19 @@ export function AppContent() {
     return (
       <Suspense fallback={<ScreenFallback dark={dark} />}>
         <SignupPageComponent dark={dark} setDark={setDark} onSignup={handleSignup} onBack={() => setScreen('login')} />
+      </Suspense>
+    );
+  }
+
+  if (screen === 'reseller-signup') {
+    return (
+      <Suspense fallback={<ScreenFallback dark={dark} />}>
+        <ResellerSignupPage
+          dark={dark}
+          setDark={setDark}
+          onBack={() => setScreen('login')}
+          onSignupComplete={() => window.location.reload()}
+        />
       </Suspense>
     );
   }
@@ -361,6 +398,14 @@ export function AppContent() {
     return (
       <Suspense fallback={<ScreenFallback dark={dark} />}>
         <ConnectPageScreen dark={dark} userId={user?.id || ''} onConnected={loadMyPages} onLogout={handleLogout} />
+      </Suspense>
+    );
+  }
+
+  if (screen === 'reseller' && user?.role === 'reseller_owner') {
+    return (
+      <Suspense fallback={<ScreenFallback dark={dark} />}>
+        <ResellerSettingsPage dark={dark} setDark={setDark} onLogout={handleLogout} />
       </Suspense>
     );
   }

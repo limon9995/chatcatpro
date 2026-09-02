@@ -140,13 +140,19 @@ const POWERED_CSS = `
 .pwby:hover .pwby-text,.pwby:hover .pwby-brand{opacity:1;color:#fff}
 @media(max-width:480px){.pwby{bottom:12px;right:12px;padding:5px 9px 5px 7px;font-size:11px}}`;
 
-function poweredByBadge(): string {
-  if (!LANDING_URL) return '';
+// White-label: a page whose owner belongs to a reseller shows that
+// reseller's own name/link on the badge instead of ChatCat Pro's — see
+// CatalogController.resolveBadgeInfo(). Every page without a reseller (every
+// page in the system today) keeps exactly today's ChatCat Pro badge.
+function poweredByBadge(badge?: { name: string; url: string } | null): string {
+  const name = badge?.name || 'ChatCat Pro';
+  const url = badge?.url || LANDING_URL;
+  if (!url) return '';
   return `
 <style>${POWERED_CSS}</style>
-<a class="pwby" href="${esc(LANDING_URL)}" target="_blank" rel="noopener" title="ChatCat Pro দিয়ে তৈরি">
+<a class="pwby" href="${esc(url)}" target="_blank" rel="noopener" title="${esc(name)} দিয়ে তৈরি">
   <div class="pwby-icon">🤖</div>
-  <span class="pwby-text">Powered by </span><span class="pwby-brand">ChatCat Pro</span>
+  <span class="pwby-text">Powered by </span><span class="pwby-brand">${esc(name)}</span>
 </a>`;
 }
 
@@ -163,6 +169,34 @@ export class CatalogController {
     private readonly reviews: ReviewsService,
     private readonly pricing: PricingService,
   ) {}
+
+  // White-label "Powered by" badge — resolves what a reseller's client Page
+  // should show instead of the default ChatCat Pro badge. Returns null (the
+  // caller then falls back to ChatCat Pro) for every page without a
+  // reseller, i.e. every page in the system today.
+  private async resolveBadgeInfo(
+    resellerId?: string | null,
+  ): Promise<{ name: string; url: string } | null> {
+    if (!resellerId) return null;
+    const reseller = await this.prisma.reseller.findUnique({
+      where: { id: resellerId },
+      select: {
+        companyName: true,
+        websiteUrl: true,
+        customDomain: true,
+        customDomainActive: true,
+        slug: true,
+      },
+    });
+    if (!reseller) return null;
+    const url =
+      reseller.websiteUrl ||
+      (reseller.customDomainActive && reseller.customDomain
+        ? `https://${reseller.customDomain}`
+        : '') ||
+      `https://${reseller.slug}.${process.env.PLATFORM_ROOT_DOMAIN || 'chatcat.pro'}`;
+    return { name: reseller.companyName, url };
+  }
 
   private normalizeCodeList(raw?: string): string[] {
     return String(raw || '')
@@ -239,6 +273,7 @@ export class CatalogController {
         restaurantLat: true,
         restaurantLng: true,
         deliverySlabsJson: true,
+        owner: { select: { resellerId: true } },
       },
     });
     if (!page) {
@@ -290,6 +325,7 @@ export class CatalogController {
         .catch(() => null),
       this.pricing.getActiveDeliveryOfferOptions(page.id).catch(() => []),
     ]);
+    const badge = await this.resolveBadgeInfo((page as any).owner?.resellerId);
 
     // V21: Increment product view counter — fire-and-forget
     void this.prisma.product
@@ -339,6 +375,7 @@ export class CatalogController {
         reviewSummary,
         offerPreview,
         deliveryOfferOptions,
+        badge,
       }),
     );
   }
@@ -961,12 +998,13 @@ export class CatalogController {
         advanceNagad: true,
         advanceRocket: true,
         advancePaymentMessage: true,
-        owner: { select: { isActive: true } },
+        owner: { select: { isActive: true, resellerId: true } },
       },
     });
     if (!page) return { error: 'Page not found' };
     if ((page as any).owner?.isActive === false)
       return { error: 'Account is disabled' };
+    const badge = await this.resolveBadgeInfo((page as any).owner?.resellerId);
     if ((page as any).websiteEnabled === false)
       return { error: 'Website is currently unavailable' };
 
@@ -1114,6 +1152,7 @@ export class CatalogController {
       },
       products,
       total: products.length,
+      badge,
     };
   }
 
@@ -1132,6 +1171,7 @@ export class CatalogController {
         type: string;
         value: number;
       }[];
+      badge?: { name: string; url: string } | null;
     },
   ): string {
     const primary = esc(page.primaryColor);
@@ -2421,7 +2461,7 @@ function ccAddFromProductPage(){
 ${this.restaurantCartWidget(page, { liftBar: true })}`
     : ''
 }
-${poweredByBadge()}
+${poweredByBadge(opts?.badge)}
 </body>
 </html>`;
   }
@@ -3786,7 +3826,7 @@ ${
 </footer>
 
 ${cartEnabled ? this.restaurantCartWidget(page) : ''}
-${poweredByBadge()}
+${poweredByBadge(data.badge)}
 <script>
 (function(){
   var grid = document.querySelector('.grid');

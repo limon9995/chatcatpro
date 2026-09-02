@@ -3,7 +3,7 @@ import { CardHeader, EmptyState, FieldWithInfo, InfoButton, Spinner } from '../c
 import type { Theme } from '../components/ui';
 import { API_BASE, useApi } from '../hooks/useApi';
 
-type AdminTab = 'overview' | 'clients' | 'global-questions' | 'global-replies' | 'learning-log' | 'courier-tutorials' | 'billing' | 'call-servers' | 'wallet' | 'pricing' | 'subscriptions' | 'page-requests' | 'wa-requests' | 'customers' | 'domain-setup' | 'api-keys' | 'reports';
+type AdminTab = 'overview' | 'clients' | 'global-questions' | 'global-replies' | 'learning-log' | 'courier-tutorials' | 'billing' | 'call-servers' | 'wallet' | 'pricing' | 'subscriptions' | 'page-requests' | 'wa-requests' | 'resellers' | 'customers' | 'domain-setup' | 'api-keys' | 'reports';
 
 interface TutorialsConfig {
   courier?: { pathao?: string; steadfast?: string; redx?: string; paperfly?: string };
@@ -65,6 +65,7 @@ const ADMIN_TABS: { key: AdminTab; label: string; icon: string; help: string }[]
   { key: 'overview',          label: 'Overview',          icon: '📊', help: 'System এর সার্বিক অবস্থা দেখুন' },
   { key: 'page-requests',     label: 'Page Requests',     icon: '📋', help: 'Client দের page access request গুলো দেখুন এবং approve/reject করুন।' },
   { key: 'wa-requests',       label: 'WhatsApp Requests', icon: '📲', help: 'Client দের WhatsApp automation request গুলো দেখুন এবং connect করুন।' },
+  { key: 'resellers',         label: 'Resellers',         icon: '🏳️', help: 'White-label reseller accounts, তাদের markup ও wholesale-payable balance manage করুন, settlement request approve করুন।' },
   { key: 'clients',           label: 'Clients',           icon: '👥', help: 'সব client এর list এবং তাদের bot knowledge পরিচালনা করুন' },
   { key: 'global-questions',  label: 'Global Questions',  icon: '🌐', help: 'সব client এর জন্য default question bank।' },
   { key: 'global-replies',    label: 'System Replies',    icon: '💬', help: 'সব page এর জন্য default bot reply template।' },
@@ -104,7 +105,7 @@ export function AdminPanel({ th, onToast, onLogout }: {
   const { request } = useApi();
   const [tab, setTab] = useState<AdminTab>(() => {
     const saved = localStorage.getItem('admin_tab') as AdminTab | null;
-    const valid: AdminTab[] = ['overview','clients','customers','global-questions','global-replies','learning-log','courier-tutorials','billing','call-servers','wallet','pricing','subscriptions','page-requests','wa-requests','domain-setup','api-keys','reports'];
+    const valid: AdminTab[] = ['overview','clients','customers','global-questions','global-replies','learning-log','courier-tutorials','billing','call-servers','wallet','pricing','subscriptions','page-requests','wa-requests','resellers','domain-setup','api-keys','reports'];
     return saved && valid.includes(saved) ? saved : 'overview';
   });
   const [pageRequests, setPageRequests] = useState<any[]>([]);
@@ -2075,6 +2076,7 @@ export function AdminPanel({ th, onToast, onLogout }: {
           />
         )}
         {tab === 'wa-requests' && <WaRequestsTab th={th} request={request} BASE={BASE} onToast={onToast} />}
+        {tab === 'resellers' && <AdminResellersTab th={th} request={request} BASE={BASE} onToast={onToast} />}
         {tab === 'customers' && (
           <AdminCustomersTab
             th={th}
@@ -3099,6 +3101,175 @@ function WaRequestsTab({ th, request, BASE, onToast }: {
           )}
         </div>
       ))}
+    </div>
+  );
+}
+
+// ── Resellers — white-label reseller management ───────────────────────────────
+function AdminResellersTab({ th, request, BASE, onToast }: {
+  th: Theme; request: <T = any>(url: string, opts?: any) => Promise<T>; BASE: string;
+  onToast: (m: string, t?: any) => void;
+}) {
+  const [resellers, setResellers] = useState<any[]>([]);
+  const [settlements, setSettlements] = useState<any[]>([]);
+  const [settleFilter, setSettleFilter] = useState<'pending' | 'all'>('pending');
+  const [busy, setBusy] = useState<string | null>(null);
+  const [settleForm, setSettleForm] = useState<Record<string, string>>({});
+
+  const load = useCallback(async () => {
+    try {
+      const [r, s] = await Promise.all([
+        request<any[]>(`${BASE}/resellers`),
+        request<any[]>(`${BASE}/resellers/settlements${settleFilter === 'pending' ? '?status=pending' : ''}`),
+      ]);
+      setResellers(r || []);
+      setSettlements(s || []);
+    } catch (e: any) { onToast(e.message, 'error'); }
+  }, [settleFilter]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const toggleActive = async (id: string, isActive: boolean) => {
+    setBusy(id);
+    try {
+      await request(`${BASE}/resellers/${id}`, { method: 'PATCH', body: JSON.stringify({ isActive: !isActive }) });
+      await load();
+    } catch (e: any) { onToast(e.message, 'error'); }
+    finally { setBusy(null); }
+  };
+
+  const manualSettle = async (id: string) => {
+    const amount = Number(settleForm[id]);
+    if (!amount || amount <= 0) { onToast('সঠিক পরিমাণ দিন', 'error'); return; }
+    setBusy(id);
+    try {
+      await request(`${BASE}/resellers/${id}/settle`, { method: 'POST', body: JSON.stringify({ amountBdt: amount, note: 'Manual admin settlement' }) });
+      setSettleForm(prev => ({ ...prev, [id]: '' }));
+      onToast('Settled!', 'success');
+      await load();
+    } catch (e: any) { onToast(e.message, 'error'); }
+    finally { setBusy(null); }
+  };
+
+  const approveSettlement = async (id: number) => {
+    setBusy(`s${id}`);
+    try {
+      await request(`${BASE}/resellers/settlements/${id}/approve`, { method: 'POST' });
+      onToast('Approved!', 'success');
+      await load();
+    } catch (e: any) { onToast(e.message, 'error'); }
+    finally { setBusy(null); }
+  };
+
+  const rejectSettlement = async (id: number) => {
+    const reason = window.prompt('কেন reject করছেন? (optional):') ?? '';
+    setBusy(`s${id}`);
+    try {
+      await request(`${BASE}/resellers/settlements/${id}/reject`, { method: 'POST', body: JSON.stringify({ reason: reason || undefined }) });
+      onToast('Rejected!', 'success');
+      await load();
+    } catch (e: any) { onToast(e.message, 'error'); }
+    finally { setBusy(null); }
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div>
+        <div style={{ fontWeight: 800, fontSize: 15, color: th.text, marginBottom: 10 }}>🏳️ Resellers</div>
+        {resellers.length === 0 ? (
+          <div style={{ ...th.card, textAlign: 'center', padding: '32px', color: th.muted, fontSize: 13 }}>
+            এখনো কোনো reseller sign up করেনি
+          </div>
+        ) : resellers.map((r) => (
+          <div key={r.id} style={{ ...th.card, display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+              <div>
+                <div style={{ fontWeight: 800, fontSize: 13.5, color: th.text }}>
+                  {r.companyName} <span style={{ color: th.muted, fontWeight: 500 }}>({r.slug}.chatcat.pro{r.customDomain ? ` · ${r.customDomain}` : ''})</span>
+                </div>
+                <div style={{ fontSize: 12, color: th.muted, marginTop: 3 }}>
+                  👥 {r.clientCount} clients · Markup: {r.markupPercent}% · Owed: ৳{Number(r.walletOwedBdt).toFixed(2)}
+                </div>
+              </div>
+              <span style={{
+                fontSize: 11, fontWeight: 900, padding: '2px 8px', borderRadius: 6,
+                color: r.isActive ? '#16a34a' : '#ef4444', background: r.isActive ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.12)',
+              }}>
+                {r.isActive ? '✅ Active' : '⛔ Suspended'}
+              </span>
+            </div>
+            <div style={{ display: 'flex', gap: 8, borderTop: `1px solid ${th.border}`, paddingTop: 10 }}>
+              <button disabled={busy === r.id} onClick={() => toggleActive(r.id, r.isActive)} style={{
+                padding: '6px 12px', borderRadius: 8, border: `1px solid ${th.border}`, background: 'transparent', color: th.text,
+                fontWeight: 700, fontSize: 12, cursor: busy === r.id ? 'default' : 'pointer', fontFamily: 'inherit',
+              }}>
+                {r.isActive ? 'Suspend করুন' : 'Activate করুন'}
+              </button>
+              <input
+                style={{ ...th.input, width: 110 }}
+                type="number" step="0.01" placeholder="৳ amount"
+                value={settleForm[r.id] || ''}
+                onChange={e => setSettleForm(prev => ({ ...prev, [r.id]: e.target.value }))}
+              />
+              <button disabled={busy === r.id} onClick={() => manualSettle(r.id)} style={{
+                padding: '6px 12px', borderRadius: 8, border: 'none', background: th.accent, color: '#fff',
+                fontWeight: 700, fontSize: 12, cursor: busy === r.id ? 'default' : 'pointer', fontFamily: 'inherit',
+              }}>
+                Settle
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+          <div style={{ fontWeight: 800, fontSize: 15, color: th.text }}>💳 Settlement Requests</div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            {(['pending', 'all'] as const).map(f => (
+              <button key={f} onClick={() => setSettleFilter(f)} style={{
+                padding: '6px 14px', borderRadius: 8, border: `1px solid ${settleFilter === f ? th.accent : th.border}`,
+                background: settleFilter === f ? th.accent : 'transparent', color: settleFilter === f ? '#fff' : th.muted,
+                fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+              }}>{f === 'pending' ? '⏳ Pending' : '📋 All'}</button>
+            ))}
+          </div>
+        </div>
+        {settlements.length === 0 ? (
+          <div style={{ ...th.card, textAlign: 'center', padding: '32px', color: th.muted, fontSize: 13 }}>
+            কোনো settlement request নেই
+          </div>
+        ) : settlements.map((s) => (
+          <div key={s.id} style={{ ...th.card, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 10 }}>
+            <div>
+              <div style={{ fontWeight: 800, fontSize: 13.5, color: th.text }}>
+                {s.reseller?.companyName || s.resellerId} — ৳{Number(s.amountBdt).toFixed(2)} ({s.method})
+              </div>
+              <div style={{ fontSize: 12, color: th.muted, marginTop: 3 }}>Trx: {s.transactionId}{s.note ? ` · ${s.note}` : ''}</div>
+            </div>
+            {s.status === 'pending' ? (
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button disabled={busy === `s${s.id}`} onClick={() => approveSettlement(s.id)} style={{
+                  padding: '6px 12px', borderRadius: 8, border: 'none', background: '#16a34a', color: '#fff',
+                  fontWeight: 800, fontSize: 12, cursor: busy === `s${s.id}` ? 'default' : 'pointer', fontFamily: 'inherit',
+                }}>✅ Approve</button>
+                <button disabled={busy === `s${s.id}`} onClick={() => rejectSettlement(s.id)} style={{
+                  padding: '6px 12px', borderRadius: 8, border: 'none', background: 'rgba(239,68,68,0.12)', color: '#ef4444',
+                  fontWeight: 800, fontSize: 12, cursor: busy === `s${s.id}` ? 'default' : 'pointer', fontFamily: 'inherit',
+                }}>❌ Reject</button>
+              </div>
+            ) : (
+              <span style={{
+                fontSize: 11, fontWeight: 900, padding: '2px 8px', borderRadius: 6,
+                color: s.status === 'approved' ? '#16a34a' : '#ef4444',
+                background: s.status === 'approved' ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.12)',
+              }}>
+                {s.status}
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

@@ -9,6 +9,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { validateEnv } from './common/env-validator';
 import { Logger, ValidationPipe } from '@nestjs/common';
+import { AllowedOriginsService } from './common/allowed-origins.service';
 
 const logger = new Logger('Bootstrap');
 
@@ -115,6 +116,7 @@ async function bootstrap() {
     : null;
 
   const isProduction = process.env.NODE_ENV === 'production';
+  const allowedOriginsService = app.get(AllowedOriginsService);
   app.enableCors({
     origin: (origin, cb) => {
       // IMPORTANT: a disallowed origin must answer cb(null, false) — NOT an
@@ -156,6 +158,10 @@ async function bootstrap() {
         }
       });
       if (allowed) return cb(null, true);
+      // Reseller/merchant custom domains + {slug}.PLATFORM_ROOT_DOMAIN
+      // subdomains can never be listed in the static CORS_ORIGINS env var —
+      // check the DB-backed cache before giving up.
+      if (allowedOriginsService.isAllowed(originHost)) return cb(null, true);
       deny(origin);
     },
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],

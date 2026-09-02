@@ -9,8 +9,10 @@ import {
 import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { OtpService } from './otp.service';
+import { ResellerLookupService } from '../reseller/reseller-lookup.service';
 
-export type AuthRole = 'admin' | 'client';
+export type AuthRole = 'admin' | 'client' | 'reseller_owner';
+const AUTH_ROLES: AuthRole[] = ['admin', 'client', 'reseller_owner'];
 
 // ── Public user shape returned to callers ─────────────────────────────────────
 export interface PublicUser {
@@ -23,6 +25,8 @@ export interface PublicUser {
   isActive: boolean;
   forcePasswordChange: boolean;
   createdAt: string;
+  // null = direct platform customer (today's only case, unchanged).
+  resellerId: string | null;
 }
 
 @Injectable()
@@ -33,6 +37,7 @@ export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly otp: OtpService,
+    private readonly resellerLookup: ResellerLookupService,
   ) {}
 
   // ── Startup: seed admin from env ─────────────────────────────────────────
@@ -51,6 +56,15 @@ export class AuthService {
     pageIds?: number[];
     isActive?: boolean;
     forcePasswordChange?: boolean;
+    // Server-resolved only (from host -> Reseller lookup) — never accept this
+    // directly from a public request body, or a signup could be spoofed into
+    // an arbitrary reseller's client bucket.
+    resellerId?: string | null;
+    // The browser hostname the signup request came from (e.g.
+    // window.location.hostname on the dashboard SPA) — resolved server-side
+    // into a resellerId via the same lookup GET /reseller/by-domain uses.
+    // Ignored when resellerId is already set explicitly.
+    signupHost?: string;
   }) {
     // Phone number can be used as username — normalize it
     const rawIdentifier = body.username || body.phone || body.email || '';
@@ -75,7 +89,16 @@ export class AuthService {
     const { salt, passwordHash } = this.hashPassword(password);
     const displayName = body.name?.trim() || username;
 
-    const role = (body.role === 'admin' ? 'admin' : 'client') as AuthRole;
+    const role = (
+      AUTH_ROLES.includes(body.role as AuthRole) ? body.role : 'client'
+    ) as AuthRole;
+
+    let resellerId = body.resellerId ?? null;
+    if (!resellerId && body.signupHost) {
+      const reseller = await this.resellerLookup.resolveByHost(body.signupHost);
+      resellerId = reseller?.id ?? null;
+    }
+
     const user = await this.prisma.user.create({
       data: {
         username,
@@ -87,6 +110,7 @@ export class AuthService {
         salt,
         forcePasswordChange: body.forcePasswordChange ?? false,
         pageIds: JSON.stringify(this.normalizePageIds(body.pageIds || [])),
+        resellerId,
       },
     });
 
@@ -319,7 +343,9 @@ export class AuthService {
     if (body.name !== undefined) data.name = String(body.name).trim();
     if (body.isActive !== undefined) data.isActive = Boolean(body.isActive);
     if (body.role !== undefined)
-      data.role = body.role === 'admin' ? 'admin' : 'client';
+      data.role = AUTH_ROLES.includes(body.role as AuthRole)
+        ? body.role
+        : 'client';
     if (body.pageIds !== undefined)
       data.pageIds = JSON.stringify(this.normalizePageIds(body.pageIds));
     if (body.forcePasswordChange !== undefined)
@@ -407,6 +433,7 @@ export class AuthService {
     name: string;
     username?: string;
     password: string;
+    signupHost?: string;
   }): Promise<PublicUser> {
     const email = body.email.trim().toLowerCase();
     const valid = await this.otp.verifyOtp(email, body.code, 'signup');
@@ -419,6 +446,7 @@ export class AuthService {
       name: username,
       role: 'client',
       isActive: true,
+      signupHost: body.signupHost,
     });
   }
 
@@ -699,6 +727,7 @@ export class AuthService {
         user.createdAt instanceof Date
           ? user.createdAt.toISOString()
           : String(user.createdAt),
+      resellerId: user.resellerId ?? null,
     };
   }
 

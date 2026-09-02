@@ -6,12 +6,13 @@ import { TelegramService } from './telegram.service';
 import { GeminiKeyRotatorService } from './gemini-key-rotator.service';
 import { MailerService } from './mailer.service';
 import { AiUsageService } from './ai-usage.service';
+import { AllowedOriginsService } from './allowed-origins.service';
 import { PrismaModule } from '../prisma/prisma.module';
 
 @Global()
 @Module({
   imports: [PrismaModule],
-  providers: [EncryptionService, GlobalSettingsService, ApiKeysService, TelegramService, GeminiKeyRotatorService, MailerService, AiUsageService],
-  exports: [EncryptionService, GlobalSettingsService, ApiKeysService, TelegramService, GeminiKeyRotatorService, MailerService, AiUsageService],
+  providers: [EncryptionService, GlobalSettingsService, ApiKeysService, TelegramService, GeminiKeyRotatorService, MailerService, AiUsageService, AllowedOriginsService],
+  exports: [EncryptionService, GlobalSettingsService, ApiKeysService, TelegramService, GeminiKeyRotatorService, MailerService, AiUsageService, AllowedOriginsService],
 })
 export class CommonModule {}

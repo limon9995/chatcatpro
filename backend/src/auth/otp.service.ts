@@ -34,7 +34,7 @@ export class OtpService {
   }
 
   /** Generate and send a 6-digit OTP to the given email. */
-  async sendOtp(email: string, purpose: 'signup' | 'reset'): Promise<void> {
+  async sendOtp(email: string, purpose: 'signup' | 'reset' | 'reseller_signup'): Promise<void> {
     // Link to the hosted logo instead of embedding it as base64 — inlining the
     // ~420KB logo pushed the email past Gmail's ~102KB clipping threshold,
     // causing Gmail to hide the body behind "View entire message".
@@ -52,7 +52,7 @@ export class OtpService {
       }),
     ]);
 
-    const isSignup = purpose === 'signup';
+    const isSignup = purpose === 'signup' || purpose === 'reseller_signup';
     const subject = isSignup
       ? 'ChatCat Pro — Email Verification OTP'
       : 'ChatCat Pro — Password Reset OTP';
@@ -110,7 +110,7 @@ export class OtpService {
   async verifyOtp(
     email: string,
     code: string,
-    purpose: 'signup' | 'reset',
+    purpose: 'signup' | 'reset' | 'reseller_signup',
   ): Promise<boolean> {
     const token = await this.prisma.otpToken.findFirst({
       where: {

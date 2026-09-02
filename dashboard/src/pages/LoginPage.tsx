@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { LanguageSwitch } from '../components/ui';
 import { useLanguage } from '../i18n';
+import { useBranding } from '../hooks/useBranding';
 
 interface Props {
   dark: boolean;
@@ -9,12 +10,14 @@ interface Props {
   onSignup?: () => void;
   onForgotPassword?: () => void;
   onGoogleLogin?: () => Promise<void>;
+  onResellerSignup?: () => void;
 }
 
 const HELPLINE_FACEBOOK = 'https://www.facebook.com/share/18CGePjSwQ/';
 
-export function LoginPage({ dark, setDark, onLogin, onSignup, onForgotPassword, onGoogleLogin }: Props) {
+export function LoginPage({ dark, setDark, onLogin, onSignup, onForgotPassword, onGoogleLogin, onResellerSignup }: Props) {
   const { language, copy } = useLanguage();
+  const branding = useBranding();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading]   = useState(false);
@@ -111,9 +114,9 @@ export function LoginPage({ dark, setDark, onLogin, onSignup, onForgotPassword, 
 
         {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <img src="/logo.png" alt="Chatcat" style={{ width: 80, height: 80, objectFit: 'cover', borderRadius: '50%', margin: '0 auto 14px', display: 'block' }} />
+          <img src={branding.logoUrl} alt={branding.companyName} style={{ width: 80, height: 80, objectFit: 'cover', borderRadius: '50%', margin: '0 auto 14px', display: 'block' }} />
           <div style={{ fontSize: 22, fontWeight: 800, color: text, letterSpacing: '-0.04em', lineHeight: 1 }}>
-            Chatcat
+            {branding.companyName}
           </div>
           <div style={{ fontSize: 12.5, color: muted, marginTop: 5, fontWeight: 500 }}>
             {copy('কমার্স অটোমেশন ড্যাশবোর্ড', 'Commerce Automation Dashboard')}
@@ -293,6 +296,20 @@ export function LoginPage({ dark, setDark, onLogin, onSignup, onForgotPassword, 
               padding:0, textDecoration:'underline', textUnderlineOffset:3,
             }}>
               {copy('সাইন আপ করুন', 'Create one')}
+            </button>
+          </div>
+        )}
+
+        {/* Reseller signup link — only on the platform's own domain; a
+            reseller's own client-facing login shouldn't advertise this. */}
+        {onResellerSignup && !branding.found && (
+          <div style={{ textAlign:'center', marginTop:10, fontSize:12.5, color:muted }}>
+            <button onClick={onResellerSignup} style={{
+              background:'none', border:'none', cursor:'pointer',
+              color: muted, fontWeight:600, fontSize:12.5, fontFamily:'inherit',
+              padding:0, textDecoration:'underline', textUnderlineOffset:3,
+            }}>
+              {copy('নিজের ব্র্যান্ডে রিসেলার হতে চান?', 'Want to become a reseller?')}
             </button>
           </div>
         )}

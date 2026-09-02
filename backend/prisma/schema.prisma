@@ -33,8 +33,16 @@ model User {
   agentRequests     AgentRequest[]
   waConnectRequests WaConnectRequest[]
 
+  // ── Reseller white-label ────────────────────────────────────────────────
+  // null = direct platform customer (today's only case, unchanged).
+  resellerId    String?
+  reseller      Reseller? @relation("ResellerClients", fields: [resellerId], references: [id], onDelete: SetNull)
+  // Set only if this user IS a reseller owner — their one Reseller row.
+  ownedReseller Reseller? @relation("ResellerOwner")
+
   @@index([username])
   @@index([email])
+  @@index([resellerId])
 }
 
 // OTP tokens for email verification and password reset
@@ -1147,6 +1155,106 @@ model WalletRechargeRequest {
 
   @@index([pageId])
   @@index([status])
+}
+
+// ── RESELLER WHITE-LABEL SYSTEM ───────────────────────────────────────────────
+// Self-serve reseller: runs their own branded dashboard/login/storefront (name,
+// logo, colors, domain) on this same backend, sets their own retail pricing for
+// their clients' Pages, while the platform tracks wholesale cost owed via the
+// ledger below. See User.resellerId — null (the default) means "no reseller",
+// which must keep behaving exactly like today for every existing account.
+
+model Reseller {
+  id          String @id @default(uuid())
+  slug        String @unique // e.g. "hisbrand" -> hisbrand.chatcat.pro
+  companyName String
+  ownerId     String @unique
+  owner       User   @relation("ResellerOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  // -- BRANDING (mirrors Page.logoUrl/businessName/primaryColor) --
+  logoUrl      String?
+  faviconUrl   String?
+  primaryColor String? @default("#5b63f5")
+  accentColor  String?
+  tagline      String?
+  supportEmail String?
+  supportPhone String?
+  // Link for the "Powered by {companyName}" badge shown on their clients'
+  // public catalog/storefront pages, in place of the default ChatCat Pro
+  // badge. Falls back to the active custom domain, then the {slug}.<root>
+  // subdomain, when left blank — see CatalogController.resolveBadgeInfo().
+  websiteUrl   String?
+
+  // -- DOMAIN (exact mirror of Page.customDomain*) --
+  customDomain          String?   @unique
+  customDomainActive    Boolean   @default(false)
+  customDomainCheckedAt DateTime?
+
+  isActive Boolean @default(true) // platform admin kill switch
+
+  // -- WHOLESALE PRICING --
+  // null = charge at the platform's global default rate (DEFAULT_GLOBAL_PRICING
+  // in admin.service.ts). Platform admin can set a partial override (same shape)
+  // for negotiated/bulk resellers, merged the same way _readGlobalPricing() does.
+  wholesaleOverridesJson Json?
+
+  // Suggested default retail markup — used only when auto-seeding a new client
+  // Page's costPer*Bdt fields (Phase 3). Reseller can still hand-edit any
+  // client page's retail price afterward via the existing per-page fields.
+  markupPercent Float @default(50)
+
+  // Running balance the reseller owes the platform for wholesale usage not
+  // yet settled — same "running balance + ledger" idiom as Page.walletBalanceBdt.
+  walletOwedBdt Float @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  clients User[]                @relation("ResellerClients")
+  ledger  ResellerLedgerEntry[]
+  settlementRequests ResellerSettlementRequest[]
+
+  @@index([ownerId])
+}
+
+// Reseller self-serve settlement submission — mirrors WalletRechargeRequest's
+// shape/flow (submit -> pending -> admin approve/reject), but settles what a
+// reseller owes the platform (Reseller.walletOwedBdt) instead of crediting a
+// Page's wallet.
+model ResellerSettlementRequest {
+  id             Int       @id @default(autoincrement())
+  resellerId     String
+  reseller       Reseller  @relation(fields: [resellerId], references: [id], onDelete: Cascade)
+  amountBdt      Float
+  method         String // bkash | nagad | bank | manual
+  transactionId  String
+  note           String?
+  status         String    @default("pending") // pending | approved | rejected
+  rejectedReason String?
+  approvedAt     DateTime?
+  approvedBy     String? // admin username
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([resellerId])
+  @@index([status])
+}
+
+// Structural twin of WalletTransaction, at the reseller tier — logs what a
+// reseller owes the platform (wholesale) as opposed to WalletTransaction's
+// per-Page retail deductions.
+model ResellerLedgerEntry {
+  id          Int      @id @default(autoincrement())
+  resellerId  String
+  reseller    Reseller @relation(fields: [resellerId], references: [id], onDelete: Cascade)
+  pageId      Int? // client page whose usage generated this wholesale charge; null for settlement/adjustment rows
+  type        String // WHOLESALE_DEBIT | SETTLEMENT_PAYMENT | ADMIN_ADJUSTMENT
+  amountBdt   Float // positive = increases what reseller owes; negative = reseller paid platform
+  description String?
+  createdAt   DateTime @default(now())
+
+  @@index([resellerId])
+  @@index([pageId])
 }
 
 model SpamCheckLog {
