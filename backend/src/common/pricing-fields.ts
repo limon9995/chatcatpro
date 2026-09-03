@@ -13,6 +13,26 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
+// ── Credit-based pricing ──────────────────────────────────────────────────────
+// Every costPer*Bdt / walletBalanceBdt / WalletTransaction.amountBdt field
+// keeps its ৳-suffixed name (renaming across ~15 files on a live billing
+// system was judged too risky for too little value — see the credit-system
+// plan) but its VALUE now means CREDITS, not real taka. CREDITS_PER_TAKA is
+// the single conversion constant used everywhere real ৳ still needs to
+// interact with the credit system: the two purchasable packages
+// (৳3000→5000 credits, ৳5000→8000 credits) imply slightly different
+// ৳-per-credit rates (0.60 vs 0.625); this is the blended/revenue-weighted
+// rate across both — the rate that actually reflects the platform's real
+// revenue per credit sold — used to convert every legacy ৳ cost so today's
+// profit margin per unit of usage is preserved exactly.
+export const CREDITS_PER_TAKA = 1.625; // = 13000 credits / 8000৳ (Starter + Growth packages combined)
+
+export const bdtToCredits = (bdt: number): number =>
+  Math.round(bdt * CREDITS_PER_TAKA * 10000) / 10000;
+
+export const creditsToBdt = (credits: number): number =>
+  Math.round((credits / CREDITS_PER_TAKA) * 100) / 100;
+
 export interface PricingFields {
   costPerTextMsgBdt?: number;
   costPerVoiceMsgBdt?: number;
@@ -54,23 +74,25 @@ export function pickPricingFields(input: PricingFields): Partial<PricingFields> 
   return data;
 }
 
-// ── Platform-wide default (wholesale) pricing ────────────────────────────────
+// ── Platform-wide default pricing (now credit-denominated) ───────────────────
 // The rate every Page/reseller falls back to when no override applies.
+// Values below are the legacy ৳ defaults × CREDITS_PER_TAKA (1.625) — e.g.
+// costPerTextMsgBdt was ৳0.05, is now 0.08125 credits (~12 texts/credit).
 
 export const DEFAULT_GLOBAL_PRICING: Required<PricingFields> = {
-  costPerKeywordReplyBdt: 0.02,
-  costPerTextMsgBdt: 0.05,
-  costPerImageBdt: 0.20,
-  costPerImageLocalBdt: 0.10,
-  costPerOcrLocalBdt: 0.02,
-  costPerOcrAiBdt: 0.05,
-  costPerVoiceMsgBdt: 1.00,
-  costPerAnalyzeBdt: 0.20,
-  costPerAiGenerateBdt: 0.10,
-  costPerBroadcastMsgBdt: 0.05,
-  costPerRecurringNotifBdt: 0.10,
-  costPerCommentReplyBdt: 0.05,
-  costPerMemoPrintBdt: 0.10,
+  costPerKeywordReplyBdt: 0.0325,
+  costPerTextMsgBdt: 0.08125,
+  costPerImageBdt: 0.325,
+  costPerImageLocalBdt: 0.1625,
+  costPerOcrLocalBdt: 0.0325,
+  costPerOcrAiBdt: 0.08125,
+  costPerVoiceMsgBdt: 1.625,
+  costPerAnalyzeBdt: 0.325,
+  costPerAiGenerateBdt: 0.1625,
+  costPerBroadcastMsgBdt: 0.08125,
+  costPerRecurringNotifBdt: 0.1625,
+  costPerCommentReplyBdt: 0.08125,
+  costPerMemoPrintBdt: 0.1625,
 };
 
 const GLOBAL_PRICING_FILE = path.join(process.cwd(), 'storage', 'global-pricing.json');

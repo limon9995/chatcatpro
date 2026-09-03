@@ -2317,24 +2317,49 @@ Return ONLY valid JSON (no markdown):
     });
   }
 
+  async listCreditPackages() {
+    return this.prisma.creditPackage.findMany({
+      where: { isActive: true },
+      orderBy: { sortOrder: 'asc' },
+    });
+  }
+
   async submitRechargeRequest(
     pageId: number,
     body: {
-      amountBdt: number;
+      packageId: string;
       method: string;
       transactionId: string;
       note?: string;
+      // Only used for the isCustom package — the client's own stated amount;
+      // creditsGranted stays null until admin negotiates/confirms it.
+      amountBdt?: number;
     },
   ) {
-    const { amountBdt, method, transactionId, note } = body;
-    if (!amountBdt || amountBdt <= 0)
-      throw new BadRequestException('Amount must be positive');
+    const { packageId, method, transactionId, note } = body;
     if (!transactionId?.trim())
       throw new BadRequestException('Transaction ID required');
 
     const allowed = ['bkash', 'nagad', 'bank', 'manual'];
     if (!allowed.includes(method))
       throw new BadRequestException('Invalid payment method');
+
+    const pkg = await this.prisma.creditPackage.findFirst({
+      where: { id: packageId, isActive: true },
+    });
+    if (!pkg) throw new BadRequestException('Package not found');
+
+    let amountBdt: number;
+    let creditsGranted: number | null;
+    if (pkg.isCustom) {
+      amountBdt = Number(body.amountBdt);
+      if (!amountBdt || amountBdt <= 0)
+        throw new BadRequestException('Amount must be positive');
+      creditsGranted = null; // admin fills this in when approving a custom deal
+    } else {
+      amountBdt = pkg.priceBdt!;
+      creditsGranted = pkg.credits!;
+    }
 
     // Prevent duplicate pending request for same TrxID + page
     const existing = await this.prisma.walletRechargeRequest.findFirst({
@@ -2352,14 +2377,18 @@ Return ONLY valid JSON (no markdown):
         method,
         transactionId: transactionId.trim(),
         note: note?.trim() || null,
+        packageId: pkg.id,
+        creditsGranted,
       },
     });
 
     // ── Auto-verify via admin payment config ────────────────────────────────
+    // Only possible for fixed packages — a custom deal has no credits amount
+    // yet, so it always needs manual admin approval regardless of SMS match.
     const adminPay = this.adminService.getGlobalConfig().adminPayment || {};
     let autoVerified = false;
 
-    if (adminPay.smsGatewayEnabled) {
+    if (adminPay.smsGatewayEnabled && creditsGranted) {
       const match = this.adminService.matchAdminSms(
         transactionId.trim(),
         amountBdt,
@@ -2375,7 +2404,7 @@ Return ONLY valid JSON (no markdown):
         });
         await this.walletService.rechargeWallet(
           pageId,
-          amountBdt,
+          creditsGranted,
           `${method}:${transactionId.trim()}`,
         );
         autoVerified = true;
@@ -2391,7 +2420,7 @@ Return ONLY valid JSON (no markdown):
       void this.telegram.sendMessage(
         `✅ <b>Wallet Auto-Verified!</b>\n` +
           `🏪 Page: ${page?.pageName || pageId}\n` +
-          `💵 Amount: ৳${amountBdt}\n` +
+          `💵 Amount: ৳${amountBdt} → ${creditsGranted} credits\n` +
           `📱 Method: ${method} | TxID: ${transactionId.trim()}`,
       );
       return {
@@ -2408,7 +2437,9 @@ Return ONLY valid JSON (no markdown):
     void this.telegram.sendMessageWithButtons(
       `💰 <b>নতুন Wallet Recharge Request!</b>\n` +
         `🏪 Page: ${page?.pageName || pageId}\n` +
-        `💵 Amount: ${amountBdt} BDT\n` +
+        `📦 Package: ${pkg.name}\n` +
+        `💵 Amount: ${amountBdt} BDT` +
+        (creditsGranted ? ` → ${creditsGranted} credits\n` : ' (custom — set credits before approving)\n') +
         `📱 Method: ${method}\n` +
         `🔖 TxID: ${transactionId.trim()}\n` +
         (note ? `📝 Note: ${note}\n` : '') +

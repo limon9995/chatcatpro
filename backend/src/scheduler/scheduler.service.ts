@@ -15,8 +15,10 @@ import { TelegramNotificationService } from '../telegram/telegram-notification.s
 import { MailerService } from '../common/mailer.service';
 import { TelegramService as AdminTelegramService } from '../common/telegram.service';
 
-const BASE_FEE_BDT = 500;
-const LOW_BALANCE_THRESHOLD_BDT = 100;
+// Credit-denominated since the credit-system migration (was ৳500/৳100) —
+// see common/pricing-fields.ts CREDITS_PER_TAKA.
+const BASE_FEE_BDT = 812.5;
+const LOW_BALANCE_THRESHOLD_BDT = 162.5;
 const SUB_EXPIRY_WARNING_DAYS = 3;
 
 @Injectable()
@@ -187,7 +189,7 @@ export class SchedulerService {
       }
 
       this.logger.log(
-        `[Scheduler] Base fee: deducted ${BASE_FEE_BDT} BDT from ${deducted} pages, ${suspended} suspended`,
+        `[Scheduler] Base fee: deducted ${BASE_FEE_BDT} credits from ${deducted} pages, ${suspended} suspended`,
       );
     } catch (e: any) {
       this.logger.error(`[Scheduler] Base fee error: ${e.message}`);
@@ -330,7 +332,7 @@ export class SchedulerService {
         await this.telegram
           .notify(
             page.id,
-            `⏳ <b>Subscription renewing soon</b> on ${dateStr}. Make sure your wallet balance covers the ৳${BASE_FEE_BDT} base fee.`,
+            `⏳ <b>Subscription renewing soon</b> on ${dateStr}. Make sure your wallet balance covers the ${BASE_FEE_BDT} credit base fee.`,
           )
           .catch(() => {});
         await this.prisma.page.update({

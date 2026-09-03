@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { WalletService } from '../wallet/wallet.service';
 import { parseSms } from './sms-parser';
 import { randomUUID } from 'crypto';
+import { CREDITS_PER_TAKA } from '../common/pricing-fields';
 
 // pageId=-1 is the admin/chatcat billing sentinel
 const ADMIN_PAGE_ID = -1;
@@ -119,12 +120,16 @@ export class SmsGatewayService {
 
   private async markMatched(sms: any, pageId?: number): Promise<SmsMatchResult> {
     await this.prisma.receivedSms.update({ where: { id: sms.id }, data: { matched: true } });
-    // Deduct 1% SMS verification fee from wallet
+    // Deduct 1% SMS verification fee from wallet. The 1% is computed against
+    // the real ৳ order amount, but the wallet is credit-denominated since the
+    // credit-system migration — convert before deducting, or this fee would
+    // silently under-charge by ~38%. See common/pricing-fields.ts CREDITS_PER_TAKA.
     if (pageId && sms.amount && sms.amount > 0) {
-      const fee = Math.round(sms.amount * 0.01 * 100) / 100;
+      const feeBdt = Math.round(sms.amount * 0.01 * 100) / 100;
+      const feeCredits = Math.round(feeBdt * CREDITS_PER_TAKA * 10000) / 10000;
       await this.wallet.deductFixed(
         pageId,
-        fee,
+        feeCredits,
         `SMS Payment Verify fee 1% of ৳${sms.amount} (${(sms.method ?? '').toUpperCase()})`,
         'DEDUCT_SMS_VERIFY',
       );

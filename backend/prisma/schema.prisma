@@ -230,7 +230,7 @@ model Page {
   businessInfo          String? // Full business description; used as AI knowledge base for businessBotOn mode
   commentReplyOn        Boolean @default(false)
   commentReplyAllowed   Boolean @default(true)
-  costPerCommentReplyBdt Float  @default(0.05)
+  costPerCommentReplyBdt Float  @default(0.08125) // credit-denominated since the credit-system migration — see common/pricing-fields.ts CREDITS_PER_TAKA
 
   callLanguage        String    @default("BN")
   voiceType           String    @default("FEMALE")
@@ -258,18 +258,20 @@ model Page {
   // V24: owner opt-out for the new "new order" email alert (Telegram alert unaffected).
   orderEmailNotifEnabled Boolean @default(true)
 
-  // -- PRICING CONFIG --
-  costPerTextMsgBdt       Float @default(0.05)
-  costPerVoiceMsgBdt      Float @default(1.00)  // For processing audio voice notes
-  costPerImageBdt         Float @default(0.20)  // Customer image — Gemini Vision API path
-  costPerImageLocalBdt    Float @default(0.10)  // Customer image — local Ollama path (no API)
-  costPerAnalyzeBdt       Float @default(0.20)  // Admin uploading product
-  costPerAiGenerateBdt    Float @default(0.10)  // AI text generation (description/broadcast draft)
-  costPerKeywordReplyBdt       Float @default(0.02)   // Pure keyword/template bot reply (no AI call)
-  costPerBroadcastMsgBdt       Float @default(0.05)   // Per broadcast message sent
-  costPerOcrLocalBdt           Float @default(0.02)   // OCR via local Tesseract
-  costPerOcrAiBdt              Float @default(0.05)   // OCR via Gemini fallback
-  costPerRecurringNotifBdt     Float @default(0.10)   // Recurring notification broadcast per message
+  // -- PRICING CONFIG (credit-denominated since the credit-system migration —
+  // see common/pricing-fields.ts CREDITS_PER_TAKA; each default = legacy ৳
+  // rate × 1.625, e.g. costPerTextMsgBdt was ৳0.05, now 0.08125 credits) --
+  costPerTextMsgBdt       Float @default(0.08125)
+  costPerVoiceMsgBdt      Float @default(1.625)  // For processing audio voice notes
+  costPerImageBdt         Float @default(0.325)  // Customer image — Gemini Vision API path
+  costPerImageLocalBdt    Float @default(0.1625)  // Customer image — local Ollama path (no API)
+  costPerAnalyzeBdt       Float @default(0.325)  // Admin uploading product
+  costPerAiGenerateBdt    Float @default(0.1625)  // AI text generation (description/broadcast draft)
+  costPerKeywordReplyBdt       Float @default(0.0325)   // Pure keyword/template bot reply (no AI call)
+  costPerBroadcastMsgBdt       Float @default(0.08125)   // Per broadcast message sent
+  costPerOcrLocalBdt           Float @default(0.0325)   // OCR via local Tesseract
+  costPerOcrAiBdt              Float @default(0.08125)   // OCR via Gemini fallback
+  costPerRecurringNotifBdt     Float @default(0.1625)   // Recurring notification broadcast per message
   recurringNotifMode           Boolean @default(false) // When ON: ask subscribe permission after order complete/cancel
 
   // -- DUAL PHOTO MODE (legacy single-pair, kept for backward compat) --
@@ -366,7 +368,7 @@ model Page {
   smsGatewayEnabled  Boolean  @default(false)
   receivedSms        ReceivedSms[]
 
-  costPerMemoPrintBdt  Float @default(0.10)
+  costPerMemoPrintBdt  Float @default(0.1625) // credit-denominated — see common/pricing-fields.ts CREDITS_PER_TAKA
 
   @@index([masterPageId])
 }
@@ -1141,7 +1143,7 @@ model WalletRechargeRequest {
   id            Int      @id @default(autoincrement())
   pageId        Int
   page          Page     @relation(fields: [pageId], references: [id], onDelete: Cascade)
-  amountBdt     Float
+  amountBdt     Float // real taka actually paid/being paid — used by the SMS-auto-verify matchers, unaffected by the credit system
   method        String   // bkash | nagad | bank | manual
   transactionId String
   note          String?
@@ -1153,8 +1155,32 @@ model WalletRechargeRequest {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
+  // -- CREDIT PACKAGE SYSTEM --
+  packageId      String?
+  package        CreditPackage? @relation(fields: [packageId], references: [id], onDelete: SetNull)
+  creditsGranted Float? // actual credits added to Page.walletBalanceBdt on approval — from package.credits, or admin-entered for a custom package
+
   @@index([pageId])
   @@index([status])
+}
+
+// A fixed (or custom/negotiated) taka-to-credit top-up tier a merchant can buy.
+// priceBdt/credits are null only for the isCustom row — admin fills both in
+// manually per request instead of a fixed rate. See
+// common/pricing-fields.ts's CREDITS_PER_TAKA for how per-action costs relate
+// to these packages.
+model CreditPackage {
+  id        String   @id @default(uuid())
+  name      String
+  priceBdt  Float?
+  credits   Float?
+  isCustom  Boolean  @default(false)
+  isActive  Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  rechargeRequests WalletRechargeRequest[]
 }
 
 // ── RESELLER WHITE-LABEL SYSTEM ───────────────────────────────────────────────

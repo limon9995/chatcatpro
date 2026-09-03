@@ -3,7 +3,7 @@ import { CardHeader, EmptyState, FieldWithInfo, InfoButton, Spinner } from '../c
 import type { Theme } from '../components/ui';
 import { API_BASE, useApi } from '../hooks/useApi';
 
-type AdminTab = 'overview' | 'clients' | 'global-questions' | 'global-replies' | 'learning-log' | 'courier-tutorials' | 'billing' | 'call-servers' | 'wallet' | 'pricing' | 'subscriptions' | 'page-requests' | 'wa-requests' | 'resellers' | 'customers' | 'domain-setup' | 'api-keys' | 'reports';
+type AdminTab = 'overview' | 'clients' | 'global-questions' | 'global-replies' | 'learning-log' | 'courier-tutorials' | 'billing' | 'call-servers' | 'wallet' | 'pricing' | 'packages' | 'subscriptions' | 'page-requests' | 'wa-requests' | 'resellers' | 'customers' | 'domain-setup' | 'api-keys' | 'reports';
 
 interface TutorialsConfig {
   courier?: { pathao?: string; steadfast?: string; redx?: string; paperfly?: string };
@@ -75,6 +75,7 @@ const ADMIN_TABS: { key: AdminTab; label: string; icon: string; help: string }[]
   { key: 'billing',           label: 'Billing',           icon: '💳', help: 'Subscriptions, payments, plan management।' },
   { key: 'wallet',            label: 'Wallet',            icon: '💰', help: 'সব client এর wallet balance দেখুন, recharge approve করুন।' },
   { key: 'pricing',           label: 'Pricing',           icon: '🏷️', help: 'Global usage cost rates edit করুন এবং সব client এ একসাথে apply করুন।' },
+  { key: 'packages',          label: 'Credit Packages',   icon: '📦', help: 'যে ৳→credits প্যাকেজগুলো client wallet page-এ দেখা যায় সেগুলো add/edit করুন।' },
   { key: 'reports',           label: 'Reports',           icon: '📊', help: 'Revenue, API cost, profit — সব কিছুর full financial report।' },
   { key: 'subscriptions',     label: 'Subscriptions',     icon: '📅', help: 'প্রতিটি page এর server subscription expiry set করুন। Expired হলে bot বন্ধ হয়ে যায়।' },
   { key: 'domain-setup',      label: 'Custom Domains',    icon: '🌐', help: 'Customer-দের নিজের domain set করুন — Nginx config + SSL সব automatic হবে।' },
@@ -105,7 +106,7 @@ export function AdminPanel({ th, onToast, onLogout }: {
   const { request } = useApi();
   const [tab, setTab] = useState<AdminTab>(() => {
     const saved = localStorage.getItem('admin_tab') as AdminTab | null;
-    const valid: AdminTab[] = ['overview','clients','customers','global-questions','global-replies','learning-log','courier-tutorials','billing','call-servers','wallet','pricing','subscriptions','page-requests','wa-requests','resellers','domain-setup','api-keys','reports'];
+    const valid: AdminTab[] = ['overview','clients','customers','global-questions','global-replies','learning-log','courier-tutorials','billing','call-servers','wallet','pricing','packages','subscriptions','page-requests','wa-requests','resellers','domain-setup','api-keys','reports'];
     return saved && valid.includes(saved) ? saved : 'overview';
   });
   const [pageRequests, setPageRequests] = useState<any[]>([]);
@@ -153,26 +154,27 @@ export function AdminPanel({ th, onToast, onLogout }: {
   const [walletRequests, setWalletRequests] = useState<any[]>([]);
   const [walletLoading, setWalletLoading]   = useState(false);
   const [walletReqFilter, setWalletReqFilter] = useState<'all' | 'pending'>('pending');
-  const [walletDirectForm, setWalletDirectForm] = useState({ pageId: '', amountBdt: '', transactionId: '', note: '' });
+  const [walletDirectForm, setWalletDirectForm] = useState({ pageId: '', amountBdt: '', creditsToAdd: '', transactionId: '', note: '' });
   const [walletDirectSaving, setWalletDirectSaving] = useState(false);
   const [walletAdjustForm, setWalletAdjustForm] = useState({ pageId: '', amountBdt: '', note: '' });
   const [walletAdjustSaving, setWalletAdjustSaving] = useState(false);
 
-  // Pricing tab state
+  // Pricing tab state — credit-denominated since the credit-system migration
+  // (legacy ৳ rate × 1.625 — see backend common/pricing-fields.ts CREDITS_PER_TAKA)
   const DEFAULT_PRICING = {
-    costPerKeywordReplyBdt: 0.02,
-    costPerTextMsgBdt: 0.05,
-    costPerImageBdt: 0.20,
-    costPerImageLocalBdt: 0.10,
-    costPerOcrLocalBdt: 0.02,
-    costPerOcrAiBdt: 0.05,
-    costPerVoiceMsgBdt: 1.00,
-    costPerAnalyzeBdt: 0.20,
-    costPerAiGenerateBdt: 0.10,
-    costPerBroadcastMsgBdt: 0.05,
-    costPerRecurringNotifBdt: 0.10,
-    costPerCommentReplyBdt: 0.05,
-    costPerMemoPrintBdt: 0.10,
+    costPerKeywordReplyBdt: 0.0325,
+    costPerTextMsgBdt: 0.08125,
+    costPerImageBdt: 0.325,
+    costPerImageLocalBdt: 0.1625,
+    costPerOcrLocalBdt: 0.0325,
+    costPerOcrAiBdt: 0.08125,
+    costPerVoiceMsgBdt: 1.625,
+    costPerAnalyzeBdt: 0.325,
+    costPerAiGenerateBdt: 0.1625,
+    costPerBroadcastMsgBdt: 0.08125,
+    costPerRecurringNotifBdt: 0.1625,
+    costPerCommentReplyBdt: 0.08125,
+    costPerMemoPrintBdt: 0.1625,
   };
   const [pricingForm, setPricingForm] = useState(DEFAULT_PRICING);
   const [pricingSaving, setPricingSaving] = useState(false);
@@ -433,24 +435,38 @@ export function AdminPanel({ th, onToast, onLogout }: {
     } catch (e: any) { onToast(e.message, 'error'); }
   };
 
+  // Custom-package requests arrive with creditsGranted=null — admin sets it
+  // once before Approve becomes usable (see approveRechargeRequest's guard).
+  const setRequestCredits = async (id: number, credits: number) => {
+    try {
+      await request(`${BASE}/wallet/requests/${id}/credits`, {
+        method: 'PATCH', body: JSON.stringify({ credits }),
+      });
+      onToast('✅ Credits set হয়েছে', 'success');
+      loadWallet();
+    } catch (e: any) { onToast(e.message, 'error'); }
+  };
+
   const directRecharge = async () => {
     const pid = Number(walletDirectForm.pageId);
-    const amt = Number(walletDirectForm.amountBdt);
-    if (!pid || !amt || amt <= 0 || !walletDirectForm.transactionId.trim()) {
-      onToast('Page, amount ও Transaction ID দিন', 'error'); return;
+    const credits = Number(walletDirectForm.creditsToAdd);
+    if (!pid || !credits || credits <= 0 || !walletDirectForm.transactionId.trim()) {
+      onToast('Page, credits ও Transaction ID দিন', 'error'); return;
     }
     setWalletDirectSaving(true);
     try {
+      const amountBdtReceived = walletDirectForm.amountBdt ? Number(walletDirectForm.amountBdt) : undefined;
       await request(`${BASE}/wallet/${pid}/recharge`, {
         method: 'POST',
         body: JSON.stringify({
-          amountBdt: amt,
+          creditsToAdd: credits,
+          amountBdtReceived,
           transactionId: walletDirectForm.transactionId.trim(),
           note: walletDirectForm.note.trim() || undefined,
         }),
       });
-      onToast(`✅ ৳${amt} balance যোগ হয়েছে`, 'success');
-      setWalletDirectForm({ pageId: '', amountBdt: '', transactionId: '', note: '' });
+      onToast(`✅ ${credits} credits যোগ হয়েছে`, 'success');
+      setWalletDirectForm({ pageId: '', amountBdt: '', creditsToAdd: '', transactionId: '', note: '' });
       loadWallet();
     } catch (e: any) { onToast(e.message, 'error'); }
     finally { setWalletDirectSaving(false); }
@@ -471,7 +487,7 @@ export function AdminPanel({ th, onToast, onLogout }: {
           note: walletAdjustForm.note.trim() || undefined,
         }),
       });
-      onToast(`✅ Balance ${amt > 0 ? '+' : ''}৳${amt} adjust হয়েছে`, 'success');
+      onToast(`✅ Balance ${amt > 0 ? '+' : ''}${amt} credits adjust হয়েছে`, 'success');
       setWalletAdjustForm({ pageId: '', amountBdt: '', note: '' });
       loadWallet();
     } catch (e: any) { onToast(e.message, 'error'); }
@@ -2028,6 +2044,7 @@ export function AdminPanel({ th, onToast, onLogout }: {
             onRefresh={loadWallet}
             onApprove={approveRequest}
             onReject={rejectRequest}
+            onSetCredits={setRequestCredits}
             onDirectRecharge={directRecharge}
             onAdjust={adjustWallet}
           />
@@ -2046,6 +2063,7 @@ export function AdminPanel({ th, onToast, onLogout }: {
             onSavePricingInfo={saveGlobalPricingInfo}
           />
         )}
+        {tab === 'packages' && <AdminPackagesTab th={th} request={request} BASE={BASE} onToast={onToast} />}
         {tab === 'subscriptions' && (
           <AdminSubscriptionsTab
             th={th}
@@ -4030,7 +4048,7 @@ const STATUS_COLORS_W: Record<string, string> = {
 
 function AdminWalletTab({ th, loading, pages, requests, reqFilter, setReqFilter,
   directForm, setDirectForm, directSaving, adjustForm, setAdjustForm, adjustSaving,
-  onRefresh, onApprove, onReject, onDirectRecharge, onAdjust,
+  onRefresh, onApprove, onReject, onSetCredits, onDirectRecharge, onAdjust,
 }: {
   th: Theme; loading: boolean; pages: any[]; requests: any[];
   reqFilter: 'all' | 'pending'; setReqFilter: (v: 'all' | 'pending') => void;
@@ -4039,12 +4057,14 @@ function AdminWalletTab({ th, loading, pages, requests, reqFilter, setReqFilter,
   adjustForm: any; setAdjustForm: (f: any) => void;
   adjustSaving: boolean;
   onRefresh: () => void; onApprove: (id: number) => void;
-  onReject: (id: number) => void; onDirectRecharge: () => void;
+  onReject: (id: number) => void; onSetCredits: (id: number, credits: number) => void;
+  onDirectRecharge: () => void;
   onAdjust: () => void;
 }) {
   const [showDirect, setShowDirect] = useState(false);
   const [showAdjust, setShowAdjust] = useState(false);
   const [pageSearch, setPageSearch] = useState('');
+  const [creditsInput, setCreditsInput] = useState<Record<number, string>>({});
 
   const card: React.CSSProperties = { ...th.card, borderRadius: 12, padding: 18, marginBottom: 16 };
   const inp: React.CSSProperties = { ...th.input, width: '100%', boxSizing: 'border-box' };
@@ -4115,13 +4135,13 @@ function AdminWalletTab({ th, loading, pages, requests, reqFilter, setReqFilter,
                 <option value="" style={{ background: th.bg, color: th.muted }}>— Page বেছে নিন —</option>
                 {pages.map(p => (
                   <option key={p.id} value={p.id} style={{ background: th.bg, color: th.text }}>
-                    {p.pageName || '(no name)'}  @{p.owner?.username || '?'}  [ID:{p.id}]  ৳{(p.walletBalanceBdt ?? 0).toFixed(2)}
+                    {p.pageName || '(no name)'}  @{p.owner?.username || '?'}  [ID:{p.id}]  {(p.walletBalanceBdt ?? 0).toFixed(2)} Credits
                   </option>
                 ))}
               </select>
             </div>
             <div>
-              <label style={{ fontSize: 11, color: th.muted, display: 'block', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Amount (BDT) — negative দিলে কমবে</label>
+              <label style={{ fontSize: 11, color: th.muted, display: 'block', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Credits Adjustment — negative দিলে কমবে</label>
               <input style={{ ...inp, fontWeight: 700, fontSize: 16 }} type="number" placeholder="200 বা -100" value={adjustForm.amountBdt}
                 onChange={e => setAdjustForm({ ...adjustForm, amountBdt: e.target.value })} />
             </div>
@@ -4160,17 +4180,26 @@ function AdminWalletTab({ th, loading, pages, requests, reqFilter, setReqFilter,
                 <option value="" style={{ background: th.bg, color: th.muted }}>— Page বেছে নিন —</option>
                 {pages.map(p => (
                   <option key={p.id} value={p.id} style={{ background: th.bg, color: th.text }}>
-                    {p.pageName || '(no name)'}  @{p.owner?.username || '?'}  [ID:{p.id}]  ৳{(p.walletBalanceBdt ?? 0).toFixed(2)}
+                    {p.pageName || '(no name)'}  @{p.owner?.username || '?'}  [ID:{p.id}]  {(p.walletBalanceBdt ?? 0).toFixed(2)} Credits
                   </option>
                 ))}
               </select>
             </div>
             <div>
-              <label style={{ fontSize: 11, color: th.muted, display: 'block', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Amount (BDT)</label>
+              <label style={{ fontSize: 11, color: th.muted, display: 'block', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>৳ Received (optional — শুধু record-এর জন্য)</label>
               <input style={{ ...inp, fontWeight: 700, fontSize: 16 }} type="number" placeholder="500" value={directForm.amountBdt}
-                onChange={e => setDirectForm({ ...directForm, amountBdt: e.target.value })} />
+                onChange={e => {
+                  const bdt = e.target.value;
+                  const suggested = bdt ? Math.round(Number(bdt) * 1.625 * 10000) / 10000 : '';
+                  setDirectForm({ ...directForm, amountBdt: bdt, creditsToAdd: directForm.creditsToAdd || String(suggested) });
+                }} />
             </div>
             <div>
+              <label style={{ fontSize: 11, color: th.muted, display: 'block', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Credits to Add *</label>
+              <input style={{ ...inp, fontWeight: 700, fontSize: 16 }} type="number" placeholder="812.5" value={directForm.creditsToAdd}
+                onChange={e => setDirectForm({ ...directForm, creditsToAdd: e.target.value })} />
+            </div>
+            <div style={{ gridColumn: '1 / -1' }}>
               <label style={{ fontSize: 11, color: th.muted, display: 'block', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Transaction ID</label>
               <input style={inp} placeholder="bKash/Nagad TrxID" value={directForm.transactionId}
                 onChange={e => setDirectForm({ ...directForm, transactionId: e.target.value })} />
@@ -4226,7 +4255,8 @@ function AdminWalletTab({ th, loading, pages, requests, reqFilter, setReqFilter,
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontWeight: 700, fontSize: 15 }}>
-                      ৳ {r.amountBdt.toLocaleString()} — {METHOD_LABELS[r.method] || r.method}
+                      {r.package?.name ? `${r.package.name} — ` : ''}৳ {r.amountBdt.toLocaleString()} — {METHOD_LABELS[r.method] || r.method}
+                      {r.creditsGranted ? <span style={{ color: '#16a34a' }}> → {r.creditsGranted} Credits</span> : null}
                     </div>
                     <div style={{ fontSize: 12, color: th.muted }}>
                       <b>{r.page?.pageName || `Page #${r.pageId}`}</b>
@@ -4242,6 +4272,22 @@ function AdminWalletTab({ th, loading, pages, requests, reqFilter, setReqFilter,
                     {r.status === 'rejected' && r.rejectedReason && (
                       <div style={{ fontSize: 12, color: '#ef4444' }}>কারণ: {r.rejectedReason}</div>
                     )}
+                    {r.status === 'pending' && !r.creditsGranted && (
+                      <div style={{ display: 'flex', gap: 6, marginTop: 8, alignItems: 'center' }}>
+                        <input
+                          style={{ ...th.input, width: 110, fontSize: 12, padding: '5px 8px' }}
+                          type="number" placeholder="Credits দিন"
+                          value={creditsInput[r.id] ?? ''}
+                          onChange={e => setCreditsInput(prev => ({ ...prev, [r.id]: e.target.value }))}
+                        />
+                        <button style={{ ...th.btnGhost, padding: '5px 10px', fontSize: 11.5, borderRadius: 7 }}
+                          onClick={() => {
+                            const c = Number(creditsInput[r.id]);
+                            if (!c || c <= 0) return;
+                            onSetCredits(r.id, c);
+                          }}>💾 Set Credits</button>
+                      </div>
+                    )}
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
                     <span style={{
@@ -4253,7 +4299,14 @@ function AdminWalletTab({ th, loading, pages, requests, reqFilter, setReqFilter,
                     </span>
                     {r.status === 'pending' && (
                       <div style={{ display: 'flex', gap: 6 }}>
-                        <button style={{ ...th.btnSmSuccess, padding: '6px 14px', borderRadius: 8, fontWeight: 700, background: 'linear-gradient(135deg, #10b981, #059669)', border: 'none', color: '#fff' }}
+                        <button
+                          disabled={!r.creditsGranted}
+                          title={!r.creditsGranted ? 'আগে credits set করুন' : undefined}
+                          style={{
+                            ...th.btnSmSuccess, padding: '6px 14px', borderRadius: 8, fontWeight: 700, border: 'none', color: '#fff',
+                            background: r.creditsGranted ? 'linear-gradient(135deg, #10b981, #059669)' : '#94a3b8',
+                            cursor: r.creditsGranted ? 'pointer' : 'not-allowed',
+                          }}
                           onClick={() => onApprove(r.id)}>✅ Approve</button>
                         <button style={{ ...th.btnSmGhost, padding: '6px 14px', borderRadius: 8, fontWeight: 700, color: '#ef4444', borderColor: '#ef4444' }}
                           onClick={() => onReject(r.id)}>❌ Reject</button>
@@ -4288,8 +4341,8 @@ function AdminWalletTab({ th, loading, pages, requests, reqFilter, setReqFilter,
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span style={{ fontSize: 11, color: th.muted }}>{group.pages.length}টি page</span>
-                    <span style={{ fontWeight: 800, fontSize: 14, color: totalBalance <= 0 ? '#ef4444' : totalBalance < 100 ? '#f59e0b' : '#22c55e' }}>
-                      মোট ৳ {totalBalance.toFixed(2)}
+                    <span style={{ fontWeight: 800, fontSize: 14, color: totalBalance <= 0 ? '#ef4444' : totalBalance < 162.5 ? '#f59e0b' : '#22c55e' }}>
+                      মোট {totalBalance.toFixed(2)} Credits
                     </span>
                   </div>
                 </div>
@@ -4298,8 +4351,8 @@ function AdminWalletTab({ th, loading, pages, requests, reqFilter, setReqFilter,
                   <div key={p.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 14px 8px 24px', borderTop: `1px solid ${th.border}` }}>
                     <div style={{ fontSize: 12, color: th.text }}>{p.pageName || p.pageId}</div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ fontWeight: 700, fontSize: 13, color: p.walletBalanceBdt <= 0 ? '#ef4444' : p.walletBalanceBdt < 100 ? '#f59e0b' : '#22c55e' }}>
-                        ৳ {p.walletBalanceBdt.toFixed(2)}
+                      <span style={{ fontWeight: 700, fontSize: 13, color: p.walletBalanceBdt <= 0 ? '#ef4444' : p.walletBalanceBdt < 162.5 ? '#f59e0b' : '#22c55e' }}>
+                        {p.walletBalanceBdt.toFixed(2)} Credits
                       </span>
                       <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 99, fontWeight: 700, background: p.subscriptionStatus === 'ACTIVE' ? '#22c55e22' : '#ef444422', color: p.subscriptionStatus === 'ACTIVE' ? '#16a34a' : '#dc2626' }}>
                         {p.subscriptionStatus}
@@ -4334,19 +4387,19 @@ type PricingForm = {
 };
 
 const PRICING_FIELDS: { key: keyof PricingForm; label: string; help: string }[] = [
-  { key: 'costPerKeywordReplyBdt',   label: 'Keyword/Template Reply (৳)',    help: 'Pure keyword/rule-based reply — AI call নেই' },
-  { key: 'costPerTextMsgBdt',        label: 'AI Text Reply (৳)',             help: 'প্রতিটি AI text message reply এর charge' },
-  { key: 'costPerImageBdt',          label: 'Customer Image — Vision (৳)',   help: 'Gemini Vision API দিয়ে customer image analyze' },
-  { key: 'costPerImageLocalBdt',     label: 'Customer Image — Local (৳)',    help: 'Local CLIP model দিয়ে customer image search' },
-  { key: 'costPerOcrLocalBdt',       label: 'OCR — Local Tesseract (৳)',     help: 'Local Tesseract দিয়ে image থেকে text extract' },
-  { key: 'costPerOcrAiBdt',          label: 'OCR — AI Gemini Fallback (৳)', help: 'Gemini Flash দিয়ে OCR fallback — বেশি accurate' },
-  { key: 'costPerVoiceMsgBdt',       label: 'Voice Note STT (৳)',            help: 'OpenAI Whisper দিয়ে voice → text, actual cost ~৳0.39–0.78/msg' },
-  { key: 'costPerAnalyzeBdt',        label: 'Product Auto-Analyze (৳)',      help: 'Admin product upload এ vision analysis' },
-  { key: 'costPerAiGenerateBdt',     label: 'AI Generate (Caption/Desc) (৳)', help: 'AI দিয়ে product description বা broadcast message তৈরি' },
-  { key: 'costPerBroadcastMsgBdt',   label: 'Broadcast Message (৳)',         help: 'প্রতিটি broadcast message পাঠানোর charge' },
-  { key: 'costPerRecurringNotifBdt', label: 'Subscriber Notification (৳)',   help: 'Recurring subscriber দের offer/product broadcast — Facebook free, আমাদের charge' },
-  { key: 'costPerCommentReplyBdt',   label: 'Comment Reply (৳)',             help: 'Facebook post comment এ auto-reply' },
-  { key: 'costPerMemoPrintBdt',      label: 'Memo Print (৳)',                help: 'প্রতিটি invoice/memo print এর charge' },
+  { key: 'costPerKeywordReplyBdt',   label: 'Keyword/Template Reply (Credit)',    help: 'Pure keyword/rule-based reply — AI call নেই' },
+  { key: 'costPerTextMsgBdt',        label: 'AI Text Reply (Credit)',             help: 'প্রতিটি AI text message reply এর charge' },
+  { key: 'costPerImageBdt',          label: 'Customer Image — Vision (Credit)',   help: 'Gemini Vision API দিয়ে customer image analyze' },
+  { key: 'costPerImageLocalBdt',     label: 'Customer Image — Local (Credit)',    help: 'Local CLIP model দিয়ে customer image search' },
+  { key: 'costPerOcrLocalBdt',       label: 'OCR — Local Tesseract (Credit)',     help: 'Local Tesseract দিয়ে image থেকে text extract' },
+  { key: 'costPerOcrAiBdt',          label: 'OCR — AI Gemini Fallback (Credit)', help: 'Gemini Flash দিয়ে OCR fallback — বেশি accurate' },
+  { key: 'costPerVoiceMsgBdt',       label: 'Voice Note STT (Credit)',            help: 'OpenAI Whisper দিয়ে voice → text' },
+  { key: 'costPerAnalyzeBdt',        label: 'Product Auto-Analyze (Credit)',      help: 'Admin product upload এ vision analysis' },
+  { key: 'costPerAiGenerateBdt',     label: 'AI Generate (Caption/Desc) (Credit)', help: 'AI দিয়ে product description বা broadcast message তৈরি' },
+  { key: 'costPerBroadcastMsgBdt',   label: 'Broadcast Message (Credit)',         help: 'প্রতিটি broadcast message পাঠানোর charge' },
+  { key: 'costPerRecurringNotifBdt', label: 'Subscriber Notification (Credit)',   help: 'Recurring subscriber দের offer/product broadcast — Facebook free, আমাদের charge' },
+  { key: 'costPerCommentReplyBdt',   label: 'Comment Reply (Credit)',             help: 'Facebook post comment এ auto-reply' },
+  { key: 'costPerMemoPrintBdt',      label: 'Memo Print (Credit)',                help: 'প্রতিটি invoice/memo print এর charge' },
 ];
 
 function AdminPricingTab({ th, form, setForm, saving, onSaveDefault, onApplyAll, globalPricingInfo, setGlobalPricingInfo, pricingInfoSaving, onSavePricingInfo }: {
@@ -4433,20 +4486,20 @@ function AdminPricingTab({ th, form, setForm, saving, onSaveDefault, onApplyAll,
       </div>
 
       <div style={{ ...th.card }}>
-        <CardHeader th={th} title="Default Rates (Reference)" sub="Recommended rates — actual API cost vs charge" />
+        <CardHeader th={th} title="Default Rates (Reference)" sub="Recommended rates (Credits) — actual API cost (৳) vs charge" />
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 12 }}>
           {[
-            { label: 'Keyword Reply', value: '৳0.02', cost: '~৳0.001' },
-            { label: 'AI Text Reply', value: '৳0.05', cost: '~৳0.018' },
-            { label: 'Customer Image (Vision)', value: '৳0.20', cost: '~৳0.052' },
-            { label: 'OCR — Local', value: '৳0.02', cost: '~৳0.001' },
-            { label: 'OCR — AI Gemini', value: '৳0.05', cost: '~৳0.006' },
-            { label: 'Voice Note (STT)', value: '৳1.00', cost: '~৳0.39–0.78 ⚠️' },
-            { label: 'Product Analyze', value: '৳0.20', cost: '~৳0.052' },
-            { label: 'Broadcast/msg', value: '৳0.05', cost: '~৳0' },
-            { label: 'Subscriber Notif', value: '৳0.10', cost: '~৳0' },
-            { label: 'Comment Reply', value: '৳0.05', cost: '~৳0.018' },
-            { label: 'Memo Print', value: '৳0.10', cost: '~৳0.001' },
+            { label: 'Keyword Reply', value: '0.0325 Cr', cost: '~৳0.001' },
+            { label: 'AI Text Reply', value: '0.08125 Cr', cost: '~৳0.018' },
+            { label: 'Customer Image (Vision)', value: '0.325 Cr', cost: '~৳0.052' },
+            { label: 'OCR — Local', value: '0.0325 Cr', cost: '~৳0.001' },
+            { label: 'OCR — AI Gemini', value: '0.08125 Cr', cost: '~৳0.006' },
+            { label: 'Voice Note (STT)', value: '1.625 Cr', cost: '~৳0.39–0.78 ⚠️' },
+            { label: 'Product Analyze', value: '0.325 Cr', cost: '~৳0.052' },
+            { label: 'Broadcast/msg', value: '0.08125 Cr', cost: '~৳0' },
+            { label: 'Subscriber Notif', value: '0.1625 Cr', cost: '~৳0' },
+            { label: 'Comment Reply', value: '0.08125 Cr', cost: '~৳0.018' },
+            { label: 'Memo Print', value: '0.1625 Cr', cost: '~৳0.001' },
           ].map(({ label, value, cost }) => (
             <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12.5, padding: '4px 0', borderBottom: `1px solid ${th.border}` }}>
               <span style={{ color: th.muted }}>{label}</span>
@@ -4471,7 +4524,7 @@ function AdminPricingTab({ th, form, setForm, saving, onSaveDefault, onApplyAll,
           onChange={e => setGlobalPricingInfo(e.target.value)}
           rows={12}
           style={{ ...th.input, width: '100%', resize: 'vertical' as const, fontFamily: 'monospace', fontSize: 12.5, boxSizing: 'border-box' }}
-          placeholder={'উদাহরণ:\n- Free trial: ১০০ AI reply/দিন\n- Paid: ৳০.১০/AI reply\n- Monthly base fee: ৳৬৯৯/মাস\n- একটা complete order conversation গড়ে ৳১ এরও কম'}
+          placeholder={'উদাহরণ:\n- Free trial: ১০০ AI reply/দিন\n- Paid: ০.০৮ credit/AI reply\n- Monthly base fee: ৮১২.৫ credits/মাস\n- একটা complete order conversation গড়ে ১ credit এরও কম'}
         />
         <button
           onClick={onSavePricingInfo}
@@ -4483,6 +4536,165 @@ function AdminPricingTab({ th, form, setForm, saving, onSaveDefault, onApplyAll,
           }}
         >{pricingInfoSaving ? 'Saving…' : '💾 Save Bot Pricing Text'}</button>
       </div>
+    </div>
+  );
+}
+
+// ── Credit Packages — CRUD for the ৳→credits top-up tiers shown on the
+// client wallet page (Starter/Growth/Custom, seeded on backend boot). ──────
+function AdminPackagesTab({ th, request, BASE, onToast }: {
+  th: Theme; request: <T = any>(url: string, opts?: any) => Promise<T>; BASE: string;
+  onToast: (m: string, t?: any) => void;
+}) {
+  const [packages, setPackages] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState<string | null>(null);
+  const [drafts, setDrafts] = useState<Record<string, any>>({});
+  const [showNew, setShowNew] = useState(false);
+  const [newForm, setNewForm] = useState({ name: '', priceBdt: '', credits: '', isCustom: false });
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await request<any[]>(`${BASE}/credit-packages`);
+      setPackages(data || []);
+      const d: Record<string, any> = {};
+      (data || []).forEach((p: any) => { d[p.id] = { name: p.name, priceBdt: p.priceBdt ?? '', credits: p.credits ?? '', sortOrder: p.sortOrder }; });
+      setDrafts(d);
+    } catch (e: any) { onToast(e.message, 'error'); }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const save = async (id: string) => {
+    setSaving(id);
+    try {
+      const d = drafts[id];
+      await request(`${BASE}/credit-packages/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          name: d.name,
+          priceBdt: d.priceBdt === '' ? null : Number(d.priceBdt),
+          credits: d.credits === '' ? null : Number(d.credits),
+          sortOrder: Number(d.sortOrder) || 0,
+        }),
+      });
+      onToast('✅ Package updated', 'success');
+      load();
+    } catch (e: any) { onToast(e.message, 'error'); }
+    finally { setSaving(null); }
+  };
+
+  const toggleActive = async (p: any) => {
+    setSaving(p.id);
+    try {
+      await request(`${BASE}/credit-packages/${p.id}`, {
+        method: 'PATCH', body: JSON.stringify({ isActive: !p.isActive }),
+      });
+      load();
+    } catch (e: any) { onToast(e.message, 'error'); }
+    finally { setSaving(null); }
+  };
+
+  const createPackage = async () => {
+    if (!newForm.name.trim()) { onToast('Package name দিন', 'error'); return; }
+    if (!newForm.isCustom && (!newForm.priceBdt || !newForm.credits)) {
+      onToast('৳ ও credits দিন (অথবা Custom mark করুন)', 'error'); return;
+    }
+    setSaving('new');
+    try {
+      await request(`${BASE}/credit-packages`, {
+        method: 'POST',
+        body: JSON.stringify({
+          name: newForm.name.trim(),
+          priceBdt: newForm.isCustom ? null : Number(newForm.priceBdt),
+          credits: newForm.isCustom ? null : Number(newForm.credits),
+          isCustom: newForm.isCustom,
+          sortOrder: packages.length,
+        }),
+      });
+      onToast('✅ Package তৈরি হয়েছে', 'success');
+      setNewForm({ name: '', priceBdt: '', credits: '', isCustom: false });
+      setShowNew(false);
+      load();
+    } catch (e: any) { onToast(e.message, 'error'); }
+    finally { setSaving(null); }
+  };
+
+  const inp: React.CSSProperties = { ...th.input, width: '100%', boxSizing: 'border-box' };
+
+  if (loading) return <div style={{ padding: 40, textAlign: 'center' }}><Spinner /></div>;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>📦 Credit Packages</h3>
+        <button style={{ ...th.btnPrimary, padding: '8px 16px', borderRadius: 10, fontWeight: 700, fontSize: 13 }}
+          onClick={() => setShowNew(v => !v)}>{showNew ? '✕ Close' : '➕ নতুন Package'}</button>
+      </div>
+
+      {showNew && (
+        <div style={{ ...th.card, borderRadius: 12, padding: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+            <input style={inp} placeholder="Name (যেমন: Pro Pack)" value={newForm.name}
+              onChange={e => setNewForm({ ...newForm, name: e.target.value })} />
+            <input style={inp} type="number" placeholder="৳ Price" disabled={newForm.isCustom} value={newForm.priceBdt}
+              onChange={e => setNewForm({ ...newForm, priceBdt: e.target.value })} />
+            <input style={inp} type="number" placeholder="Credits" disabled={newForm.isCustom} value={newForm.credits}
+              onChange={e => setNewForm({ ...newForm, credits: e.target.value })} />
+          </div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 10, fontSize: 12.5, color: th.muted, cursor: 'pointer' }}>
+            <input type="checkbox" checked={newForm.isCustom} onChange={e => setNewForm({ ...newForm, isCustom: e.target.checked })} />
+            Custom package (fixed ৳/credits নেই — admin প্রতি request-এ manually ঠিক করবে)
+          </label>
+          <button style={{ ...th.btnPrimary, marginTop: 12, padding: '9px 18px', borderRadius: 9, fontWeight: 700, fontSize: 13 }}
+            disabled={saving === 'new'} onClick={createPackage}>
+            {saving === 'new' ? <Spinner size={14} /> : '💾 তৈরি করুন'}
+          </button>
+        </div>
+      )}
+
+      {packages.length === 0 ? (
+        <div style={{ ...th.card, textAlign: 'center', padding: 32, color: th.muted, fontSize: 13 }}>কোনো package নেই</div>
+      ) : packages.map((p: any) => {
+        const d = drafts[p.id] || {};
+        return (
+          <div key={p.id} style={{ ...th.card, borderRadius: 12, padding: 16, opacity: p.isActive ? 1 : 0.55 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <span style={{
+                fontSize: 11, fontWeight: 800, padding: '2px 8px', borderRadius: 6,
+                background: p.isCustom ? '#8b5cf622' : '#22c55e22', color: p.isCustom ? '#8b5cf6' : '#16a34a',
+              }}>{p.isCustom ? 'CUSTOM' : 'FIXED'}</span>
+              <button style={{ ...th.btnGhost, padding: '4px 12px', fontSize: 11.5, borderRadius: 7 }}
+                disabled={saving === p.id} onClick={() => toggleActive(p)}>
+                {p.isActive ? '✅ Active' : '⛔ Inactive'}
+              </button>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: p.isCustom ? '1fr' : '1fr 1fr 1fr', gap: 10 }}>
+              <input style={inp} placeholder="Name" value={d.name ?? ''}
+                onChange={e => setDrafts({ ...drafts, [p.id]: { ...d, name: e.target.value } })} />
+              {!p.isCustom && (
+                <>
+                  <input style={inp} type="number" placeholder="৳ Price" value={d.priceBdt ?? ''}
+                    onChange={e => setDrafts({ ...drafts, [p.id]: { ...d, priceBdt: e.target.value } })} />
+                  <input style={inp} type="number" placeholder="Credits" value={d.credits ?? ''}
+                    onChange={e => setDrafts({ ...drafts, [p.id]: { ...d, credits: e.target.value } })} />
+                </>
+              )}
+            </div>
+            {!p.isCustom && d.priceBdt && d.credits && (
+              <div style={{ fontSize: 11.5, color: th.muted, marginTop: 6 }}>
+                ≈ ৳{(Number(d.priceBdt) / Number(d.credits)).toFixed(4)}/credit
+              </div>
+            )}
+            <button style={{ ...th.btnPrimary, marginTop: 10, padding: '7px 16px', borderRadius: 8, fontWeight: 700, fontSize: 12.5 }}
+              disabled={saving === p.id} onClick={() => save(p.id)}>
+              {saving === p.id ? <Spinner size={13} /> : '💾 Save'}
+            </button>
+          </div>
+        );
+      })}
     </div>
   );
 }

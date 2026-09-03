@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { PricingFields, resolveWholesaleRate } from '../common/pricing-fields';
+import { PricingFields, resolveWholesaleRate, creditsToBdt } from '../common/pricing-fields';
 
 export type AiStatus = 'ok' | 'no_balance' | 'trial_limit_exceeded' | 'suspended';
 const TRIAL_DAILY_AI_LIMIT = 100;
@@ -146,7 +146,7 @@ export class WalletService {
           break;
         }
         case 'IMAGE_UNIQUENESS':
-          amountToDeduct = 0.02;
+          amountToDeduct = 0.0325; // credit-denominated (was ৳0.02) — see common/pricing-fields.ts CREDITS_PER_TAKA
           description = 'পণ্য যাচাই';
           break;
         case 'AI_GENERATE':
@@ -273,7 +273,7 @@ export class WalletService {
       case 'ADMIN_VISION':
         return rate.costPerAnalyzeBdt * (options?.photoCount ?? 1);
       case 'IMAGE_UNIQUENESS':
-        return 0.02;
+        return 0.0325; // credit-denominated (was ৳0.02)
       case 'AI_GENERATE':
         return rate.costPerAiGenerateBdt;
       case 'DUAL_PHOTO_AI':
@@ -307,8 +307,13 @@ export class WalletService {
       });
       if (!reseller) return;
       const rate = resolveWholesaleRate(reseller.wholesaleOverridesJson);
-      const amount = this.computeWholesaleAmount(type, options, rate);
-      if (amount <= 0) return;
+      const amountCredits = this.computeWholesaleAmount(type, options, rate);
+      if (amountCredits <= 0) return;
+      // resolveWholesaleRate() reads the same credit-denominated global
+      // pricing the retail side uses — convert back to real ৳ here, since
+      // reseller settlement (ResellerLedgerEntry/walletOwedBdt) is real money
+      // owed to the platform, not credits.
+      const amount = creditsToBdt(amountCredits);
 
       await this.prisma.$transaction([
         this.prisma.resellerLedgerEntry.create({

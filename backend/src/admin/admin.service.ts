@@ -3,6 +3,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  OnModuleInit,
 } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -22,6 +23,7 @@ import {
   DEFAULT_GLOBAL_PRICING,
   readGlobalPricing,
   writeGlobalPricing,
+  creditsToBdt,
 } from '../common/pricing-fields';
 
 export interface CallServerConfig {
@@ -90,7 +92,7 @@ export interface TutorialsConfig {
 }
 
 @Injectable()
-export class AdminService {
+export class AdminService implements OnModuleInit {
   private readonly logger = new Logger(AdminService.name);
 
   constructor(
@@ -101,6 +103,35 @@ export class AdminService {
     private readonly telegram: TelegramNotificationService,
     private readonly waConnectRequests: WaConnectRequestService,
   ) {}
+
+  async onModuleInit() {
+    await this.seedCreditPackages();
+  }
+
+  // Mirrors BillingService's onModuleInit Plan-seeding pattern (stable
+  // `where` key via upsert, so re-running on every boot is a no-op once seeded).
+  private async seedCreditPackages() {
+    try {
+      await this.prisma.creditPackage.upsert({
+        where: { id: 'pkg_starter' },
+        update: {},
+        create: { id: 'pkg_starter', name: 'Starter', priceBdt: 3000, credits: 5000, sortOrder: 1 },
+      });
+      await this.prisma.creditPackage.upsert({
+        where: { id: 'pkg_growth' },
+        update: {},
+        create: { id: 'pkg_growth', name: 'Growth', priceBdt: 5000, credits: 8000, sortOrder: 2 },
+      });
+      await this.prisma.creditPackage.upsert({
+        where: { id: 'pkg_custom' },
+        update: {},
+        create: { id: 'pkg_custom', name: 'Custom', isCustom: true, sortOrder: 3 },
+      });
+      this.logger.log('[Admin] Credit packages seeded');
+    } catch (e: any) {
+      this.logger.warn(`[Admin] Credit package seeding failed: ${e.message}`);
+    }
+  }
 
   async overview() {
     const [
@@ -863,24 +894,34 @@ export class AdminService {
     return { page, transactions };
   }
 
+  /**
+   * Direct admin recharge — creditsToAdd is what actually gets added to the
+   * wallet. amountBdtReceived is optional, purely for the audit-trail
+   * description (the real ৳ the admin says they received for this credit
+   * grant, e.g. for a custom/negotiated deal) — it does not drive the wallet
+   * math at all.
+   */
   async rechargePageWallet(
     pageId: number,
-    amountBdt: number,
+    creditsToAdd: number,
     transactionId: string,
     note?: string,
+    amountBdtReceived?: number,
   ) {
-    if (amountBdt <= 0) throw new NotFoundException('Amount must be positive');
+    if (creditsToAdd <= 0) throw new NotFoundException('Credits must be positive');
     const page = await this.prisma.page.findUnique({
       where: { id: pageId },
       select: { id: true },
     });
     if (!page) throw new NotFoundException('Page not found');
 
+    const receivedNote = amountBdtReceived ? ` — ৳${amountBdtReceived} received` : '';
+
     await this.prisma.$transaction(async (tx) => {
       await tx.page.update({
         where: { id: pageId },
         data: {
-          walletBalanceBdt: { increment: amountBdt },
+          walletBalanceBdt: { increment: creditsToAdd },
           subscriptionStatus: 'ACTIVE',
         },
       });
@@ -888,15 +929,15 @@ export class AdminService {
         data: {
           pageId,
           type: 'RECHARGE',
-          amountBdt,
+          amountBdt: creditsToAdd,
           description: note
-            ? `${note} (Trx: ${transactionId})`
-            : `Recharge via Trx: ${transactionId}`,
+            ? `${note} (Trx: ${transactionId})${receivedNote}`
+            : `Recharge via Trx: ${transactionId}${receivedNote}`,
         },
       });
     });
 
-    return { success: true, amountBdt };
+    return { success: true, creditsAdded: creditsToAdd };
   }
 
   /**
@@ -1008,7 +1049,26 @@ export class AdminService {
             owner: { select: { username: true, name: true } },
           },
         },
+        package: { select: { id: true, name: true, isCustom: true } },
       },
+    });
+  }
+
+  /**
+   * Sets/overrides the credits a Custom-package request will grant — required
+   * before approving any request whose creditsGranted is still null (fixed
+   * Starter/Growth packages already have it set at submission time).
+   */
+  async setRechargeRequestCredits(requestId: number, credits: number) {
+    if (!Number.isFinite(credits) || credits <= 0)
+      throw new BadRequestException('credits must be positive');
+    const req = await this.prisma.walletRechargeRequest.findUnique({ where: { id: requestId } });
+    if (!req) throw new NotFoundException('Request not found');
+    if (req.status !== 'pending')
+      throw new BadRequestException('Request is not pending');
+    return this.prisma.walletRechargeRequest.update({
+      where: { id: requestId },
+      data: { creditsGranted: credits },
     });
   }
 
@@ -1019,12 +1079,17 @@ export class AdminService {
     if (!req) throw new NotFoundException('Request not found');
     if (req.status !== 'pending')
       throw new BadRequestException('Request is not pending');
+    if (!req.creditsGranted || req.creditsGranted <= 0)
+      throw new BadRequestException(
+        'এই request-এর জন্য credits এখনো সেট করা হয়নি — আগে credits সেট করুন।',
+      );
+    const credits = req.creditsGranted;
 
     await this.prisma.$transaction(async (tx) => {
       await tx.page.update({
         where: { id: req.pageId },
         data: {
-          walletBalanceBdt: { increment: req.amountBdt },
+          walletBalanceBdt: { increment: credits },
           subscriptionStatus: 'ACTIVE',
         },
       });
@@ -1032,8 +1097,8 @@ export class AdminService {
         data: {
           pageId: req.pageId,
           type: 'RECHARGE',
-          amountBdt: req.amountBdt,
-          description: `${req.method.toUpperCase()} Recharge — TrxID: ${req.transactionId}`,
+          amountBdt: credits,
+          description: `${req.method.toUpperCase()} Recharge — ৳${req.amountBdt} → ${credits} credits — TrxID: ${req.transactionId}`,
         },
       });
       await tx.walletRechargeRequest.update({
@@ -1049,7 +1114,7 @@ export class AdminService {
     // Notify the client on their page Telegram that the balance was added.
     void this.telegram.notify(
       req.pageId,
-      `✅ <b>Wallet Recharge Approved</b>\n💰 ৳${req.amountBdt} আপনার balance-এ যোগ হয়েছে। ধন্যবাদ! 🎉`,
+      `✅ <b>Wallet Recharge Approved</b>\n💰 ${credits} credits আপনার balance-এ যোগ হয়েছে। ধন্যবাদ! 🎉`,
     );
 
     return { success: true };
@@ -1068,6 +1133,77 @@ export class AdminService {
       data: { status: 'rejected', rejectedReason: reason || null },
     });
 
+    return { success: true };
+  }
+
+  // ── Credit packages ──────────────────────────────────────────────────────
+  // Purchasable ৳→credits tiers shown on the client wallet page. Seeded with
+  // Starter/Growth/Custom on first boot — see BillingService's onModuleInit
+  // Plan-seeding for the pattern this mirrors.
+
+  async listCreditPackages(activeOnly = false) {
+    return this.prisma.creditPackage.findMany({
+      where: activeOnly ? { isActive: true } : undefined,
+      orderBy: { sortOrder: 'asc' },
+    });
+  }
+
+  async createCreditPackage(body: {
+    name: string;
+    priceBdt?: number | null;
+    credits?: number | null;
+    isCustom?: boolean;
+    sortOrder?: number;
+  }) {
+    const name = String(body.name || '').trim();
+    if (!name) throw new BadRequestException('Package name দিন');
+    const isCustom = Boolean(body.isCustom);
+    if (!isCustom) {
+      if (!body.priceBdt || body.priceBdt <= 0)
+        throw new BadRequestException('priceBdt must be positive (or mark isCustom)');
+      if (!body.credits || body.credits <= 0)
+        throw new BadRequestException('credits must be positive (or mark isCustom)');
+    }
+    return this.prisma.creditPackage.create({
+      data: {
+        name,
+        priceBdt: isCustom ? null : body.priceBdt,
+        credits: isCustom ? null : body.credits,
+        isCustom,
+        sortOrder: body.sortOrder ?? 0,
+      },
+    });
+  }
+
+  async updateCreditPackage(
+    id: string,
+    body: {
+      name?: string;
+      priceBdt?: number | null;
+      credits?: number | null;
+      isActive?: boolean;
+      sortOrder?: number;
+    },
+  ) {
+    const data: any = {};
+    if (body.name !== undefined) data.name = String(body.name).trim();
+    if (body.priceBdt !== undefined) data.priceBdt = body.priceBdt;
+    if (body.credits !== undefined) data.credits = body.credits;
+    if (body.isActive !== undefined) data.isActive = Boolean(body.isActive);
+    if (body.sortOrder !== undefined) data.sortOrder = Number(body.sortOrder);
+    const pkg = await this.prisma.creditPackage.update({ where: { id }, data }).catch(() => null);
+    if (!pkg) throw new NotFoundException('Package not found');
+    return pkg;
+  }
+
+  async deleteCreditPackage(id: string) {
+    // Soft-delete — a package may already be referenced by historical
+    // WalletRechargeRequest rows (onDelete: SetNull would otherwise orphan
+    // that history's "which package" context on a hard delete).
+    const pkg = await this.prisma.creditPackage
+      .update({ where: { id }, data: { isActive: false } })
+      .catch(() => null);
+    if (!pkg) throw new NotFoundException('Package not found');
     return { success: true };
   }
 
@@ -1720,12 +1856,17 @@ server {
       if (!monthMap[monthKey]) monthMap[monthKey] = { revenueBdt: 0, apiCostBdt: 0 };
       if (!pageMap[tx.pageId]) pageMap[tx.pageId] = { rechargedBdt: 0, billedBdt: 0, apiCostBdt: 0, apiCallCount: 0 };
 
+      // WalletTransaction.amountBdt is credit-denominated since the
+      // credit-system migration — convert back to real ৳ here so this report
+      // (real revenue vs. real API cost) stays meaningful. See
+      // common/pricing-fields.ts CREDITS_PER_TAKA.
       if (tx.type === 'RECHARGE') {
-        totalRevenueBdt += tx.amountBdt;
-        pageMap[tx.pageId].rechargedBdt += tx.amountBdt;
-        monthMap[monthKey].revenueBdt += tx.amountBdt;
+        const revenue = creditsToBdt(tx.amountBdt);
+        totalRevenueBdt += revenue;
+        pageMap[tx.pageId].rechargedBdt += revenue;
+        monthMap[monthKey].revenueBdt += revenue;
       } else if (tx.amountBdt < 0) {
-        const billed = Math.abs(tx.amountBdt);
+        const billed = creditsToBdt(Math.abs(tx.amountBdt));
         totalBilledBdt += billed;
         pageMap[tx.pageId].billedBdt += billed;
         pageMap[tx.pageId].apiCallCount += 1;
@@ -1758,7 +1899,7 @@ server {
           pageId: Number(pageIdStr),
           pageName: p?.pageName ?? '?',
           ownerName: p?.owner?.username ?? '?',
-          currentBalanceBdt: p?.walletBalanceBdt ?? 0,
+          currentBalanceBdt: creditsToBdt(p?.walletBalanceBdt ?? 0),
           subscriptionStatus: p?.subscriptionStatus ?? '?',
           nextBillingDate: p?.nextBillingDate ?? null,
           ...agg,

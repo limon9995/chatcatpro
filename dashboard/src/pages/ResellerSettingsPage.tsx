@@ -361,6 +361,12 @@ export function ResellerSettingsPage({ dark, setDark, onLogout }: Props) {
 
         {tab === 'clients' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ fontSize: 12, color: th.muted, background: th.panel, border: `1px solid ${th.border}`, borderRadius: 10, padding: '10px 14px' }}>
+              {copy(
+                'ℹ️ আপনার ক্লায়েন্টরা Credits-এ বিল হয় (নিচের pricing এখানেই সেট করুন)। আপনি প্ল্যাটফর্মের সাথে আসল ৳ টাকায় settle করেন (Settlement ট্যাব দেখুন)।',
+                'ℹ️ Your clients are billed in Credits (set their pricing below). You settle with the platform in real ৳ (see the Settlement tab).'
+              )}
+            </div>
             {clients.length === 0 && (
               <div style={{ color: th.muted, fontSize: 13.5 }}>{copy('এখনো কোনো ক্লায়েন্ট নেই', 'No clients yet')}</div>
             )}
@@ -372,7 +378,7 @@ export function ResellerSettingsPage({ dark, setDark, onLogout }: Props) {
                   <div key={p.id} style={{ marginTop: 8, borderTop: `1px solid ${th.border}`, paddingTop: 8 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div style={{ fontSize: 13, color: th.textSub }}>
-                        {p.pageName || `Page #${p.id}`} — ৳{p.walletBalanceBdt?.toFixed?.(2) ?? p.walletBalanceBdt}
+                        {p.pageName || `Page #${p.id}`} — {p.walletBalanceBdt?.toFixed?.(2) ?? p.walletBalanceBdt} Credits
                       </div>
                       <button onClick={() => openPricing(p.id)}
                         style={{ padding: '5px 12px', borderRadius: 7, border: `1.5px solid ${th.border}`, background: 'transparent', color: th.accentText, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>

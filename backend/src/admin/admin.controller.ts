@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseIntPipe,
@@ -353,14 +354,16 @@ export class AdminController {
     @Param('pageId', ParseIntPipe) pageId: number,
     @Body() b: any,
   ) {
-    const amount = Number(b?.amountBdt);
-    if (!amount || amount <= 0)
-      throw new BadRequestException('amountBdt must be positive');
+    const credits = Number(b?.creditsToAdd);
+    if (!credits || credits <= 0)
+      throw new BadRequestException('creditsToAdd must be positive');
+    const amountBdtReceived = b?.amountBdtReceived !== undefined ? Number(b.amountBdtReceived) : undefined;
     return this.svc.rechargePageWallet(
       pageId,
-      amount,
+      credits,
       b?.transactionId || 'MANUAL',
       b?.note,
+      amountBdtReceived,
     );
   }
 
@@ -407,6 +410,33 @@ export class AdminController {
   @Post('wallet/requests/:id/reject')
   rejectRechargeRequest(@Param('id', ParseIntPipe) id: number, @Body() b: any) {
     return this.svc.rejectRechargeRequest(id, b?.reason);
+  }
+
+  @Patch('wallet/requests/:id/credits')
+  setRechargeRequestCredits(@Param('id', ParseIntPipe) id: number, @Body() b: any) {
+    return this.svc.setRechargeRequestCredits(id, Number(b?.credits));
+  }
+
+  // ── Credit packages ────────────────────────────────────────────────────────
+
+  @Get('credit-packages')
+  listCreditPackages() {
+    return this.svc.listCreditPackages();
+  }
+
+  @Post('credit-packages')
+  createCreditPackage(@Body() b: any) {
+    return this.svc.createCreditPackage(b);
+  }
+
+  @Patch('credit-packages/:id')
+  updateCreditPackage(@Param('id') id: string, @Body() b: any) {
+    return this.svc.updateCreditPackage(id, b);
+  }
+
+  @Delete('credit-packages/:id')
+  deleteCreditPackage(@Param('id') id: string) {
+    return this.svc.deleteCreditPackage(id);
   }
 
   // ── Subscription management ───────────────────────────────────────────────

@@ -508,8 +508,8 @@ export class TelegramController {
     );
     await this.adminTelegram.sendMessage(
       sign > 0
-        ? `✅ Page #${pageId} <b>${tgEsc(page?.pageName ?? '')}</b>-এ ৳${fmtBdt(amount)} যোগ হলো।\n💰 নতুন balance: ৳${newBalance}`
-        : `✅ Page #${pageId} <b>${tgEsc(page?.pageName ?? '')}</b> থেকে ৳${fmtBdt(amount)} কাটা হলো।\n💰 নতুন balance: ৳${newBalance}`,
+        ? `✅ Page #${pageId} <b>${tgEsc(page?.pageName ?? '')}</b>-এ ${fmtBdt(amount)} credits যোগ হলো।\n💰 নতুন balance: ${newBalance} credits`
+        : `✅ Page #${pageId} <b>${tgEsc(page?.pageName ?? '')}</b> থেকে ${fmtBdt(amount)} credits কাটা হলো।\n💰 নতুন balance: ${newBalance} credits`,
     );
   }
 
@@ -633,7 +633,7 @@ export class TelegramController {
     const lines = slice.map((p: any) => {
       const st = p.subscriptionStatus === 'ACTIVE' ? '✅' : '🚫';
       const test = p.isTestPage ? ' 🧪test' : '';
-      return `${st} <b>#${p.id} ${tgEsc(p.pageName)}</b>${test}\n   👤 ${tgEsc(p.owner?.username ?? '?')} | 💰 ৳${Math.round(p.walletBalanceBdt)} | ${p.subscriptionStatus}`;
+      return `${st} <b>#${p.id} ${tgEsc(p.pageName)}</b>${test}\n   👤 ${tgEsc(p.owner?.username ?? '?')} | 💰 ${Math.round(p.walletBalanceBdt)} credits | ${p.subscriptionStatus}`;
     });
     const buttons = slice.map((p: any) =>
       p.subscriptionStatus === 'ACTIVE'
@@ -670,7 +670,7 @@ export class TelegramController {
           `💰 <b>Recharge Request #${r.id}</b>`,
           `🏪 ${tgEsc(r.page?.pageName ?? '?')} (page #${r.pageId})`,
           `👤 ${tgEsc(r.page?.owner?.username ?? '?')}`,
-          `💵 ৳${r.amountBdt} | 📱 ${tgEsc(r.method)}`,
+          `💵 ৳${r.amountBdt}${r.creditsGranted ? ` → ${r.creditsGranted} credits` : ' ⚠️ credits not set — approve from dashboard'} | 📱 ${tgEsc(r.method)}`,
           `🔖 TrxID: <code>${tgEsc(r.transactionId)}</code>`,
         ].join('\n'),
         [
@@ -846,10 +846,7 @@ export class TelegramController {
     }
 
     if (action === 'reject') {
-      await this.prisma.walletRechargeRequest.update({
-        where: { id },
-        data: { status: 'rejected', rejectedReason: 'Rejected via Telegram' },
-      });
+      await this.adminSvc().rejectRechargeRequest(id, 'Rejected via Telegram');
       await this.adminTelegram.answerCallback(callbackQueryId, '❌ Rejected');
       await this.adminTelegram.sendMessage(
         `❌ Recharge Request #${id} — rejected (via Telegram button)`,
@@ -857,44 +854,26 @@ export class TelegramController {
       return;
     }
 
-    // approve — credit the wallet in one transaction
-    await this.prisma.$transaction(async (tx) => {
-      await tx.page.update({
-        where: { id: req.pageId },
-        data: {
-          walletBalanceBdt: { increment: req.amountBdt },
-          subscriptionStatus: 'ACTIVE',
-        },
-      });
-      await tx.walletTransaction.create({
-        data: {
-          pageId: req.pageId,
-          type: 'RECHARGE',
-          amountBdt: req.amountBdt,
-          description: `${req.method.toUpperCase()} Recharge — TrxID: ${req.transactionId}`,
-        },
-      });
-      await tx.walletRechargeRequest.update({
-        where: { id },
-        data: {
-          status: 'approved',
-          approvedAt: new Date(),
-          approvedBy: 'telegram-admin',
-        },
-      });
-    });
+    // approve — delegate to AdminService so there's one single place that
+    // knows how to turn a request into a wallet credit (handles the
+    // creditsGranted vs. legacy amountBdt distinction, custom-package
+    // validation, etc.) instead of duplicating that logic here.
+    try {
+      await this.adminSvc().approveRechargeRequest(id, 'telegram-admin');
+    } catch (e: any) {
+      await this.adminTelegram.answerCallback(callbackQueryId, `❌ ${e.message}`);
+      await this.adminTelegram.sendMessage(
+        `⚠️ Request #${id} approve করা যায়নি: ${e.message}\n(Custom package হলে আগে dashboard থেকে credits set করুন।)`,
+      );
+      return;
+    }
 
     await this.adminTelegram.answerCallback(
       callbackQueryId,
-      `✅ Approved! ৳${req.amountBdt} added`,
+      `✅ Approved! ${req.creditsGranted} credits added`,
     );
     await this.adminTelegram.sendMessage(
-      `✅ <b>Recharge Approved</b>\nRequest #${id} — ৳${req.amountBdt} balance যোগ হয়েছে (via Telegram)`,
-    );
-    // Notify the client on their page Telegram that the balance was added.
-    void this.telegram.notify(
-      req.pageId,
-      `✅ <b>Wallet Recharge Approved</b>\n💰 ৳${req.amountBdt} আপনার balance-এ যোগ হয়েছে। ধন্যবাদ! 🎉`,
+      `✅ <b>Recharge Approved</b>\nRequest #${id} — ${req.creditsGranted} credits যোগ হয়েছে (via Telegram)`,
     );
   }
 
@@ -1204,14 +1183,14 @@ export class TelegramController {
         : `🚫 ${page?.subscriptionStatus ?? '?'}`;
     const txLines = txs.map((t) => {
       const amt = Math.round(Math.abs(t.amountBdt) * 100) / 100;
-      return `${t.amountBdt >= 0 ? '➕' : '➖'} ৳${fmtBdt(amt)} — ${tgEsc(t.description || t.type)}`;
+      return `${t.amountBdt >= 0 ? '➕' : '➖'} ${fmtBdt(amt)} credits — ${tgEsc(t.description || t.type)}`;
     });
     await this.telegram.sendRaw(
       token,
       chatId,
       [
         '💰 <b>Wallet</b>',
-        `Balance: <b>৳${fmtBdt(balance)}</b>`,
+        `Balance: <b>${fmtBdt(balance)} credits</b>`,
         `Status: ${st}`,
         '',
         txLines.length
