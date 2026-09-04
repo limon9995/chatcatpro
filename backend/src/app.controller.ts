@@ -13,8 +13,15 @@ export class AppController {
   ) {}
 
   @Get('public/pricing')
-  getPublicPricing() {
-    return this.adminService.getGlobalPricing();
+  async getPublicPricing() {
+    const [rates, packages] = await Promise.all([
+      this.adminService.getGlobalPricing(),
+      this.adminService.listCreditPackages(true),
+    ]);
+    // rates are credit-denominated since the credit-system migration — see
+    // backend/src/common/pricing-fields.ts CREDITS_PER_TAKA. Landing page
+    // must label these as Credits, not ৳.
+    return { rates, packages };
   }
 
   @Get('health')
