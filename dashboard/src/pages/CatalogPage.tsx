@@ -502,8 +502,8 @@ export function CatalogPage({ th, pageId, onToast }: {
                 </div>
                 <div style={{ fontSize: 11.5, color: th.muted, marginTop: 8, lineHeight: 1.7 }}>
                   {copy(
-                    '১. আপনার domain provider (Namecheap / GoDaddy / Cloudflare ইত্যাদি)-এর DNS settings-এ যান।\n২. একটা "A record" যোগ করুন — Host/Name: @ (অথবা আপনার subdomain, যেমন "shop"), Value/Points to: 200.97.166.34\n৩. উপরে domain লিখে "Save" চাপুন।\n৪. DNS change হতে ৫-৩০ মিনিট (কখনো কয়েক ঘন্টা) লাগতে পারে — তারপর নিচের "Activate" বাটনে চাপুন।\n৫. Activate সফল হলে https সহ আপনার নিজের domain-এই website live হয়ে যাবে।',
-                    '1. Go to your domain provider\'s (Namecheap / GoDaddy / Cloudflare etc.) DNS settings.\n2. Add an "A record" — Host/Name: @ (or your subdomain, e.g. "shop"), Value/Points to: 200.97.166.34\n3. Enter the domain above and click "Save".\n4. DNS changes usually take 5-30 minutes (occasionally a few hours) — then click "Activate" below.\n5. Once activated, your website will be live on your own domain with https automatically.'
+                    '১. আপনার domain provider (Namecheap / GoDaddy / Cloudflare ইত্যাদি)-এর DNS settings-এ যান।\n২. একটা "A record" যোগ করুন — Host/Name: @ (অথবা আপনার subdomain, যেমন "shop"), Value/Points to: 187.127.53.112\n৩. উপরে domain লিখে "Save" চাপুন।\n৪. DNS change হতে ৫-৩০ মিনিট (কখনো কয়েক ঘন্টা) লাগতে পারে — তারপর নিচের "Activate" বাটনে চাপুন।\n৫. Activate সফল হলে https সহ আপনার নিজের domain-এই website live হয়ে যাবে।',
+                    '1. Go to your domain provider\'s (Namecheap / GoDaddy / Cloudflare etc.) DNS settings.\n2. Add an "A record" — Host/Name: @ (or your subdomain, e.g. "shop"), Value/Points to: 187.127.53.112\n3. Enter the domain above and click "Save".\n4. DNS changes usually take 5-30 minutes (occasionally a few hours) — then click "Activate" below.\n5. Once activated, your website will be live on your own domain with https automatically.'
                   ).split('\n').map((line, i) => <div key={i}>{line}</div>)}
                 </div>
                 {(customDomain || activeCustomDomain) && (
@@ -514,7 +514,7 @@ export function CatalogPage({ th, pageId, onToast }: {
                   }}>
                     <div style={{ color: th.muted }}>DNS Record (A):</div>
                     <div style={{ color: th.accent }}>
-                      {customDomain || activeCustomDomain} <span style={{ color: th.muted }}>→</span> 200.97.166.34
+                      {customDomain || activeCustomDomain} <span style={{ color: th.muted }}>→</span> 187.127.53.112
                     </div>
                   </div>
                 )}

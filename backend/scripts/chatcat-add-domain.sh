@@ -11,7 +11,7 @@
 set -euo pipefail
 
 DOMAIN="${1:-}"
-VPS_IP="200.97.166.34"
+VPS_IP="187.127.53.112"
 EMAIL="admin@chatcat.pro"
 
 if ! [[ "$DOMAIN" =~ ^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$ ]]; then

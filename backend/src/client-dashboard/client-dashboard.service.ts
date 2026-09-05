@@ -2004,7 +2004,7 @@ Return ONLY valid JSON (no markdown):
     if (out.includes('STATUS=DNS_NOT_POINTING')) {
       return {
         status: 'dns_pending',
-        message: `DNS এখনো ${domain} → 200.97.166.34 point করছে না। DNS provider-এ A record ঠিকভাবে বসিয়েছেন কিনা check করুন। DNS propagate হতে কিছুক্ষণ (৫ মিনিট থেকে কয়েক ঘন্টা) সময় লাগতে পারে — একটু পর আবার "Activate" চাপুন।`,
+        message: `DNS এখনো ${domain} → 187.127.53.112 point করছে না। DNS provider-এ A record ঠিকভাবে বসিয়েছেন কিনা check করুন। DNS propagate হতে কিছুক্ষণ (৫ মিনিট থেকে কয়েক ঘন্টা) সময় লাগতে পারে — একটু পর আবার "Activate" চাপুন।`,
       };
     }
     if (out.includes('STATUS=INVALID_DOMAIN')) {
