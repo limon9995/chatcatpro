@@ -326,9 +326,20 @@ export function ResellerSettingsPage({ dark, setDark, onLogout }: Props) {
             </button>
 
             <div style={{ borderTop: `1px solid ${th.border}`, marginTop: 6, paddingTop: 18 }}>
-              <label style={label}>{copy('নিজস্ব ডোমেইন (ঐচ্ছিক)', 'Custom Domain (optional)')}</label>
+              <label style={label}>{copy('নিজস্ব ডোমেইন (প্রয়োজনীয়)', 'Custom Domain (required)')}</label>
               <div style={{ fontSize: 12, color: th.muted, marginBottom: 8 }}>
-                {copy(`ডিফল্টভাবে আপনার ড্যাশবোর্ড ${me?.slug}.chatcat.pro থেকে চলবে। চাইলে নিজের ডোমেইন যোগ করতে পারেন।`, `By default your dashboard runs on ${me?.slug}.chatcat.pro. You can optionally point your own domain at it.`)}
+                {copy(
+                  'আপনার নিজের ব্র্যান্ডে ক্লায়েন্টদের কাছে দেখাতে হলে একটা নিজের ডোমেইন লাগবে (যেমন app.yourbrand.com)। ডোমেইন যোগ করার পর, আপনার DNS provider-এ একটা A record বসান — ঠিকানা নিচে দেওয়া আছে।',
+                  'To show your own branding to your clients you need your own domain (e.g. app.yourbrand.com). After saving it below, add an A record at your DNS provider pointing to the address shown below.'
+                )}
+              </div>
+              <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '8px 12px', borderRadius: 8, background: `${th.accent}12`, border: `1px solid ${th.accent}30`,
+                fontSize: 12.5, marginBottom: 10,
+              }}>
+                <span style={{ color: th.muted }}>{copy('A record এ point করুন', 'Point your A record to')}</span>
+                <b style={{ color: th.text, fontFamily: 'monospace' }}>187.127.53.112</b>
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
                 <input style={inp} value={domainInput} onChange={e => setDomainInput(e.target.value)} placeholder="app.yourbrand.com" />

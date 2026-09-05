@@ -360,7 +360,11 @@ export class ResellerService {
     let stdout = '';
     let stderr = '';
     try {
-      const result = await execFileAsync('/usr/local/bin/chatcat-add-domain.sh', [domain], {
+      // Deliberately a different script from the Page/catalog custom-domain
+      // flow — this one serves the shared dashboard build for the domain
+      // instead of proxying to /catalog/by-domain (which would be wrong for
+      // a reseller's own dashboard/login domain).
+      const result = await execFileAsync('/usr/local/bin/chatcat-add-reseller-domain.sh', [domain], {
         timeout: 90_000,
       });
       stdout = result.stdout || '';
@@ -389,7 +393,7 @@ export class ResellerService {
     if (out.includes('STATUS=DNS_NOT_POINTING')) {
       return {
         status: 'dns_pending',
-        message: `DNS এখনো ${domain} → সার্ভারের IP point করছে না। DNS provider-এ A record ঠিকভাবে বসিয়েছেন কিনা check করুন। কিছুক্ষণ পর আবার "Activate" চাপুন।`,
+        message: `DNS এখনো ${domain} → 187.127.53.112 (আমাদের সার্ভার) point করছে না। আপনার DNS provider-এ একটা A record বসান: ${domain} → 187.127.53.112। DNS propagate হতে কিছুক্ষণ (৫ মিনিট থেকে কয়েক ঘন্টা) সময় লাগতে পারে — একটু পর আবার "Activate" চাপুন।`,
       };
     }
     if (out.includes('STATUS=INVALID_DOMAIN')) {
