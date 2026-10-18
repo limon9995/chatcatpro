@@ -1,109 +1,111 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# ChatCat Pro — Backend API
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+Enterprise NestJS API engine powering multi-tenant conversational commerce, omnichannel integrations, OCR/AI vision pipelines, courier logistics, accounting, and reseller capabilities.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+---
 
-## Description
+## 🏗 Architecture & Technologies
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+- **Framework**: [NestJS](https://nestjs.com/) (TypeScript)
+- **Database & ORM**: PostgreSQL via [Prisma ORM](https://www.prisma.io/)
+- **Process Manager**: PM2 (Cluster/Fork mode with memory monitoring)
+- **AI & Vision**:
+  - Google Gemini API (`@google/genai`)
+  - OpenAI Vision & Fallbacks
+  - Local Ollama vision/text integration
+  - Tesseract.js OCR (Trained on English and Bengali alphanumeric invoice/code patterns)
+- **Security & Integrity**:
+  - AES-256-GCM token encryption (`EncryptionService`)
+  - HMAC-SHA256 Meta webhook request verification
+  - Role-based Access Control (Admin, Client, Reseller)
+  - Throttler rate limiting (Global, Auth, and Chat tiers)
 
-## Project setup
+---
 
+## 📦 Core Domain Modules
+
+| Module Directory | Primary Responsibility |
+|---|---|
+| `src/auth/` | Authentication, sessions, OTP verification, Google OAuth, password management |
+| `src/webhook/` | Meta Facebook Messenger webhook receiver & event dispatching |
+| `src/whatsapp/` | WhatsApp Business Cloud API webhooks and interactive message delivery |
+| `src/instagram/` | Instagram DM & comment-to-DM automated engagement |
+| `src/bot/` & `src/smart-bot/` | AI-driven dialogue system, intent parser, and context awareness |
+| `src/products/` & `src/catalog/` | Product catalog CRUD, image embeddings, categories, and public digital storefront |
+| `src/orders/` | Order lifecycle (draft, confirm, status updates, invoice tokens, notifications) |
+| `src/ocr/` & `src/vision-analysis/` | Screenshot receipt/product code extraction & multi-provider image recognition |
+| `src/courier/` | Pathao, Steadfast, RedX, and Paperfly dispatch and parcel tracking integration |
+| `src/accounting/` | Cashflow, revenue, expenses, returns, exchanges, and profit calculation |
+| `src/wallet/` & `src/billing/` | Pay-as-you-go credit wallet, recharge requests, and SaaS plans |
+| `src/reseller/` | White-label sub-tenancy, custom branding, wholesale balance & client management |
+| `src/sms-gateway/` | Integration gateway receiving forwarded MFS SMS from PaySync Android app |
+| `src/restaurant/` | Restaurant delivery slabs, geolocation map-pin checkout, and BOM inventory |
+| `src/university/` | Notice web scrapers, crawler, FAQ responder, and automated post generation |
+
+---
+
+## 🛠 Local Setup & Development
+
+### 1. Requirements
+- Node.js 20+
+- PostgreSQL 15+ (or Docker container)
+- npm or pnpm
+
+### 2. Install Dependencies
 ```bash
-$ npm install
-$ cp .env.example .env
+npm install
 ```
 
-Set secrets in `backend/.env`. If you want real OpenAI fallback replies or image analysis, set:
+### 3. Environment Setup
+Copy the sample environment file and configure database and secret keys:
+```bash
+cp .env.example .env
+```
 
+Ensure the following critical variables are populated:
 ```env
-OPENAI_API_KEY=your_new_openai_key
-FALLBACK_AI_PROVIDER=openai
-VISION_PROVIDER=openai
+PORT=3000
+DATABASE_URL="postgresql://user:password@localhost:5432/chatcatpro?schema=public"
+FB_TOKEN_ENCRYPTION_KEY="<64-character-hex-key>"
+FB_WEBHOOK_SECRET="<your-meta-app-secret>"
+DEFAULT_VERIFY_TOKEN="<random-verify-token>"
+AUTH_ADMIN_USERNAME="admin"
+AUTH_ADMIN_PASSWORD="SecurePasswordHere"
 ```
 
-Keep the key on the backend only. Do not place it in frontend files like `landing/index.html`.
+### 4. Database Initialization
+```bash
+# Push Prisma schema to your PostgreSQL database
+npx prisma db push
 
-## Compile and run the project
+# Generate Prisma Client
+npx prisma generate
+
+# (Optional) Seed or open database browser
+npx prisma studio
+```
+
+### 5. Running the Application
+```bash
+# Development mode with Hot Reload
+npm run start:dev
+
+# Production build and run
+npm run build
+npm run start:prod
+```
+
+---
+
+## 🧪 Testing & Linting
 
 ```bash
-# development
-$ npm run start
+# Run unit tests
+npm run test
 
-# watch mode
-$ npm run start:dev
+# Run e2e tests
+npm run test:e2e
 
-# production mode
-$ npm run start:prod
+# Run linter
+npm run lint
 ```
-
-## Run tests
-
-```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
-```
-
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
-```
-
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
